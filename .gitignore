@@ -23,8 +23,8 @@ run
 run-data
 mcmodsrepo
 
-# local Claude Code session settings
-.claude/settings.local.json
+# Claude Code session data — never publish (local logs/settings)
+.claude/
 
 # Files from Forge MDK
 forge*changelog.txt
