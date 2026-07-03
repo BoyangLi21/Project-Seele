@@ -8,15 +8,23 @@ An open-source **Neon Genesis Evangelion** universe mod for Minecraft **Forge 1.
 
 ## Status / 状态
 
-Early development. Current goal — **Phase 1: Ramiel MVP**（第一阶段：使徒"雷天使"）.
+Early development. **Phase 1 MVP playable**: fight Ramiel, the Fifth Angel — a hovering crystal octahedron with a charged sniper beam, boss bar and drops. / **第一阶段 MVP 可玩**：与第5使徒拉米尔作战（悬浮八面体、蓄力光束、Boss 血条与掉落）。
 
-## Roadmap / 路线图
+## Docs / 文档
 
-- [ ] **Phase 1** — Ramiel boss fight, Angel alert siren, base materials / 使徒 Ramiel Boss 战、使徒来袭警报、基础材料
-- [ ] **Phase 2** — Pilotable EVA Unit-01, umbilical cable power, sync rate, berserk mode / 可驾驶初号机、脐带电缆供电、同步率、暴走
-- [ ] **Phase 3** — AT Field mechanics, more Angels (Sachiel, Shamshel, Zeruel) / AT 力场机制、更多使徒
-- [ ] **Phase 4** — GeoFront, NERV HQ, retractable Tokyo-3 / 地下都市、NERV 总部、可升降的第三新东京市
-- [ ] **Phase 5** — Polish, optional integrations (Valkyrien Skies), public release / 打磨、联动、正式发布
+- **[docs/ROADMAP.md](docs/ROADMAP.md)** — full plan through Third Impact & the Tree of Life / 完整路线图（直到第三次冲击与生命之树）
+- [docs/SETUP.md](docs/SETUP.md) — dev environment setup / 开发环境搭建
+- [docs/PROMPTS.md](docs/PROMPTS.md) — kickoff prompts for AI-assisted sessions / AI 协作开工手册
+- [CLAUDE.md](CLAUDE.md) — project conventions for Claude Code / 项目协作约定
+
+## Roadmap (short) / 路线图（简版）
+
+1. 🔄 **Angels attack** — Ramiel fight polish: alert siren, real beam rendering, cross explosions / 警报、真光束、十字爆炸
+2. ⬜ **EVA Unit-01** — pilotable, umbilical power, sync rate, berserk / 可驾驶初号机、电力、同步率、暴走
+3. ⬜ **A.T. Fields & more Angels** — Sachiel, Shamshel, Zeruel, siege events / AT 力场与使徒图鉴
+4. ⬜ **NERV / GeoFront / Tokyo-3** — dimension, launch catapults, retractable city / 场景与发射井
+5. ⬜ **SEELE's scenario** — Lance of Longinus, Mass Production EVAs, **Third Impact & Tree of Life** / 朗基努斯、量产机、第三次冲击
+6. ⬜ **Release** — integrations, optimization, CurseForge/Modrinth / 发布
 
 ## Building / 构建
 
