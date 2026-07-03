@@ -1,6 +1,10 @@
 package com.projectseele;
 
 import com.mojang.logging.LogUtils;
+import com.projectseele.registry.ModCreativeTabs;
+import com.projectseele.registry.ModEntities;
+import com.projectseele.registry.ModItems;
+import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
@@ -16,7 +20,13 @@ public class ProjectSeele
 
     public ProjectSeele(FMLJavaModLoadingContext context)
     {
-        context.getModEventBus().addListener(this::commonSetup);
+        IEventBus modEventBus = context.getModEventBus();
+
+        ModItems.ITEMS.register(modEventBus);
+        ModEntities.ENTITY_TYPES.register(modEventBus);
+        ModCreativeTabs.TABS.register(modEventBus);
+
+        modEventBus.addListener(this::commonSetup);
     }
 
     private void commonSetup(final FMLCommonSetupEvent event)
