@@ -43,6 +43,7 @@ import net.minecraft.world.entity.ai.goal.Goal;
 import net.minecraft.world.entity.ai.goal.target.NearestAttackableTargetGoal;
 import net.minecraft.world.entity.monster.Enemy;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.entity.projectile.ProjectileUtil;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.GameRules;
 import net.minecraft.world.level.Level;
@@ -52,6 +53,7 @@ import net.minecraftforge.network.PacketDistributor;
 import org.jetbrains.annotations.Nullable;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Vector3f;
 
@@ -84,20 +86,21 @@ public class RamielEntity extends FlyingMob implements Enemy, Angel
 
     // Operation-Yashima rules: the shell opens for the final stretch of the
     // charge and stays open briefly after firing — snipe the core or nothing.
-    public static final float CORE_RADIUS = 2.2F;
+    // Geometry doubled 2026-07 (user: original scale read too small).
+    public static final float CORE_RADIUS = 4.4F;
     private static final int EXPOSE_CHARGE_WINDOW = 20;
     private static final int EXPOSED_AFTER_FIRE_TICKS = 60;
-    private static final double AT_FIELD_PUSH_RANGE = 8.0D;
-    private static final float SHELL_SURFACE_RADIUS = 3.4F;
+    private static final double AT_FIELD_PUSH_RANGE = 14.0D;
+    private static final float SHELL_SURFACE_RADIUS = 6.8F;
 
     // Phase two (below 40% health): faster charge plus the drill descent.
     private static final float ENRAGE_HEALTH_FRACTION = 0.4F;
     private static final int DRILL_APPROACH_TIMEOUT = 140;
     private static final int DRILL_DURATION_TICKS = 80;
     private static final int DRILL_HIT_INTERVAL = 10;
-    private static final double DRILL_RADIUS = 1.7D;
-    private static final float DRILL_DESCENT_PER_TICK = 0.4F;
-    private static final float DRILL_MAX_DEPTH = 24.0F;
+    private static final double DRILL_RADIUS = 2.6D;
+    private static final float DRILL_DESCENT_PER_TICK = 0.5F;
+    private static final float DRILL_MAX_DEPTH = 32.0F;
     private static final float DRILL_UNBREAKABLE_RESISTANCE = 1200.0F;
 
     private static final DustParticleOptions CHARGE_DUST =
@@ -373,7 +376,7 @@ public class RamielEntity extends FlyingMob implements Enemy, Angel
         super.die(source);
         if (this.level() instanceof ServerLevel serverLevel)
         {
-            CrossExplosionFX.spawn(serverLevel, this.position(), 1.6F);
+            CrossExplosionFX.spawn(serverLevel, this.position(), 2.8F);
             if (source.getEntity() instanceof ServerPlayer slayer
                     && !this.hurtPlayers.contains(slayer.getUUID()))
             {
@@ -395,6 +398,19 @@ public class RamielEntity extends FlyingMob implements Enemy, Angel
         BlockHitResult blockHit = this.level().clip(
                 new ClipContext(from, farEnd, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, this));
         Vec3 end = blockHit.getLocation();
+
+        // The beam detonates on the first body it meets (an EVA blocks it
+        // with its bulk) instead of lancing through to the far terrain.
+        EntityHitResult bodyHit = ProjectileUtil.getEntityHitResult(this.level(), this, from, end,
+                new AABB(from, end).inflate(1.0D),
+                e -> e instanceof LivingEntity && e != this && e.isAlive()
+                        && !(e instanceof Angel)
+                        && !(e.getVehicle() instanceof EvaUnit01Entity));
+        if (bodyHit != null)
+        {
+            end = bodyHit.getLocation();
+        }
+        final Vec3 impact = end;
 
         for (LivingEntity victim : this.level().getEntitiesOfClass(LivingEntity.class,
                 new AABB(from, end).inflate(1.0D), e -> e != this && e.isAlive()))
@@ -427,20 +443,20 @@ public class RamielEntity extends FlyingMob implements Enemy, Angel
         {
             SeeleNetwork.CHANNEL.send(
                     PacketDistributor.NEAR.with(() -> new PacketDistributor.TargetPoint(
-                            end.x, end.y, end.z, 192.0D, serverLevel.dimension())),
-                    new ClientboundNukeFxPacket(end.x, end.y, end.z, 1.0F));
-            serverLevel.sendParticles(ParticleTypes.END_ROD, end.x, end.y, end.z, 24, 0.6D, 0.6D, 0.6D, 0.12D);
-            serverLevel.sendParticles(ParticleTypes.EXPLOSION_EMITTER, end.x, end.y + 1.0D, end.z, 2, 1.5D, 1.0D, 1.5D, 0.0D);
+                            impact.x, impact.y, impact.z, 192.0D, serverLevel.dimension())),
+                    new ClientboundNukeFxPacket(impact.x, impact.y, impact.z, 1.0F));
+            serverLevel.sendParticles(ParticleTypes.END_ROD, impact.x, impact.y, impact.z, 24, 0.6D, 0.6D, 0.6D, 0.12D);
+            serverLevel.sendParticles(ParticleTypes.EXPLOSION_EMITTER, impact.x, impact.y + 1.0D, impact.z, 2, 1.5D, 1.0D, 1.5D, 0.0D);
             // Mushroom stem and cap.
             for (int i = 2; i <= 14; i += 2)
             {
                 serverLevel.sendParticles(ParticleTypes.LARGE_SMOKE,
-                        end.x, end.y + i, end.z, 6, 0.9D, 0.8D, 0.9D, 0.01D);
+                        impact.x, impact.y + i, impact.z, 6, 0.9D, 0.8D, 0.9D, 0.01D);
             }
             serverLevel.sendParticles(ParticleTypes.CAMPFIRE_COSY_SMOKE,
-                    end.x, end.y + 15.0D, end.z, 40, 5.5D, 1.6D, 5.5D, 0.02D);
+                    impact.x, impact.y + 15.0D, impact.z, 40, 5.5D, 1.6D, 5.5D, 0.02D);
             serverLevel.sendParticles(ParticleTypes.FLAME,
-                    end.x, end.y + 0.8D, end.z, 50, 3.0D, 1.2D, 3.0D, 0.08D);
+                    impact.x, impact.y + 0.8D, impact.z, 50, 3.0D, 1.2D, 3.0D, 0.08D);
         }
         this.playSound(ModSounds.BEAM_FIRE.get(), 5.0F, 1.0F);
     }
@@ -598,8 +614,8 @@ public class RamielEntity extends FlyingMob implements Enemy, Angel
                     flatAway = new Vec3(1.0D, 0.0D, 0.0D);
                 }
                 Vec3 wanted = target.position()
-                        .add(flatAway.normalize().scale(22.0D))
-                        .add(0.0D, 16.0D, 0.0D);
+                        .add(flatAway.normalize().scale(30.0D))
+                        .add(0.0D, 20.0D, 0.0D);
                 control.setWantedPosition(wanted.x, wanted.y, wanted.z, 1.0D);
             }
             else if (this.ramiel.getRandom().nextInt(60) == 0)
@@ -783,11 +799,11 @@ public class RamielEntity extends FlyingMob implements Enemy, Angel
             if (!this.drilling)
             {
                 this.approachTicks++;
-                Vec3 wanted = target.position().add(0.0D, 16.0D, 0.0D);
+                Vec3 wanted = target.position().add(0.0D, 24.0D, 0.0D);
                 this.ramiel.getMoveControl().setWantedPosition(wanted.x, wanted.y, wanted.z, 1.0D);
                 double horizontalSqr = this.ramiel.position().subtract(target.position())
                         .multiply(1.0D, 0.0D, 1.0D).lengthSqr();
-                if (horizontalSqr < 2.5D * 2.5D && this.ramiel.getY() > target.getY() + 8.0D)
+                if (horizontalSqr < 4.0D * 4.0D && this.ramiel.getY() > target.getY() + 12.0D)
                 {
                     this.drilling = true;
                     this.anchor = this.ramiel.position();

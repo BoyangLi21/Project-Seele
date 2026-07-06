@@ -19,6 +19,7 @@
   "msg.projectseele.at_field_low": "A.T. Field energy too low",
 
   "hud.projectseele.eva_status": "EVA-01",
+  "hud.projectseele.emergency": "!! EMERGENCY — HULL CRITICAL !!",
   "hud.projectseele.charging": "CHARGING",
   "hud.projectseele.charge_ready": "READY",
   "hud.projectseele.core_lock": "CORE LOCK",

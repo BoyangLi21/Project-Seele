@@ -65,8 +65,9 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     private static final float MELEE_FIST_DAMAGE = 20.0F;
     private static final float MELEE_KNIFE_DAMAGE = 60.0F;
     private static final int MELEE_COOLDOWN_TICKS = 14;
-    private static final double MELEE_REACH = 4.2D;
-    private static final double MELEE_RADIUS = 3.4D;
+    // Reach geometry for the doubled 24-block frame.
+    private static final double MELEE_REACH = 8.0D;
+    private static final double MELEE_RADIUS = 6.0D;
     private static final float AT_FIELD_MAX = 200.0F;
     private static final float AT_FIELD_REGEN = 0.4F;
     private static final int AT_FIELD_REGEN_DELAY = 100;
@@ -97,7 +98,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     public EvaUnit01Entity(EntityType<? extends EvaUnit01Entity> type, Level level)
     {
         super(type, level);
-        this.setMaxUpStep(1.6F);
+        this.setMaxUpStep(2.6F);
     }
 
     public static AttributeSupplier.Builder createAttributes()
@@ -198,7 +199,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         this.playSound(ModSounds.CRYSTAL_HIT.get(), 2.0F, on ? 0.8F : 0.5F);
         if (on && this.level() instanceof ServerLevel serverLevel)
         {
-            Vec3 front = this.position().add(this.getForward().scale(3.0D)).add(0.0D, 6.0D, 0.0D);
+            Vec3 front = this.position().add(this.getForward().scale(6.0D)).add(0.0D, 12.0D, 0.0D);
             AtFieldFX.ripple(serverLevel, front, this.getForward());
         }
     }
@@ -221,8 +222,8 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         boolean knife = this.getWeapon() == WEAPON_KNIFE;
         float damage = knife ? MELEE_KNIFE_DAMAGE : MELEE_FIST_DAMAGE;
         Vec3 forward = this.getForward().multiply(1.0D, 0.0D, 1.0D).normalize();
-        Vec3 center = this.position().add(forward.scale(MELEE_REACH)).add(0.0D, 5.5D, 0.0D);
-        AABB zone = new AABB(center, center).inflate(MELEE_RADIUS, 4.0D, MELEE_RADIUS);
+        Vec3 center = this.position().add(forward.scale(MELEE_REACH)).add(0.0D, 11.0D, 0.0D);
+        AABB zone = new AABB(center, center).inflate(MELEE_RADIUS, 8.0D, MELEE_RADIUS);
 
         if (this.level() instanceof ServerLevel serverLevel)
         {
@@ -277,8 +278,9 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             end = entityHit.getLocation();
             if (entityHit.getEntity() instanceof RamielEntity ramiel && ramiel.isCoreHit(end))
             {
-                // The Yashima shot: straight through the bared core.
-                ramiel.hurt(pilot.damageSources().playerAttack(pilot), 99999.0F);
+                // The Yashima shot: two clean core hits end the Angel.
+                ramiel.hurt(pilot.damageSources().playerAttack(pilot),
+                        SeeleConfig.CANNON_CORE_DAMAGE.get().floatValue());
             }
             else
             {
@@ -289,8 +291,8 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
 
         // Muzzle roughly at the cannon barrel, right hand height.
         Vec3 muzzle = this.position()
-                .add(this.getForward().scale(4.0D))
-                .add(0.0D, 7.5D, 0.0D);
+                .add(this.getForward().scale(7.0D))
+                .add(0.0D, 15.0D, 0.0D);
         SeeleNetwork.CHANNEL.send(PacketDistributor.TRACKING_ENTITY_AND_SELF.with(() -> this),
                 new ClientboundCannonBeamPacket(muzzle.x, muzzle.y, muzzle.z, end.x, end.y, end.z));
         level.sendParticles(ParticleTypes.END_ROD, end.x, end.y, end.z, 30, 0.5D, 0.5D, 0.5D, 0.2D);
@@ -391,7 +393,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         Vec3 dir = origin != null && origin.distanceToSqr(center) > 1.0E-4D
                 ? origin.subtract(center).normalize()
                 : this.getForward();
-        AtFieldFX.ripple(serverLevel, center.add(dir.scale(3.2D)), dir);
+        AtFieldFX.ripple(serverLevel, center.add(dir.scale(6.4D)), dir);
     }
 
     // ----- piloting -----
@@ -450,12 +452,13 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         {
             return;
         }
-        // Entry plug: nape of the neck, slightly behind the shoulders.
+        // The pilot rides at head height: in first person the plug view IS
+        // the Unit's own eyes (the airframe hides itself from its pilot).
         float rad = (float) Math.toRadians(this.yBodyRot);
-        double behind = 0.95D;
+        double behind = 0.35D;
         move.accept(passenger,
                 this.getX() + Math.sin(rad) * behind,
-                this.getY() + 8.7D,
+                this.getY() + 20.0D,
                 this.getZ() - Math.cos(rad) * behind);
     }
 
@@ -464,7 +467,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     {
         // Step out at the Unit's feet instead of dropping from plug height.
         float rad = (float) Math.toRadians(this.yBodyRot);
-        return new Vec3(this.getX() + Math.sin(rad) * 3.0D, this.getY(), this.getZ() - Math.cos(rad) * 3.0D);
+        return new Vec3(this.getX() + Math.sin(rad) * 5.5D, this.getY(), this.getZ() - Math.cos(rad) * 5.5D);
     }
 
     // ----- durability -----
@@ -473,7 +476,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     public boolean causeFallDamage(float distance, float multiplier, DamageSource source)
     {
         // A 40-metre war machine does not stub its toe.
-        return distance > 12.0F && super.causeFallDamage(distance - 12.0F, multiplier * 0.5F, source);
+        return distance > 18.0F && super.causeFallDamage(distance - 18.0F, multiplier * 0.5F, source);
     }
 
     @Override

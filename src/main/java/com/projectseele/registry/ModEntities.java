@@ -16,15 +16,15 @@ public class ModEntities
 
     public static final RegistryObject<EntityType<RamielEntity>> RAMIEL = ENTITY_TYPES.register("ramiel",
             () -> EntityType.Builder.of(RamielEntity::new, MobCategory.MONSTER)
-                    .sized(6.0F, 6.0F)
+                    .sized(12.0F, 12.0F)
                     .fireImmune()
-                    .clientTrackingRange(10)
+                    .clientTrackingRange(12)
                     .build("ramiel"));
 
     public static final RegistryObject<EntityType<EvaUnit01Entity>> EVA_UNIT01 = ENTITY_TYPES.register("eva_unit01",
             () -> EntityType.Builder.of(EvaUnit01Entity::new, MobCategory.MISC)
-                    .sized(3.4F, 12.0F)
+                    .sized(6.8F, 24.0F)
                     .fireImmune()
-                    .clientTrackingRange(10)
+                    .clientTrackingRange(12)
                     .build("eva_unit01"));
 }

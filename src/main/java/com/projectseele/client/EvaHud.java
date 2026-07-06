@@ -32,7 +32,7 @@ public final class EvaHud
 
     private EvaHud() {}
 
-    /** Machine status, bottom-left, whenever the player sits in the plug. */
+    /** Full entry-plug cockpit: frame, synchro readout, status, warnings. */
     public static final IGuiOverlay COCKPIT = (gui, guiGraphics, partialTick, width, height) ->
     {
         LocalPlayer player = Minecraft.getInstance().player;
@@ -40,6 +40,48 @@ public final class EvaHud
         {
             return;
         }
+
+        // --- plug ambience: faint LCL-orange edges + corner frame ---
+        int lcl = 0x14FF8C1A;
+        int edge = Math.round(Math.min(width, height) * 0.045F);
+        guiGraphics.fill(0, 0, width, edge, lcl);
+        guiGraphics.fill(0, height - edge, width, height, lcl);
+        guiGraphics.fill(0, edge, edge, height - edge, lcl);
+        guiGraphics.fill(width - edge, edge, width, height - edge, lcl);
+        int cLen = 34;
+        int m = 6;
+        int frame = 0xB0FF7A00;
+        guiGraphics.fill(m, m, m + cLen, m + 2, frame);
+        guiGraphics.fill(m, m, m + 2, m + cLen, frame);
+        guiGraphics.fill(width - m - cLen, m, width - m, m + 2, frame);
+        guiGraphics.fill(width - m - 2, m, width - m, m + cLen, frame);
+        guiGraphics.fill(m, height - m - 2, m + cLen, height - m, frame);
+        guiGraphics.fill(m, height - m - cLen, m + 2, height - m, frame);
+        guiGraphics.fill(width - m - cLen, height - m - 2, width - m, height - m, frame);
+        guiGraphics.fill(width - m - 2, height - m - cLen, width - m, height - m, frame);
+
+        // --- top-centre: synchro readout (placeholder until Phase 2.3) ---
+        float time = (System.currentTimeMillis() % 600000L) / 1000.0F;
+        float synchro = 41.3F + 1.8F * Mth.sin(time * 0.13F) + 0.6F * Mth.sin(time * 1.7F);
+        guiGraphics.drawCenteredString(gui.getFont(),
+                Component.literal(String.format("SYNCHRO  %.1f%%", synchro))
+                        .withStyle(ChatFormatting.GOLD),
+                width / 2, m + 6, NERV_ORANGE);
+
+        // --- hull warning strip ---
+        float hullFrac = eva.getHealth() / eva.getMaxHealth();
+        if (hullFrac <= 0.34F)
+        {
+            boolean blink = ((int) (time * 2.5F)) % 2 == 0;
+            if (blink)
+            {
+                guiGraphics.drawCenteredString(gui.getFont(),
+                        Component.translatable("hud.projectseele.emergency")
+                                .withStyle(ChatFormatting.DARK_RED, ChatFormatting.BOLD),
+                        width / 2, m + 18, 0xFFFF2020);
+            }
+        }
+
         int x = 10;
         int y = height - 64;
         int barWidth = 130;

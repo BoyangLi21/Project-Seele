@@ -38,6 +38,7 @@ public final class SeeleConfig
     public static final ForgeConfigSpec.DoubleValue CANNON_RANGE;
     public static final ForgeConfigSpec.IntValue CANNON_COOLDOWN_TICKS;
     public static final ForgeConfigSpec.DoubleValue CANNON_MOB_DAMAGE;
+    public static final ForgeConfigSpec.DoubleValue CANNON_CORE_DAMAGE;
 
     // ----- client -----
     public static final ForgeConfigSpec.BooleanValue ALARM_VIGNETTE;
@@ -112,8 +113,11 @@ public final class SeeleConfig
                 .comment("Cooldown after a shot in ticks.")
                 .defineInRange("cooldownTicks", 200, 1, 6000);
         CANNON_MOB_DAMAGE = common
-                .comment("Damage against ordinary targets (a core hit on an exposed Angel is always lethal).")
+                .comment("Damage against ordinary targets.")
                 .defineInRange("mobDamage", 40.0D, 0.0D, 1000.0D);
+        CANNON_CORE_DAMAGE = common
+                .comment("Damage when striking an exposed Angel core. Default kills Ramiel in two core hits.")
+                .defineInRange("coreDamage", 180.0D, 0.0D, 100000.0D);
         common.pop();
 
         COMMON_SPEC = common.build();
