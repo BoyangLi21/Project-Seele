@@ -42,9 +42,11 @@ cd Project-Seele
 ## 4. 已知坑
 
 - PowerShell 5.1 的哈希表键**不区分大小写**（写生成脚本时踩过：`'g'` 和 `'G'` 算重复键）
+- PowerShell 5.1 把**无 BOM 的 UTF-8 .ps1 当 ANSI(GBK) 解析**——脚本里写中文注释会炸出 ParserError（踩过：gen_sounds.ps1）。`tools/` 下脚本一律 ASCII 注释
 - 控制台中文可能乱码（GBK/UTF-8），日志判断以关键英文串为准（如 `Project SEELE initialized`）
 - 杀掉游戏窗口后对应的 gradle runClient 任务会报 exit 1，属正常现象
 - `.claude/` 是本机会话数据，已 gitignore，换机不迁移、不提交
+- 装不了 MSI（无管理员/不想动系统）时可用 **zip 版 Temurin 17**：解压后 `setx JAVA_HOME <目录>`，Claude 会话内跑 gradlew 前需内联 `$env:JAVA_HOME=...`（新 shell 才读得到 setx）
 
 ## 5. 交接检查单（新机器就绪标准）
 

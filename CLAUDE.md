@@ -78,18 +78,27 @@ resources/
 3. 实体行为验证：让用户 `/summon projectseele:ramiel ~ ~5 ~20`，生存模式触发 AI。
 4. 提交前必须 `./gradlew build` 通过。
 
-## 当前数值表（Phase 1 MVP，均在对应类顶部常量区）
+## 当前数值表（Phase 1 收尾版）
 
-| 项 | 值 | 位置 |
+数值已全部外置到 `SeeleConfig`（游戏目录 `config/projectseele-common.toml` / `-client.toml`），改平衡不用重新构建。下表为默认值：
+
+| 项 | 值 | Config 键 |
 |---|---|---|
-| Ramiel 血量/护甲 | 350 / 6 | `RamielEntity.createAttributes` |
-| 光束伤害/蓄力/冷却/射程 | 18 / 50t / 90t / 64 | `RamielEntity` 常量 |
-| 步枪伤害/冷却/射程 | 16 / 25t / 96 | `PositronRifleItem` 常量 |
-| 核心碎片掉落 | 4–8 (+抢夺) | `loot_tables/entities/ramiel.json` |
+| Ramiel 血量/护甲 | 350 / 6 | `ramiel.maxHealth` / `ramiel.armor`（`finalizeSpawn` 应用） |
+| 光束伤害/蓄力/冷却/射程 | 18 / 50t / 90t / 64 | `ramiel.beamDamage` 等 |
+| 二阶段蓄力（血量<40%） | 30t | `ramiel.beamChargeTicksEnraged` |
+| 钻头伤害/持续/冷却 | 4×每10t / 80t / 300t | `ramiel.drillDamage` / `drillCooldownTicks` |
+| 步枪伤害/冷却/射程 | 16 / 25t / 96 | `positron_rifle.*` |
+| 警报总开关 | true | `ramiel.alarmEnabled` |
+| 客户端特效强度/警报红屏 | 1.0 / true | `screen_effects.*` |
+| 核心碎片掉落 | 4–8 (+抢夺) | `loot_tables/entities/ramiel.json`（不在 config） |
+
+非平衡类几何/演出常量（光束存续 tick、钻头半径等）仍在类顶常量区。
 
 ## 已知占位/技术债
 
-- 贴图为程序生成占位（生成器已入库：`tools/gen_textures.ps1`），欢迎高清重绘
-- 音效暂用原版（信标/紫水晶/Warden 音效），Phase 1 收尾换原创
-- Ramiel 光束是粒子线，计划换成真正的光束渲染（ROADMAP 任务 1.2）
+- 贴图为程序生成 32×32（生成器：`tools/gen_textures.ps1`），欢迎高清重绘（资源包可覆盖）
+- 音效已全部替换为原创合成（`tools/gen_sounds.ps1`，登记于 `docs/ASSETS.md`）；后续可迭代音色质感
 - `ResourceLocation(String,String)` 有过时警告（Forge 迁移提示），1.20.1 内无害，Phase 6 统一清理
+- `run/saves/` 内有本地测试地图（NERV HQ 1:1），**永不提交**；发布捆绑需先拿作者授权（ROADMAP §9）
+- 写 `.ps1` 脚本只用 ASCII 注释：PS 5.1 把无 BOM UTF-8 当 ANSI 读，中文注释会炸解析
