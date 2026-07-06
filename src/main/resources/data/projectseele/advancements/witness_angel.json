@@ -1,0 +1,23 @@
+{
+  "display": {
+    "icon": {
+      "item": "projectseele:core_fragment"
+    },
+    "title": {
+      "translate": "advancements.projectseele.witness_angel.title"
+    },
+    "description": {
+      "translate": "advancements.projectseele.witness_angel.description"
+    },
+    "frame": "task",
+    "background": "minecraft:textures/gui/advancements/backgrounds/end.png",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "criteria": {
+    "triggered": {
+      "trigger": "minecraft:impossible"
+    }
+  }
+}

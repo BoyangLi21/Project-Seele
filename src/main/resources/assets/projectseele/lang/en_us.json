@@ -3,5 +3,25 @@
   "item.projectseele.positron_rifle": "Positron Rifle",
   "item.projectseele.core_fragment": "Angel Core Fragment",
   "item.projectseele.ramiel_spawn_egg": "Ramiel Spawn Egg",
-  "entity.projectseele.ramiel": "Ramiel"
+  "entity.projectseele.ramiel": "Ramiel",
+
+  "title.projectseele.angel_alarm": "ANGEL ATTACK",
+  "subtitle.projectseele.angel_alarm": "Pattern BLUE — all personnel, first-stage alert",
+
+  "subtitles.projectseele.alarm": "Air-raid siren wails",
+  "subtitles.projectseele.beam_charge": "Ramiel charges energy",
+  "subtitles.projectseele.beam_fire": "Positron beam fires",
+  "subtitles.projectseele.cross_explosion": "Cross explosion",
+  "subtitles.projectseele.crystal_hit": "Crystal cracks",
+  "subtitles.projectseele.crystal_break": "Crystal shatters",
+  "subtitles.projectseele.drill": "Drill bores down",
+  "subtitles.projectseele.ramiel_hum": "Ominous humming",
+  "subtitles.projectseele.rifle_fire": "Positron rifle fires",
+
+  "advancements.projectseele.witness_angel.title": "Angel, Attack",
+  "advancements.projectseele.witness_angel.description": "Witness an Angel assault and live to hear the sirens",
+  "advancements.projectseele.first_victory.title": "First Victory",
+  "advancements.projectseele.first_victory.description": "Defeat Ramiel, the Fifth Angel",
+  "advancements.projectseele.yashima_untouched.title": "Operation Yashima, Untouched",
+  "advancements.projectseele.yashima_untouched.description": "Slay Ramiel without ever being hit by it"
 }

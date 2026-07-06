@@ -1,0 +1,23 @@
+{
+  "parent": "projectseele:first_victory",
+  "display": {
+    "icon": {
+      "item": "minecraft:spyglass"
+    },
+    "title": {
+      "translate": "advancements.projectseele.yashima_untouched.title"
+    },
+    "description": {
+      "translate": "advancements.projectseele.yashima_untouched.description"
+    },
+    "frame": "challenge",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": true
+  },
+  "criteria": {
+    "triggered": {
+      "trigger": "minecraft:impossible"
+    }
+  }
+}

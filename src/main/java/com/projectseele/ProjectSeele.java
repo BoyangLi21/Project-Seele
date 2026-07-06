@@ -1,11 +1,16 @@
 package com.projectseele;
 
 import com.mojang.logging.LogUtils;
+import com.projectseele.config.SeeleConfig;
+import com.projectseele.network.SeeleNetwork;
 import com.projectseele.registry.ModCreativeTabs;
 import com.projectseele.registry.ModEntities;
 import com.projectseele.registry.ModItems;
+import com.projectseele.registry.ModSounds;
 import net.minecraftforge.eventbus.api.IEventBus;
+import net.minecraftforge.fml.ModLoadingContext;
 import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.fml.config.ModConfig;
 import net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 import org.slf4j.Logger;
@@ -25,12 +30,17 @@ public class ProjectSeele
         ModItems.ITEMS.register(modEventBus);
         ModEntities.ENTITY_TYPES.register(modEventBus);
         ModCreativeTabs.TABS.register(modEventBus);
+        ModSounds.SOUNDS.register(modEventBus);
+
+        ModLoadingContext.get().registerConfig(ModConfig.Type.COMMON, SeeleConfig.COMMON_SPEC);
+        ModLoadingContext.get().registerConfig(ModConfig.Type.CLIENT, SeeleConfig.CLIENT_SPEC);
 
         modEventBus.addListener(this::commonSetup);
     }
 
     private void commonSetup(final FMLCommonSetupEvent event)
     {
+        event.enqueueWork(SeeleNetwork::register);
         LOGGER.info("Project SEELE initialized. God's in his heaven, all's right with the world.");
     }
 }

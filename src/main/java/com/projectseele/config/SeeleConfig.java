@@ -1,0 +1,100 @@
+package com.projectseele.config;
+
+import net.minecraftforge.common.ForgeConfigSpec;
+
+/**
+ * All balance numbers live here so tuning never needs a rebuild. Defaults
+ * mirror the Phase-1 table in CLAUDE.md; change them in
+ * config/projectseele-common.toml (numbers) or -client.toml (visual toggles).
+ */
+public final class SeeleConfig
+{
+    public static final ForgeConfigSpec COMMON_SPEC;
+    public static final ForgeConfigSpec CLIENT_SPEC;
+
+    // ----- common: Ramiel -----
+    public static final ForgeConfigSpec.DoubleValue RAMIEL_MAX_HEALTH;
+    public static final ForgeConfigSpec.DoubleValue RAMIEL_ARMOR;
+    public static final ForgeConfigSpec.DoubleValue BEAM_DAMAGE;
+    public static final ForgeConfigSpec.IntValue BEAM_CHARGE_TICKS;
+    public static final ForgeConfigSpec.IntValue BEAM_CHARGE_TICKS_ENRAGED;
+    public static final ForgeConfigSpec.IntValue BEAM_COOLDOWN_TICKS;
+    public static final ForgeConfigSpec.DoubleValue BEAM_RANGE;
+    public static final ForgeConfigSpec.DoubleValue DRILL_DAMAGE;
+    public static final ForgeConfigSpec.IntValue DRILL_COOLDOWN_TICKS;
+    public static final ForgeConfigSpec.BooleanValue ALARM_ENABLED;
+
+    // ----- common: positron rifle -----
+    public static final ForgeConfigSpec.DoubleValue RIFLE_DAMAGE;
+    public static final ForgeConfigSpec.IntValue RIFLE_COOLDOWN_TICKS;
+    public static final ForgeConfigSpec.DoubleValue RIFLE_RANGE;
+
+    // ----- client -----
+    public static final ForgeConfigSpec.BooleanValue ALARM_VIGNETTE;
+    public static final ForgeConfigSpec.DoubleValue FX_INTENSITY;
+
+    static
+    {
+        ForgeConfigSpec.Builder common = new ForgeConfigSpec.Builder();
+
+        common.push("ramiel");
+        RAMIEL_MAX_HEALTH = common
+                .comment("Ramiel max health.")
+                .defineInRange("maxHealth", 350.0D, 1.0D, 10000.0D);
+        RAMIEL_ARMOR = common
+                .comment("Ramiel armor points.")
+                .defineInRange("armor", 6.0D, 0.0D, 30.0D);
+        BEAM_DAMAGE = common
+                .comment("Positron beam damage per hit.")
+                .defineInRange("beamDamage", 18.0D, 0.0D, 1000.0D);
+        BEAM_CHARGE_TICKS = common
+                .comment("Beam charge-up time in ticks (phase one).")
+                .defineInRange("beamChargeTicks", 50, 5, 400);
+        BEAM_CHARGE_TICKS_ENRAGED = common
+                .comment("Beam charge-up time in ticks while below 40% health.")
+                .defineInRange("beamChargeTicksEnraged", 30, 5, 400);
+        BEAM_COOLDOWN_TICKS = common
+                .comment("Cooldown between beam shots in ticks.")
+                .defineInRange("beamCooldownTicks", 90, 10, 2000);
+        BEAM_RANGE = common
+                .comment("Beam sniping range in blocks.")
+                .defineInRange("beamRange", 64.0D, 8.0D, 256.0D);
+        DRILL_DAMAGE = common
+                .comment("Drill damage per hit (one hit every 10 ticks inside the column).")
+                .defineInRange("drillDamage", 4.0D, 0.0D, 1000.0D);
+        DRILL_COOLDOWN_TICKS = common
+                .comment("Cooldown between drill descents in ticks.")
+                .defineInRange("drillCooldownTicks", 300, 20, 6000);
+        ALARM_ENABLED = common
+                .comment("Whether Angels acquiring a player target raises the server-wide alarm.")
+                .define("alarmEnabled", true);
+        common.pop();
+
+        common.push("positron_rifle");
+        RIFLE_DAMAGE = common
+                .comment("Positron rifle damage per shot.")
+                .defineInRange("damage", 16.0D, 0.0D, 1000.0D);
+        RIFLE_COOLDOWN_TICKS = common
+                .comment("Positron rifle cooldown in ticks.")
+                .defineInRange("cooldownTicks", 25, 1, 1200);
+        RIFLE_RANGE = common
+                .comment("Positron rifle hitscan range in blocks.")
+                .defineInRange("range", 96.0D, 8.0D, 256.0D);
+        common.pop();
+
+        COMMON_SPEC = common.build();
+
+        ForgeConfigSpec.Builder client = new ForgeConfigSpec.Builder();
+        client.push("screen_effects");
+        ALARM_VIGNETTE = client
+                .comment("Show the pulsing red vignette while the Angel alarm is active.")
+                .define("alarmVignette", true);
+        FX_INTENSITY = client
+                .comment("Global brightness/opacity multiplier for beam and explosion effects (0 disables cross explosions).")
+                .defineInRange("fxIntensity", 1.0D, 0.0D, 1.0D);
+        client.pop();
+        CLIENT_SPEC = client.build();
+    }
+
+    private SeeleConfig() {}
+}

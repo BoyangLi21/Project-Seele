@@ -1,0 +1,38 @@
+{
+  "alarm": {
+    "subtitle": "subtitles.projectseele.alarm",
+    "sounds": [{"name": "projectseele:alarm", "stream": false}]
+  },
+  "beam_charge": {
+    "subtitle": "subtitles.projectseele.beam_charge",
+    "sounds": ["projectseele:beam_charge"]
+  },
+  "beam_fire": {
+    "subtitle": "subtitles.projectseele.beam_fire",
+    "sounds": ["projectseele:beam_fire"]
+  },
+  "cross_explosion": {
+    "subtitle": "subtitles.projectseele.cross_explosion",
+    "sounds": ["projectseele:cross_explosion"]
+  },
+  "crystal_hit": {
+    "subtitle": "subtitles.projectseele.crystal_hit",
+    "sounds": ["projectseele:crystal_hit"]
+  },
+  "crystal_break": {
+    "subtitle": "subtitles.projectseele.crystal_break",
+    "sounds": ["projectseele:crystal_break"]
+  },
+  "drill": {
+    "subtitle": "subtitles.projectseele.drill",
+    "sounds": ["projectseele:drill"]
+  },
+  "ramiel_hum": {
+    "subtitle": "subtitles.projectseele.ramiel_hum",
+    "sounds": ["projectseele:ramiel_hum"]
+  },
+  "rifle_fire": {
+    "subtitle": "subtitles.projectseele.rifle_fire",
+    "sounds": ["projectseele:rifle_fire"]
+  }
+}

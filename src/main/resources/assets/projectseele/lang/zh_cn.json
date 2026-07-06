@@ -3,5 +3,25 @@
   "item.projectseele.positron_rifle": "阳电子步枪",
   "item.projectseele.core_fragment": "使徒核心碎片",
   "item.projectseele.ramiel_spawn_egg": "拉米尔刷怪蛋",
-  "entity.projectseele.ramiel": "拉米尔"
+  "entity.projectseele.ramiel": "拉米尔",
+
+  "title.projectseele.angel_alarm": "使徒，来袭",
+  "subtitle.projectseele.angel_alarm": "Pattern：蓝色 —— 全员进入一级战斗配置",
+
+  "subtitles.projectseele.alarm": "空袭警报回荡",
+  "subtitles.projectseele.beam_charge": "拉米尔正在蓄能",
+  "subtitles.projectseele.beam_fire": "阳电子光束轰鸣",
+  "subtitles.projectseele.cross_explosion": "十字爆炸",
+  "subtitles.projectseele.crystal_hit": "晶体开裂",
+  "subtitles.projectseele.crystal_break": "晶体碎裂",
+  "subtitles.projectseele.drill": "钻击直下",
+  "subtitles.projectseele.ramiel_hum": "不祥的低鸣",
+  "subtitles.projectseele.rifle_fire": "阳电子步枪射击",
+
+  "advancements.projectseele.witness_angel.title": "使徒，来袭",
+  "advancements.projectseele.witness_angel.description": "目击使徒袭来，并活着听完警报",
+  "advancements.projectseele.first_victory.title": "初战告捷",
+  "advancements.projectseele.first_victory.description": "击败第五使徒拉米尔",
+  "advancements.projectseele.yashima_untouched.title": "无伤屋岛",
+  "advancements.projectseele.yashima_untouched.description": "全程未被拉米尔命中并将其击败"
 }
