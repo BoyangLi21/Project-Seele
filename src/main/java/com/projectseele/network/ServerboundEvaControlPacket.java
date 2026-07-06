@@ -18,6 +18,7 @@ public class ServerboundEvaControlPacket
     public static final int ACTION_MELEE = 2;
     public static final int ACTION_CHARGE_START = 3;
     public static final int ACTION_CHARGE_STOP = 4;
+    public static final int ACTION_SMASH = 5;
 
     public final int action;
 
@@ -46,6 +47,7 @@ public class ServerboundEvaControlPacket
                 case ACTION_CYCLE_WEAPON -> eva.cycleWeapon(sender);
                 case ACTION_TOGGLE_AT_FIELD -> eva.toggleAtField(sender);
                 case ACTION_MELEE -> eva.meleeAttack(sender);
+                case ACTION_SMASH -> eva.smashAttack(sender);
                 case ACTION_CHARGE_START -> eva.setChargingHeld(true);
                 case ACTION_CHARGE_STOP -> eva.releaseCannon(sender);
                 default -> { }

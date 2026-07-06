@@ -27,6 +27,7 @@ public class ClientEvents
         event.registerAboveAll("angel_alarm", AlarmOverlay.INSTANCE);
         event.registerAboveAll("eva_cockpit", EvaHud.COCKPIT);
         event.registerAboveAll("sniper_scope", EvaHud.SCOPE);
+        event.registerAboveAll("plug_insertion", EvaHud.INSERTION);
     }
 
     @SubscribeEvent

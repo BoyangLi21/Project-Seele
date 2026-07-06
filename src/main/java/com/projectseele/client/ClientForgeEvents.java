@@ -20,8 +20,22 @@ public final class ClientForgeEvents
 {
     /** Tracks the held use-key while the cannon is out (charge start/stop). */
     private static boolean chargeHeld;
+    /** Entry-plug insertion cinematic: counts down after boarding. */
+    private static final int INSERTION_LENGTH = 50;
+    private static int insertionTicks;
+    private static boolean wasPiloting;
 
     private ClientForgeEvents() {}
+
+    /** 0..1 elapsed progress of the plug-insertion overlay, or -1 when idle. */
+    public static float insertionProgress(float partialTick)
+    {
+        if (insertionTicks <= 0)
+        {
+            return -1.0F;
+        }
+        return Mth.clamp((INSERTION_LENGTH - insertionTicks + partialTick) / INSERTION_LENGTH, 0.0F, 1.0F);
+    }
 
     private static void send(int action)
     {
@@ -43,6 +57,18 @@ public final class ClientForgeEvents
         Minecraft minecraft = Minecraft.getInstance();
         LocalPlayer player = minecraft.player;
         EvaUnit01Entity eva = ridden(player);
+
+        // Boarding transition: play the entry-plug insertion cinematic.
+        boolean piloting = eva != null;
+        if (piloting && !wasPiloting)
+        {
+            insertionTicks = INSERTION_LENGTH;
+        }
+        wasPiloting = piloting;
+        if (insertionTicks > 0 && !minecraft.isPaused())
+        {
+            insertionTicks--;
+        }
 
         while (Keybinds.CYCLE_WEAPON.consumeClick())
         {
@@ -82,7 +108,10 @@ public final class ClientForgeEvents
         {
             event.setCanceled(true);
             event.setSwingHand(false);
-            send(ServerboundEvaControlPacket.ACTION_MELEE);
+            // Crouch + attack = the two-handed smash.
+            send(player.isShiftKeyDown()
+                    ? ServerboundEvaControlPacket.ACTION_SMASH
+                    : ServerboundEvaControlPacket.ACTION_MELEE);
         }
     }
 

@@ -39,6 +39,7 @@ public final class SeeleConfig
     public static final ForgeConfigSpec.IntValue CANNON_COOLDOWN_TICKS;
     public static final ForgeConfigSpec.DoubleValue CANNON_MOB_DAMAGE;
     public static final ForgeConfigSpec.DoubleValue CANNON_CORE_DAMAGE;
+    public static final ForgeConfigSpec.DoubleValue CANNON_EXPLOSION_RADIUS;
 
     // ----- client -----
     public static final ForgeConfigSpec.BooleanValue ALARM_VIGNETTE;
@@ -118,6 +119,9 @@ public final class SeeleConfig
         CANNON_CORE_DAMAGE = common
                 .comment("Damage when striking an exposed Angel core. Default kills Ramiel in two core hits.")
                 .defineInRange("coreDamage", 180.0D, 0.0D, 100000.0D);
+        CANNON_EXPLOSION_RADIUS = common
+                .comment("Explosion radius at the cannon impact point.")
+                .defineInRange("explosionRadius", 4.0D, 0.0D, 12.0D);
         common.pop();
 
         COMMON_SPEC = common.build();

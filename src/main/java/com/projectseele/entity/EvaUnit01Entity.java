@@ -64,10 +64,15 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
 
     private static final float MELEE_FIST_DAMAGE = 20.0F;
     private static final float MELEE_KNIFE_DAMAGE = 60.0F;
-    private static final int MELEE_COOLDOWN_TICKS = 14;
+    private static final int MELEE_COOLDOWN_TICKS = 12;
     // Reach geometry for the doubled 24-block frame.
     private static final double MELEE_REACH = 8.0D;
     private static final double MELEE_RADIUS = 6.0D;
+    // Smash: crouch + attack. Slow, heavy, area knockdown.
+    private static final float SMASH_FIST_DAMAGE = 35.0F;
+    private static final float SMASH_KNIFE_DAMAGE = 80.0F;
+    private static final int SMASH_COOLDOWN_TICKS = 60;
+    private static final double SMASH_RADIUS = 9.0D;
     private static final float AT_FIELD_MAX = 200.0F;
     private static final float AT_FIELD_REGEN = 0.4F;
     private static final int AT_FIELD_REGEN_DELAY = 100;
@@ -88,11 +93,15 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     private static final RawAnimation ANIM_WALK = RawAnimation.begin().thenLoop("animation.eva_unit01.walk");
     private static final RawAnimation ANIM_AIM = RawAnimation.begin().thenLoop("animation.eva_unit01.aim");
     private static final RawAnimation ANIM_MELEE = RawAnimation.begin().thenPlay("animation.eva_unit01.melee");
+    private static final RawAnimation ANIM_MELEE_LEFT = RawAnimation.begin().thenPlay("animation.eva_unit01.melee_left");
+    private static final RawAnimation ANIM_SMASH = RawAnimation.begin().thenPlay("animation.eva_unit01.smash");
 
     private final AnimatableInstanceCache geoCache = GeckoLibUtil.createInstanceCache(this);
 
     private boolean chargingHeld;
     private int meleeCooldown;
+    private int smashCooldown;
+    private boolean leftSwing;
     private int atRegenDelay;
 
     public EvaUnit01Entity(EntityType<? extends EvaUnit01Entity> type, Level level)
@@ -105,7 +114,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     {
         return PathfinderMob.createMobAttributes()
                 .add(Attributes.MAX_HEALTH, 300.0D)
-                .add(Attributes.MOVEMENT_SPEED, 0.30D)
+                .add(Attributes.MOVEMENT_SPEED, 0.42D)
                 .add(Attributes.KNOCKBACK_RESISTANCE, 1.0D)
                 .add(Attributes.ATTACK_DAMAGE, 12.0D)
                 .add(ForgeMod.STEP_HEIGHT_ADDITION.get(), 1.0D);
@@ -209,7 +218,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         this.chargingHeld = held;
     }
 
-    /** Left-click from the plug: one heavy swing in front of the Unit. */
+    /** Left-click from the plug: alternating swings in front of the Unit. */
     public void meleeAttack(ServerPlayer pilot)
     {
         if (this.meleeCooldown > 0 || this.getWeapon() == WEAPON_CANNON)
@@ -217,29 +226,59 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             return;
         }
         this.meleeCooldown = MELEE_COOLDOWN_TICKS;
-        this.triggerAnim("strike", "melee");
+        this.leftSwing = !this.leftSwing;
+        this.triggerAnim("strike", this.leftSwing ? "melee_left" : "melee");
 
         boolean knife = this.getWeapon() == WEAPON_KNIFE;
         float damage = knife ? MELEE_KNIFE_DAMAGE : MELEE_FIST_DAMAGE;
         Vec3 forward = this.getForward().multiply(1.0D, 0.0D, 1.0D).normalize();
         Vec3 center = this.position().add(forward.scale(MELEE_REACH)).add(0.0D, 11.0D, 0.0D);
         AABB zone = new AABB(center, center).inflate(MELEE_RADIUS, 8.0D, MELEE_RADIUS);
-
-        if (this.level() instanceof ServerLevel serverLevel)
-        {
-            for (LivingEntity target : serverLevel.getEntitiesOfClass(LivingEntity.class, zone,
-                    e -> e != this && e != pilot && !this.hasPassenger(e) && e.isAlive()))
-            {
-                // Damage sourced directly from the Unit: Angel A.T. Fields
-                // treat EVA contact as neutralized and let it through.
-                target.hurt(this.damageSources().mobAttack(this), damage);
-                target.knockback(1.1D, this.getX() - target.getX(), this.getZ() - target.getZ());
-            }
-            serverLevel.sendParticles(ParticleTypes.SWEEP_ATTACK,
-                    center.x, center.y, center.z, 6, 1.6D, 1.2D, 1.6D, 0.0D);
-        }
+        this.strikeZone(pilot, zone, damage, 1.1D, center);
         this.playSound(knife ? SoundEvents.PLAYER_ATTACK_SWEEP : SoundEvents.IRON_GOLEM_ATTACK, 2.5F,
                 knife ? 0.7F : 0.8F);
+    }
+
+    /** Crouch + attack: a slow two-handed slam that flattens the area ahead. */
+    public void smashAttack(ServerPlayer pilot)
+    {
+        if (this.smashCooldown > 0 || this.getWeapon() == WEAPON_CANNON)
+        {
+            return;
+        }
+        this.smashCooldown = SMASH_COOLDOWN_TICKS;
+        this.triggerAnim("strike", "smash");
+
+        boolean knife = this.getWeapon() == WEAPON_KNIFE;
+        float damage = knife ? SMASH_KNIFE_DAMAGE : SMASH_FIST_DAMAGE;
+        Vec3 forward = this.getForward().multiply(1.0D, 0.0D, 1.0D).normalize();
+        Vec3 center = this.position().add(forward.scale(MELEE_REACH + 1.0D)).add(0.0D, 4.0D, 0.0D);
+        AABB zone = new AABB(center, center).inflate(SMASH_RADIUS, 7.0D, SMASH_RADIUS);
+        this.strikeZone(pilot, zone, damage, 2.0D, center);
+        if (this.level() instanceof ServerLevel serverLevel)
+        {
+            serverLevel.sendParticles(ParticleTypes.EXPLOSION,
+                    center.x, center.y - 2.0D, center.z, 10, 3.5D, 0.6D, 3.5D, 0.0D);
+        }
+        this.playSound(SoundEvents.IRON_GOLEM_DEATH, 3.0F, 0.55F);
+    }
+
+    private void strikeZone(ServerPlayer pilot, AABB zone, float damage, double knockback, Vec3 fxCenter)
+    {
+        if (!(this.level() instanceof ServerLevel serverLevel))
+        {
+            return;
+        }
+        for (LivingEntity target : serverLevel.getEntitiesOfClass(LivingEntity.class, zone,
+                e -> e != this && e != pilot && !this.hasPassenger(e) && e.isAlive()))
+        {
+            // Damage sourced directly from the Unit: Angel A.T. Fields
+            // treat EVA contact as neutralized and let it through.
+            target.hurt(this.damageSources().mobAttack(this), damage);
+            target.knockback(knockback, this.getX() - target.getX(), this.getZ() - target.getZ());
+        }
+        serverLevel.sendParticles(ParticleTypes.SWEEP_ATTACK,
+                fxCenter.x, fxCenter.y, fxCenter.z, 6, 1.6D, 1.2D, 1.6D, 0.0D);
     }
 
     /** Use-key released: fire if fully charged, otherwise just power down. */
@@ -289,6 +328,10 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             }
         }
 
+        // The shot itself detonates: positron rounds do not leave neat holes.
+        level.explode(this, end.x, end.y, end.z,
+                SeeleConfig.CANNON_EXPLOSION_RADIUS.get().floatValue(), Level.ExplosionInteraction.MOB);
+
         // Muzzle roughly at the cannon barrel, right hand height.
         Vec3 muzzle = this.position()
                 .add(this.getForward().scale(7.0D))
@@ -313,6 +356,10 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         if (this.meleeCooldown > 0)
         {
             this.meleeCooldown--;
+        }
+        if (this.smashCooldown > 0)
+        {
+            this.smashCooldown--;
         }
         int cooldown = this.getCannonCooldown();
         if (cooldown > 0)
@@ -426,12 +473,27 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         // The Unit turns with the pilot's view, horse-style.
         this.setRot(player.getYRot(), player.getXRot() * 0.5F);
         this.yRotO = this.yBodyRot = this.yHeadRot = this.getYRot();
+        // The pilot is sealed inside the entry plug — nobody sees them.
+        if (!player.isInvisible())
+        {
+            player.setInvisible(true);
+        }
+    }
+
+    @Override
+    protected void removePassenger(Entity passenger)
+    {
+        super.removePassenger(passenger);
+        if (passenger instanceof Player player)
+        {
+            player.setInvisible(false);
+        }
     }
 
     @Override
     protected Vec3 getRiddenInput(Player player, Vec3 input)
     {
-        return new Vec3(player.xxa * 0.5D, 0.0D, player.zza >= 0.0F ? player.zza : player.zza * 0.4D);
+        return new Vec3(player.xxa * 0.7D, 0.0D, player.zza >= 0.0F ? player.zza : player.zza * 0.6D);
     }
 
     @Override
@@ -525,7 +587,9 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             return PlayState.STOP;
         }));
         controllers.add(new AnimationController<>(this, "strike", 3, state -> PlayState.STOP)
-                .triggerableAnim("melee", ANIM_MELEE));
+                .triggerableAnim("melee", ANIM_MELEE)
+                .triggerableAnim("melee_left", ANIM_MELEE_LEFT)
+                .triggerableAnim("smash", ANIM_SMASH));
     }
 
     @Override

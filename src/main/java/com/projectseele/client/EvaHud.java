@@ -32,6 +32,43 @@ public final class EvaHud
 
     private EvaHud() {}
 
+    /**
+     * Entry-plug insertion cinematic: dark clunk, LCL floods bottom-to-top,
+     * vision clears. Runs for ~2.5s after boarding.
+     */
+    public static final IGuiOverlay INSERTION = (gui, guiGraphics, partialTick, width, height) ->
+    {
+        float progress = ClientForgeEvents.insertionProgress(partialTick);
+        if (progress < 0.0F)
+        {
+            return;
+        }
+        // Phase 1 (0..0.16): hard blackout as the plug slams home.
+        // Phase 2 (0.16..0.6): LCL rises from the bottom of the view.
+        // Phase 3 (0.6..1): everything drains to transparency.
+        float blackout = progress < 0.16F ? progress / 0.16F
+                : Mth.clamp(1.0F - (progress - 0.16F) / 0.5F, 0.0F, 1.0F);
+        guiGraphics.fill(0, 0, width, height, ((int) (blackout * 230.0F) << 24));
+
+        float rise = Mth.clamp((progress - 0.16F) / 0.44F, 0.0F, 1.0F);
+        float fade = progress > 0.6F ? Mth.clamp(1.0F - (progress - 0.6F) / 0.4F, 0.0F, 1.0F) : 1.0F;
+        if (rise > 0.0F)
+        {
+            int surface = height - Math.round(height * rise);
+            int lclAlpha = (int) (150.0F * fade);
+            guiGraphics.fill(0, surface, width, height, (lclAlpha << 24) | 0xFF8C1A);
+            // Bright meniscus line at the LCL surface.
+            guiGraphics.fill(0, Math.max(0, surface - 2), width, surface, ((int) (220.0F * fade) << 24) | 0xFFB35C);
+        }
+        if (progress > 0.1F && progress < 0.85F)
+        {
+            guiGraphics.drawCenteredString(gui.getFont(),
+                    Component.translatable("hud.projectseele.plug_insertion")
+                            .withStyle(ChatFormatting.GOLD),
+                    width / 2, height / 2 - 30, NERV_ORANGE);
+        }
+    };
+
     /** Full entry-plug cockpit: frame, synchro readout, status, warnings. */
     public static final IGuiOverlay COCKPIT = (gui, guiGraphics, partialTick, width, height) ->
     {
