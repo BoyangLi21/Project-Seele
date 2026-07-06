@@ -47,6 +47,7 @@ cd Project-Seele
 - 杀掉游戏窗口后对应的 gradle runClient 任务会报 exit 1，属正常现象
 - `.claude/` 是本机会话数据，已 gitignore，换机不迁移、不提交
 - 装不了 MSI（无管理员/不想动系统）时可用 **zip 版 Temurin 17**：解压后 `setx JAVA_HOME <目录>`，Claude 会话内跑 gradlew 前需内联 `$env:JAVA_HOME=...`（新 shell 才读得到 setx）
+- **GeckoLib 在开发环境启动崩溃**（`TextureManagerMixin FAILED during APPLY ... m_118506_`）：它的 mixin refmap 是 SRG 名而 userdev 跑 official 映射。修复已入库（`build.gradle` runs 里的 `mixin.env.remapRefMap` 两行 + 跑一次 `gradlew createSrgToMcp`）。换机后首次 runClient 前记得跑 createSrgToMcp（build/ 不进版本库）
 
 ## 5. 交接检查单（新机器就绪标准）
 

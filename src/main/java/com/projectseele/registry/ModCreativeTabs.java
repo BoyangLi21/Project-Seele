@@ -18,7 +18,6 @@ public class ModCreativeTabs
                     .icon(() -> ModItems.POSITRON_RIFLE.get().getDefaultInstance())
                     .displayItems((parameters, output) -> {
                         output.accept(ModItems.POSITRON_RIFLE.get());
-                        output.accept(ModItems.POSITRON_CANNON.get());
                         output.accept(ModItems.CORE_FRAGMENT.get());
                         output.accept(ModItems.RAMIEL_SPAWN_EGG.get());
                         output.accept(ModItems.EVA_UNIT01_SPAWN_EGG.get());

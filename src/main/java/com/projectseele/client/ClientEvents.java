@@ -7,6 +7,7 @@ import com.projectseele.registry.ModEntities;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.EntityRenderersEvent;
 import net.minecraftforge.client.event.RegisterGuiOverlaysEvent;
+import net.minecraftforge.client.event.RegisterKeyMappingsEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 
@@ -26,5 +27,12 @@ public class ClientEvents
         event.registerAboveAll("angel_alarm", AlarmOverlay.INSTANCE);
         event.registerAboveAll("eva_cockpit", EvaHud.COCKPIT);
         event.registerAboveAll("sniper_scope", EvaHud.SCOPE);
+    }
+
+    @SubscribeEvent
+    public static void onRegisterKeyMappings(RegisterKeyMappingsEvent event)
+    {
+        event.register(Keybinds.CYCLE_WEAPON);
+        event.register(Keybinds.TOGGLE_AT_FIELD);
     }
 }

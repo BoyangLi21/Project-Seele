@@ -1,14 +1,23 @@
 {
   "itemGroup.projectseele": "Project SEELE",
   "item.projectseele.positron_rifle": "Positron Rifle",
-  "item.projectseele.positron_cannon": "Positron Sniper Cannon",
   "item.projectseele.core_fragment": "Angel Core Fragment",
   "item.projectseele.ramiel_spawn_egg": "Ramiel Spawn Egg",
   "item.projectseele.eva_unit01_spawn_egg": "EVA Unit-01 Spawn Egg",
   "entity.projectseele.ramiel": "Ramiel",
   "entity.projectseele.eva_unit01": "EVA Unit-01",
 
-  "msg.projectseele.cannon_requires_eva": "The positron cannon can only be fired from an EVA entry plug",
+  "key.categories.projectseele": "Project SEELE",
+  "key.projectseele.cycle_weapon": "EVA: Cycle Weapon",
+  "key.projectseele.toggle_at_field": "EVA: Toggle A.T. Field",
+
+  "msg.projectseele.weapon_fists": "Weapon: Bare Hands",
+  "msg.projectseele.weapon_knife": "Weapon: Progressive Knife",
+  "msg.projectseele.weapon_cannon": "Weapon: Positron Sniper Cannon",
+  "msg.projectseele.at_field_on": "A.T. Field deployed",
+  "msg.projectseele.at_field_off": "A.T. Field withdrawn",
+  "msg.projectseele.at_field_low": "A.T. Field energy too low",
+
   "hud.projectseele.eva_status": "EVA-01",
   "hud.projectseele.charging": "CHARGING",
   "hud.projectseele.charge_ready": "READY",

@@ -68,6 +68,23 @@ public final class ClientFxManager
                 new Vec3(packet.x2, packet.y2, packet.z2)));
     }
 
+    public static void addNukeFx(com.projectseele.network.ClientboundNukeFxPacket packet)
+    {
+        Vec3 pos = new Vec3(packet.x, packet.y, packet.z);
+        if (com.projectseele.config.SeeleConfig.FX_INTENSITY.get() > 0.0D)
+        {
+            ACTIVE.add(new NukeExplosion(pos, packet.scale));
+            // The nuke carries its own small cross of light.
+            ACTIVE.add(new CrossExplosion(pos, packet.scale * 0.5F));
+        }
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft.level != null)
+        {
+            minecraft.level.playLocalSound(packet.x, packet.y, packet.z,
+                    ModSounds.CROSS_EXPLOSION.get(), SoundSource.HOSTILE, 5.0F, 0.72F, false);
+        }
+    }
+
     public static void clear()
     {
         ACTIVE.clear();
@@ -260,6 +277,106 @@ public final class ClientFxManager
                 RibbonRenderer.drawPolyRing(pose, consumer, this.u, this.v, 6, radius,
                         0.22F - 0.04F * ring, 1.0F, 0.60F, 0.18F, alpha * (1.0F - ring * 0.22F));
             }
+        }
+    }
+
+    /**
+     * Nuke-grade beam impact: a blinding radial flash, an expanding fireball
+     * of light ribbons and a fast double shockwave. The mushroom smoke itself
+     * is server-side particles; the cross of light is a separate instance.
+     */
+    private static final class NukeExplosion extends WorldFx
+    {
+        static final int LIFETIME = 44;
+
+        private static final Vector3f[] BURST_DIRS = buildBurstDirs();
+
+        final float scale;
+
+        NukeExplosion(Vec3 pos, float scale)
+        {
+            super(pos);
+            this.scale = scale;
+        }
+
+        @Override
+        int lifetime()
+        {
+            return LIFETIME;
+        }
+
+        @Override
+        void render(PoseStack poseStack, VertexConsumer consumer, float partialTick)
+        {
+            float t = this.age + partialTick;
+            Matrix4f pose = poseStack.last().pose();
+            float intensity = fxIntensity();
+
+            // Blinding radial flash for the first half second.
+            if (t < 9.0F)
+            {
+                float flashT = t / 9.0F;
+                float len = (6.0F + 14.0F * easeOutCubic(flashT)) * this.scale;
+                float alpha = (1.0F - flashT) * 0.95F * intensity;
+                for (Vector3f dir : BURST_DIRS)
+                {
+                    Vector3f end = new Vector3f(dir).mul(len);
+                    RibbonRenderer.drawStarRibbon(pose, consumer, new Vector3f(0.0F, 0.0F, 0.0F), end,
+                            1.3F * this.scale, 0.12F, 1.0F, 0.99F, 0.92F, alpha);
+                }
+            }
+
+            // Rising fireball: stacked luminous rings swelling and lifting.
+            float ballT = Mth.clamp(t / 30.0F, 0.0F, 1.0F);
+            float ballAlpha = (1.0F - ballT) * 0.65F * intensity;
+            if (ballAlpha > 0.01F)
+            {
+                float radius = (2.0F + 9.0F * easeOutCubic(ballT)) * this.scale;
+                float lift = 6.0F * ballT * this.scale;
+                Vector3f ux = new Vector3f(1.0F, 0.0F, 0.0F);
+                Vector3f uz = new Vector3f(0.0F, 0.0F, 1.0F);
+                for (int layer = -1; layer <= 1; layer++)
+                {
+                    float layerR = radius * (1.0F - 0.28F * Math.abs(layer));
+                    poseStack.pushPose();
+                    poseStack.translate(0.0D, lift + layer * radius * 0.45F, 0.0D);
+                    RibbonRenderer.drawPolyRing(poseStack.last().pose(), consumer, ux, uz, 12,
+                            layerR, layerR * 0.45F, 1.0F, 0.52F, 0.16F, ballAlpha);
+                    poseStack.popPose();
+                }
+            }
+
+            // Twin ground shockwaves racing outward.
+            for (int wave = 0; wave < 2; wave++)
+            {
+                float waveT = Mth.clamp((t - wave * 5.0F) / 26.0F, 0.0F, 1.0F);
+                if (waveT <= 0.0F || waveT >= 1.0F)
+                {
+                    continue;
+                }
+                float radius = 42.0F * this.scale * easeOutCubic(waveT);
+                float alpha = (1.0F - waveT) * (0.5F - wave * 0.15F) * intensity;
+                poseStack.pushPose();
+                poseStack.translate(0.0D, 0.2D + wave * 0.5D, 0.0D);
+                RibbonRenderer.drawGroundRing(poseStack.last().pose(), consumer, radius,
+                        1.4F * this.scale, 1.0F, 0.72F, 0.35F, alpha);
+                poseStack.popPose();
+            }
+        }
+
+        private static Vector3f[] buildBurstDirs()
+        {
+            // 14 fixed directions: 6 axes + 8 diagonals, normalized.
+            float d = 0.5774F;
+            return new Vector3f[] {
+                    new Vector3f(1, 0, 0), new Vector3f(-1, 0, 0),
+                    new Vector3f(0, 1, 0), new Vector3f(0, -1, 0),
+                    new Vector3f(0, 0, 1), new Vector3f(0, 0, -1),
+                    new Vector3f(d, d, d), new Vector3f(-d, d, d),
+                    new Vector3f(d, d, -d), new Vector3f(-d, d, -d),
+                    new Vector3f(d, -d, d), new Vector3f(-d, -d, d),
+                    new Vector3f(d, -d, -d), new Vector3f(-d, -d, -d)
+            };
         }
     }
 

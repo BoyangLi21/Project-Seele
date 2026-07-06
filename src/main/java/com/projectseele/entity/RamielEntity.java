@@ -9,8 +9,9 @@ import java.util.UUID;
 
 import com.projectseele.alarm.AngelAlarmSystem;
 import com.projectseele.config.SeeleConfig;
+import com.projectseele.fx.AtFieldFX;
 import com.projectseele.fx.CrossExplosionFX;
-import com.projectseele.network.ClientboundAtFieldRipplePacket;
+import com.projectseele.network.ClientboundNukeFxPacket;
 import com.projectseele.network.SeeleNetwork;
 import com.projectseele.registry.ModSounds;
 import net.minecraft.core.BlockPos;
@@ -258,11 +259,13 @@ public class RamielEntity extends FlyingMob implements Enemy, Angel
     /**
      * The A.T. Field: while the core is sealed, everything short of
      * invulnerability-bypassing damage is deflected with a hexagon ripple.
+     * EVA melee is the exception — field-on-field contact neutralizes it.
      */
     @Override
     public boolean hurt(DamageSource source, float amount)
     {
-        if (!this.isExposed() && !source.is(DamageTypeTags.BYPASSES_INVULNERABILITY))
+        boolean evaNeutralized = source.getDirectEntity() instanceof EvaUnit01Entity;
+        if (!this.isExposed() && !evaNeutralized && !source.is(DamageTypeTags.BYPASSES_INVULNERABILITY))
         {
             if (!this.level().isClientSide)
             {
@@ -290,12 +293,13 @@ public class RamielEntity extends FlyingMob implements Enemy, Angel
         this.playSound(ModSounds.CRYSTAL_HIT.get(), 2.0F, 0.55F);
     }
 
-    /** Broadcasts a hexagon ripple to everyone tracking this Angel. */
+    /** Broadcasts a hexagon ripple to everyone near this Angel. */
     public void spawnAtFieldRipple(Vec3 point, Vec3 normal)
     {
-        SeeleNetwork.CHANNEL.send(PacketDistributor.TRACKING_ENTITY.with(() -> this),
-                new ClientboundAtFieldRipplePacket(point.x, point.y, point.z,
-                        (float) normal.x, (float) normal.y, (float) normal.z));
+        if (this.level() instanceof ServerLevel serverLevel)
+        {
+            AtFieldFX.ripple(serverLevel, point, normal);
+        }
     }
 
     @Override
@@ -414,13 +418,29 @@ public class RamielEntity extends FlyingMob implements Enemy, Angel
         this.exposedTimer = EXPOSED_AFTER_FIRE_TICKS;
         this.setExposed(true);
 
-        // The beam itself is rendered client-side from this synced state; only
-        // the impact point still gets a server particle burst.
+        // The beam itself is rendered client-side from this synced state; the
+        // impact gets the full nuke treatment: flash + fireball + cross light
+        // client-side, mushroom column via server particles.
         this.entityData.set(DATA_BEAM_END, new Vector3f((float) end.x, (float) end.y, (float) end.z));
         this.entityData.set(DATA_BEAM_TICKS, BEAM_RENDER_TICKS);
         if (this.level() instanceof ServerLevel serverLevel)
         {
+            SeeleNetwork.CHANNEL.send(
+                    PacketDistributor.NEAR.with(() -> new PacketDistributor.TargetPoint(
+                            end.x, end.y, end.z, 192.0D, serverLevel.dimension())),
+                    new ClientboundNukeFxPacket(end.x, end.y, end.z, 1.0F));
             serverLevel.sendParticles(ParticleTypes.END_ROD, end.x, end.y, end.z, 24, 0.6D, 0.6D, 0.6D, 0.12D);
+            serverLevel.sendParticles(ParticleTypes.EXPLOSION_EMITTER, end.x, end.y + 1.0D, end.z, 2, 1.5D, 1.0D, 1.5D, 0.0D);
+            // Mushroom stem and cap.
+            for (int i = 2; i <= 14; i += 2)
+            {
+                serverLevel.sendParticles(ParticleTypes.LARGE_SMOKE,
+                        end.x, end.y + i, end.z, 6, 0.9D, 0.8D, 0.9D, 0.01D);
+            }
+            serverLevel.sendParticles(ParticleTypes.CAMPFIRE_COSY_SMOKE,
+                    end.x, end.y + 15.0D, end.z, 40, 5.5D, 1.6D, 5.5D, 0.02D);
+            serverLevel.sendParticles(ParticleTypes.FLAME,
+                    end.x, end.y + 0.8D, end.z, 50, 3.0D, 1.2D, 3.0D, 0.08D);
         }
         this.playSound(ModSounds.BEAM_FIRE.get(), 5.0F, 1.0F);
     }

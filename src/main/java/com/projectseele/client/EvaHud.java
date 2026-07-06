@@ -3,9 +3,9 @@ package com.projectseele.client;
 import com.projectseele.config.SeeleConfig;
 import com.projectseele.entity.EvaUnit01Entity;
 import com.projectseele.entity.RamielEntity;
-import com.projectseele.item.PositronCannonItem;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.network.chat.Component;
@@ -16,6 +16,7 @@ import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.EntityHitResult;
+import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.client.gui.overlay.IGuiOverlay;
 
@@ -26,6 +27,7 @@ import net.minecraftforge.client.gui.overlay.IGuiOverlay;
 public final class EvaHud
 {
     private static final int NERV_ORANGE = 0xFFFF7A00;
+    private static final int AT_CYAN = 0xFF39D8E8;
     private static final int PANEL_BG = 0x90101010;
 
     private EvaHud() {}
@@ -39,25 +41,47 @@ public final class EvaHud
             return;
         }
         int x = 10;
-        int y = height - 46;
+        int y = height - 64;
         int barWidth = 130;
 
-        guiGraphics.fill(x - 4, y - 14, x + barWidth + 4, y + 18, PANEL_BG);
+        guiGraphics.fill(x - 4, y - 14, x + barWidth + 4, y + 36, PANEL_BG);
         guiGraphics.fill(x - 4, y - 14, x + barWidth + 4, y - 13, NERV_ORANGE);
-        guiGraphics.fill(x - 4, y + 17, x + barWidth + 4, y + 18, NERV_ORANGE);
+        guiGraphics.fill(x - 4, y + 35, x + barWidth + 4, y + 36, NERV_ORANGE);
 
         guiGraphics.drawString(gui.getFont(),
                 Component.translatable("hud.projectseele.eva_status").withStyle(ChatFormatting.GOLD),
                 x, y - 10, NERV_ORANGE);
-
-        float fraction = Mth.clamp(eva.getHealth() / eva.getMaxHealth(), 0.0F, 1.0F);
-        int fill = Math.round(barWidth * fraction);
-        int color = fraction > 0.5F ? 0xFF35D435 : fraction > 0.25F ? 0xFFE0C020 : 0xFFD43535;
-        guiGraphics.fill(x, y + 2, x + barWidth, y + 10, 0xFF202020);
-        guiGraphics.fill(x, y + 2, x + fill, y + 10, color);
         guiGraphics.drawString(gui.getFont(),
                 String.format("%.0f / %.0f", eva.getHealth(), eva.getMaxHealth()),
                 x + barWidth - 52, y - 10, 0xFFDDDDDD);
+
+        // Hull bar.
+        float hull = Mth.clamp(eva.getHealth() / eva.getMaxHealth(), 0.0F, 1.0F);
+        int hullColor = hull > 0.5F ? 0xFF35D435 : hull > 0.25F ? 0xFFE0C020 : 0xFFD43535;
+        guiGraphics.fill(x, y + 2, x + barWidth, y + 10, 0xFF202020);
+        guiGraphics.fill(x, y + 2, x + Math.round(barWidth * hull), y + 10, hullColor);
+
+        // A.T. Field bar: cyan when raised, grey when down.
+        float at = Mth.clamp(eva.getAtFieldEnergy() / EvaUnit01Entity.getAtFieldMax(), 0.0F, 1.0F);
+        boolean atOn = eva.isAtFieldOn();
+        guiGraphics.fill(x, y + 14, x + barWidth, y + 22, 0xFF202020);
+        guiGraphics.fill(x, y + 14, x + Math.round(barWidth * at), y + 22,
+                atOn ? AT_CYAN : 0xFF5A6068);
+        guiGraphics.drawString(gui.getFont(),
+                Component.translatable("hud.projectseele.at_field")
+                        .withStyle(atOn ? ChatFormatting.AQUA : ChatFormatting.DARK_GRAY),
+                x, y + 25, 0xFFFFFFFF);
+
+        // Weapon line.
+        String weaponKey = switch (eva.getWeapon())
+        {
+            case EvaUnit01Entity.WEAPON_KNIFE -> "msg.projectseele.weapon_knife";
+            case EvaUnit01Entity.WEAPON_CANNON -> "msg.projectseele.weapon_cannon";
+            default -> "msg.projectseele.weapon_fists";
+        };
+        guiGraphics.drawString(gui.getFont(),
+                Component.translatable(weaponKey).withStyle(ChatFormatting.YELLOW),
+                x + 44, y + 25, 0xFFFFFFFF);
     };
 
     /** Sniper scope: crosshair, charge bar, rangefinder and core-lock call-outs. */
@@ -65,15 +89,15 @@ public final class EvaHud
     {
         Minecraft minecraft = Minecraft.getInstance();
         LocalPlayer player = minecraft.player;
-        if (player == null || !player.isUsingItem()
-                || !(player.getUseItem().getItem() instanceof PositronCannonItem)
-                || !(player.getVehicle() instanceof EvaUnit01Entity))
+        if (player == null || !(player.getVehicle() instanceof EvaUnit01Entity eva)
+                || eva.getWeapon() != EvaUnit01Entity.WEAPON_CANNON
+                || eva.getCannonCharge() <= 0)
         {
             return;
         }
         int cx = width / 2;
         int cy = height / 2;
-        float progress = PositronCannonItem.chargeProgress(player);
+        float progress = eva.chargeProgress();
 
         // Scope shading around a central window.
         int frameH = Math.round(height * 0.14F);
@@ -116,11 +140,11 @@ public final class EvaHud
         guiGraphics.drawCenteredString(gui.getFont(), chargeText, cx, by + 12, 0xFFFFFFFF);
 
         // Rangefinder + target designation.
-        scopeReadout(guiGraphics, gui.getFont(), player, cx, cy - b - 24, ready);
+        scopeReadout(guiGraphics, gui.getFont(), player, eva, cx, cy - b - 24, ready);
     };
 
-    private static void scopeReadout(GuiGraphics guiGraphics, net.minecraft.client.gui.Font font,
-                                     LocalPlayer player, int cx, int y, boolean ready)
+    private static void scopeReadout(GuiGraphics guiGraphics, Font font,
+                                     LocalPlayer player, EvaUnit01Entity eva, int cx, int y, boolean ready)
     {
         double range = SeeleConfig.CANNON_RANGE.get();
         Vec3 from = player.getEyePosition();
@@ -131,11 +155,11 @@ public final class EvaHud
         Vec3 end = blockHit.getLocation();
         EntityHitResult entityHit = ProjectileUtil.getEntityHitResult(player.level(), player, from, end,
                 new AABB(from, end).inflate(1.0D),
-                e -> e instanceof LivingEntity && e != player && e != player.getVehicle()
+                e -> e instanceof LivingEntity && e != player && e != eva
                         && !e.isSpectator() && e.isAlive());
 
         double distance = (entityHit != null ? entityHit.getLocation() : end).distanceTo(from);
-        String distText = blockHit.getType() == net.minecraft.world.phys.HitResult.Type.MISS && entityHit == null
+        String distText = blockHit.getType() == HitResult.Type.MISS && entityHit == null
                 ? "----"
                 : String.format("%.0f m", distance);
         guiGraphics.drawCenteredString(font, "DIST " + distText, cx, y, 0xFFCCCCCC);

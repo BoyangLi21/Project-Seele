@@ -175,20 +175,70 @@ $bmp.Save("$root\item\positron_cannon.png", [System.Drawing.Imaging.ImageFormat]
 $bmp.Dispose()
 Write-Output "wrote item/positron_cannon.png (32x32)"
 
-# ---------- eva_unit01.png (32x32 entity sheet) ----------
-# Flat armour plate: subtle vertical gradient with darker panel seams. The
-# renderer's vertex colors provide the purple/green; keep this near-white.
-$bmp = New-Canvas 32
-for ($y = 0; $y -lt 32; $y++) {
-    for ($x = 0; $x -lt 32; $x++) {
-        $v2 = 232 - $y - (($x * 7 + $y * 3) % 5)
-        if (($y % 11) -eq 0 -or ($x % 13) -eq 0) { $v2 -= 16 }                    # panel seams
-        Set-Px $bmp $x $y @(255, $v2, $v2, [Math]::Min(255, $v2 + 6))
+# ---------- eva_unit01.png (256x256 GeckoLib sheet) ----------
+# Box-UV regions per cube; table MUST match geo/eva_unit01.geo.json uv origins.
+# Each region gets its part colour + vertical shading + sparse panel seams.
+$bmp = New-Object System.Drawing.Bitmap(256, 256)
+
+function Fill-Region([int]$U, [int]$V, [int]$W, [int]$H, [int[]]$Rgb, [double]$Seams) {
+    for ($y = 0; $y -lt $H; $y++) {
+        for ($x = 0; $x -lt $W; $x++) {
+            $shade = 1.0 - 0.18 * ($y / [Math]::Max(1, $H)) - 0.03 * (($x * 5 + $y * 3) % 4) / 4.0
+            if ($Seams -gt 0 -and (($y % 9) -eq 4 -or ($x % 14) -eq 7)) { $shade -= $Seams }
+            $r = [Math]::Max(0, [Math]::Min(255, [int]($Rgb[0] * $shade)))
+            $g = [Math]::Max(0, [Math]::Min(255, [int]($Rgb[1] * $shade)))
+            $b = [Math]::Max(0, [Math]::Min(255, [int]($Rgb[2] * $shade)))
+            $bmp.SetPixel($U + $x, $V + $y, [System.Drawing.Color]::FromArgb(255, $r, $g, $b))
+        }
     }
 }
+
+$purple  = @(96, 44, 158)
+$darkpur = @(62, 28, 108)
+$white2  = @(226, 228, 236)
+$green2  = @(64, 240, 96)
+$orange2 = @(255, 130, 20)
+$metal   = @(74, 80, 94)
+
+# purple armour
+Fill-Region 0 0 72 40 $purple 0.10        # chest
+Fill-Region 76 0 48 34 $purple 0.10      # spine
+Fill-Region 128 0 64 24 $purple 0.10     # pelvis
+Fill-Region 196 0 44 27 $purple 0.08     # skull
+Fill-Region 0 44 38 52 $purple 0.10      # thigh_l
+Fill-Region 40 44 38 52 $purple 0.10     # thigh_r
+Fill-Region 80 44 34 49 $purple 0.10     # shin_l
+Fill-Region 116 44 34 49 $purple 0.10    # shin_r
+Fill-Region 152 44 30 36 $purple 0.08    # upper_arm_l
+Fill-Region 184 44 30 36 $purple 0.08    # upper_arm_r
+Fill-Region 216 44 30 38 $purple 0.08    # forearm_l
+Fill-Region 0 100 30 38 $purple 0.08     # forearm_r
+# dark joints
+Fill-Region 32 100 36 20 $darkpur 0.0    # hand_l
+Fill-Region 70 100 36 20 $darkpur 0.0    # hand_r
+Fill-Region 108 100 52 21 $darkpur 0.06  # foot_l
+Fill-Region 162 100 52 21 $darkpur 0.06  # foot_r
+# white parts
+Fill-Region 0 140 46 30 $white2 0.08     # pylon_l
+Fill-Region 48 140 46 30 $white2 0.08    # pylon_r
+Fill-Region 180 140 8 28 $white2 0.0     # horn
+Fill-Region 190 140 16 30 $white2 0.05   # knife blade
+# glow greens
+Fill-Region 96 140 18 9 $green2 0.0      # core
+Fill-Region 116 140 40 6 $green2 0.0     # chest V
+Fill-Region 160 140 8 3 $green2 0.0      # eye_l
+Fill-Region 170 140 8 3 $green2 0.0      # eye_r
+# orange jaw
+Fill-Region 96 152 18 9 $orange2 0.0     # jaw guard
+# cannon
+Fill-Region 0 170 168 86 $metal 0.09     # barrel box uv
+Fill-Region 208 140 36 18 $metal 0.05    # scope
+# energy band across the barrel region for flavour
+Fill-Region 60 200 24 10 $orange2 0.0
+
 $bmp.Save("$root\entity\eva_unit01.png", [System.Drawing.Imaging.ImageFormat]::Png)
 $bmp.Dispose()
-Write-Output "wrote entity/eva_unit01.png (32x32)"
+Write-Output "wrote entity/eva_unit01.png (256x256)"
 
 # ---------- ramiel.png (32x32 entity gradient) ----------
 # Near-white blue with fine facet seams; renderer vertex colors do the tinting.

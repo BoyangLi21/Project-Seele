@@ -43,5 +43,15 @@ public final class SeeleNetwork
                 .decoder(ClientboundCannonBeamPacket::new)
                 .consumerMainThread(ClientboundCannonBeamPacket::handle)
                 .add();
+        CHANNEL.messageBuilder(ClientboundNukeFxPacket.class, id++, NetworkDirection.PLAY_TO_CLIENT)
+                .encoder(ClientboundNukeFxPacket::encode)
+                .decoder(ClientboundNukeFxPacket::new)
+                .consumerMainThread(ClientboundNukeFxPacket::handle)
+                .add();
+        CHANNEL.messageBuilder(ServerboundEvaControlPacket.class, id++, NetworkDirection.PLAY_TO_SERVER)
+                .encoder(ServerboundEvaControlPacket::encode)
+                .decoder(ServerboundEvaControlPacket::new)
+                .consumerMainThread(ServerboundEvaControlPacket::handle)
+                .add();
     }
 }
