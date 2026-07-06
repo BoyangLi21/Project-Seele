@@ -49,6 +49,45 @@ public final class RibbonRenderer
         }
     }
 
+    /**
+     * Regular polygon ring in the plane spanned by (u, v), centred on the
+     * local origin. Six sides = the A.T. Field hexagon.
+     */
+    public static void drawPolyRing(Matrix4f pose, VertexConsumer consumer, Vector3f u, Vector3f v,
+                                    int sides, float radius, float halfWidth,
+                                    float r, float g, float b, float a)
+    {
+        for (int i = 0; i < sides; i++)
+        {
+            float a0 = (float) (i * 2.0D * Math.PI / sides);
+            float a1 = (float) ((i + 1) * 2.0D * Math.PI / sides);
+            float in = radius - halfWidth;
+            float out = radius + halfWidth;
+            Vector3f d0 = new Vector3f(u).mul(Mth.cos(a0)).add(new Vector3f(v).mul(Mth.sin(a0)));
+            Vector3f d1 = new Vector3f(u).mul(Mth.cos(a1)).add(new Vector3f(v).mul(Mth.sin(a1)));
+            Vector3f p0 = new Vector3f(d0).mul(in);
+            Vector3f p1 = new Vector3f(d0).mul(out);
+            Vector3f p2 = new Vector3f(d1).mul(out);
+            Vector3f p3 = new Vector3f(d1).mul(in);
+            quadBothSides(pose, consumer, p0, p1, p2, p3, r, g, b, a);
+        }
+    }
+
+    /** Builds an orthonormal basis (u, v) perpendicular to the given normal. */
+    public static Vector3f[] planeBasis(Vector3f normal)
+    {
+        Vector3f n = new Vector3f(normal);
+        if (n.lengthSquared() < 1.0E-6F)
+        {
+            n.set(0.0F, 1.0F, 0.0F);
+        }
+        n.normalize();
+        Vector3f seed = Math.abs(n.y()) > 0.98F ? new Vector3f(1.0F, 0.0F, 0.0F) : new Vector3f(0.0F, 1.0F, 0.0F);
+        Vector3f u = new Vector3f(n).cross(seed).normalize();
+        Vector3f v = new Vector3f(n).cross(u).normalize();
+        return new Vector3f[] {u, v};
+    }
+
     /** Flat ring on the XZ plane centred on the local origin (shockwaves). */
     public static void drawGroundRing(Matrix4f pose, VertexConsumer consumer, float radius, float halfWidth,
                                       float r, float g, float b, float a)

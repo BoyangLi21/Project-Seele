@@ -1,6 +1,7 @@
 package com.projectseele.registry;
 
 import com.projectseele.ProjectSeele;
+import com.projectseele.entity.EvaUnit01Entity;
 import com.projectseele.entity.RamielEntity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MobCategory;
@@ -19,4 +20,11 @@ public class ModEntities
                     .fireImmune()
                     .clientTrackingRange(10)
                     .build("ramiel"));
+
+    public static final RegistryObject<EntityType<EvaUnit01Entity>> EVA_UNIT01 = ENTITY_TYPES.register("eva_unit01",
+            () -> EntityType.Builder.of(EvaUnit01Entity::new, MobCategory.MISC)
+                    .sized(3.4F, 12.0F)
+                    .fireImmune()
+                    .clientTrackingRange(10)
+                    .build("eva_unit01"));
 }

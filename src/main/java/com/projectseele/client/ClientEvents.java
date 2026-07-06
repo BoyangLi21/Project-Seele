@@ -1,6 +1,7 @@
 package com.projectseele.client;
 
 import com.projectseele.ProjectSeele;
+import com.projectseele.client.render.EvaUnit01Renderer;
 import com.projectseele.client.render.RamielRenderer;
 import com.projectseele.registry.ModEntities;
 import net.minecraftforge.api.distmarker.Dist;
@@ -16,11 +17,14 @@ public class ClientEvents
     public static void onRegisterRenderers(EntityRenderersEvent.RegisterRenderers event)
     {
         event.registerEntityRenderer(ModEntities.RAMIEL.get(), RamielRenderer::new);
+        event.registerEntityRenderer(ModEntities.EVA_UNIT01.get(), EvaUnit01Renderer::new);
     }
 
     @SubscribeEvent
     public static void onRegisterGuiOverlays(RegisterGuiOverlaysEvent event)
     {
         event.registerAboveAll("angel_alarm", AlarmOverlay.INSTANCE);
+        event.registerAboveAll("eva_cockpit", EvaHud.COCKPIT);
+        event.registerAboveAll("sniper_scope", EvaHud.SCOPE);
     }
 }

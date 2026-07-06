@@ -85,15 +85,21 @@ resources/
 | 项 | 值 | Config 键 |
 |---|---|---|
 | Ramiel 血量/护甲 | 350 / 6 | `ramiel.maxHealth` / `ramiel.armor`（`finalizeSpawn` 应用） |
-| 光束伤害/蓄力/冷却/射程 | 18 / 50t / 90t / 64 | `ramiel.beamDamage` 等 |
+| **AT Field** | 未露核**完全免伤**+近身8格推开 | 硬机制（无 config；`hurt()` 拦截） |
+| **露核窗口** | 蓄力最后20t + 发射后60t | 常量 `EXPOSE_CHARGE_WINDOW` / `EXPOSED_AFTER_FIRE_TICKS` |
+| 光束伤害/爆炸半径 | **120（核弹级）** / 8 | `ramiel.beamDamage` / `beamExplosionRadius` |
+| 光束蓄力/冷却/射程 | 50t / 90t / 64 | `ramiel.beamChargeTicks` 等 |
 | 二阶段蓄力（血量<40%） | 30t | `ramiel.beamChargeTicksEnraged` |
 | 钻头伤害/持续/冷却 | 4×每10t / 80t / 300t | `ramiel.drillDamage` / `drillCooldownTicks` |
-| 步枪伤害/冷却/射程 | 16 / 25t / 96 | `positron_rifle.*` |
-| 警报总开关 | true | `ramiel.alarmEnabled` |
+| **EVA初号机血量** | 300（抗两枪120，第三枪死） | `eva_unit01.maxHealth` |
+| **狙击炮蓄力/射程/冷却** | 60t / 512 / 200t | `positron_cannon.*` |
+| 狙击炮命中露核核心 | **一击毙命**（99999） | 硬机制；命中壳=`mobDamage` 40 |
+| 步枪伤害/冷却/射程 | 16 / 25t / 96（对使徒被 AT Field 全弹开） | `positron_rifle.*` |
+| 警报总开关/音量 | true / 0.45 | `ramiel.alarmEnabled`（音量为常量） |
 | 客户端特效强度/警报红屏 | 1.0 / true | `screen_effects.*` |
 | 核心碎片掉落 | 4–8 (+抢夺) | `loot_tables/entities/ramiel.json`（不在 config） |
 
-非平衡类几何/演出常量（光束存续 tick、钻头半径等）仍在类顶常量区。
+非平衡类几何/演出常量（光束存续 tick、钻头半径、核心判定半径 2.2 等）仍在类顶常量区。
 
 ## 已知占位/技术债
 

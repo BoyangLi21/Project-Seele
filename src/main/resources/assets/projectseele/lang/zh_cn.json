@@ -1,9 +1,20 @@
 {
   "itemGroup.projectseele": "Project SEELE",
   "item.projectseele.positron_rifle": "阳电子步枪",
+  "item.projectseele.positron_cannon": "阳电子狙击炮",
   "item.projectseele.core_fragment": "使徒核心碎片",
   "item.projectseele.ramiel_spawn_egg": "拉米尔刷怪蛋",
+  "item.projectseele.eva_unit01_spawn_egg": "EVA初号机刷怪蛋",
   "entity.projectseele.ramiel": "拉米尔",
+  "entity.projectseele.eva_unit01": "EVA初号机",
+
+  "msg.projectseele.cannon_requires_eva": "阳电子狙击炮只能在EVA插入栓内发射",
+  "hud.projectseele.eva_status": "EVA-01 初号机",
+  "hud.projectseele.charging": "蓄能中",
+  "hud.projectseele.charge_ready": "就绪",
+  "hud.projectseele.core_lock": "核心锁定",
+  "hud.projectseele.core_exposed": "核心暴露",
+  "hud.projectseele.at_field": "A.T. FIELD",
 
   "title.projectseele.angel_alarm": "使徒，来袭",
   "subtitle.projectseele.angel_alarm": "Pattern：蓝色 —— 全员进入一级战斗配置",

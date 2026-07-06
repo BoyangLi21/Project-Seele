@@ -33,5 +33,15 @@ public final class SeeleNetwork
                 .decoder(ClientboundAlarmPacket::new)
                 .consumerMainThread(ClientboundAlarmPacket::handle)
                 .add();
+        CHANNEL.messageBuilder(ClientboundAtFieldRipplePacket.class, id++, NetworkDirection.PLAY_TO_CLIENT)
+                .encoder(ClientboundAtFieldRipplePacket::encode)
+                .decoder(ClientboundAtFieldRipplePacket::new)
+                .consumerMainThread(ClientboundAtFieldRipplePacket::handle)
+                .add();
+        CHANNEL.messageBuilder(ClientboundCannonBeamPacket.class, id++, NetworkDirection.PLAY_TO_CLIENT)
+                .encoder(ClientboundCannonBeamPacket::encode)
+                .decoder(ClientboundCannonBeamPacket::new)
+                .consumerMainThread(ClientboundCannonBeamPacket::handle)
+                .add();
     }
 }

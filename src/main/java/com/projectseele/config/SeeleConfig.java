@@ -16,6 +16,7 @@ public final class SeeleConfig
     public static final ForgeConfigSpec.DoubleValue RAMIEL_MAX_HEALTH;
     public static final ForgeConfigSpec.DoubleValue RAMIEL_ARMOR;
     public static final ForgeConfigSpec.DoubleValue BEAM_DAMAGE;
+    public static final ForgeConfigSpec.DoubleValue BEAM_EXPLOSION_RADIUS;
     public static final ForgeConfigSpec.IntValue BEAM_CHARGE_TICKS;
     public static final ForgeConfigSpec.IntValue BEAM_CHARGE_TICKS_ENRAGED;
     public static final ForgeConfigSpec.IntValue BEAM_COOLDOWN_TICKS;
@@ -28,6 +29,15 @@ public final class SeeleConfig
     public static final ForgeConfigSpec.DoubleValue RIFLE_DAMAGE;
     public static final ForgeConfigSpec.IntValue RIFLE_COOLDOWN_TICKS;
     public static final ForgeConfigSpec.DoubleValue RIFLE_RANGE;
+
+    // ----- common: EVA Unit-01 -----
+    public static final ForgeConfigSpec.DoubleValue EVA_MAX_HEALTH;
+
+    // ----- common: positron sniper cannon (EVA weapon) -----
+    public static final ForgeConfigSpec.IntValue CANNON_CHARGE_TICKS;
+    public static final ForgeConfigSpec.DoubleValue CANNON_RANGE;
+    public static final ForgeConfigSpec.IntValue CANNON_COOLDOWN_TICKS;
+    public static final ForgeConfigSpec.DoubleValue CANNON_MOB_DAMAGE;
 
     // ----- client -----
     public static final ForgeConfigSpec.BooleanValue ALARM_VIGNETTE;
@@ -45,8 +55,11 @@ public final class SeeleConfig
                 .comment("Ramiel armor points.")
                 .defineInRange("armor", 6.0D, 0.0D, 30.0D);
         BEAM_DAMAGE = common
-                .comment("Positron beam damage per hit.")
-                .defineInRange("beamDamage", 18.0D, 0.0D, 1000.0D);
+                .comment("Positron beam damage per hit. Nuke-grade: two hits cripple an EVA.")
+                .defineInRange("beamDamage", 120.0D, 0.0D, 1000.0D);
+        BEAM_EXPLOSION_RADIUS = common
+                .comment("Explosion radius at the beam impact point.")
+                .defineInRange("beamExplosionRadius", 8.0D, 1.0D, 16.0D);
         BEAM_CHARGE_TICKS = common
                 .comment("Beam charge-up time in ticks (phase one).")
                 .defineInRange("beamChargeTicks", 50, 5, 400);
@@ -80,6 +93,27 @@ public final class SeeleConfig
         RIFLE_RANGE = common
                 .comment("Positron rifle hitscan range in blocks.")
                 .defineInRange("range", 96.0D, 8.0D, 256.0D);
+        common.pop();
+
+        common.push("eva_unit01");
+        EVA_MAX_HEALTH = common
+                .comment("EVA Unit-01 max health. Tuned to survive two nuke beams and die to the third.")
+                .defineInRange("maxHealth", 300.0D, 1.0D, 10000.0D);
+        common.pop();
+
+        common.push("positron_cannon");
+        CANNON_CHARGE_TICKS = common
+                .comment("Hold-to-charge time in ticks before the sniper cannon can fire.")
+                .defineInRange("chargeTicks", 60, 5, 400);
+        CANNON_RANGE = common
+                .comment("Sniper cannon hitscan range in blocks.")
+                .defineInRange("range", 512.0D, 32.0D, 1024.0D);
+        CANNON_COOLDOWN_TICKS = common
+                .comment("Cooldown after a shot in ticks.")
+                .defineInRange("cooldownTicks", 200, 1, 6000);
+        CANNON_MOB_DAMAGE = common
+                .comment("Damage against ordinary targets (a core hit on an exposed Angel is always lethal).")
+                .defineInRange("mobDamage", 40.0D, 0.0D, 1000.0D);
         common.pop();
 
         COMMON_SPEC = common.build();

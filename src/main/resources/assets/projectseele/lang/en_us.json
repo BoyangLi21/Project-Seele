@@ -1,9 +1,20 @@
 {
   "itemGroup.projectseele": "Project SEELE",
   "item.projectseele.positron_rifle": "Positron Rifle",
+  "item.projectseele.positron_cannon": "Positron Sniper Cannon",
   "item.projectseele.core_fragment": "Angel Core Fragment",
   "item.projectseele.ramiel_spawn_egg": "Ramiel Spawn Egg",
+  "item.projectseele.eva_unit01_spawn_egg": "EVA Unit-01 Spawn Egg",
   "entity.projectseele.ramiel": "Ramiel",
+  "entity.projectseele.eva_unit01": "EVA Unit-01",
+
+  "msg.projectseele.cannon_requires_eva": "The positron cannon can only be fired from an EVA entry plug",
+  "hud.projectseele.eva_status": "EVA-01",
+  "hud.projectseele.charging": "CHARGING",
+  "hud.projectseele.charge_ready": "READY",
+  "hud.projectseele.core_lock": "CORE LOCK",
+  "hud.projectseele.core_exposed": "CORE EXPOSED",
+  "hud.projectseele.at_field": "A.T. FIELD",
 
   "title.projectseele.angel_alarm": "ANGEL ATTACK",
   "subtitle.projectseele.angel_alarm": "Pattern BLUE — all personnel, first-stage alert",

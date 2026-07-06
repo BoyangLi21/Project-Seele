@@ -16,7 +16,8 @@ public class AlarmSoundInstance extends AbstractTickableSoundInstance
         super(ModSounds.ALARM.get(), SoundSource.HOSTILE, SoundInstance.createUnseededRandom());
         this.looping = true;
         this.delay = 0;
-        this.volume = 0.85F;
+        // Kept well below the action so the siren reads as backdrop, not assault.
+        this.volume = 0.45F;
         this.relative = true;
         this.attenuation = SoundInstance.Attenuation.NONE;
         this.x = 0.0D;

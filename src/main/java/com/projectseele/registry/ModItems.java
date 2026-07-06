@@ -1,6 +1,7 @@
 package com.projectseele.registry;
 
 import com.projectseele.ProjectSeele;
+import com.projectseele.item.PositronCannonItem;
 import com.projectseele.item.PositronRifleItem;
 import net.minecraft.world.item.Item;
 import net.minecraftforge.common.ForgeSpawnEggItem;
@@ -18,6 +19,12 @@ public class ModItems
     public static final RegistryObject<Item> POSITRON_RIFLE = ITEMS.register("positron_rifle",
             () -> new PositronRifleItem(new Item.Properties().stacksTo(1)));
 
+    public static final RegistryObject<Item> POSITRON_CANNON = ITEMS.register("positron_cannon",
+            () -> new PositronCannonItem(new Item.Properties().stacksTo(1)));
+
     public static final RegistryObject<Item> RAMIEL_SPAWN_EGG = ITEMS.register("ramiel_spawn_egg",
             () -> new ForgeSpawnEggItem(ModEntities.RAMIEL, 0x4A7FD4, 0xE3242B, new Item.Properties()));
+
+    public static final RegistryObject<Item> EVA_UNIT01_SPAWN_EGG = ITEMS.register("eva_unit01_spawn_egg",
+            () -> new ForgeSpawnEggItem(ModEntities.EVA_UNIT01, 0x57288A, 0x39FF6E, new Item.Properties()));
 }

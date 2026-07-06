@@ -67,20 +67,48 @@ public class RamielRenderer extends EntityRenderer<RamielEntity>
 
         VertexConsumer body = buffer.getBuffer(RenderType.entityTranslucent(TEXTURE));
         int fullBright = LightTexture.FULL_BRIGHT;
+        float time = entity.tickCount + partialTick;
+
+        // Shell halves part vertically to bare the core (the sniping window).
+        float expose = entity.getExposeProgress(partialTick);
+        float halfGap = 1.5F * expose;
 
         float corePulse = entity.isCharging()
-                ? 1.1F + 0.3F * Mth.sin((entity.tickCount + partialTick) * 0.5F)
+                ? 1.1F + 0.3F * Mth.sin(time * 0.5F)
                 : 0.95F;
-        drawOctahedron(poseStack, body, 1.05F * corePulse, 1.0F, 0.12F, 0.18F, 1.0F, fullBright);
+        corePulse *= 1.0F + 0.16F * expose * Mth.sin(time * 0.9F);
+        float coreSize = (1.05F + 0.55F * expose) * corePulse;
+        drawOctahedron(poseStack, body, coreSize,
+                1.0F, 0.12F + 0.45F * expose, 0.18F + 0.28F * expose, 1.0F, fullBright);
+
         // Shell flashes toward white while the beam is live.
         float shellR = Mth.lerp(beamGlow, 0.45F, 1.0F);
         float shellG = Mth.lerp(beamGlow, 0.72F, 0.95F);
         float shellB = 1.0F;
-        drawOctahedron(poseStack, body, 3.3F, shellR, shellG, shellB, 0.7F, fullBright);
-
         VertexConsumer glow = buffer.getBuffer(RenderType.lightning());
-        drawOctahedronEdges(poseStack, glow, 3.3F, 0.05F,
+
+        poseStack.pushPose();
+        poseStack.translate(0.0D, halfGap, 0.0D);
+        drawOctahedronFaces(poseStack, body, 3.3F, 0, 4, shellR, shellG, shellB, 0.7F, fullBright);
+        drawOctahedronEdgeSet(poseStack, glow, 3.3F, 0.05F, TOP_EDGES,
                 0.75F, 0.92F, 1.0F, 0.55F + 0.4F * beamGlow);
+        poseStack.popPose();
+
+        poseStack.pushPose();
+        poseStack.translate(0.0D, -halfGap, 0.0D);
+        drawOctahedronFaces(poseStack, body, 3.3F, 4, 8, shellR, shellG, shellB, 0.7F, fullBright);
+        drawOctahedronEdgeSet(poseStack, glow, 3.3F, 0.05F, BOTTOM_EDGES,
+                0.75F, 0.92F, 1.0F, 0.55F + 0.4F * beamGlow);
+        poseStack.popPose();
+
+        // Luminous seam around the opened equator.
+        if (expose > 0.05F)
+        {
+            Vector3f[] basis = {new Vector3f(1.0F, 0.0F, 0.0F), new Vector3f(0.0F, 0.0F, 1.0F)};
+            RibbonRenderer.drawPolyRing(poseStack.last().pose(), glow, basis[0], basis[1], 4,
+                    3.35F, 0.10F + 0.05F * Mth.sin(time * 0.8F),
+                    1.0F, 0.55F, 0.75F, 0.5F * expose);
+        }
 
         poseStack.popPose();
 
@@ -197,15 +225,26 @@ public class RamielRenderer extends EntityRenderer<RamielEntity>
             {1, 2}, {1, 3}, {1, 4}, {1, 5},
             {2, 3}, {3, 4}, {4, 5}, {5, 2}
     };
+    // Each shell half keeps its apex edges plus its own copy of the equator.
+    private static final int[] TOP_EDGES = {0, 1, 2, 3, 8, 9, 10, 11};
+    private static final int[] BOTTOM_EDGES = {4, 5, 6, 7, 8, 9, 10, 11};
 
     private static void drawOctahedron(PoseStack poseStack, VertexConsumer consumer, float size,
                                        float red, float green, float blue, float alpha, int packedLight)
+    {
+        drawOctahedronFaces(poseStack, consumer, size, 0, FACES.length, red, green, blue, alpha, packedLight);
+    }
+
+    /** Draws faces [from, to) — 0..4 is the top pyramid, 4..8 the bottom. */
+    private static void drawOctahedronFaces(PoseStack poseStack, VertexConsumer consumer, float size,
+                                            int from, int to,
+                                            float red, float green, float blue, float alpha, int packedLight)
     {
         Matrix4f pose = poseStack.last().pose();
         Matrix3f normalPose = poseStack.last().normal();
         float[][] uvs = {{0.5F, 0.0F}, {0.0F, 1.0F}, {1.0F, 1.0F}};
 
-        for (int f = 0; f < FACES.length; f++)
+        for (int f = from; f < to; f++)
         {
             Vector3f a = new Vector3f(UNIT_VERTS[FACES[f][0]]).mul(size);
             Vector3f b = new Vector3f(UNIT_VERTS[FACES[f][1]]).mul(size);
@@ -224,13 +263,15 @@ public class RamielRenderer extends EntityRenderer<RamielEntity>
         }
     }
 
-    /** Thin luminous ribbons along each edge give the crystal its cut. */
-    private static void drawOctahedronEdges(PoseStack poseStack, VertexConsumer consumer, float size,
-                                            float width, float r, float g, float b, float a)
+    /** Thin luminous ribbons along the given edge indices give the crystal its cut. */
+    private static void drawOctahedronEdgeSet(PoseStack poseStack, VertexConsumer consumer, float size,
+                                              float width, int[] edgeIndices,
+                                              float r, float g, float b, float a)
     {
         Matrix4f pose = poseStack.last().pose();
-        for (int[] edge : EDGES)
+        for (int index : edgeIndices)
         {
+            int[] edge = EDGES[index];
             Vector3f from = new Vector3f(UNIT_VERTS[edge[0]]).mul(size);
             Vector3f to = new Vector3f(UNIT_VERTS[edge[1]]).mul(size);
             drawStarRibbon(pose, consumer, from, to, width, width, r, g, b, a);

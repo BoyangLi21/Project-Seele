@@ -118,6 +118,78 @@ $bmp.Save("$root\item\core_fragment.png", [System.Drawing.Imaging.ImageFormat]::
 $bmp.Dispose()
 Write-Output "wrote item/core_fragment.png (32x32)"
 
+# ---------- positron_cannon.png (32x32) ----------
+# EVA-scale sniper cannon: longer and bulkier than the rifle, huge scope,
+# twin energy cells. Same diagonal-axis technique.
+$bmp = New-Canvas 32
+for ($y = 0; $y -lt 32; $y++) {
+    for ($x = 0; $x -lt 32; $x++) {
+        $uv = Get-UV $x $y
+        $u = $uv[0]; $v = $uv[1]
+        $c = $null
+
+        if ($u -ge 2 -and $u -le 14 -and [Math]::Abs($v) -le 5) {                 # heavy stock
+            $c = $G
+            if ($u -le 4 -or [Math]::Abs($v) -eq 5) { $c = $k }
+            elseif ($v -eq -4) { $c = $L }
+        }
+        elseif ($u -gt 14 -and $u -le 34 -and [Math]::Abs($v) -le 6) {            # receiver block
+            $c = $g
+            if ([Math]::Abs($v) -ge 6) { $c = $k }
+            elseif ($v -eq -5) { $c = $L }
+            elseif ($v -ge 4) { $c = $G }
+            if ($u -ge 20 -and $u -le 24 -and $v -ge -2 -and $v -le 2) {          # twin cells
+                $c = $o
+                if ($v -eq 0) { $c = $Y }
+            }
+            if ($u -ge 27 -and $u -le 31 -and $v -ge -2 -and $v -le 2) {
+                $c = $o
+                if ($v -eq 0) { $c = $Y }
+            }
+            if ($u -ge 16 -and $u -le 18 -and [Math]::Abs($v) -le 3) { $c = $r }  # NERV band
+        }
+        elseif ($u -gt 22 -and $u -le 30 -and $v -gt 6 -and $v -le 12) {          # grip
+            $c = $G
+            if ($v -eq 12 -or $u -le 24) { $c = $k }
+        }
+        elseif ($u -gt 34 -and $u -le 56 -and [Math]::Abs($v) -le 3) {            # heavy barrel
+            $c = $L
+            if ([Math]::Abs($v) -eq 3) { $c = $k }
+            elseif ($v -eq -2) { $c = $W }
+            elseif ($v -ge 1) { $c = $g }
+        }
+        elseif ($u -gt 56 -and $u -le 60 -and [Math]::Abs($v) -le 4) {            # muzzle
+            $c = $G
+            if ($u -ge 59 -or [Math]::Abs($v) -eq 4) { $c = $k }
+        }
+        elseif ($u -ge 16 -and $u -le 34 -and $v -ge -11 -and $v -le -7) {        # long scope
+            $c = $g
+            if ($v -eq -11 -or $v -eq -7 -or $u -le 17) { $c = $k }
+            if ($u -ge 31 -and $v -ge -10 -and $v -le -8) { $c = $Y }             # lens
+        }
+
+        if ($null -ne $c) { Set-Px $bmp $x $y $c }
+    }
+}
+$bmp.Save("$root\item\positron_cannon.png", [System.Drawing.Imaging.ImageFormat]::Png)
+$bmp.Dispose()
+Write-Output "wrote item/positron_cannon.png (32x32)"
+
+# ---------- eva_unit01.png (32x32 entity sheet) ----------
+# Flat armour plate: subtle vertical gradient with darker panel seams. The
+# renderer's vertex colors provide the purple/green; keep this near-white.
+$bmp = New-Canvas 32
+for ($y = 0; $y -lt 32; $y++) {
+    for ($x = 0; $x -lt 32; $x++) {
+        $v2 = 232 - $y - (($x * 7 + $y * 3) % 5)
+        if (($y % 11) -eq 0 -or ($x % 13) -eq 0) { $v2 -= 16 }                    # panel seams
+        Set-Px $bmp $x $y @(255, $v2, $v2, [Math]::Min(255, $v2 + 6))
+    }
+}
+$bmp.Save("$root\entity\eva_unit01.png", [System.Drawing.Imaging.ImageFormat]::Png)
+$bmp.Dispose()
+Write-Output "wrote entity/eva_unit01.png (32x32)"
+
 # ---------- ramiel.png (32x32 entity gradient) ----------
 # Near-white blue with fine facet seams; renderer vertex colors do the tinting.
 $bmp = New-Canvas 32

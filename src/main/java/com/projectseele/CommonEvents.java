@@ -1,5 +1,6 @@
 package com.projectseele;
 
+import com.projectseele.entity.EvaUnit01Entity;
 import com.projectseele.entity.RamielEntity;
 import com.projectseele.registry.ModEntities;
 import net.minecraftforge.event.entity.EntityAttributeCreationEvent;
@@ -13,5 +14,6 @@ public class CommonEvents
     public static void onEntityAttributeCreation(EntityAttributeCreationEvent event)
     {
         event.put(ModEntities.RAMIEL.get(), RamielEntity.createAttributes().build());
+        event.put(ModEntities.EVA_UNIT01.get(), EvaUnit01Entity.createAttributes().build());
     }
 }

@@ -10,6 +10,8 @@ import java.util.UUID;
 import com.projectseele.alarm.AngelAlarmSystem;
 import com.projectseele.config.SeeleConfig;
 import com.projectseele.fx.CrossExplosionFX;
+import com.projectseele.network.ClientboundAtFieldRipplePacket;
+import com.projectseele.network.SeeleNetwork;
 import com.projectseele.registry.ModSounds;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.particles.DustParticleOptions;
@@ -22,6 +24,7 @@ import net.minecraft.server.level.ServerBossEvent;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvent;
+import net.minecraft.tags.DamageTypeTags;
 import net.minecraft.util.Mth;
 import net.minecraft.world.BossEvent;
 import net.minecraft.world.damagesource.DamageSource;
@@ -44,6 +47,7 @@ import net.minecraft.world.level.GameRules;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.ServerLevelAccessor;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraftforge.network.PacketDistributor;
 import org.jetbrains.annotations.Nullable;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
@@ -67,12 +71,23 @@ public class RamielEntity extends FlyingMob implements Enemy, Angel
             SynchedEntityData.defineId(RamielEntity.class, EntityDataSerializers.BOOLEAN);
     private static final EntityDataAccessor<Float> DATA_DRILL_DEPTH =
             SynchedEntityData.defineId(RamielEntity.class, EntityDataSerializers.FLOAT);
+    // Core exposure: the only window in which Ramiel can be damaged at all.
+    private static final EntityDataAccessor<Boolean> DATA_EXPOSED =
+            SynchedEntityData.defineId(RamielEntity.class, EntityDataSerializers.BOOLEAN);
 
     // Balance values (damage, ranges, cooldowns) live in SeeleConfig; the
     // constants left here are presentation/geometry, not tuning knobs.
     /** Total client-visible beam lifetime: solid flash then afterglow fade-out. */
     public static final int BEAM_RENDER_TICKS = 16;
     public static final int BEAM_SOLID_TICKS = 6;
+
+    // Operation-Yashima rules: the shell opens for the final stretch of the
+    // charge and stays open briefly after firing — snipe the core or nothing.
+    public static final float CORE_RADIUS = 2.2F;
+    private static final int EXPOSE_CHARGE_WINDOW = 20;
+    private static final int EXPOSED_AFTER_FIRE_TICKS = 60;
+    private static final double AT_FIELD_PUSH_RANGE = 8.0D;
+    private static final float SHELL_SURFACE_RADIUS = 3.4F;
 
     // Phase two (below 40% health): faster charge plus the drill descent.
     private static final float ENRAGE_HEALTH_FRACTION = 0.4F;
@@ -91,6 +106,8 @@ public class RamielEntity extends FlyingMob implements Enemy, Angel
             this.getDisplayName(), BossEvent.BossBarColor.BLUE, BossEvent.BossBarOverlay.PROGRESS);
 
     private int beamCooldown = 60;
+    private int exposedTimer;
+    private int rippleCooldown;
 
     // Players this Angel ever managed to hurt — the flawless-kill bonus
     // (hidden advancement) goes to a slayer who is not on this list.
@@ -99,6 +116,9 @@ public class RamielEntity extends FlyingMob implements Enemy, Angel
     // Client-side rotation state, interpolated by the renderer.
     private float spin;
     private float spinO;
+    // Client-side shell-separation animation, eased toward the synced flag.
+    private float exposeProgress;
+    private float exposeProgressO;
 
     public RamielEntity(EntityType<? extends RamielEntity> type, Level level)
     {
@@ -139,7 +159,9 @@ public class RamielEntity extends FlyingMob implements Enemy, Angel
         this.goalSelector.addGoal(0, new DrillAttackGoal(this));
         this.goalSelector.addGoal(1, new BeamAttackGoal(this));
         this.goalSelector.addGoal(2, new HoverGoal(this));
-        this.targetSelector.addGoal(1, new NearestAttackableTargetGoal<>(this, Player.class, false));
+        // The EVA is the bigger threat; stray humans are an afterthought.
+        this.targetSelector.addGoal(1, new NearestAttackableTargetGoal<>(this, EvaUnit01Entity.class, false));
+        this.targetSelector.addGoal(2, new NearestAttackableTargetGoal<>(this, Player.class, false));
     }
 
     @Override
@@ -151,6 +173,29 @@ public class RamielEntity extends FlyingMob implements Enemy, Angel
         this.entityData.define(DATA_BEAM_END, new Vector3f());
         this.entityData.define(DATA_DRILLING, false);
         this.entityData.define(DATA_DRILL_DEPTH, 0.0F);
+        this.entityData.define(DATA_EXPOSED, false);
+    }
+
+    public boolean isExposed()
+    {
+        return this.entityData.get(DATA_EXPOSED);
+    }
+
+    private void setExposed(boolean exposed)
+    {
+        this.entityData.set(DATA_EXPOSED, exposed);
+    }
+
+    /** Whether a hit at this point strikes the exposed core (kill shot). */
+    public boolean isCoreHit(Vec3 hitLocation)
+    {
+        return this.isExposed() && hitLocation.distanceTo(this.beamOrigin()) <= CORE_RADIUS;
+    }
+
+    /** Eased 0..1 shell separation for the renderer. */
+    public float getExposeProgress(float partialTick)
+    {
+        return Mth.lerp(partialTick, this.exposeProgressO, this.exposeProgress);
     }
 
     public boolean isDrilling()
@@ -204,7 +249,53 @@ public class RamielEntity extends FlyingMob implements Enemy, Angel
         {
             this.spinO = this.spin;
             this.spin += this.isCharging() || this.isDrilling() ? 6.0F : 0.75F;
+            this.exposeProgressO = this.exposeProgress;
+            float target = this.isExposed() ? 1.0F : 0.0F;
+            this.exposeProgress += (target - this.exposeProgress) * 0.16F;
         }
+    }
+
+    /**
+     * The A.T. Field: while the core is sealed, everything short of
+     * invulnerability-bypassing damage is deflected with a hexagon ripple.
+     */
+    @Override
+    public boolean hurt(DamageSource source, float amount)
+    {
+        if (!this.isExposed() && !source.is(DamageTypeTags.BYPASSES_INVULNERABILITY))
+        {
+            if (!this.level().isClientSide)
+            {
+                this.deflect(source);
+            }
+            return false;
+        }
+        return super.hurt(source, amount);
+    }
+
+    private void deflect(DamageSource source)
+    {
+        if (this.rippleCooldown > 0)
+        {
+            return;
+        }
+        this.rippleCooldown = 3;
+        Vec3 origin = source.getSourcePosition() != null ? source.getSourcePosition() : null;
+        Vec3 core = this.beamOrigin();
+        Vec3 dir = origin != null && origin.distanceToSqr(core) > 1.0E-4D
+                ? origin.subtract(core).normalize()
+                : new Vec3(this.random.nextDouble() - 0.5D, this.random.nextDouble() - 0.5D,
+                        this.random.nextDouble() - 0.5D).normalize();
+        this.spawnAtFieldRipple(core.add(dir.scale(SHELL_SURFACE_RADIUS)), dir);
+        this.playSound(ModSounds.CRYSTAL_HIT.get(), 2.0F, 0.55F);
+    }
+
+    /** Broadcasts a hexagon ripple to everyone tracking this Angel. */
+    public void spawnAtFieldRipple(Vec3 point, Vec3 normal)
+    {
+        SeeleNetwork.CHANNEL.send(PacketDistributor.TRACKING_ENTITY.with(() -> this),
+                new ClientboundAtFieldRipplePacket(point.x, point.y, point.z,
+                        (float) normal.x, (float) normal.y, (float) normal.z));
     }
 
     @Override
@@ -215,13 +306,56 @@ public class RamielEntity extends FlyingMob implements Enemy, Angel
         {
             this.beamCooldown--;
         }
+        if (this.rippleCooldown > 0)
+        {
+            this.rippleCooldown--;
+        }
+        if (this.exposedTimer > 0 && --this.exposedTimer == 0 && !this.isCharging())
+        {
+            this.setExposed(false);
+        }
         int beamTicks = this.entityData.get(DATA_BEAM_TICKS);
         if (beamTicks > 0)
         {
             this.entityData.set(DATA_BEAM_TICKS, beamTicks - 1);
         }
+        if (this.tickCount % 5 == 0)
+        {
+            this.pushWithAtField();
+        }
         this.bossEvent.setProgress(this.getHealth() / this.getMaxHealth());
         this.bossEvent.setColor(this.isEnraged() ? BossEvent.BossBarColor.RED : BossEvent.BossBarColor.BLUE);
+    }
+
+    /** Anything that walks up to the Angel gets shoved back by the field. */
+    private void pushWithAtField()
+    {
+        Vec3 core = this.position();
+        AABB range = new AABB(core, core).inflate(AT_FIELD_PUSH_RANGE);
+        for (LivingEntity target : this.level().getEntitiesOfClass(LivingEntity.class, range,
+                e -> e != this && !(e instanceof Angel) && e.isAlive() && !e.isSpectator()))
+        {
+            Vec3 away = target.position().subtract(core);
+            double distance = away.length();
+            if (distance > AT_FIELD_PUSH_RANGE || distance < 1.0E-3D)
+            {
+                continue;
+            }
+            double resist = target.getAttributeValue(Attributes.KNOCKBACK_RESISTANCE);
+            double strength = 0.14D * (1.0D - distance / AT_FIELD_PUSH_RANGE) * (1.0D - resist);
+            if (strength <= 0.0D)
+            {
+                continue;
+            }
+            Vec3 push = away.normalize().scale(strength);
+            target.push(push.x, push.y * 0.4D + 0.02D, push.z);
+            if (this.rippleCooldown <= 0 && distance < AT_FIELD_PUSH_RANGE * 0.6D)
+            {
+                this.rippleCooldown = 4;
+                Vec3 mid = core.add(away.scale(0.55D)).add(0.0D, this.getBbHeight() * 0.35D, 0.0D);
+                this.spawnAtFieldRipple(mid, away.normalize());
+            }
+        }
     }
 
     public void markPlayerHurt(UUID playerId)
@@ -261,6 +395,11 @@ public class RamielEntity extends FlyingMob implements Enemy, Angel
         for (LivingEntity victim : this.level().getEntitiesOfClass(LivingEntity.class,
                 new AABB(from, end).inflate(1.0D), e -> e != this && e.isAlive()))
         {
+            // The entry plug shields the pilot; the Unit takes the hit instead.
+            if (victim.getVehicle() instanceof EvaUnit01Entity)
+            {
+                continue;
+            }
             Optional<Vec3> hit = victim.getBoundingBox().inflate(0.3D).clip(from, end);
             if (hit.isPresent())
             {
@@ -269,7 +408,11 @@ public class RamielEntity extends FlyingMob implements Enemy, Angel
             }
         }
 
-        this.level().explode(this, end.x, end.y, end.z, 3.0F, Level.ExplosionInteraction.MOB);
+        this.level().explode(this, end.x, end.y, end.z,
+                SeeleConfig.BEAM_EXPLOSION_RADIUS.get().floatValue(), Level.ExplosionInteraction.MOB);
+        // The shell stays open after the shot — this is the sniping window.
+        this.exposedTimer = EXPOSED_AFTER_FIRE_TICKS;
+        this.setExposed(true);
 
         // The beam itself is rendered client-side from this synced state; only
         // the impact point still gets a server particle burst.
@@ -504,6 +647,11 @@ public class RamielEntity extends FlyingMob implements Enemy, Angel
         {
             this.ramiel.setCharging(false);
             this.ramiel.beamCooldown = SeeleConfig.BEAM_COOLDOWN_TICKS.get();
+            // Interrupted before firing: seal the shell again immediately.
+            if (this.ramiel.exposedTimer <= 0)
+            {
+                this.ramiel.setExposed(false);
+            }
         }
 
         @Override
@@ -525,6 +673,11 @@ public class RamielEntity extends FlyingMob implements Enemy, Angel
             if (--this.chargeTicks <= 0)
             {
                 this.ramiel.fireBeam(target);
+            }
+            else if (this.chargeTicks == EXPOSE_CHARGE_WINDOW)
+            {
+                // The shell parts for the final stretch of the charge.
+                this.ramiel.setExposed(true);
             }
         }
     }
