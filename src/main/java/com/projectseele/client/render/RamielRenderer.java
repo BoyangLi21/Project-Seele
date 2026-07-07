@@ -71,13 +71,13 @@ public class RamielRenderer extends EntityRenderer<RamielEntity>
 
         // Shell halves part vertically to bare the core (the sniping window).
         float expose = entity.getExposeProgress(partialTick);
-        float halfGap = 3.0F * expose;
+        float halfGap = 3.75F * expose;
 
         float corePulse = entity.isCharging()
                 ? 1.1F + 0.3F * Mth.sin(time * 0.5F)
                 : 0.95F;
         corePulse *= 1.0F + 0.16F * expose * Mth.sin(time * 0.9F);
-        float coreSize = (2.1F + 1.1F * expose) * corePulse;
+        float coreSize = (2.6F + 1.4F * expose) * corePulse;
         drawOctahedron(poseStack, body, coreSize,
                 1.0F, 0.12F + 0.45F * expose, 0.18F + 0.28F * expose, 1.0F, fullBright);
 
@@ -89,15 +89,15 @@ public class RamielRenderer extends EntityRenderer<RamielEntity>
 
         poseStack.pushPose();
         poseStack.translate(0.0D, halfGap, 0.0D);
-        drawOctahedronFaces(poseStack, body, 6.6F, 0, 4, shellR, shellG, shellB, 0.7F, fullBright);
-        drawOctahedronEdgeSet(poseStack, glow, 6.6F, 0.09F, TOP_EDGES,
+        drawOctahedronFaces(poseStack, body, 8.25F, 0, 4, shellR, shellG, shellB, 0.7F, fullBright);
+        drawOctahedronEdgeSet(poseStack, glow, 8.25F, 0.11F, TOP_EDGES,
                 0.75F, 0.92F, 1.0F, 0.55F + 0.4F * beamGlow);
         poseStack.popPose();
 
         poseStack.pushPose();
         poseStack.translate(0.0D, -halfGap, 0.0D);
-        drawOctahedronFaces(poseStack, body, 6.6F, 4, 8, shellR, shellG, shellB, 0.7F, fullBright);
-        drawOctahedronEdgeSet(poseStack, glow, 6.6F, 0.09F, BOTTOM_EDGES,
+        drawOctahedronFaces(poseStack, body, 8.25F, 4, 8, shellR, shellG, shellB, 0.7F, fullBright);
+        drawOctahedronEdgeSet(poseStack, glow, 8.25F, 0.11F, BOTTOM_EDGES,
                 0.75F, 0.92F, 1.0F, 0.55F + 0.4F * beamGlow);
         poseStack.popPose();
 
@@ -106,7 +106,7 @@ public class RamielRenderer extends EntityRenderer<RamielEntity>
         {
             Vector3f[] basis = {new Vector3f(1.0F, 0.0F, 0.0F), new Vector3f(0.0F, 0.0F, 1.0F)};
             RibbonRenderer.drawPolyRing(poseStack.last().pose(), glow, basis[0], basis[1], 4,
-                    6.7F, 0.20F + 0.10F * Mth.sin(time * 0.8F),
+                    8.4F, 0.25F + 0.12F * Mth.sin(time * 0.8F),
                     1.0F, 0.55F, 0.75F, 0.5F * expose);
         }
 
@@ -149,9 +149,9 @@ public class RamielRenderer extends EntityRenderer<RamielEntity>
         Matrix4f pose = poseStack.last().pose();
 
         // Outer violet halo, then inner white-hot core.
-        drawStarRibbon(pose, consumer, start, end, 2.1F * flash, 1.2F * flash,
+        drawStarRibbon(pose, consumer, start, end, 2.6F * flash, 1.5F * flash,
                 BEAM_HALO_RGB[0], BEAM_HALO_RGB[1], BEAM_HALO_RGB[2], alpha * 0.55F);
-        drawStarRibbon(pose, consumer, start, end, 0.85F * flash, 0.5F * flash,
+        drawStarRibbon(pose, consumer, start, end, 1.05F * flash, 0.62F * flash,
                 BEAM_CORE_RGB[0], BEAM_CORE_RGB[1], BEAM_CORE_RGB[2], alpha * 0.95F);
 
         poseStack.popPose();
@@ -192,7 +192,7 @@ public class RamielRenderer extends EntityRenderer<RamielEntity>
             float azimuth = (float) Math.toRadians(i * 45.0F + time * 1.8F);
             float pitch = (float) Math.toRadians((i % 2 == 0 ? 24.0F : -18.0F)
                     + 8.0F * Mth.sin(time * 0.11F + i));
-            float radius = 15.0F;
+            float radius = 18.75F;
             Vector3f outer = new Vector3f(
                     radius * Mth.cos(pitch) * Mth.cos(azimuth),
                     radius * Mth.sin(pitch),

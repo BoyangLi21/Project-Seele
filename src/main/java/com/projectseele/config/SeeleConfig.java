@@ -15,6 +15,7 @@ public final class SeeleConfig
     // ----- common: Ramiel -----
     public static final ForgeConfigSpec.DoubleValue RAMIEL_MAX_HEALTH;
     public static final ForgeConfigSpec.DoubleValue RAMIEL_ARMOR;
+    public static final ForgeConfigSpec.DoubleValue RAMIEL_AT_FIELD_MULTIPLIER;
     public static final ForgeConfigSpec.DoubleValue BEAM_DAMAGE;
     public static final ForgeConfigSpec.DoubleValue BEAM_EXPLOSION_RADIUS;
     public static final ForgeConfigSpec.IntValue BEAM_CHARGE_TICKS;
@@ -56,12 +57,16 @@ public final class SeeleConfig
         RAMIEL_ARMOR = common
                 .comment("Ramiel armor points.")
                 .defineInRange("armor", 6.0D, 0.0D, 30.0D);
+        RAMIEL_AT_FIELD_MULTIPLIER = common
+                .comment("Ramiel A.T. Field durability as a multiple of its real health.",
+                        "Only EVA melee can damage this pool while the core is sealed.")
+                .defineInRange("atFieldHealthMultiplier", 5.0D, 0.0D, 20.0D);
         BEAM_DAMAGE = common
                 .comment("Positron beam damage per hit. Nuke-grade: two hits cripple an EVA.")
                 .defineInRange("beamDamage", 120.0D, 0.0D, 1000.0D);
         BEAM_EXPLOSION_RADIUS = common
                 .comment("Explosion radius at the beam impact point.")
-                .defineInRange("beamExplosionRadius", 12.0D, 1.0D, 24.0D);
+                .defineInRange("beamExplosionRadius", 28.0D, 1.0D, 48.0D);
         BEAM_CHARGE_TICKS = common
                 .comment("Beam charge-up time in ticks (phase one).")
                 .defineInRange("beamChargeTicks", 50, 5, 400);
@@ -122,7 +127,7 @@ public final class SeeleConfig
                 .defineInRange("coreDamage", 210.0D, 0.0D, 100000.0D);
         CANNON_EXPLOSION_RADIUS = common
                 .comment("Explosion radius at the cannon impact point.")
-                .defineInRange("explosionRadius", 4.0D, 0.0D, 12.0D);
+                .defineInRange("explosionRadius", 18.0D, 0.0D, 32.0D);
         common.pop();
 
         COMMON_SPEC = common.build();

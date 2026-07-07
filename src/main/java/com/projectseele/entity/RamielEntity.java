@@ -18,6 +18,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.particles.DustParticleOptions;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.core.particles.ParticleTypes;
+import net.minecraft.network.chat.Component;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
@@ -77,6 +78,8 @@ public class RamielEntity extends FlyingMob implements Enemy, Angel
     // Core exposure: the only window in which Ramiel can be damaged at all.
     private static final EntityDataAccessor<Boolean> DATA_EXPOSED =
             SynchedEntityData.defineId(RamielEntity.class, EntityDataSerializers.BOOLEAN);
+    private static final EntityDataAccessor<Float> DATA_AT_ENERGY =
+            SynchedEntityData.defineId(RamielEntity.class, EntityDataSerializers.FLOAT);
 
     // Balance values (damage, ranges, cooldowns) live in SeeleConfig; the
     // constants left here are presentation/geometry, not tuning knobs.
@@ -86,13 +89,13 @@ public class RamielEntity extends FlyingMob implements Enemy, Angel
 
     // Operation-Yashima rules: the shell opens for the final stretch of the
     // charge and stays open briefly after firing — snipe the core or nothing.
-    // Geometry doubled 2026-07 (user: original scale read too small).
+    // Geometry enlarged again after playtest: the Angel should dominate half a city block.
     // Aim tolerance matches the rendered core octahedron (~3.2 blocks).
-    public static final float CORE_RADIUS = 3.4F;
+    public static final float CORE_RADIUS = 4.25F;
     private static final int EXPOSE_CHARGE_WINDOW = 20;
     private static final int EXPOSED_AFTER_FIRE_TICKS = 60;
-    private static final double AT_FIELD_PUSH_RANGE = 14.0D;
-    private static final float SHELL_SURFACE_RADIUS = 6.8F;
+    private static final double AT_FIELD_PUSH_RANGE = 17.5D;
+    private static final float SHELL_SURFACE_RADIUS = 8.5F;
 
     // Phase two (below 40% health): faster charge plus the drill descent.
     private static final float ENRAGE_HEALTH_FRACTION = 0.4F;
@@ -155,7 +158,23 @@ public class RamielEntity extends FlyingMob implements Enemy, Angel
             this.getAttribute(Attributes.ARMOR).setBaseValue(SeeleConfig.RAMIEL_ARMOR.get());
             this.setHealth(this.getMaxHealth());
         }
+        this.entityData.set(DATA_AT_ENERGY, this.getAtFieldMax());
         return super.finalizeSpawn(level, difficulty, reason, spawnData, dataTag);
+    }
+
+    @Override
+    public void addAdditionalSaveData(CompoundTag tag)
+    {
+        super.addAdditionalSaveData(tag);
+        tag.putFloat("AtFieldEnergy", this.getAtFieldEnergy());
+    }
+
+    @Override
+    public void readAdditionalSaveData(CompoundTag tag)
+    {
+        super.readAdditionalSaveData(tag);
+        this.entityData.set(DATA_AT_ENERGY,
+                tag.contains("AtFieldEnergy") ? tag.getFloat("AtFieldEnergy") : this.getAtFieldMax());
     }
 
     @Override
@@ -179,6 +198,7 @@ public class RamielEntity extends FlyingMob implements Enemy, Angel
         this.entityData.define(DATA_DRILLING, false);
         this.entityData.define(DATA_DRILL_DEPTH, 0.0F);
         this.entityData.define(DATA_EXPOSED, false);
+        this.entityData.define(DATA_AT_ENERGY, 1750.0F);
     }
 
     public boolean isExposed()
@@ -189,6 +209,23 @@ public class RamielEntity extends FlyingMob implements Enemy, Angel
     private void setExposed(boolean exposed)
     {
         this.entityData.set(DATA_EXPOSED, exposed);
+    }
+
+    public float getAtFieldEnergy()
+    {
+        return this.entityData.get(DATA_AT_ENERGY);
+    }
+
+    public float getAtFieldMax()
+    {
+        double multiplier = SeeleConfig.COMMON_SPEC.isLoaded()
+                ? SeeleConfig.RAMIEL_AT_FIELD_MULTIPLIER.get() : 5.0D;
+        return (float) (this.getMaxHealth() * multiplier);
+    }
+
+    public boolean hasAtField()
+    {
+        return this.getAtFieldEnergy() > 0.0F;
     }
 
     /**
@@ -276,19 +313,36 @@ public class RamielEntity extends FlyingMob implements Enemy, Angel
     }
 
     /**
-     * The A.T. Field: while the core is sealed, everything short of
-     * invulnerability-bypassing damage is deflected with a hexagon ripple.
-     * EVA melee is the exception — field-on-field contact neutralizes it.
+     * The A.T. Field is a real durability pool. While the core is sealed,
+     * only direct EVA melee can drain it; all ranged damage is reflected.
+     * Core shots during exposure bypass the pool and hit real health.
      */
     @Override
     public boolean hurt(DamageSource source, float amount)
     {
-        boolean evaNeutralized = source.getDirectEntity() instanceof EvaUnit01Entity;
-        if (!this.isExposed() && !evaNeutralized && !source.is(DamageTypeTags.BYPASSES_INVULNERABILITY))
+        // The cannon's direct ray owns Angel damage. Its huge cinematic
+        // blast must not double-dip and turn the tuned two-core-hit fight
+        // into an accidental one-shot.
+        if (source.is(DamageTypeTags.IS_EXPLOSION) && source.getEntity() instanceof EvaUnit01Entity)
         {
+            return false;
+        }
+        if (!this.isExposed() && this.hasAtField() && !source.is(DamageTypeTags.BYPASSES_INVULNERABILITY))
+        {
+            boolean evaMelee = source.getDirectEntity() instanceof EvaUnit01Entity
+                    && !source.is(DamageTypeTags.IS_EXPLOSION);
             if (!this.level().isClientSide)
             {
                 this.deflect(source);
+                if (evaMelee)
+                {
+                    float remaining = Math.max(0.0F, this.getAtFieldEnergy() - amount);
+                    this.entityData.set(DATA_AT_ENERGY, remaining);
+                    if (remaining <= 0.0F)
+                    {
+                        this.playSound(ModSounds.CRYSTAL_BREAK.get(), 3.0F, 0.65F);
+                    }
+                }
             }
             return false;
         }
@@ -342,12 +396,18 @@ public class RamielEntity extends FlyingMob implements Enemy, Angel
         {
             this.entityData.set(DATA_BEAM_TICKS, beamTicks - 1);
         }
-        if (this.tickCount % 5 == 0)
+        if (this.hasAtField() && this.tickCount % 5 == 0)
         {
             this.pushWithAtField();
         }
-        this.bossEvent.setProgress(this.getHealth() / this.getMaxHealth());
-        this.bossEvent.setColor(this.isEnraged() ? BossEvent.BossBarColor.RED : BossEvent.BossBarColor.BLUE);
+        boolean fieldBar = this.hasAtField() && !this.isExposed();
+        this.bossEvent.setProgress(fieldBar
+                ? this.getAtFieldEnergy() / Math.max(1.0F, this.getAtFieldMax())
+                : this.getHealth() / this.getMaxHealth());
+        this.bossEvent.setName(fieldBar
+                ? Component.translatable("boss.projectseele.ramiel_at_field") : this.getDisplayName());
+        this.bossEvent.setColor(fieldBar ? BossEvent.BossBarColor.BLUE
+                : this.isEnraged() ? BossEvent.BossBarColor.RED : BossEvent.BossBarColor.PURPLE);
     }
 
     /** Anything that walks up to the Angel gets shoved back by the field. */
@@ -460,17 +520,17 @@ public class RamielEntity extends FlyingMob implements Enemy, Angel
             SeeleNetwork.CHANNEL.send(
                     PacketDistributor.NEAR.with(() -> new PacketDistributor.TargetPoint(
                             impact.x, impact.y, impact.z, 256.0D, serverLevel.dimension())),
-                    new ClientboundNukeFxPacket(impact.x, impact.y, impact.z, 1.6F));
-            serverLevel.sendParticles(ParticleTypes.END_ROD, impact.x, impact.y, impact.z, 32, 1.0D, 1.0D, 1.0D, 0.15D);
-            serverLevel.sendParticles(ParticleTypes.EXPLOSION_EMITTER, impact.x, impact.y + 1.5D, impact.z, 4, 2.5D, 1.5D, 2.5D, 0.0D);
+                    new ClientboundNukeFxPacket(impact.x, impact.y, impact.z, 2.6F));
+            serverLevel.sendParticles(ParticleTypes.END_ROD, impact.x, impact.y, impact.z, 64, 2.0D, 2.0D, 2.0D, 0.22D);
+            serverLevel.sendParticles(ParticleTypes.EXPLOSION_EMITTER, impact.x, impact.y + 2.0D, impact.z, 9, 5.0D, 2.5D, 5.0D, 0.0D);
             // Mushroom stem and cap.
-            for (int i = 2; i <= 22; i += 2)
+            for (int i = 2; i <= 36; i += 2)
             {
                 serverLevel.sendParticles(ParticleTypes.LARGE_SMOKE,
-                        impact.x, impact.y + i, impact.z, 8, 1.3D, 1.0D, 1.3D, 0.01D);
+                        impact.x, impact.y + i, impact.z, 12, 2.2D, 1.3D, 2.2D, 0.015D);
             }
             serverLevel.sendParticles(ParticleTypes.CAMPFIRE_COSY_SMOKE,
-                    impact.x, impact.y + 23.0D, impact.z, 60, 8.5D, 2.2D, 8.5D, 0.02D);
+                    impact.x, impact.y + 37.0D, impact.z, 110, 14.0D, 3.5D, 14.0D, 0.025D);
             serverLevel.sendParticles(ParticleTypes.FLAME,
                     impact.x, impact.y + 1.0D, impact.z, 70, 4.5D, 1.6D, 4.5D, 0.09D);
         }

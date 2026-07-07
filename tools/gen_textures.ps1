@@ -237,8 +237,10 @@ Fill-Region 208 140 36 18 $metal 0.05    # scope
 Fill-Region 128 200 20 8 $orange2 0.0
 
 $bmp.Save("$root\entity\eva_unit01.png", [System.Drawing.Imaging.ImageFormat]::Png)
+$bmp.Save("$root\entity\eva_cockpit_arms.png", [System.Drawing.Imaging.ImageFormat]::Png)
 $bmp.Dispose()
 Write-Output "wrote entity/eva_unit01.png (256x256)"
+Write-Output "wrote entity/eva_cockpit_arms.png (256x256)"
 
 # ---------- ramiel.png (32x32 entity gradient) ----------
 # Near-white blue with fine facet seams; renderer vertex colors do the tinting.

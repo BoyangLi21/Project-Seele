@@ -13,7 +13,7 @@ any public use (ROADMAP section 9).
 
 Transformations applied:
   * geometry rescaled so total height = 192 geo units (matches our renderer,
-    24 blocks at scale 2.0)
+    30 blocks at scale 2.5)
   * animations renamed to the keys our code triggers
   * our positron-cannon and prog-knife bones grafted onto the right forearm
     (uv [0,0]; colors borrowed from their sheet, close enough for testing)
@@ -37,6 +37,8 @@ RIGHT_FOREARM = "brazoderechobajo"
 ANIM_MAP = {
     "animation.eva_unit01.idle": "animation.eva_01_robot.idle",
     "animation.eva_unit01.walk": "animation.eva_01_robot.walking",
+    "animation.eva_unit01.run": "animation.eva_01_robot.runing",
+    "animation.eva_unit01.jump": "animation.eva_01_robot.jump",
     "animation.eva_unit01.melee": "animation.eva_01_robot.attack",
 }
 
@@ -122,6 +124,63 @@ def main():
             "brazoizquierda": {"rotation": {"0.0": [-60, 0, 30]}},
         },
     }
+    out_anims["animation.eva_unit01.crouch"] = {
+        "loop": True,
+        "animation_length": 1.2,
+        "bones": {
+            "todo": {"position": {"0.0": [0, -33, 0]}},
+            "CINTURA": {"rotation": {"0.0": [10, 0, 0]}},
+            "PIERNAIZQUIERD": {"rotation": {"0.0": [-72, 0, -3]}},
+            "PIERNADERECHA": {"rotation": {"0.0": [-14, 0, 5]}},
+            "PIERNABAJAIZQUIERDA": {"rotation": {"0.0": [116, 0, 0]}},
+            "PIERNABAJAIZQUIERDA2": {"rotation": {"0.0": [38, 0, 0]}},
+        },
+    }
+    out_anims["animation.eva_unit01.crouch_walk"] = {
+        "loop": True,
+        "animation_length": 1.0,
+        "bones": {
+            "todo": {"position": {"0.0": [0, -30, 0]}},
+            "CINTURA": {"rotation": {"0.0": [12, 5, 0], "0.5": [12, -5, 0], "1.0": [12, 5, 0]}},
+            "PIERNAIZQUIERD": {"rotation": {"0.0": [-70, 0, -3], "0.5": [-16, 0, -3], "1.0": [-70, 0, -3]}},
+            "PIERNADERECHA": {"rotation": {"0.0": [-16, 0, 3], "0.5": [-70, 0, 3], "1.0": [-16, 0, 3]}},
+            "PIERNABAJAIZQUIERDA": {"rotation": {"0.0": [114, 0, 0], "0.5": [42, 0, 0], "1.0": [114, 0, 0]}},
+            "PIERNABAJAIZQUIERDA2": {"rotation": {"0.0": [42, 0, 0], "0.5": [114, 0, 0], "1.0": [42, 0, 0]}},
+        },
+    }
+    out_anims["animation.eva_unit01.prone"] = {
+        "loop": True,
+        "animation_length": 1.8,
+        "bones": {
+            "todo": {"rotation": {"0.0": [90, 0, 0]}, "position": {"0.0": [0, 8, -12]}},
+            "brazoizquierda": {"rotation": {"0.0": [-142, 0, 12]}},
+            "brazoderecho": {"rotation": {"0.0": [-142, 0, -12]}},
+            "PIERNAIZQUIERD": {"rotation": {"0.0": [8, 0, -4]}},
+            "PIERNADERECHA": {"rotation": {"0.0": [8, 0, 4]}},
+        },
+    }
+    out_anims["animation.eva_unit01.crawl"] = {
+        "loop": True,
+        "animation_length": 1.2,
+        "bones": {
+            "todo": {"rotation": {"0.0": [90, 0, 0]}, "position": {"0.0": [0, 8, -12]}},
+            "brazoizquierda": {"rotation": {"0.0": [-158, 0, 12], "0.6": [-118, 0, 12], "1.2": [-158, 0, 12]}},
+            "brazoderecho": {"rotation": {"0.0": [-118, 0, -12], "0.6": [-158, 0, -12], "1.2": [-118, 0, -12]}},
+            "PIERNAIZQUIERD": {"rotation": {"0.0": [-16, 0, -4], "0.6": [24, 0, -4], "1.2": [-16, 0, -4]}},
+            "PIERNADERECHA": {"rotation": {"0.0": [24, 0, 4], "0.6": [-16, 0, 4], "1.2": [24, 0, 4]}},
+        },
+    }
+    out_anims["animation.eva_unit01.fall"] = {
+        "loop": True,
+        "animation_length": 0.5,
+        "bones": {
+            "CINTURA": {"rotation": {"0.0": [6, 0, 0]}},
+            "brazoizquierda": {"rotation": {"0.0": [18, 0, 30]}},
+            "brazoderecho": {"rotation": {"0.0": [18, 0, -30]}},
+            "PIERNAIZQUIERD": {"rotation": {"0.0": [12, 0, -7]}},
+            "PIERNADERECHA": {"rotation": {"0.0": [12, 0, 7]}},
+        },
+    }
     # Distinct left jab and two-handed smash (their sheet only has one
     # attack animation; mapping all three to it made the buttons feel
     # identical).
@@ -142,6 +201,51 @@ def main():
                 "0.0": [0, 0, 0], "0.25": [-172, 0, -8], "0.45": [-38, 0, -4], "0.8": [0, 0, 0]}},
             "brazoizquierda": {"rotation": {
                 "0.0": [0, 0, 0], "0.25": [-172, 0, 8], "0.45": [-38, 0, 4], "0.8": [0, 0, 0]}},
+        },
+    }
+    out_anims["animation.eva_unit01.knife"] = {
+        "loop": False,
+        "animation_length": 0.7,
+        "bones": {
+            "pecho": {"rotation": {"0.0": [0, 0, 0], "0.16": [-5, 24, 0], "0.38": [7, -28, 0], "0.7": [0, 0, 0]}},
+            "brazoderecho": {"rotation": {"0.0": [0, 0, 0], "0.16": [-122, -12, -18], "0.38": [-74, 10, 8], "0.7": [0, 0, 0]}},
+        },
+    }
+    out_anims["animation.eva_unit01.knife_left"] = {
+        "loop": False,
+        "animation_length": 0.65,
+        "bones": {
+            "pecho": {"rotation": {"0.0": [0, 0, 0], "0.14": [-5, -28, 0], "0.32": [8, 26, 0], "0.65": [0, 0, 0]}},
+            "brazoderecho": {"rotation": {"0.0": [0, 0, 0], "0.14": [-48, 34, -42], "0.32": [-116, -24, 22], "0.65": [0, 0, 0]}},
+        },
+    }
+    out_anims["animation.eva_unit01.cannon_fire"] = {
+        "loop": False,
+        "animation_length": 0.55,
+        "bones": {
+            "pecho": {"rotation": {"0.0": [0, 0, 0], "0.06": [-8, 0, 0], "0.2": [5, 0, 0], "0.55": [0, 0, 0]}},
+            "brazoderecho": {"rotation": {"0.0": [0, 0, 0], "0.06": [12, 0, 0], "0.55": [0, 0, 0]}},
+            "brazoizquierda": {"rotation": {"0.0": [0, 0, 0], "0.06": [9, 0, 0], "0.55": [0, 0, 0]}},
+        },
+    }
+    out_anims["animation.eva_unit01.land"] = {
+        "loop": False,
+        "animation_length": 0.46,
+        "bones": {
+            "todo": {"position": {"0.0": [0, 0, 0], "0.08": [0, -4, 0], "0.22": [0, 1, 0], "0.46": [0, 0, 0]}},
+            "CINTURA": {"rotation": {"0.0": [0, 0, 0], "0.08": [13, 0, 0], "0.46": [0, 0, 0]}},
+            "PIERNAIZQUIERD": {"rotation": {"0.0": [0, 0, 0], "0.08": [-24, 0, -3], "0.46": [0, 0, 0]}},
+            "PIERNADERECHA": {"rotation": {"0.0": [0, 0, 0], "0.08": [-24, 0, 3], "0.46": [0, 0, 0]}},
+        },
+    }
+    out_anims["animation.eva_unit01.stomp"] = {
+        "loop": False,
+        "animation_length": 0.72,
+        "bones": {
+            "todo": {"position": {"0.0": [0, 0, 0], "0.2": [0, 4, 0], "0.42": [0, -3, 0], "0.72": [0, 0, 0]}},
+            "CINTURA": {"rotation": {"0.0": [0, 0, 0], "0.2": [-12, -5, 0], "0.42": [16, 4, 0], "0.72": [0, 0, 0]}},
+            "PIERNADERECHA": {"rotation": {"0.0": [0, 0, 0], "0.2": [-68, 0, 4], "0.34": [-78, 0, 4], "0.42": [24, 0, 0], "0.72": [0, 0, 0]}},
+            "PIERNABAJAIZQUIERDA2": {"rotation": {"0.0": [0, 0, 0], "0.2": [94, 0, 0], "0.34": [106, 0, 0], "0.42": [-12, 0, 0], "0.72": [0, 0, 0]}},
         },
     }
 

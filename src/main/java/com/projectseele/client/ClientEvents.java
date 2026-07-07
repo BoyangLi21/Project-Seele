@@ -2,6 +2,7 @@ package com.projectseele.client;
 
 import com.projectseele.ProjectSeele;
 import com.projectseele.client.render.EvaUnit01Renderer;
+import com.projectseele.client.render.EvaCockpitArms;
 import com.projectseele.client.render.RamielRenderer;
 import com.projectseele.registry.ModEntities;
 import net.minecraftforge.api.distmarker.Dist;
@@ -22,6 +23,12 @@ public class ClientEvents
     }
 
     @SubscribeEvent
+    public static void onRegisterLayerDefinitions(EntityRenderersEvent.RegisterLayerDefinitions event)
+    {
+        event.registerLayerDefinition(EvaCockpitArms.LAYER, EvaCockpitArms::createLayer);
+    }
+
+    @SubscribeEvent
     public static void onRegisterGuiOverlays(RegisterGuiOverlaysEvent event)
     {
         event.registerAboveAll("angel_alarm", AlarmOverlay.INSTANCE);
@@ -35,5 +42,8 @@ public class ClientEvents
     {
         event.register(Keybinds.CYCLE_WEAPON);
         event.register(Keybinds.TOGGLE_AT_FIELD);
+        event.register(Keybinds.EXIT_EVA);
+        event.register(Keybinds.STOMP);
+        event.register(Keybinds.TOGGLE_PRONE);
     }
 }

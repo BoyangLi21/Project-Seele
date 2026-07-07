@@ -19,6 +19,14 @@ public class ServerboundEvaControlPacket
     public static final int ACTION_CHARGE_START = 3;
     public static final int ACTION_CHARGE_STOP = 4;
     public static final int ACTION_SMASH = 5;
+    public static final int ACTION_CROUCH_START = 6;
+    public static final int ACTION_CROUCH_STOP = 7;
+    public static final int ACTION_SPRINT_START = 8;
+    public static final int ACTION_SPRINT_STOP = 9;
+    public static final int ACTION_JUMP = 10;
+    public static final int ACTION_EXIT = 11;
+    public static final int ACTION_STOMP = 12;
+    public static final int ACTION_TOGGLE_PRONE = 13;
 
     public final int action;
 
@@ -50,6 +58,14 @@ public class ServerboundEvaControlPacket
                 case ACTION_SMASH -> eva.smashAttack(sender);
                 case ACTION_CHARGE_START -> eva.setChargingHeld(true);
                 case ACTION_CHARGE_STOP -> eva.releaseCannon(sender);
+                case ACTION_CROUCH_START -> eva.setPilotCrouching(sender, true);
+                case ACTION_CROUCH_STOP -> eva.setPilotCrouching(sender, false);
+                case ACTION_SPRINT_START -> eva.setPilotSprinting(sender, true);
+                case ACTION_SPRINT_STOP -> eva.setPilotSprinting(sender, false);
+                case ACTION_JUMP -> eva.pilotJump(sender);
+                case ACTION_EXIT -> eva.exitEva(sender);
+                case ACTION_STOMP -> eva.stompAttack(sender);
+                case ACTION_TOGGLE_PRONE -> eva.toggleProne(sender);
                 default -> { }
             }
         }

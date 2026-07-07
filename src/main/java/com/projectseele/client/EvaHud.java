@@ -105,6 +105,23 @@ public final class EvaHud
                         .withStyle(ChatFormatting.GOLD),
                 width / 2, m + 6, NERV_ORANGE);
 
+        int heading = Math.floorMod(Math.round(player.getYRot()), 360);
+        guiGraphics.drawCenteredString(gui.getFont(),
+                Component.literal(String.format("HDG %03d   PITCH %+03d", heading, Math.round(-player.getXRot())))
+                        .withStyle(ChatFormatting.DARK_GRAY),
+                width / 2, m + 18, 0xFFB8A48D);
+
+        // Helmet sight and artificial horizon. It stays subtle until the
+        // dedicated cannon scope takes over, giving the plug a stable frame
+        // of reference while the 24-block body moves underneath it.
+        int cx = width / 2;
+        int cy = height / 2;
+        int horizonY = cy + Mth.clamp(Math.round(player.getXRot() * 1.2F), -42, 42);
+        guiGraphics.fill(cx - 34, horizonY, cx - 8, horizonY + 1, 0x80FF7A00);
+        guiGraphics.fill(cx + 8, horizonY, cx + 34, horizonY + 1, 0x80FF7A00);
+        guiGraphics.fill(cx - 1, cy - 4, cx + 2, cy + 5, 0xA0FF7A00);
+        guiGraphics.fill(cx - 4, cy - 1, cx + 5, cy + 2, 0xA0FF7A00);
+
         // --- hull warning strip ---
         float hullFrac = eva.getHealth() / eva.getMaxHealth();
         if (hullFrac <= 0.34F)
@@ -161,6 +178,23 @@ public final class EvaHud
         guiGraphics.drawString(gui.getFont(),
                 Component.translatable(weaponKey).withStyle(ChatFormatting.YELLOW),
                 x + 44, y + 25, 0xFFFFFFFF);
+
+        String stanceKey = eva.isPilotProne() ? "hud.projectseele.stance_prone"
+                : eva.isPilotCrouching() ? "hud.projectseele.stance_crouch"
+                : eva.isPilotSprinting() ? "hud.projectseele.stance_sprint"
+                : "hud.projectseele.stance_walk";
+        Component stance = Component.translatable(stanceKey).withStyle(
+                eva.isPilotSprinting() ? ChatFormatting.GREEN : ChatFormatting.GRAY);
+        guiGraphics.drawString(gui.getFont(), stance, width - 10 - gui.getFont().width(stance),
+                height - 24, 0xFFFFFFFF);
+
+        if (ClientForgeEvents.pilotTicks() < 240)
+        {
+            Component controls = Component.translatable("hud.projectseele.controls")
+                    .withStyle(ChatFormatting.GRAY);
+            guiGraphics.drawString(gui.getFont(), controls,
+                    width - 10 - gui.getFont().width(controls), height - 12, 0xFFFFFFFF);
+        }
     };
 
     /** Sniper scope: crosshair, charge bar, rangefinder and core-lock call-outs. */

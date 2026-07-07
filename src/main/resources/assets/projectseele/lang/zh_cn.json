@@ -10,6 +10,9 @@
   "key.categories.projectseele": "Project SEELE",
   "key.projectseele.cycle_weapon": "EVA：切换武器",
   "key.projectseele.toggle_at_field": "EVA：展开/收起 A.T. Field",
+  "key.projectseele.exit_eva": "EVA：弹出插入栓",
+  "key.projectseele.stomp": "EVA：踩踏",
+  "key.projectseele.toggle_prone": "EVA：趴下/起身",
 
   "msg.projectseele.weapon_fists": "武器：徒手",
   "msg.projectseele.weapon_knife": "武器：高振动粒子刀",
@@ -17,6 +20,7 @@
   "msg.projectseele.at_field_on": "A.T. Field 展开",
   "msg.projectseele.at_field_off": "A.T. Field 收起",
   "msg.projectseele.at_field_low": "A.T. Field 能量不足",
+  "msg.projectseele.cannot_stand": "上方空间不足，无法起身",
 
   "hud.projectseele.eva_status": "EVA-01 初号机",
   "hud.projectseele.emergency": "！！紧急事态 —— 机体大破！！",
@@ -26,6 +30,12 @@
   "hud.projectseele.core_lock": "核心锁定",
   "hud.projectseele.core_exposed": "核心暴露",
   "hud.projectseele.at_field": "A.T. FIELD",
+  "hud.projectseele.stance_walk": "姿态：步行",
+  "hud.projectseele.stance_sprint": "姿态：冲刺",
+  "hud.projectseele.stance_crouch": "姿态：低姿",
+  "hud.projectseele.stance_prone": "姿态：匍匐",
+  "hud.projectseele.controls": "SPACE 跳跃  SHIFT 单膝跪地  Z 趴下  B 踩踏  V 弹出",
+  "boss.projectseele.ramiel_at_field": "拉米尔 — A.T. FIELD",
 
   "title.projectseele.angel_alarm": "使徒，来袭",
   "subtitle.projectseele.angel_alarm": "Pattern：蓝色 —— 全员进入一级战斗配置",

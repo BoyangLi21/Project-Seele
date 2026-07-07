@@ -8,7 +8,9 @@ An open-source **Neon Genesis Evangelion** universe mod for Minecraft **Forge 1.
 
 ## Status / 状态
 
-Early development. **Phase 1 MVP playable**: fight Ramiel, the Fifth Angel — a hovering crystal octahedron with a charged sniper beam, boss bar and drops. / **第一阶段 MVP 可玩**：与第5使徒拉米尔作战（悬浮八面体、蓄力光束、Boss 血条与掉落）。
+Early development. **Operation Yashima is playable**: pilot EVA Unit-01 against Ramiel with an A.T. Field, progressive knife and positron cannon. / **屋岛作战已可玩**：驾驶 EVA 初号机，以 A.T. Field、粒子刀与阳电子狙击炮迎战拉米尔。
+
+Pilot controls / 驾驶操作：`WASD` 移动、`Space` 跳跃、`Shift` 单膝跪地、`Z` 趴下/匍匐、`Ctrl` 冲刺、`B` 踩踏、`R` 切换武器、`G` 开关 A.T. Field、鼠标攻击/蓄力、`V` 弹出插入栓。
 
 ## Docs / 文档
 
@@ -19,8 +21,8 @@ Early development. **Phase 1 MVP playable**: fight Ramiel, the Fifth Angel — a
 
 ## Roadmap (short) / 路线图（简版）
 
-1. 🔄 **Angels attack** — Ramiel fight polish: alert siren, real beam rendering, cross explosions / 警报、真光束、十字爆炸
-2. ⬜ **EVA Unit-01** — pilotable, umbilical power, sync rate, berserk / 可驾驶初号机、电力、同步率、暴走
+1. ✅ **Angels attack** — Ramiel fight, alert siren, real beam rendering, cross explosions / 拉米尔战、警报、真光束、十字爆炸
+2. 🔄 **EVA Unit-01** — piloting and combat complete; umbilical power, sync rate and berserk next / 驾驶与战斗已落地；下一步为电力、同步率、暴走
 3. ⬜ **A.T. Fields & more Angels** — Sachiel, Shamshel, Zeruel, siege events / AT 力场与使徒图鉴
 4. ⬜ **NERV / GeoFront / Tokyo-3** — dimension, launch catapults, retractable city / 场景与发射井
 5. ⬜ **SEELE's scenario** — Lance of Longinus, Mass Production EVAs, **Third Impact & Tree of Life** / 朗基努斯、量产机、第三次冲击

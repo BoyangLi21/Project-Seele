@@ -1,6 +1,5 @@
 package com.projectseele.client.render;
 
-import java.util.Set;
 import java.util.function.Consumer;
 
 import com.mojang.blaze3d.vertex.PoseStack;
@@ -9,6 +8,7 @@ import com.projectseele.entity.EvaUnit01Entity;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
+import net.minecraft.util.Mth;
 import org.jetbrains.annotations.Nullable;
 import software.bernie.geckolib.cache.object.BakedGeoModel;
 import software.bernie.geckolib.cache.object.GeoBone;
@@ -16,28 +16,19 @@ import software.bernie.geckolib.renderer.GeoEntityRenderer;
 
 /**
  * GeckoLib-driven Unit-01. Weapon bones (prog knife, positron cannon) are
- * toggled from the entity's synced weapon state. In first person the pilot
- * sees only the Unit's own arms and weapon — the rest of the airframe hides,
- * so the plug view stays clear while your hands remain yours.
+ * toggled from the entity's synced weapon state. The world model is hidden
+ * from its own first-person camera; EvaCockpitArms supplies a guaranteed
+ * camera-space pair of arms instead.
  */
 public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
 {
-    /**
-     * Bones that stay visible in the pilot's first-person view. Covers both
-     * the built-in placeholder skeleton and the community-model bone names
-     * used by the local test resource pack.
-     */
-    private static final Set<String> PILOT_VIEW_BONES = Set.of(
-            "arm_l", "forearm_l", "arm_r", "forearm_r", "knife", "cannon",
-            "brazoizquierda", "brazobajo", "brazoderecho", "brazoderechobajo");
-
     private boolean pilotView;
 
     public EvaUnit01Renderer(EntityRendererProvider.Context context)
     {
         super(context, new EvaUnit01GeoModel());
         this.shadowRadius = 3.6F;
-        this.withScale(2.0F);
+        this.withScale(2.5F);
     }
 
     @Override
@@ -60,16 +51,20 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
         super.preRender(poseStack, animatable, model, bufferSource, buffer, isReRender,
                 partialTick, packedLight, packedOverlay, red, green, blue, alpha);
         boolean firstPerson = this.pilotView;
-        forEachBone(model, bone -> bone.setHidden(firstPerson && !PILOT_VIEW_BONES.contains(bone.getName())));
-        if (firstPerson && animatable.getWeapon() != EvaUnit01Entity.WEAPON_CANNON)
+        forEachBone(model, bone ->
         {
-            // Raise the arms into the pilot's view (added on top of whatever
-            // the animation is doing, so swings still read). ~80° up plus a
-            // slight inward tuck to reach the bottom edge of a 70° FOV.
-            raiseArm(model, "arm_l", -1.4F, 0.18F);
-            raiseArm(model, "arm_r", -1.4F, -0.18F);
-            raiseArm(model, "brazoizquierda", -1.4F, 0.18F);
-            raiseArm(model, "brazoderecho", -1.4F, -0.18F);
+            bone.setHidden(firstPerson);
+            bone.setChildrenHidden(false);
+        });
+        if (!firstPerson && animatable.getWeapon() == EvaUnit01Entity.WEAPON_CANNON)
+        {
+            // The animation establishes a proper two-hand firing stance;
+            // this procedural layer follows the pilot's vertical aim.
+            float pitch = -Mth.clamp(animatable.getXRot(), -55.0F, 55.0F) * Mth.DEG_TO_RAD;
+            aimArm(model, "arm_r", pitch);
+            aimArm(model, "arm_l", pitch * 0.82F);
+            aimArm(model, "brazoderecho", pitch);
+            aimArm(model, "brazoizquierda", pitch * 0.82F);
         }
         // Weapon visibility applies on top in every view.
         model.getBone("knife").ifPresent(bone ->
@@ -78,13 +73,9 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
                 bone.setHidden(bone.isHidden() || animatable.getWeapon() != EvaUnit01Entity.WEAPON_CANNON));
     }
 
-    private static void raiseArm(BakedGeoModel model, String name, float pitchRad, float tuckRad)
+    private static void aimArm(BakedGeoModel model, String name, float pitchRad)
     {
-        model.getBone(name).ifPresent(bone ->
-        {
-            bone.setRotX(bone.getRotX() + pitchRad);
-            bone.setRotZ(bone.getRotZ() + tuckRad);
-        });
+        model.getBone(name).ifPresent(bone -> bone.setRotX(bone.getRotX() + pitchRad));
     }
 
     private static void forEachBone(BakedGeoModel model, Consumer<GeoBone> action)

@@ -3,6 +3,7 @@ package com.projectseele.entity;
 import com.projectseele.config.SeeleConfig;
 import com.projectseele.fx.AtFieldFX;
 import com.projectseele.network.ClientboundCannonBeamPacket;
+import com.projectseele.network.ClientboundNukeFxPacket;
 import com.projectseele.network.SeeleNetwork;
 import com.projectseele.registry.ModSounds;
 import net.minecraft.core.particles.ParticleTypes;
@@ -23,10 +24,12 @@ import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntityDimensions;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.MobSpawnType;
 import net.minecraft.world.entity.PathfinderMob;
+import net.minecraft.world.entity.Pose;
 import net.minecraft.world.entity.SpawnGroupData;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
@@ -51,7 +54,7 @@ import software.bernie.geckolib.core.object.PlayState;
 import software.bernie.geckolib.util.GeckoLibUtil;
 
 /**
- * EVA Unit-01: rideable 12-block war machine and the pilot's body in every
+ * EVA Unit-01: rideable 30-block war machine and the pilot's body in every
  * Angel fight. Carries its own weapon state (fists / prog knife / positron
  * sniper cannon), an A.T. Field shield pool, and survives exactly two Ramiel
  * beams. All pilot input arrives via {@code ServerboundEvaControlPacket}.
@@ -65,18 +68,32 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     private static final float MELEE_FIST_DAMAGE = 20.0F;
     private static final float MELEE_KNIFE_DAMAGE = 60.0F;
     private static final int MELEE_COOLDOWN_TICKS = 12;
-    // Reach geometry for the doubled 24-block frame.
-    private static final double MELEE_REACH = 8.0D;
-    private static final double MELEE_RADIUS = 6.0D;
+    // Reach geometry for the 30-block frame.
+    private static final double MELEE_REACH = 10.0D;
+    private static final double MELEE_RADIUS = 7.5D;
     // Smash: crouch + attack. Slow, heavy, area knockdown.
     private static final float SMASH_FIST_DAMAGE = 35.0F;
     private static final float SMASH_KNIFE_DAMAGE = 80.0F;
     private static final int SMASH_COOLDOWN_TICKS = 60;
-    private static final double SMASH_RADIUS = 9.0D;
+    private static final double SMASH_RADIUS = 11.0D;
+    private static final float STOMP_DAMAGE = 50.0F;
+    private static final int STOMP_COOLDOWN_TICKS = 50;
+    private static final double STOMP_RADIUS = 9.4D;
     private static final float AT_FIELD_MAX = 200.0F;
     private static final float AT_FIELD_REGEN = 0.4F;
     private static final int AT_FIELD_REGEN_DELAY = 100;
     private static final float AT_FIELD_MIN_TO_RAISE = 20.0F;
+    private static final float NORMAL_WIDTH = 8.5F;
+    private static final float NORMAL_HEIGHT = 30.0F;
+    private static final float CROUCH_HEIGHT = 21.0F;
+    private static final float PRONE_WIDTH = 24.0F;
+    private static final float PRONE_HEIGHT = 8.5F;
+    private static final float WALK_SPEED = 0.42F;
+    private static final float CROUCH_SPEED = 0.18F;
+    private static final float PRONE_SPEED = 0.10F;
+    private static final float SPRINT_SPEED = 0.62F;
+    private static final double JUMP_VELOCITY = 1.05D;
+    private static final int JUMP_COOLDOWN_TICKS = 10;
 
     private static final EntityDataAccessor<Integer> DATA_WEAPON =
             SynchedEntityData.defineId(EvaUnit01Entity.class, EntityDataSerializers.INT);
@@ -88,21 +105,44 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             SynchedEntityData.defineId(EvaUnit01Entity.class, EntityDataSerializers.INT);
     private static final EntityDataAccessor<Integer> DATA_CANNON_COOLDOWN =
             SynchedEntityData.defineId(EvaUnit01Entity.class, EntityDataSerializers.INT);
+    private static final EntityDataAccessor<Boolean> DATA_CROUCHING =
+            SynchedEntityData.defineId(EvaUnit01Entity.class, EntityDataSerializers.BOOLEAN);
+    private static final EntityDataAccessor<Boolean> DATA_SPRINTING =
+            SynchedEntityData.defineId(EvaUnit01Entity.class, EntityDataSerializers.BOOLEAN);
+    private static final EntityDataAccessor<Boolean> DATA_PRONE =
+            SynchedEntityData.defineId(EvaUnit01Entity.class, EntityDataSerializers.BOOLEAN);
 
     private static final RawAnimation ANIM_IDLE = RawAnimation.begin().thenLoop("animation.eva_unit01.idle");
     private static final RawAnimation ANIM_WALK = RawAnimation.begin().thenLoop("animation.eva_unit01.walk");
+    private static final RawAnimation ANIM_RUN = RawAnimation.begin().thenLoop("animation.eva_unit01.run");
+    private static final RawAnimation ANIM_CROUCH = RawAnimation.begin().thenLoop("animation.eva_unit01.crouch");
+    private static final RawAnimation ANIM_CROUCH_WALK = RawAnimation.begin().thenLoop("animation.eva_unit01.crouch_walk");
+    private static final RawAnimation ANIM_JUMP = RawAnimation.begin().thenLoop("animation.eva_unit01.jump");
+    private static final RawAnimation ANIM_FALL = RawAnimation.begin().thenLoop("animation.eva_unit01.fall");
+    private static final RawAnimation ANIM_PRONE = RawAnimation.begin().thenLoop("animation.eva_unit01.prone");
+    private static final RawAnimation ANIM_CRAWL = RawAnimation.begin().thenLoop("animation.eva_unit01.crawl");
     private static final RawAnimation ANIM_AIM = RawAnimation.begin().thenLoop("animation.eva_unit01.aim");
     private static final RawAnimation ANIM_MELEE = RawAnimation.begin().thenPlay("animation.eva_unit01.melee");
     private static final RawAnimation ANIM_MELEE_LEFT = RawAnimation.begin().thenPlay("animation.eva_unit01.melee_left");
+    private static final RawAnimation ANIM_KNIFE = RawAnimation.begin().thenPlay("animation.eva_unit01.knife");
+    private static final RawAnimation ANIM_KNIFE_LEFT = RawAnimation.begin().thenPlay("animation.eva_unit01.knife_left");
     private static final RawAnimation ANIM_SMASH = RawAnimation.begin().thenPlay("animation.eva_unit01.smash");
+    private static final RawAnimation ANIM_CANNON_FIRE = RawAnimation.begin().thenPlay("animation.eva_unit01.cannon_fire");
+    private static final RawAnimation ANIM_LAND = RawAnimation.begin().thenPlay("animation.eva_unit01.land");
+    private static final RawAnimation ANIM_STOMP = RawAnimation.begin().thenPlay("animation.eva_unit01.stomp");
 
     private final AnimatableInstanceCache geoCache = GeckoLibUtil.createInstanceCache(this);
 
     private boolean chargingHeld;
     private int meleeCooldown;
     private int smashCooldown;
+    private int stompCooldown;
     private boolean leftSwing;
     private int atRegenDelay;
+    private int jumpCooldown;
+    private boolean crouchingDimensions;
+    private boolean proneDimensions;
+    private boolean wasAirborne;
 
     public EvaUnit01Entity(EntityType<? extends EvaUnit01Entity> type, Level level)
     {
@@ -129,6 +169,9 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         this.entityData.define(DATA_AT_ENERGY, AT_FIELD_MAX);
         this.entityData.define(DATA_CANNON_CHARGE, 0);
         this.entityData.define(DATA_CANNON_COOLDOWN, 0);
+        this.entityData.define(DATA_CROUCHING, false);
+        this.entityData.define(DATA_SPRINTING, false);
+        this.entityData.define(DATA_PRONE, false);
     }
 
     @Override
@@ -176,6 +219,21 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         return this.entityData.get(DATA_CANNON_COOLDOWN);
     }
 
+    public boolean isPilotCrouching()
+    {
+        return this.entityData.get(DATA_CROUCHING);
+    }
+
+    public boolean isPilotSprinting()
+    {
+        return this.entityData.get(DATA_SPRINTING);
+    }
+
+    public boolean isPilotProne()
+    {
+        return this.entityData.get(DATA_PRONE);
+    }
+
     // ----- pilot commands (validated by the packet handler) -----
 
     public void cycleWeapon(ServerPlayer pilot)
@@ -208,7 +266,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         this.playSound(ModSounds.CRYSTAL_HIT.get(), 2.0F, on ? 0.8F : 0.5F);
         if (on && this.level() instanceof ServerLevel serverLevel)
         {
-            Vec3 front = this.position().add(this.getForward().scale(6.0D)).add(0.0D, 12.0D, 0.0D);
+            Vec3 front = this.position().add(this.getForward().scale(7.5D)).add(0.0D, 15.0D, 0.0D);
             AtFieldFX.ripple(serverLevel, front, this.getForward());
         }
     }
@@ -227,13 +285,15 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         }
         this.meleeCooldown = MELEE_COOLDOWN_TICKS;
         this.leftSwing = !this.leftSwing;
-        this.triggerAnim("strike", this.leftSwing ? "melee_left" : "melee");
-
         boolean knife = this.getWeapon() == WEAPON_KNIFE;
+        String animation = knife
+                ? (this.leftSwing ? "knife_left" : "knife")
+                : (this.leftSwing ? "melee_left" : "melee");
+        this.triggerAnim("strike", animation);
         float damage = knife ? MELEE_KNIFE_DAMAGE : MELEE_FIST_DAMAGE;
         Vec3 forward = this.getForward().multiply(1.0D, 0.0D, 1.0D).normalize();
-        Vec3 center = this.position().add(forward.scale(MELEE_REACH)).add(0.0D, 11.0D, 0.0D);
-        AABB zone = new AABB(center, center).inflate(MELEE_RADIUS, 8.0D, MELEE_RADIUS);
+        Vec3 center = this.position().add(forward.scale(MELEE_REACH)).add(0.0D, 14.0D, 0.0D);
+        AABB zone = new AABB(center, center).inflate(MELEE_RADIUS, 10.0D, MELEE_RADIUS);
         this.strikeZone(pilot, zone, damage, 1.1D, center);
         this.playSound(knife ? SoundEvents.PLAYER_ATTACK_SWEEP : SoundEvents.IRON_GOLEM_ATTACK, 2.5F,
                 knife ? 0.7F : 0.8F);
@@ -253,7 +313,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         float damage = knife ? SMASH_KNIFE_DAMAGE : SMASH_FIST_DAMAGE;
         Vec3 forward = this.getForward().multiply(1.0D, 0.0D, 1.0D).normalize();
         Vec3 center = this.position().add(forward.scale(MELEE_REACH + 1.0D)).add(0.0D, 4.0D, 0.0D);
-        AABB zone = new AABB(center, center).inflate(SMASH_RADIUS, 7.0D, SMASH_RADIUS);
+        AABB zone = new AABB(center, center).inflate(SMASH_RADIUS, 8.5D, SMASH_RADIUS);
         this.strikeZone(pilot, zone, damage, 2.0D, center);
         if (this.level() instanceof ServerLevel serverLevel)
         {
@@ -261,6 +321,30 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
                     center.x, center.y - 2.0D, center.z, 10, 3.5D, 0.6D, 3.5D, 0.0D);
         }
         this.playSound(SoundEvents.IRON_GOLEM_DEATH, 3.0F, 0.55F);
+    }
+
+    /** Heavy single-foot strike for targets beneath the Unit. */
+    public void stompAttack(ServerPlayer pilot)
+    {
+        if (this.stompCooldown > 0 || this.getWeapon() == WEAPON_CANNON)
+        {
+            return;
+        }
+        this.stompCooldown = STOMP_COOLDOWN_TICKS;
+        this.triggerAnim("strike", "stomp");
+
+        Vec3 forward = this.getForward().multiply(1.0D, 0.0D, 1.0D).normalize();
+        Vec3 center = this.position().add(forward.scale(2.8D)).add(0.0D, 1.0D, 0.0D);
+        AABB zone = new AABB(center, center).inflate(STOMP_RADIUS, 3.5D, STOMP_RADIUS);
+        this.strikeZone(pilot, zone, STOMP_DAMAGE, 2.4D, center);
+        if (this.level() instanceof ServerLevel serverLevel)
+        {
+            serverLevel.sendParticles(ParticleTypes.CLOUD,
+                    center.x, center.y, center.z, 34, 3.8D, 0.35D, 3.8D, 0.06D);
+            serverLevel.sendParticles(ParticleTypes.EXPLOSION,
+                    center.x, center.y, center.z, 8, 2.4D, 0.3D, 2.4D, 0.0D);
+        }
+        this.playSound(SoundEvents.GENERIC_EXPLODE, 3.2F, 0.58F);
     }
 
     private void strikeZone(ServerPlayer pilot, AABB zone, float damage, double knockback, Vec3 fxCenter)
@@ -298,8 +382,102 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         }
     }
 
+    public void setPilotCrouching(ServerPlayer pilot, boolean crouching)
+    {
+        if (this.getControllingPassenger() != pilot || this.isPilotCrouching() == crouching)
+        {
+            return;
+        }
+        if (!crouching && !this.hasStandingRoom())
+        {
+            pilot.displayClientMessage(Component.translatable("msg.projectseele.cannot_stand"), true);
+            return;
+        }
+        if (crouching)
+        {
+            this.entityData.set(DATA_PRONE, false);
+        }
+        this.entityData.set(DATA_CROUCHING, crouching);
+        this.entityData.set(DATA_SPRINTING, false);
+        this.updatePoseDimensions();
+    }
+
+    public void toggleProne(ServerPlayer pilot)
+    {
+        if (this.getControllingPassenger() != pilot)
+        {
+            return;
+        }
+        boolean prone = !this.isPilotProne();
+        if (!prone && !this.hasStandingRoom())
+        {
+            pilot.displayClientMessage(Component.translatable("msg.projectseele.cannot_stand"), true);
+            return;
+        }
+        this.entityData.set(DATA_PRONE, prone);
+        this.entityData.set(DATA_CROUCHING, false);
+        this.entityData.set(DATA_SPRINTING, false);
+        this.updatePoseDimensions();
+    }
+
+    public void setPilotSprinting(ServerPlayer pilot, boolean sprinting)
+    {
+        if (this.getControllingPassenger() == pilot)
+        {
+            this.entityData.set(DATA_SPRINTING, sprinting && !this.isPilotCrouching() && !this.isPilotProne()
+                    && this.getCannonCharge() <= 0);
+        }
+    }
+
+    public void pilotJump(ServerPlayer pilot)
+    {
+        if (this.getControllingPassenger() != pilot || !this.onGround() || this.jumpCooldown > 0
+                || this.getCannonCharge() > 0)
+        {
+            return;
+        }
+        if (this.isPilotCrouching())
+        {
+            this.setPilotCrouching(pilot, false);
+            if (this.isPilotCrouching())
+            {
+                return;
+            }
+        }
+        if (this.isPilotProne())
+        {
+            this.toggleProne(pilot);
+            if (this.isPilotProne())
+            {
+                return;
+            }
+        }
+        Vec3 motion = this.getDeltaMovement();
+        this.setDeltaMovement(motion.x, JUMP_VELOCITY, motion.z);
+        this.hasImpulse = true;
+        this.jumpCooldown = JUMP_COOLDOWN_TICKS;
+        this.playSound(SoundEvents.IRON_GOLEM_STEP, 2.2F, 0.65F);
+    }
+
+    public void exitEva(ServerPlayer pilot)
+    {
+        if (this.getControllingPassenger() == pilot)
+        {
+            pilot.stopRiding();
+        }
+    }
+
+    private boolean hasStandingRoom()
+    {
+        double halfWidth = NORMAL_WIDTH * 0.5D;
+        AABB standing = new AABB(this.getX() - halfWidth, this.getY(), this.getZ() - halfWidth,
+                this.getX() + halfWidth, this.getY() + NORMAL_HEIGHT, this.getZ() + halfWidth);
+        return this.level().noCollision(this, standing);
+    }
+
     private void fireCannon(ServerLevel level, ServerPlayer pilot)
     {
+        this.triggerAnim("strike", "cannon_fire");
         Vec3 from = pilot.getEyePosition();
         Vec3 dir = pilot.getLookAngle();
         double range = SeeleConfig.CANNON_RANGE.get();
@@ -331,14 +509,27 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         // The shot itself detonates: positron rounds do not leave neat holes.
         level.explode(this, end.x, end.y, end.z,
                 SeeleConfig.CANNON_EXPLOSION_RADIUS.get().floatValue(), Level.ExplosionInteraction.MOB);
+        final Vec3 impact = end;
 
         // Muzzle roughly at the cannon barrel, right hand height.
         Vec3 muzzle = this.position()
-                .add(this.getForward().scale(7.0D))
-                .add(0.0D, 15.0D, 0.0D);
+                .add(this.getForward().scale(8.75D))
+                .add(0.0D, 18.75D, 0.0D);
         SeeleNetwork.CHANNEL.send(PacketDistributor.TRACKING_ENTITY_AND_SELF.with(() -> this),
                 new ClientboundCannonBeamPacket(muzzle.x, muzzle.y, muzzle.z, end.x, end.y, end.z));
-        level.sendParticles(ParticleTypes.END_ROD, end.x, end.y, end.z, 30, 0.5D, 0.5D, 0.5D, 0.2D);
+        SeeleNetwork.CHANNEL.send(PacketDistributor.NEAR.with(() -> new PacketDistributor.TargetPoint(
+                        impact.x, impact.y, impact.z, 320.0D, level.dimension())),
+                new ClientboundNukeFxPacket(impact.x, impact.y, impact.z, 1.8F));
+        level.sendParticles(ParticleTypes.END_ROD, impact.x, impact.y, impact.z, 54, 1.4D, 1.4D, 1.4D, 0.24D);
+        level.sendParticles(ParticleTypes.EXPLOSION_EMITTER,
+                impact.x, impact.y + 1.5D, impact.z, 6, 3.5D, 1.8D, 3.5D, 0.0D);
+        for (int i = 2; i <= 24; i += 3)
+        {
+            level.sendParticles(ParticleTypes.LARGE_SMOKE,
+                    impact.x, impact.y + i, impact.z, 8, 1.7D, 1.0D, 1.7D, 0.015D);
+        }
+        level.sendParticles(ParticleTypes.CAMPFIRE_COSY_SMOKE,
+                impact.x, impact.y + 25.0D, impact.z, 70, 9.5D, 2.5D, 9.5D, 0.02D);
         level.playSound(null, this.getX(), this.getY(), this.getZ(),
                 ModSounds.BEAM_FIRE.get(), SoundSource.PLAYERS, 4.0F, 1.25F);
     }
@@ -360,6 +551,29 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         if (this.smashCooldown > 0)
         {
             this.smashCooldown--;
+        }
+        if (this.stompCooldown > 0)
+        {
+            this.stompCooldown--;
+        }
+        if (this.jumpCooldown > 0)
+        {
+            this.jumpCooldown--;
+        }
+        if (!this.onGround())
+        {
+            this.wasAirborne = true;
+        }
+        else if (this.wasAirborne)
+        {
+            this.wasAirborne = false;
+            this.triggerAnim("strike", "land");
+            if (this.level() instanceof ServerLevel serverLevel)
+            {
+                serverLevel.sendParticles(ParticleTypes.CLOUD, this.getX(), this.getY() + 0.4D, this.getZ(),
+                        22, 3.2D, 0.25D, 3.2D, 0.04D);
+            }
+            this.playSound(SoundEvents.IRON_GOLEM_STEP, 2.8F, 0.52F);
         }
         int cooldown = this.getCannonCooldown();
         if (cooldown > 0)
@@ -396,6 +610,10 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             this.entityData.set(DATA_AT_ON, false);
             this.playSound(ModSounds.CRYSTAL_BREAK.get(), 2.0F, 1.2F);
         }
+        if (this.getControllingPassenger() == null)
+        {
+            this.setPilotMovementState(false, false);
+        }
     }
 
     /**
@@ -413,7 +631,9 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         if (this.isAtFieldOn() && amount > 0.0F)
         {
             this.atRegenDelay = AT_FIELD_REGEN_DELAY;
-            if (source.getEntity() instanceof Angel)
+            boolean evaMelee = source.getEntity() instanceof EvaUnit01Entity
+                    && !source.is(DamageTypeTags.IS_EXPLOSION);
+            if (source.getEntity() instanceof Angel || evaMelee)
             {
                 float energy = this.getAtFieldEnergy();
                 float absorbed = Math.min(energy, amount);
@@ -440,7 +660,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         Vec3 dir = origin != null && origin.distanceToSqr(center) > 1.0E-4D
                 ? origin.subtract(center).normalize()
                 : this.getForward();
-        AtFieldFX.ripple(serverLevel, center.add(dir.scale(6.4D)), dir);
+        AtFieldFX.ripple(serverLevel, center.add(dir.scale(8.0D)), dir);
     }
 
     // ----- piloting -----
@@ -473,10 +693,12 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         // The Unit turns with the pilot's view, horse-style.
         this.setRot(player.getYRot(), player.getXRot() * 0.5F);
         this.yRotO = this.yBodyRot = this.yHeadRot = this.getYRot();
-        // The pilot is sealed inside the entry plug — nobody sees them.
-        if (!player.isInvisible())
+        // The player renderer is cancelled client-side while mounted. Keep
+        // the entity itself visible so Forge still fires first-person hand
+        // rendering events for the dedicated cockpit arms.
+        if (player.isInvisible())
         {
-            player.setInvisible(true);
+            player.setInvisible(false);
         }
     }
 
@@ -484,16 +706,36 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     protected void removePassenger(Entity passenger)
     {
         super.removePassenger(passenger);
-        if (passenger instanceof Player player)
+        this.chargingHeld = false;
+        this.entityData.set(DATA_CANNON_CHARGE, 0);
+        this.setPilotMovementState(false, false);
+    }
+
+    private void setPilotMovementState(boolean crouching, boolean sprinting)
+    {
+        this.entityData.set(DATA_CROUCHING, crouching);
+        this.entityData.set(DATA_SPRINTING, sprinting);
+        this.entityData.set(DATA_PRONE, false);
+        this.updatePoseDimensions();
+    }
+
+    private void updatePoseDimensions()
+    {
+        boolean crouching = this.isPilotCrouching();
+        boolean prone = this.isPilotProne();
+        if (this.crouchingDimensions != crouching || this.proneDimensions != prone)
         {
-            player.setInvisible(false);
+            this.crouchingDimensions = crouching;
+            this.proneDimensions = prone;
+            this.refreshDimensions();
         }
     }
 
     @Override
     protected Vec3 getRiddenInput(Player player, Vec3 input)
     {
-        return new Vec3(player.xxa * 0.7D, 0.0D, player.zza >= 0.0F ? player.zza : player.zza * 0.6D);
+        double strafe = this.isPilotProne() ? 0.28D : this.isPilotCrouching() ? 0.45D : 0.7D;
+        return new Vec3(player.xxa * strafe, 0.0D, player.zza >= 0.0F ? player.zza : player.zza * 0.6D);
     }
 
     @Override
@@ -504,7 +746,36 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         {
             return 0.02F;
         }
-        return (float) this.getAttributeValue(Attributes.MOVEMENT_SPEED);
+        if (this.isPilotCrouching())
+        {
+            return CROUCH_SPEED;
+        }
+        if (this.isPilotProne())
+        {
+            return PRONE_SPEED;
+        }
+        return this.isPilotSprinting() ? SPRINT_SPEED : WALK_SPEED;
+    }
+
+    @Override
+    public EntityDimensions getDimensions(Pose pose)
+    {
+        EntityDimensions dimensions = super.getDimensions(pose);
+        if (this.proneDimensions)
+        {
+            return EntityDimensions.scalable(PRONE_WIDTH, PRONE_HEIGHT);
+        }
+        return this.crouchingDimensions ? EntityDimensions.scalable(NORMAL_WIDTH, CROUCH_HEIGHT) : dimensions;
+    }
+
+    @Override
+    public void onSyncedDataUpdated(EntityDataAccessor<?> key)
+    {
+        super.onSyncedDataUpdated(key);
+        if (DATA_CROUCHING.equals(key) || DATA_PRONE.equals(key))
+        {
+            this.updatePoseDimensions();
+        }
     }
 
     @Override
@@ -518,9 +789,10 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         // the Unit's own eyes (the airframe hides itself from its pilot).
         float rad = (float) Math.toRadians(this.yBodyRot);
         double behind = 0.35D;
+        double plugHeight = this.isPilotProne() ? 6.2D : this.isPilotCrouching() ? 17.7D : 25.0D;
         move.accept(passenger,
                 this.getX() + Math.sin(rad) * behind,
-                this.getY() + 20.0D,
+                this.getY() + plugHeight,
                 this.getZ() - Math.cos(rad) * behind);
     }
 
@@ -577,7 +849,25 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     public void registerControllers(AnimatableManager.ControllerRegistrar controllers)
     {
         controllers.add(new AnimationController<>(this, "base", 6, state ->
-                state.setAndContinue(state.isMoving() ? ANIM_WALK : ANIM_IDLE)));
+        {
+            if (!this.onGround())
+            {
+                return state.setAndContinue(this.getDeltaMovement().y > 0.02D ? ANIM_JUMP : ANIM_FALL);
+            }
+            if (this.isPilotCrouching())
+            {
+                return state.setAndContinue(state.isMoving() ? ANIM_CROUCH_WALK : ANIM_CROUCH);
+            }
+            if (this.isPilotProne())
+            {
+                return state.setAndContinue(state.isMoving() ? ANIM_CRAWL : ANIM_PRONE);
+            }
+            if (state.isMoving())
+            {
+                return state.setAndContinue(this.isPilotSprinting() ? ANIM_RUN : ANIM_WALK);
+            }
+            return state.setAndContinue(ANIM_IDLE);
+        }));
         controllers.add(new AnimationController<>(this, "arms", 8, state ->
         {
             if (this.getWeapon() == WEAPON_CANNON)
@@ -589,7 +879,12 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         controllers.add(new AnimationController<>(this, "strike", 3, state -> PlayState.STOP)
                 .triggerableAnim("melee", ANIM_MELEE)
                 .triggerableAnim("melee_left", ANIM_MELEE_LEFT)
-                .triggerableAnim("smash", ANIM_SMASH));
+                .triggerableAnim("knife", ANIM_KNIFE)
+                .triggerableAnim("knife_left", ANIM_KNIFE_LEFT)
+                .triggerableAnim("smash", ANIM_SMASH)
+                .triggerableAnim("cannon_fire", ANIM_CANNON_FIRE)
+                .triggerableAnim("land", ANIM_LAND)
+                .triggerableAnim("stomp", ANIM_STOMP));
     }
 
     @Override

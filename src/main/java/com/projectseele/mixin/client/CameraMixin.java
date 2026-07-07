@@ -8,7 +8,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.ModifyVariable;
 
 /**
- * Third-person camera cannot frame a 24-block war machine at the vanilla
+ * Third-person camera cannot frame a 30-block war machine at the vanilla
  * 4-block orbit. Scale the requested zoom distance while piloting; the
  * method's own raycast still clamps it against walls.
  */
@@ -21,7 +21,7 @@ public abstract class CameraMixin
         Entity subject = ((Camera) (Object) this).getEntity();
         if (subject != null && subject.getVehicle() instanceof EvaUnit01Entity)
         {
-            return desired * 4.5D;
+            return desired * 5.5D;
         }
         return desired;
     }
