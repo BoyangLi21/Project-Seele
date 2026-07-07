@@ -21,6 +21,8 @@ public class ModCreativeTabs
                         output.accept(ModItems.CORE_FRAGMENT.get());
                         output.accept(ModItems.RAMIEL_SPAWN_EGG.get());
                         output.accept(ModItems.EVA_UNIT01_SPAWN_EGG.get());
+                        output.accept(ModItems.EVA_UNIT00_SPAWN_EGG.get());
+                        output.accept(ModItems.EVA_UNIT02_SPAWN_EGG.get());
                     })
                     .build());
 }

@@ -27,4 +27,18 @@ public class ModEntities
                     .fireImmune()
                     .clientTrackingRange(12)
                     .build("eva_unit01"));
+
+    public static final RegistryObject<EntityType<EvaUnit01Entity>> EVA_UNIT00 = ENTITY_TYPES.register("eva_unit00",
+            () -> EntityType.Builder.of(EvaUnit01Entity::new, MobCategory.MISC)
+                    .sized(8.5F, 30.0F)
+                    .fireImmune()
+                    .clientTrackingRange(12)
+                    .build("eva_unit00"));
+
+    public static final RegistryObject<EntityType<EvaUnit01Entity>> EVA_UNIT02 = ENTITY_TYPES.register("eva_unit02",
+            () -> EntityType.Builder.of(EvaUnit01Entity::new, MobCategory.MISC)
+                    .sized(8.5F, 30.0F)
+                    .fireImmune()
+                    .clientTrackingRange(12)
+                    .build("eva_unit02"));
 }

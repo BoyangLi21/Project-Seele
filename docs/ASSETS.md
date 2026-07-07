@@ -35,6 +35,6 @@
 |---|---|---|
 | NERV HQ 1:1 世界存档（`run/saves/NERV_HQ_1to1_Poodcie`） | PMC 项目 `nerv-hq`，作者 Poodcie，官方镜像下载 | 仅本地测试。**如需随 mod 公开发布，必须先取得作者授权**（ROADMAP §9 行动清单） |
 | EVA-01 高精模型资源包（`run/resourcepacks/eva_real_model`，由 `tools/make_model_pack.py` 从本地 jar 生成） | Rei Chikita Mod 1.1.7b（CurseForge），作者 DanielFernandez，**All Rights Reserved** | 仅本地测试，包内含 `_SOURCE.txt` 免责声明。**公开使用前必须取得作者许可**；生成脚本入库，模型产物永不入库 |
-| 仓库根目录的两个第三方 mod jar（Rei Chikita / EUD） | 用户手动下载 | 已被 `.gitignore` 的 `/*.jar` 规则拦截，永不提交。EUD（CC-BY-NC-SA）内含朗基努斯系枪模型与插入栓服，Phase 5 可依其协议改用 |
+| 仓库根目录的两个第三方 mod jar（Rei Chikita / EUD） | 用户手动下载 | 已被 `.gitignore` 的 `/*.jar` 规则拦截，永不提交。EUD 1.1.0 清单标注 **CC BY-NC 4.0**，含驾驶服、LCL、三枪与 EVA 遗迹结构，但无可驾驶 EVA 模型；公开改用前仍联系作者确认署名方式 |
 
 `run/` 已 gitignore，上表资产不会进入版本库与发行物。

@@ -120,32 +120,38 @@ def main():
         "loop": True,
         "animation_length": 0.5,
         "bones": {
-            "brazoderecho": {"rotation": {"0.0": [-88, 0, 0]}},
-            "brazoizquierda": {"rotation": {"0.0": [-60, 0, 30]}},
+            "brazoderecho": {"rotation": {"0.0": [-92, -5, -4]}},
+            "brazoderechobajo": {"rotation": {"0.0": [-10, 0, 0]}},
+            "brazoizquierda": {"rotation": {"0.0": [-78, 4, 34]}},
+            "brazobajo": {"rotation": {"0.0": [-48, -24, -8]}},
+            "pecho": {"rotation": {"0.0": [6, -7, 0]}},
+            "cabeza": {"rotation": {"0.0": [-5, 7, 0]}},
         },
     }
     out_anims["animation.eva_unit01.crouch"] = {
         "loop": True,
         "animation_length": 1.2,
         "bones": {
-            "todo": {"position": {"0.0": [0, -33, 0]}},
-            "CINTURA": {"rotation": {"0.0": [10, 0, 0]}},
-            "PIERNAIZQUIERD": {"rotation": {"0.0": [-72, 0, -3]}},
-            "PIERNADERECHA": {"rotation": {"0.0": [-14, 0, 5]}},
-            "PIERNABAJAIZQUIERDA": {"rotation": {"0.0": [116, 0, 0]}},
-            "PIERNABAJAIZQUIERDA2": {"rotation": {"0.0": [38, 0, 0]}},
+            "todo": {"position": {"0.0": [0, -38, 0]}},
+            "CINTURA": {"rotation": {"0.0": [8, 0, 0]}},
+            "PIERNAIZQUIERD": {"rotation": {"0.0": [0, 0, -82]}},
+            "PIERNADERECHA": {"rotation": {"0.0": [0, 0, -20]}},
+            "PIERNABAJAIZQUIERDA": {"rotation": {"0.0": [0, 0, 125]}},
+            "PIERNABAJAIZQUIERDA2": {"rotation": {"0.0": [0, 0, 45]}},
+            "PIEIZQUIERDO": {"rotation": {"0.0": [0, 0, -28]}},
+            "PIEIZQUIERDO2": {"rotation": {"0.0": [0, 0, -12]}},
         },
     }
     out_anims["animation.eva_unit01.crouch_walk"] = {
         "loop": True,
         "animation_length": 1.0,
         "bones": {
-            "todo": {"position": {"0.0": [0, -30, 0]}},
+            "todo": {"position": {"0.0": [0, -34, 0]}},
             "CINTURA": {"rotation": {"0.0": [12, 5, 0], "0.5": [12, -5, 0], "1.0": [12, 5, 0]}},
-            "PIERNAIZQUIERD": {"rotation": {"0.0": [-70, 0, -3], "0.5": [-16, 0, -3], "1.0": [-70, 0, -3]}},
-            "PIERNADERECHA": {"rotation": {"0.0": [-16, 0, 3], "0.5": [-70, 0, 3], "1.0": [-16, 0, 3]}},
-            "PIERNABAJAIZQUIERDA": {"rotation": {"0.0": [114, 0, 0], "0.5": [42, 0, 0], "1.0": [114, 0, 0]}},
-            "PIERNABAJAIZQUIERDA2": {"rotation": {"0.0": [42, 0, 0], "0.5": [114, 0, 0], "1.0": [42, 0, 0]}},
+            "PIERNAIZQUIERD": {"rotation": {"0.0": [0, 0, -78], "0.5": [0, 0, -20], "1.0": [0, 0, -78]}},
+            "PIERNADERECHA": {"rotation": {"0.0": [0, 0, -20], "0.5": [0, 0, -78], "1.0": [0, 0, -20]}},
+            "PIERNABAJAIZQUIERDA": {"rotation": {"0.0": [0, 0, 120], "0.5": [0, 0, 45], "1.0": [0, 0, 120]}},
+            "PIERNABAJAIZQUIERDA2": {"rotation": {"0.0": [0, 0, 45], "0.5": [0, 0, 120], "1.0": [0, 0, 45]}},
         },
     }
     out_anims["animation.eva_unit01.prone"] = {
@@ -155,8 +161,8 @@ def main():
             "todo": {"rotation": {"0.0": [90, 0, 0]}, "position": {"0.0": [0, 8, -12]}},
             "brazoizquierda": {"rotation": {"0.0": [-142, 0, 12]}},
             "brazoderecho": {"rotation": {"0.0": [-142, 0, -12]}},
-            "PIERNAIZQUIERD": {"rotation": {"0.0": [8, 0, -4]}},
-            "PIERNADERECHA": {"rotation": {"0.0": [8, 0, 4]}},
+            "PIERNAIZQUIERD": {"rotation": {"0.0": [0, 0, 8]}},
+            "PIERNADERECHA": {"rotation": {"0.0": [0, 0, 8]}},
         },
     }
     out_anims["animation.eva_unit01.crawl"] = {
@@ -166,8 +172,8 @@ def main():
             "todo": {"rotation": {"0.0": [90, 0, 0]}, "position": {"0.0": [0, 8, -12]}},
             "brazoizquierda": {"rotation": {"0.0": [-158, 0, 12], "0.6": [-118, 0, 12], "1.2": [-158, 0, 12]}},
             "brazoderecho": {"rotation": {"0.0": [-118, 0, -12], "0.6": [-158, 0, -12], "1.2": [-118, 0, -12]}},
-            "PIERNAIZQUIERD": {"rotation": {"0.0": [-16, 0, -4], "0.6": [24, 0, -4], "1.2": [-16, 0, -4]}},
-            "PIERNADERECHA": {"rotation": {"0.0": [24, 0, 4], "0.6": [-16, 0, 4], "1.2": [24, 0, 4]}},
+            "PIERNAIZQUIERD": {"rotation": {"0.0": [0, 0, -16], "0.6": [0, 0, 24], "1.2": [0, 0, -16]}},
+            "PIERNADERECHA": {"rotation": {"0.0": [0, 0, 24], "0.6": [0, 0, -16], "1.2": [0, 0, 24]}},
         },
     }
     out_anims["animation.eva_unit01.fall"] = {
@@ -177,8 +183,8 @@ def main():
             "CINTURA": {"rotation": {"0.0": [6, 0, 0]}},
             "brazoizquierda": {"rotation": {"0.0": [18, 0, 30]}},
             "brazoderecho": {"rotation": {"0.0": [18, 0, -30]}},
-            "PIERNAIZQUIERD": {"rotation": {"0.0": [12, 0, -7]}},
-            "PIERNADERECHA": {"rotation": {"0.0": [12, 0, 7]}},
+            "PIERNAIZQUIERD": {"rotation": {"0.0": [0, 0, 12]}},
+            "PIERNADERECHA": {"rotation": {"0.0": [0, 0, 12]}},
         },
     }
     # Distinct left jab and two-handed smash (their sheet only has one
@@ -234,8 +240,10 @@ def main():
         "bones": {
             "todo": {"position": {"0.0": [0, 0, 0], "0.08": [0, -4, 0], "0.22": [0, 1, 0], "0.46": [0, 0, 0]}},
             "CINTURA": {"rotation": {"0.0": [0, 0, 0], "0.08": [13, 0, 0], "0.46": [0, 0, 0]}},
-            "PIERNAIZQUIERD": {"rotation": {"0.0": [0, 0, 0], "0.08": [-24, 0, -3], "0.46": [0, 0, 0]}},
-            "PIERNADERECHA": {"rotation": {"0.0": [0, 0, 0], "0.08": [-24, 0, 3], "0.46": [0, 0, 0]}},
+            "PIERNAIZQUIERD": {"rotation": {"0.0": [0, 0, 0], "0.08": [0, 0, -24], "0.46": [0, 0, 0]}},
+            "PIERNADERECHA": {"rotation": {"0.0": [0, 0, 0], "0.08": [0, 0, -24], "0.46": [0, 0, 0]}},
+            "PIERNABAJAIZQUIERDA": {"rotation": {"0.0": [0, 0, 0], "0.08": [0, 0, 42], "0.46": [0, 0, 0]}},
+            "PIERNABAJAIZQUIERDA2": {"rotation": {"0.0": [0, 0, 0], "0.08": [0, 0, 42], "0.46": [0, 0, 0]}},
         },
     }
     out_anims["animation.eva_unit01.stomp"] = {
@@ -244,8 +252,8 @@ def main():
         "bones": {
             "todo": {"position": {"0.0": [0, 0, 0], "0.2": [0, 4, 0], "0.42": [0, -3, 0], "0.72": [0, 0, 0]}},
             "CINTURA": {"rotation": {"0.0": [0, 0, 0], "0.2": [-12, -5, 0], "0.42": [16, 4, 0], "0.72": [0, 0, 0]}},
-            "PIERNADERECHA": {"rotation": {"0.0": [0, 0, 0], "0.2": [-68, 0, 4], "0.34": [-78, 0, 4], "0.42": [24, 0, 0], "0.72": [0, 0, 0]}},
-            "PIERNABAJAIZQUIERDA2": {"rotation": {"0.0": [0, 0, 0], "0.2": [94, 0, 0], "0.34": [106, 0, 0], "0.42": [-12, 0, 0], "0.72": [0, 0, 0]}},
+            "PIERNADERECHA": {"rotation": {"0.0": [0, 0, 0], "0.2": [0, 0, -68], "0.34": [0, 0, -78], "0.42": [0, 0, 24], "0.72": [0, 0, 0]}},
+            "PIERNABAJAIZQUIERDA2": {"rotation": {"0.0": [0, 0, 0], "0.2": [0, 0, 94], "0.34": [0, 0, 106], "0.42": [0, 0, -12], "0.72": [0, 0, 0]}},
         },
     }
 

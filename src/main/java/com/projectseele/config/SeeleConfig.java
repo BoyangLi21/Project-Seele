@@ -45,6 +45,9 @@ public final class SeeleConfig
     // ----- client -----
     public static final ForgeConfigSpec.BooleanValue ALARM_VIGNETTE;
     public static final ForgeConfigSpec.DoubleValue FX_INTENSITY;
+    public static final ForgeConfigSpec.DoubleValue COCKPIT_ARM_SCALE;
+    public static final ForgeConfigSpec.DoubleValue COCKPIT_ARM_Y;
+    public static final ForgeConfigSpec.DoubleValue COCKPIT_ARM_Z;
 
     static
     {
@@ -140,6 +143,15 @@ public final class SeeleConfig
         FX_INTENSITY = client
                 .comment("Global brightness/opacity multiplier for beam and explosion effects (0 disables cross explosions).")
                 .defineInRange("fxIntensity", 1.0D, 0.0D, 1.0D);
+        COCKPIT_ARM_SCALE = client
+                .comment("First-person real-bone EVA arm scale.")
+                .defineInRange("cockpitArmScale", 0.08D, 0.02D, 0.30D);
+        COCKPIT_ARM_Y = client
+                .comment("First-person real-bone EVA arm vertical offset.")
+                .defineInRange("cockpitArmY", -1.10D, -4.0D, 4.0D);
+        COCKPIT_ARM_Z = client
+                .comment("First-person real-bone EVA arm depth offset.")
+                .defineInRange("cockpitArmZ", -1.35D, -4.0D, 2.0D);
         client.pop();
         CLIENT_SPEC = client.build();
     }

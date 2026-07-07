@@ -23,4 +23,8 @@ public class ModItems
 
     public static final RegistryObject<Item> EVA_UNIT01_SPAWN_EGG = ITEMS.register("eva_unit01_spawn_egg",
             () -> new ForgeSpawnEggItem(ModEntities.EVA_UNIT01, 0x57288A, 0x39FF6E, new Item.Properties()));
+    public static final RegistryObject<Item> EVA_UNIT00_SPAWN_EGG = ITEMS.register("eva_unit00_spawn_egg",
+            () -> new ForgeSpawnEggItem(ModEntities.EVA_UNIT00, 0xE89B2C, 0xF5F5E8, new Item.Properties()));
+    public static final RegistryObject<Item> EVA_UNIT02_SPAWN_EGG = ITEMS.register("eva_unit02_spawn_egg",
+            () -> new ForgeSpawnEggItem(ModEntities.EVA_UNIT02, 0xB51F28, 0xF2C230, new Item.Properties()));
 }

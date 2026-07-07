@@ -1,12 +1,15 @@
 package com.projectseele.client;
 
 import com.projectseele.ProjectSeele;
-import com.projectseele.client.render.EvaCockpitArms;
+import com.projectseele.client.render.EvaUnit01Renderer;
 import com.projectseele.entity.EvaUnit01Entity;
 import com.projectseele.network.SeeleNetwork;
 import com.projectseele.network.ServerboundEvaControlPacket;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.sounds.SoundEvent;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
 import net.minecraftforge.api.distmarker.Dist;
@@ -28,14 +31,13 @@ public final class ClientForgeEvents
     private static boolean crouchHeld;
     private static boolean sprintHeld;
     private static boolean jumpHeld;
-    private static boolean cockpitLeftSwing;
-    private static int cockpitAction = EvaCockpitArms.ACTION_NONE;
-    private static int cockpitActionTicks;
-    private static EvaCockpitArms cockpitArms;
+    private static boolean pilotArmsLogged;
     /** Entry-plug insertion cinematic: counts down after boarding. */
-    private static final int INSERTION_LENGTH = 50;
+    private static final int INSERTION_LENGTH = 120;
     private static int insertionTicks;
     private static int pilotTicks;
+    private static int damageFlashTicks;
+    private static float lastEvaHealth = -1.0F;
     private static boolean wasPiloting;
 
     private ClientForgeEvents() {}
@@ -53,6 +55,11 @@ public final class ClientForgeEvents
     public static int pilotTicks()
     {
         return pilotTicks;
+    }
+
+    public static float damageFlash(float partialTick)
+    {
+        return Mth.clamp((damageFlashTicks - partialTick) / 18.0F, 0.0F, 1.0F);
     }
 
     private static void send(int action)
@@ -93,20 +100,43 @@ public final class ClientForgeEvents
         {
             insertionTicks = INSERTION_LENGTH;
             pilotTicks = 0;
+            lastEvaHealth = eva.getHealth();
+            playPlugSound(minecraft, SoundEvents.PISTON_EXTEND, 1.4F, 0.55F);
         }
         pilotTicks = piloting ? pilotTicks + 1 : 0;
         wasPiloting = piloting;
         if (insertionTicks > 0 && !minecraft.isPaused())
         {
+            if (insertionTicks == 96)
+            {
+                playPlugSound(minecraft, SoundEvents.IRON_DOOR_CLOSE, 1.2F, 0.72F);
+            }
+            else if (insertionTicks == 68)
+            {
+                playPlugSound(minecraft, SoundEvents.BEACON_POWER_SELECT, 1.0F, 0.62F);
+            }
+            else if (insertionTicks == 32)
+            {
+                playPlugSound(minecraft, SoundEvents.BEACON_ACTIVATE, 1.0F, 1.18F);
+            }
             insertionTicks--;
         }
-        if (cockpitActionTicks > 0 && !minecraft.isPaused())
+        if (damageFlashTicks > 0 && !minecraft.isPaused())
         {
-            cockpitActionTicks--;
-            if (cockpitActionTicks == 0)
+            damageFlashTicks--;
+        }
+        if (eva != null)
+        {
+            if (lastEvaHealth >= 0.0F && eva.getHealth() < lastEvaHealth)
             {
-                cockpitAction = EvaCockpitArms.ACTION_NONE;
+                damageFlashTicks = 18;
             }
+            lastEvaHealth = eva.getHealth();
+        }
+        else
+        {
+            lastEvaHealth = -1.0F;
+            damageFlashTicks = 0;
         }
 
         while (Keybinds.CYCLE_WEAPON.consumeClick())
@@ -134,8 +164,6 @@ public final class ClientForgeEvents
         {
             if (eva != null && eva.getWeapon() != EvaUnit01Entity.WEAPON_CANNON)
             {
-                cockpitAction = EvaCockpitArms.ACTION_STOMP;
-                cockpitActionTicks = 12;
                 send(ServerboundEvaControlPacket.ACTION_STOMP);
             }
         }
@@ -186,11 +214,6 @@ public final class ClientForgeEvents
                 && minecraft.options.keyUse.isDown();
         if (wantCharge != chargeHeld)
         {
-            if (!wantCharge && chargeHeld && eva != null && eva.chargeProgress() >= 1.0F)
-            {
-                cockpitAction = EvaCockpitArms.ACTION_FIRE;
-                cockpitActionTicks = 12;
-            }
             chargeHeld = wantCharge;
             send(wantCharge
                     ? ServerboundEvaControlPacket.ACTION_CHARGE_START
@@ -203,6 +226,15 @@ public final class ClientForgeEvents
         long window = minecraft.getWindow().getWindow();
         return GLFW.glfwGetKey(window, left) == GLFW.GLFW_PRESS
                 || GLFW.glfwGetKey(window, right) == GLFW.GLFW_PRESS;
+    }
+
+    private static void playPlugSound(Minecraft minecraft, SoundEvent sound, float volume, float pitch)
+    {
+        if (minecraft.level != null && minecraft.player != null)
+        {
+            minecraft.level.playLocalSound(minecraft.player.getX(), minecraft.player.getY(), minecraft.player.getZ(),
+                    sound, SoundSource.PLAYERS, volume, pitch, false);
+        }
     }
 
     /**
@@ -223,11 +255,6 @@ public final class ClientForgeEvents
         {
             event.setCanceled(true);
             event.setSwingHand(false);
-            cockpitLeftSwing = !cockpitLeftSwing;
-            cockpitAction = eva.getWeapon() == EvaUnit01Entity.WEAPON_KNIFE
-                    ? EvaCockpitArms.ACTION_RIGHT
-                    : cockpitLeftSwing ? EvaCockpitArms.ACTION_LEFT : EvaCockpitArms.ACTION_RIGHT;
-            cockpitActionTicks = 12;
             send(ServerboundEvaControlPacket.ACTION_MELEE);
         }
         else if (event.isUseItem())
@@ -237,8 +264,6 @@ public final class ClientForgeEvents
             event.setSwingHand(false);
             if (eva.getWeapon() != EvaUnit01Entity.WEAPON_CANNON)
             {
-                cockpitAction = EvaCockpitArms.ACTION_SMASH;
-                cockpitActionTicks = 12;
                 send(ServerboundEvaControlPacket.ACTION_SMASH);
             }
         }
@@ -258,13 +283,16 @@ public final class ClientForgeEvents
         {
             return;
         }
-        if (cockpitArms == null)
+        if (minecraft.getEntityRenderDispatcher().getRenderer(eva) instanceof EvaUnit01Renderer renderer)
         {
-            cockpitArms = new EvaCockpitArms(minecraft.getEntityModels().bakeLayer(EvaCockpitArms.LAYER));
-            ProjectSeele.LOGGER.info("EVA cockpit arms renderer active");
+            renderer.renderPilotArms(eva, event.getPartialTick(), event.getPoseStack(),
+                    event.getMultiBufferSource(), event.getPackedLight());
+            if (!pilotArmsLogged)
+            {
+                pilotArmsLogged = true;
+                ProjectSeele.LOGGER.info("EVA real-bone cockpit arms renderer active");
+            }
         }
-        cockpitArms.render(event.getPoseStack(), event.getMultiBufferSource(), event.getPackedLight(),
-                eva, event.getPartialTick(), cockpitAction, cockpitActionTicks);
     }
 
     @SubscribeEvent

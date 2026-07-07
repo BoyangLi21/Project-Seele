@@ -1,10 +1,12 @@
 package com.projectseele.client.render;
 
+import java.util.Set;
 import java.util.function.Consumer;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.projectseele.entity.EvaUnit01Entity;
+import com.projectseele.config.SeeleConfig;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
@@ -17,12 +19,17 @@ import software.bernie.geckolib.renderer.GeoEntityRenderer;
 /**
  * GeckoLib-driven Unit-01. Weapon bones (prog knife, positron cannon) are
  * toggled from the entity's synced weapon state. The world model is hidden
- * from its own first-person camera; EvaCockpitArms supplies a guaranteed
- * camera-space pair of arms instead.
+ * from its own first-person camera; a second camera-space pass renders the
+ * same animated arm bones used by the world model.
  */
 public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
 {
+    private static final Set<String> ARM_BONES = Set.of(
+            "arm_l", "forearm_l", "hand_l", "arm_r", "forearm_r", "hand_r", "knife", "cannon", "shield",
+            "brazoizquierda", "brazobajo", "brazoderecho", "brazoderechobajo");
+
     private boolean pilotView;
+    private boolean pilotArmPass;
 
     public EvaUnit01Renderer(EntityRendererProvider.Context context)
     {
@@ -42,6 +49,26 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
         super.render(entity, entityYaw, partialTick, poseStack, bufferSource, packedLight);
     }
 
+    /** Renders the real, animated arm bones directly in camera space. */
+    public void renderPilotArms(EvaUnit01Entity entity, float partialTick, PoseStack poseStack,
+                                MultiBufferSource bufferSource, int packedLight)
+    {
+        this.pilotArmPass = true;
+        poseStack.pushPose();
+        poseStack.translate(0.0D, SeeleConfig.COCKPIT_ARM_Y.get(), SeeleConfig.COCKPIT_ARM_Z.get());
+        float armScale = SeeleConfig.COCKPIT_ARM_SCALE.get().floatValue();
+        poseStack.scale(armScale, armScale, armScale);
+        try
+        {
+            super.render(entity, 0.0F, partialTick, poseStack, bufferSource, packedLight);
+        }
+        finally
+        {
+            poseStack.popPose();
+            this.pilotArmPass = false;
+        }
+    }
+
     @Override
     public void preRender(PoseStack poseStack, EvaUnit01Entity animatable, BakedGeoModel model,
                           @Nullable MultiBufferSource bufferSource, @Nullable VertexConsumer buffer,
@@ -51,12 +78,23 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
         super.preRender(poseStack, animatable, model, bufferSource, buffer, isReRender,
                 partialTick, packedLight, packedOverlay, red, green, blue, alpha);
         boolean firstPerson = this.pilotView;
-        forEachBone(model, bone ->
+        if (this.pilotArmPass)
         {
-            bone.setHidden(firstPerson);
-            bone.setChildrenHidden(false);
-        });
-        if (!firstPerson && animatable.getWeapon() == EvaUnit01Entity.WEAPON_CANNON)
+            forEachBone(model, bone ->
+            {
+                bone.setHidden(!ARM_BONES.contains(bone.getName()));
+                bone.setChildrenHidden(false);
+            });
+        }
+        else
+        {
+            forEachBone(model, bone ->
+            {
+                bone.setHidden(firstPerson);
+                bone.setChildrenHidden(false);
+            });
+        }
+        if ((!firstPerson || this.pilotArmPass) && animatable.getWeapon() == EvaUnit01Entity.WEAPON_CANNON)
         {
             // The animation establishes a proper two-hand firing stance;
             // this procedural layer follows the pilot's vertical aim.

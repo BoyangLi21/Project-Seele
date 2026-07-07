@@ -34,7 +34,8 @@ public final class EvaHud
 
     /**
      * Entry-plug insertion cinematic: dark clunk, LCL floods bottom-to-top,
-     * vision clears. Runs for ~2.5s after boarding.
+     * A six-second activation sequence: mechanical lock, LCL pressure,
+     * A10 nerve connection, synchronization, then optical clearing.
      */
     public static final IGuiOverlay INSERTION = (gui, guiGraphics, partialTick, width, height) ->
     {
@@ -43,30 +44,52 @@ public final class EvaHud
         {
             return;
         }
-        // Phase 1 (0..0.16): hard blackout as the plug slams home.
-        // Phase 2 (0.16..0.6): LCL rises from the bottom of the view.
-        // Phase 3 (0.6..1): everything drains to transparency.
-        float blackout = progress < 0.16F ? progress / 0.16F
-                : Mth.clamp(1.0F - (progress - 0.16F) / 0.5F, 0.0F, 1.0F);
-        guiGraphics.fill(0, 0, width, height, ((int) (blackout * 230.0F) << 24));
+        float blackout = progress < 0.12F ? Mth.clamp(progress / 0.08F, 0.0F, 1.0F)
+                : Mth.clamp(1.0F - (progress - 0.12F) / 0.22F, 0.0F, 1.0F);
+        guiGraphics.fill(0, 0, width, height, ((int) (blackout * 245.0F) << 24));
 
-        float rise = Mth.clamp((progress - 0.16F) / 0.44F, 0.0F, 1.0F);
-        float fade = progress > 0.6F ? Mth.clamp(1.0F - (progress - 0.6F) / 0.4F, 0.0F, 1.0F) : 1.0F;
+        float rise = Mth.clamp((progress - 0.12F) / 0.34F, 0.0F, 1.0F);
+        float fade = progress > 0.76F ? Mth.clamp(1.0F - (progress - 0.76F) / 0.24F, 0.0F, 1.0F) : 1.0F;
         if (rise > 0.0F)
         {
             int surface = height - Math.round(height * rise);
-            int lclAlpha = (int) (150.0F * fade);
+            int lclAlpha = (int) (190.0F * fade);
             guiGraphics.fill(0, surface, width, height, (lclAlpha << 24) | 0xFF8C1A);
-            // Bright meniscus line at the LCL surface.
             guiGraphics.fill(0, Math.max(0, surface - 2), width, surface, ((int) (220.0F * fade) << 24) | 0xFFB35C);
+            for (int bubble = 0; bubble < 14; bubble++)
+            {
+                int bx = Math.floorMod(bubble * 97 + (int) (progress * 380.0F), Math.max(1, width));
+                int by = height - Math.floorMod(bubble * 53 + (int) (progress * 240.0F), Math.max(1, height));
+                if (by >= surface)
+                {
+                    guiGraphics.fill(bx, by, bx + 2, by + 2, ((int) (135.0F * fade) << 24) | 0xFFE0A0);
+                }
+            }
         }
-        if (progress > 0.1F && progress < 0.85F)
+
+        if (progress > 0.42F)
         {
-            guiGraphics.drawCenteredString(gui.getFont(),
-                    Component.translatable("hud.projectseele.plug_insertion")
-                            .withStyle(ChatFormatting.GOLD),
-                    width / 2, height / 2 - 30, NERV_ORANGE);
+            int scanAlpha = (int) (55.0F * fade);
+            for (int y = 0; y < height; y += 5)
+            {
+                guiGraphics.fill(0, y, width, y + 1, (scanAlpha << 24) | 0xFFB060);
+            }
         }
+
+        String stageKey = progress < 0.2F ? "hud.projectseele.plug_lock"
+                : progress < 0.48F ? "hud.projectseele.lcl_pressurize"
+                : progress < 0.70F ? "hud.projectseele.a10_connect"
+                : "hud.projectseele.synch_start";
+        guiGraphics.drawCenteredString(gui.getFont(),
+                Component.translatable(stageKey).withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD),
+                width / 2, height / 2 - 34, NERV_ORANGE);
+        int barWidth = Math.min(240, width / 2);
+        int bx = width / 2 - barWidth / 2;
+        int by = height / 2 - 15;
+        guiGraphics.fill(bx, by, bx + barWidth, by + 5, 0xB0202020);
+        guiGraphics.fill(bx, by, bx + Math.round(barWidth * progress), by + 5, NERV_ORANGE);
+        guiGraphics.drawCenteredString(gui.getFont(), String.format("SYSTEM  %03d%%", Math.round(progress * 100.0F)),
+                width / 2, by + 10, 0xFFE8D2B8);
     };
 
     /** Full entry-plug cockpit: frame, synchro readout, status, warnings. */
@@ -76,6 +99,13 @@ public final class EvaHud
         if (player == null || !(player.getVehicle() instanceof EvaUnit01Entity eva))
         {
             return;
+        }
+
+        float damageFlash = ClientForgeEvents.damageFlash(partialTick);
+        if (damageFlash > 0.0F)
+        {
+            int alpha = Math.round(110.0F * damageFlash);
+            guiGraphics.fill(0, 0, width, height, (alpha << 24) | 0xA00000);
         }
 
         // --- plug ambience: faint LCL-orange edges + corner frame ---
@@ -104,6 +134,14 @@ public final class EvaHud
                 Component.literal(String.format("SYNCHRO  %.1f%%", synchro))
                         .withStyle(ChatFormatting.GOLD),
                 width / 2, m + 6, NERV_ORANGE);
+        String roleKey = switch (eva.getUnitVariant())
+        {
+            case EvaUnit01Entity.UNIT_00 -> "hud.projectseele.role_prototype";
+            case EvaUnit01Entity.UNIT_02 -> "hud.projectseele.role_assault";
+            default -> "hud.projectseele.role_test";
+        };
+        guiGraphics.drawString(gui.getFont(), Component.translatable(roleKey).withStyle(ChatFormatting.DARK_GRAY),
+                m + 6, m + 6, 0xFFB8A48D);
 
         int heading = Math.floorMod(Math.round(player.getYRot()), 360);
         guiGraphics.drawCenteredString(gui.getFont(),
@@ -145,7 +183,7 @@ public final class EvaHud
         guiGraphics.fill(x - 4, y + 35, x + barWidth + 4, y + 36, NERV_ORANGE);
 
         guiGraphics.drawString(gui.getFont(),
-                Component.translatable("hud.projectseele.eva_status").withStyle(ChatFormatting.GOLD),
+                eva.getDisplayName().copy().withStyle(ChatFormatting.GOLD),
                 x, y - 10, NERV_ORANGE);
         guiGraphics.drawString(gui.getFont(),
                 String.format("%.0f / %.0f", eva.getHealth(), eva.getMaxHealth()),
@@ -158,7 +196,7 @@ public final class EvaHud
         guiGraphics.fill(x, y + 2, x + Math.round(barWidth * hull), y + 10, hullColor);
 
         // A.T. Field bar: cyan when raised, grey when down.
-        float at = Mth.clamp(eva.getAtFieldEnergy() / EvaUnit01Entity.getAtFieldMax(), 0.0F, 1.0F);
+        float at = Mth.clamp(eva.getAtFieldEnergy() / eva.getAtFieldCapacity(), 0.0F, 1.0F);
         boolean atOn = eva.isAtFieldOn();
         guiGraphics.fill(x, y + 14, x + barWidth, y + 22, 0xFF202020);
         guiGraphics.fill(x, y + 14, x + Math.round(barWidth * at), y + 22,
@@ -179,12 +217,14 @@ public final class EvaHud
                 Component.translatable(weaponKey).withStyle(ChatFormatting.YELLOW),
                 x + 44, y + 25, 0xFFFFFFFF);
 
-        String stanceKey = eva.isPilotProne() ? "hud.projectseele.stance_prone"
+        String stanceKey = eva.isShieldBraced() ? "hud.projectseele.stance_shield"
+                : eva.isPilotProne() ? "hud.projectseele.stance_prone"
                 : eva.isPilotCrouching() ? "hud.projectseele.stance_crouch"
                 : eva.isPilotSprinting() ? "hud.projectseele.stance_sprint"
                 : "hud.projectseele.stance_walk";
         Component stance = Component.translatable(stanceKey).withStyle(
-                eva.isPilotSprinting() ? ChatFormatting.GREEN : ChatFormatting.GRAY);
+                eva.isShieldBraced() ? ChatFormatting.AQUA
+                        : eva.isPilotSprinting() ? ChatFormatting.GREEN : ChatFormatting.GRAY);
         guiGraphics.drawString(gui.getFont(), stance, width - 10 - gui.getFont().width(stance),
                 height - 24, 0xFFFFFFFF);
 

@@ -6,6 +6,7 @@ import com.projectseele.network.ClientboundCannonBeamPacket;
 import com.projectseele.network.ClientboundNukeFxPacket;
 import com.projectseele.network.SeeleNetwork;
 import com.projectseele.registry.ModSounds;
+import com.projectseele.registry.ModEntities;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
@@ -64,6 +65,9 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     public static final int WEAPON_FISTS = 0;
     public static final int WEAPON_KNIFE = 1;
     public static final int WEAPON_CANNON = 2;
+    public static final int UNIT_00 = 0;
+    public static final int UNIT_01 = 1;
+    public static final int UNIT_02 = 2;
 
     private static final float MELEE_FIST_DAMAGE = 20.0F;
     private static final float MELEE_KNIFE_DAMAGE = 60.0F;
@@ -143,6 +147,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     private boolean crouchingDimensions;
     private boolean proneDimensions;
     private boolean wasAirborne;
+    private int activationTicks;
 
     public EvaUnit01Entity(EntityType<? extends EvaUnit01Entity> type, Level level)
     {
@@ -184,6 +189,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             this.getAttribute(Attributes.MAX_HEALTH).setBaseValue(SeeleConfig.EVA_MAX_HEALTH.get());
             this.setHealth(this.getMaxHealth());
         }
+        this.entityData.set(DATA_AT_ENERGY, this.getAtFieldCapacity());
         return super.finalizeSpawn(level, difficulty, reason, spawnData, dataTag);
     }
 
@@ -192,6 +198,19 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     public int getWeapon()
     {
         return this.entityData.get(DATA_WEAPON);
+    }
+
+    public int getUnitVariant()
+    {
+        if (this.getType() == ModEntities.EVA_UNIT00.get())
+        {
+            return UNIT_00;
+        }
+        if (this.getType() == ModEntities.EVA_UNIT02.get())
+        {
+            return UNIT_02;
+        }
+        return UNIT_01;
     }
 
     public boolean isAtFieldOn()
@@ -204,9 +223,20 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         return this.entityData.get(DATA_AT_ENERGY);
     }
 
-    public static float getAtFieldMax()
+    public float getAtFieldCapacity()
     {
-        return AT_FIELD_MAX;
+        return switch (this.getUnitVariant())
+        {
+            case UNIT_00 -> 300.0F;
+            case UNIT_02 -> 160.0F;
+            default -> AT_FIELD_MAX;
+        };
+    }
+
+    /** Unit-00's kneeling shield posture, used to cover the firing Unit. */
+    public boolean isShieldBraced()
+    {
+        return this.getUnitVariant() == UNIT_00 && this.isPilotCrouching() && this.isAtFieldOn();
     }
 
     public int getCannonCharge()
@@ -279,7 +309,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     /** Left-click from the plug: alternating swings in front of the Unit. */
     public void meleeAttack(ServerPlayer pilot)
     {
-        if (this.meleeCooldown > 0 || this.getWeapon() == WEAPON_CANNON)
+        if (this.activationTicks > 20 || this.meleeCooldown > 0 || this.getWeapon() == WEAPON_CANNON)
         {
             return;
         }
@@ -290,7 +320,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
                 ? (this.leftSwing ? "knife_left" : "knife")
                 : (this.leftSwing ? "melee_left" : "melee");
         this.triggerAnim("strike", animation);
-        float damage = knife ? MELEE_KNIFE_DAMAGE : MELEE_FIST_DAMAGE;
+        float damage = (knife ? MELEE_KNIFE_DAMAGE : MELEE_FIST_DAMAGE) * this.getMeleeMultiplier();
         Vec3 forward = this.getForward().multiply(1.0D, 0.0D, 1.0D).normalize();
         Vec3 center = this.position().add(forward.scale(MELEE_REACH)).add(0.0D, 14.0D, 0.0D);
         AABB zone = new AABB(center, center).inflate(MELEE_RADIUS, 10.0D, MELEE_RADIUS);
@@ -302,7 +332,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     /** Crouch + attack: a slow two-handed slam that flattens the area ahead. */
     public void smashAttack(ServerPlayer pilot)
     {
-        if (this.smashCooldown > 0 || this.getWeapon() == WEAPON_CANNON)
+        if (this.activationTicks > 20 || this.smashCooldown > 0 || this.getWeapon() == WEAPON_CANNON)
         {
             return;
         }
@@ -310,7 +340,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         this.triggerAnim("strike", "smash");
 
         boolean knife = this.getWeapon() == WEAPON_KNIFE;
-        float damage = knife ? SMASH_KNIFE_DAMAGE : SMASH_FIST_DAMAGE;
+        float damage = (knife ? SMASH_KNIFE_DAMAGE : SMASH_FIST_DAMAGE) * this.getMeleeMultiplier();
         Vec3 forward = this.getForward().multiply(1.0D, 0.0D, 1.0D).normalize();
         Vec3 center = this.position().add(forward.scale(MELEE_REACH + 1.0D)).add(0.0D, 4.0D, 0.0D);
         AABB zone = new AABB(center, center).inflate(SMASH_RADIUS, 8.5D, SMASH_RADIUS);
@@ -326,7 +356,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     /** Heavy single-foot strike for targets beneath the Unit. */
     public void stompAttack(ServerPlayer pilot)
     {
-        if (this.stompCooldown > 0 || this.getWeapon() == WEAPON_CANNON)
+        if (this.activationTicks > 20 || this.stompCooldown > 0 || this.getWeapon() == WEAPON_CANNON)
         {
             return;
         }
@@ -336,7 +366,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         Vec3 forward = this.getForward().multiply(1.0D, 0.0D, 1.0D).normalize();
         Vec3 center = this.position().add(forward.scale(2.8D)).add(0.0D, 1.0D, 0.0D);
         AABB zone = new AABB(center, center).inflate(STOMP_RADIUS, 3.5D, STOMP_RADIUS);
-        this.strikeZone(pilot, zone, STOMP_DAMAGE, 2.4D, center);
+        this.strikeZone(pilot, zone, STOMP_DAMAGE * this.getMeleeMultiplier(), 2.4D, center);
         if (this.level() instanceof ServerLevel serverLevel)
         {
             serverLevel.sendParticles(ParticleTypes.CLOUD,
@@ -365,13 +395,23 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
                 fxCenter.x, fxCenter.y, fxCenter.z, 6, 1.6D, 1.2D, 1.6D, 0.0D);
     }
 
+    private float getMeleeMultiplier()
+    {
+        return switch (this.getUnitVariant())
+        {
+            case UNIT_00 -> 0.85F;
+            case UNIT_02 -> 1.20F;
+            default -> 1.0F;
+        };
+    }
+
     /** Use-key released: fire if fully charged, otherwise just power down. */
     public void releaseCannon(ServerPlayer pilot)
     {
         this.chargingHeld = false;
         boolean full = this.getCannonCharge() >= SeeleConfig.CANNON_CHARGE_TICKS.get();
         this.entityData.set(DATA_CANNON_CHARGE, 0);
-        if (!full || this.getWeapon() != WEAPON_CANNON || this.getCannonCooldown() > 0)
+        if (this.activationTicks > 20 || !full || this.getWeapon() != WEAPON_CANNON || this.getCannonCooldown() > 0)
         {
             return;
         }
@@ -560,6 +600,10 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         {
             this.jumpCooldown--;
         }
+        if (this.activationTicks > 0)
+        {
+            this.activationTicks--;
+        }
         if (!this.onGround())
         {
             this.wasAirborne = true;
@@ -600,10 +644,10 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         {
             this.atRegenDelay--;
         }
-        else if (this.getAtFieldEnergy() < AT_FIELD_MAX)
+        else if (this.getAtFieldEnergy() < this.getAtFieldCapacity())
         {
             this.entityData.set(DATA_AT_ENERGY,
-                    Math.min(AT_FIELD_MAX, this.getAtFieldEnergy() + AT_FIELD_REGEN));
+                    Math.min(this.getAtFieldCapacity(), this.getAtFieldEnergy() + AT_FIELD_REGEN));
         }
         if (this.isAtFieldOn() && this.getAtFieldEnergy() <= 0.0F)
         {
@@ -636,10 +680,16 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             if (source.getEntity() instanceof Angel || evaMelee)
             {
                 float energy = this.getAtFieldEnergy();
-                float absorbed = Math.min(energy, amount);
+                // Unit-00 can physically interpose itself in Ramiel's ray.
+                // Kneeling behind the shield doubles its already superior
+                // field efficiency, making the Yashima cover role practical.
+                float costMultiplier = this.getUnitVariant() == UNIT_00
+                        ? (this.isShieldBraced() ? 0.30F : 0.60F) : 1.0F;
+                float fieldCost = amount * costMultiplier;
+                float absorbed = Math.min(energy, fieldCost);
                 this.entityData.set(DATA_AT_ENERGY, energy - absorbed);
                 this.rippleAt(source);
-                float leftover = amount - absorbed;
+                float leftover = (fieldCost - absorbed) / costMultiplier;
                 return leftover > 0.0F && super.hurt(source, leftover);
             }
             // Conventional weapons cannot even scratch the field.
@@ -673,6 +723,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             if (!this.level().isClientSide)
             {
                 player.startRiding(this);
+                this.activationTicks = 120;
             }
             return InteractionResult.sidedSuccess(this.level().isClientSide);
         }
@@ -734,6 +785,10 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     @Override
     protected Vec3 getRiddenInput(Player player, Vec3 input)
     {
+        if (this.activationTicks > 20)
+        {
+            return Vec3.ZERO;
+        }
         double strafe = this.isPilotProne() ? 0.28D : this.isPilotCrouching() ? 0.45D : 0.7D;
         return new Vec3(player.xxa * strafe, 0.0D, player.zza >= 0.0F ? player.zza : player.zza * 0.6D);
     }
@@ -741,6 +796,10 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     @Override
     protected float getRiddenSpeed(Player player)
     {
+        if (this.activationTicks > 20)
+        {
+            return 0.0F;
+        }
         // Sniper stance: charging the cannon roots the Unit.
         if (this.getCannonCharge() > 0)
         {
@@ -754,7 +813,13 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         {
             return PRONE_SPEED;
         }
-        return this.isPilotSprinting() ? SPRINT_SPEED : WALK_SPEED;
+        float variantSpeed = switch (this.getUnitVariant())
+        {
+            case UNIT_00 -> this.isPilotSprinting() ? 0.52F : 0.36F;
+            case UNIT_02 -> this.isPilotSprinting() ? 0.72F : 0.48F;
+            default -> this.isPilotSprinting() ? SPRINT_SPEED : WALK_SPEED;
+        };
+        return variantSpeed;
     }
 
     @Override

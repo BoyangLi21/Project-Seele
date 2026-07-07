@@ -112,15 +112,15 @@
       "loop": true,
       "animation_length": 1.6,
       "bones": {
-        "root": {"position": {"0.0": [0, -34, 0]}},
-        "torso_lower": {"rotation": {"0.0": [10, 0, 0]}},
-        "torso_upper": {"rotation": {"0.0": [-5, 0, 0], "0.8": [-3, 0, 0], "1.6": [-5, 0, 0]}},
-        "leg_l": {"rotation": {"0.0": [-72, 0, -3]}},
-        "shin_l": {"rotation": {"0.0": [116, 0, 0]}},
-        "leg_r": {"rotation": {"0.0": [-14, 0, 5]}},
-        "shin_r": {"rotation": {"0.0": [38, 0, 0]}},
-        "arm_l": {"rotation": {"0.0": [-28, 0, 12]}},
-        "arm_r": {"rotation": {"0.0": [-28, 0, -12]}}
+        "root": {"position": {"0.0": [0, -38, 0]}},
+        "torso_lower": {"rotation": {"0.0": [8, 0, 0]}},
+        "torso_upper": {"rotation": {"0.0": [-4, 0, 0], "0.8": [-2, 0, 0], "1.6": [-4, 0, 0]}},
+        "leg_l": {"rotation": {"0.0": [-82, 0, -2]}},
+        "shin_l": {"rotation": {"0.0": [125, 0, 0]}},
+        "leg_r": {"rotation": {"0.0": [-20, 0, 4]}},
+        "shin_r": {"rotation": {"0.0": [45, 0, 0]}},
+        "arm_l": {"rotation": {"0.0": [-32, 0, 14]}},
+        "arm_r": {"rotation": {"0.0": [-32, 0, -14]}}
       }
     },
     "animation.eva_unit01.crouch_walk": {

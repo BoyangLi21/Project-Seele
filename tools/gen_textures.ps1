@@ -237,10 +237,60 @@ Fill-Region 208 140 36 18 $metal 0.05    # scope
 Fill-Region 128 200 20 8 $orange2 0.0
 
 $bmp.Save("$root\entity\eva_unit01.png", [System.Drawing.Imaging.ImageFormat]::Png)
-$bmp.Save("$root\entity\eva_cockpit_arms.png", [System.Drawing.Imaging.ImageFormat]::Png)
 $bmp.Dispose()
 Write-Output "wrote entity/eva_unit01.png (256x256)"
-Write-Output "wrote entity/eva_cockpit_arms.png (256x256)"
+
+# ---------- eva_unit00.png (original Project SEELE variant) ----------
+$bmp = New-Object System.Drawing.Bitmap(256, 256)
+$unit00 = @(222, 142, 34)
+$unit00dark = @(122, 68, 20)
+foreach ($region in @(
+    @(0,0,72,40), @(76,0,48,34), @(128,0,64,24), @(196,0,44,27),
+    @(0,44,38,52), @(40,44,38,52), @(80,44,34,49), @(116,44,34,49),
+    @(152,44,30,36), @(184,44,30,36), @(216,44,30,38), @(0,100,30,38)
+)) { Fill-Region $region[0] $region[1] $region[2] $region[3] $unit00 0.10 }
+Fill-Region 32 100 36 20 $unit00dark 0.0
+Fill-Region 70 100 36 20 $unit00dark 0.0
+Fill-Region 108 100 52 21 $unit00dark 0.06
+Fill-Region 162 100 52 21 $unit00dark 0.06
+Fill-Region 0 140 46 30 $white2 0.08
+Fill-Region 48 140 46 30 $white2 0.08
+Fill-Region 160 140 18 8 $r 0.0
+Fill-Region 96 140 18 9 $green2 0.0
+Fill-Region 190 140 16 30 $white2 0.05
+Fill-Region 120 158 36 96 $metal 0.06
+Fill-Region 208 140 36 18 $metal 0.05
+$bmp.Save("$root\entity\eva_unit00.png", [System.Drawing.Imaging.ImageFormat]::Png)
+$bmp.Dispose()
+Write-Output "wrote entity/eva_unit00.png (256x256)"
+
+# ---------- eva_unit02.png (original Project SEELE variant) ----------
+$bmp = New-Object System.Drawing.Bitmap(256, 256)
+$unit02 = @(184, 32, 42)
+$unit02dark = @(92, 16, 24)
+foreach ($region in @(
+    @(0,0,72,40), @(76,0,48,34), @(128,0,64,24), @(196,0,44,27),
+    @(0,44,38,52), @(40,44,38,52), @(80,44,34,49), @(116,44,34,49),
+    @(152,44,30,36), @(184,44,30,36), @(216,44,30,38), @(0,100,30,38)
+)) { Fill-Region $region[0] $region[1] $region[2] $region[3] $unit02 0.11 }
+Fill-Region 32 100 36 20 $unit02dark 0.0
+Fill-Region 70 100 36 20 $unit02dark 0.0
+Fill-Region 108 100 52 21 $unit02dark 0.06
+Fill-Region 162 100 52 21 $unit02dark 0.06
+Fill-Region 0 140 46 30 $white2 0.08
+Fill-Region 48 140 46 30 $white2 0.08
+Fill-Region 180 140 8 28 $orange2 0.0
+Fill-Region 190 140 16 30 $white2 0.05
+Fill-Region 96 140 18 9 $green2 0.0
+Fill-Region 116 140 40 6 $orange2 0.0
+Fill-Region 160 140 18 9 $green2 0.0
+Fill-Region 170 140 18 9 $green2 0.0
+Fill-Region 96 152 18 9 $orange2 0.0
+Fill-Region 120 158 36 96 $metal 0.06
+Fill-Region 208 140 36 18 $metal 0.05
+$bmp.Save("$root\entity\eva_unit02.png", [System.Drawing.Imaging.ImageFormat]::Png)
+$bmp.Dispose()
+Write-Output "wrote entity/eva_unit02.png (256x256)"
 
 # ---------- ramiel.png (32x32 entity gradient) ----------
 # Near-white blue with fine facet seams; renderer vertex colors do the tinting.
