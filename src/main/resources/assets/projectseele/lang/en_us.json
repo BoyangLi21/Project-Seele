@@ -47,6 +47,7 @@
   "hud.projectseele.stance_shield": "STANCE: SHIELD BRACED",
   "hud.projectseele.stance_prone": "STANCE: PRONE",
   "hud.projectseele.controls": "SPACE jump  SHIFT kneel  Z prone  B stomp  V eject",
+  "hud.projectseele.controls_unit00": "G field + hold SHIFT: brace shield   V eject",
   "boss.projectseele.ramiel_at_field": "RAMIEL — A.T. FIELD",
 
   "title.projectseele.angel_alarm": "ANGEL ATTACK",

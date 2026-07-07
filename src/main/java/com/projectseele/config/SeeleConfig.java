@@ -144,14 +144,14 @@ public final class SeeleConfig
                 .comment("Global brightness/opacity multiplier for beam and explosion effects (0 disables cross explosions).")
                 .defineInRange("fxIntensity", 1.0D, 0.0D, 1.0D);
         COCKPIT_ARM_SCALE = client
-                .comment("First-person real-bone EVA arm scale.")
-                .defineInRange("cockpitArmScale", 0.08D, 0.02D, 0.30D);
+                .comment("First-person real-bone EVA upper-body scale.")
+                .defineInRange("cockpitBodyScale", 0.10D, 0.02D, 0.30D);
         COCKPIT_ARM_Y = client
-                .comment("First-person real-bone EVA arm vertical offset.")
-                .defineInRange("cockpitArmY", -1.10D, -4.0D, 4.0D);
+                .comment("First-person real-bone EVA upper-body vertical offset.")
+                .defineInRange("cockpitBodyY", -2.25D, -4.0D, 4.0D);
         COCKPIT_ARM_Z = client
-                .comment("First-person real-bone EVA arm depth offset.")
-                .defineInRange("cockpitArmZ", -1.35D, -4.0D, 2.0D);
+                .comment("First-person real-bone EVA upper-body depth offset.")
+                .defineInRange("cockpitBodyZ", -1.65D, -4.0D, 2.0D);
         client.pop();
         CLIENT_SPEC = client.build();
     }

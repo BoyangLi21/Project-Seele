@@ -47,6 +47,7 @@
   "hud.projectseele.stance_shield": "姿态：举盾防御",
   "hud.projectseele.stance_prone": "姿态：匍匐",
   "hud.projectseele.controls": "SPACE 跳跃  SHIFT 单膝跪地  Z 趴下  B 踩踏  V 弹出",
+  "hud.projectseele.controls_unit00": "G 展开力场 + 按住 SHIFT：单膝举盾   V 弹出",
   "boss.projectseele.ramiel_at_field": "拉米尔 — A.T. FIELD",
 
   "title.projectseele.angel_alarm": "使徒，来袭",

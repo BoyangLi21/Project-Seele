@@ -5,6 +5,7 @@ import java.util.function.Consumer;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
+import com.mojang.math.Axis;
 import com.projectseele.entity.EvaUnit01Entity;
 import com.projectseele.config.SeeleConfig;
 import net.minecraft.client.Minecraft;
@@ -24,8 +25,15 @@ import software.bernie.geckolib.renderer.GeoEntityRenderer;
  */
 public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
 {
-    private static final Set<String> ARM_BONES = Set.of(
-            "arm_l", "forearm_l", "hand_l", "arm_r", "forearm_r", "hand_r", "knife", "cannon", "shield",
+    /**
+     * First-person body-awareness bones. Rendering only the arms made them
+     * look detached; upper torso and shoulder armour visually connect them.
+     */
+    private static final Set<String> PILOT_BONES = Set.of(
+            "torso_lower", "torso_upper", "pylon_l", "pylon_r",
+            "arm_l", "forearm_l", "hand_l", "arm_r", "forearm_r", "hand_r",
+            "knife", "cannon", "shield",
+            "CINTURA", "bone", "pecho", "alaiz", "bone8", "bone5", "bone7",
             "brazoizquierda", "brazobajo", "brazoderecho", "brazoderechobajo");
 
     private boolean pilotView;
@@ -70,6 +78,20 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
     }
 
     @Override
+    protected void applyRotations(EvaUnit01Entity entity, PoseStack poseStack,
+                                  float ageInTicks, float rotationYaw, float partialTick)
+    {
+        if (this.pilotArmPass)
+        {
+            // This pass already lives in camera space. World body yaw caused
+            // the hands to flip whenever the Eva crossed 180 degrees.
+            poseStack.mulPose(Axis.YP.rotationDegrees(180.0F));
+            return;
+        }
+        super.applyRotations(entity, poseStack, ageInTicks, rotationYaw, partialTick);
+    }
+
+    @Override
     public void preRender(PoseStack poseStack, EvaUnit01Entity animatable, BakedGeoModel model,
                           @Nullable MultiBufferSource bufferSource, @Nullable VertexConsumer buffer,
                           boolean isReRender, float partialTick, int packedLight, int packedOverlay,
@@ -82,7 +104,7 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
         {
             forEachBone(model, bone ->
             {
-                bone.setHidden(!ARM_BONES.contains(bone.getName()));
+                bone.setHidden(!PILOT_BONES.contains(bone.getName()));
                 bone.setChildrenHidden(false);
             });
         }

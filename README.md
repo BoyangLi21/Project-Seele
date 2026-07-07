@@ -10,7 +10,7 @@ An open-source **Neon Genesis Evangelion** universe mod for Minecraft **Forge 1.
 
 Early development. **Operation Yashima is playable**: pilot original, animated EVA Units 00/01/02 against Ramiel with A.T. Fields, progressive weapons and the positron cannon. / **屋岛作战已可玩**：驾驶原创可动画的 EVA 零号机、初号机与二号机，以 A.T. Field、粒子武器和阳电子炮迎战拉米尔。
 
-Pilot controls / 驾驶操作：`WASD` 移动、`Space` 跳跃、`Shift` 单膝跪地、`Z` 趴下/匍匐、`Ctrl` 冲刺、`B` 踩踏、`R` 切换武器、`G` 开关 A.T. Field、鼠标攻击/蓄力、`V` 弹出插入栓。
+Pilot controls / 驾驶操作：`WASD` 移动、`Space` 跳跃、`Shift` 单膝跪地、`Z` 趴下/匍匐、`Ctrl` 冲刺、`B` 踩踏、`R` 切换武器、`G` 开关 A.T. Field、鼠标攻击/蓄力、`V` 弹出插入栓。零号机展开 A.T. Field 后按住 `Shift`，即进入单膝举盾防御。
 
 ## Docs / 文档
 

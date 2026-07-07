@@ -230,7 +230,9 @@ public final class EvaHud
 
         if (ClientForgeEvents.pilotTicks() < 240)
         {
-            Component controls = Component.translatable("hud.projectseele.controls")
+            String controlsKey = eva.getUnitVariant() == EvaUnit01Entity.UNIT_00
+                    ? "hud.projectseele.controls_unit00" : "hud.projectseele.controls";
+            Component controls = Component.translatable(controlsKey)
                     .withStyle(ChatFormatting.GRAY);
             guiGraphics.drawString(gui.getFont(), controls,
                     width - 10 - gui.getFont().width(controls), height - 12, 0xFFFFFFFF);
