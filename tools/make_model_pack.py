@@ -66,6 +66,7 @@ def main():
     k = TARGET_HEIGHT / top
     print(f"source height {top:.1f} geo units -> scale x{k:.3f}")
 
+    cube_index = 0
     for bone in bones:
         if "pivot" in bone:
             bone["pivot"] = scale_vec(bone["pivot"], k)
@@ -74,20 +75,25 @@ def main():
             cube["size"] = scale_vec(cube["size"], k)
             if "pivot" in cube:
                 cube["pivot"] = scale_vec(cube["pivot"], k)
-            if "inflate" in cube:
-                cube["inflate"] = cube["inflate"] * k
+            # Stagger inflate per cube: the rescale squeezes the author's
+            # overlapping plates together and they z-fight (visible flicker);
+            # a sub-visible inflate offset breaks the coplanarity.
+            cube["inflate"] = cube.get("inflate", 0.0) * k + (cube_index % 7) * 0.02
+            cube_index += 1
 
     # --- graft weapon bones onto the right forearm ---
     forearm = next((b for b in bones if b["name"] == RIGHT_FOREARM), None)
     if forearm is None:
         sys.exit(f"bone {RIGHT_FOREARM} not found; model layout changed?")
+    # Weapon uv regions land in the texture's top-left corner, which we
+    # repaint below (the source sheet is transparent there).
     px, py, pz = forearm["pivot"]
     bones.append({
         "name": "knife",
         "parent": RIGHT_FOREARM,
         "pivot": [px, py, pz],
         "cubes": [
-            {"origin": [px - 2, py - 34, pz - 2], "size": [4, 28, 4], "uv": [0, 0]}
+            {"origin": [px - 2, py - 34, pz - 2], "size": [4, 28, 4], "uv": [0, 40]}
         ],
     })
     bones.append({
@@ -95,8 +101,8 @@ def main():
         "parent": RIGHT_FOREARM,
         "pivot": [px, py, pz],
         "cubes": [
-            {"origin": [px - 4, py - 14, pz - 72], "size": [8, 10, 78], "uv": [0, 0]},
-            {"origin": [px - 2, py - 3, pz - 44], "size": [4, 4, 14], "uv": [0, 0]},
+            {"origin": [px - 4, py - 14, pz - 72], "size": [8, 10, 78], "uv": [0, 80]},
+            {"origin": [px - 2, py - 3, pz - 44], "size": [4, 4, 14], "uv": [200, 80]},
         ],
     })
 
@@ -141,9 +147,36 @@ def main():
     (anim_dir / "eva_unit01.animation.json").write_text(
         json.dumps({"format_version": anim.get("format_version", "1.8.0"), "animations": out_anims}),
         encoding="utf-8")
-    (tex_dir / "eva_unit01.png").write_bytes(texture)
+    tex_path = tex_dir / "eva_unit01.png"
+    tex_path.write_bytes(texture)
+    repaint_weapon_regions(tex_path)
     print(f"pack written -> {OUT}")
     print("enable it in-game: Options > Resource Packs > eva_real_model")
+
+
+def repaint_weapon_regions(png_path: Path):
+    """Fill the grafted weapon uv regions with solid colors — the source
+    sheet is transparent in its top-left corner, which made the weapons
+    invisible. Uses System.Drawing through PowerShell (no PIL dependency)."""
+    import subprocess
+    script = (
+        "Add-Type -AssemblyName System.Drawing;"
+        f"$p='{png_path}';"
+        "$src=[System.Drawing.Image]::FromFile($p);"
+        "$bmp=New-Object System.Drawing.Bitmap($src);$src.Dispose();"
+        "$g=[System.Drawing.Graphics]::FromImage($bmp);"
+        "$steel=New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(255,216,220,230));"
+        "$metal=New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(255,72,78,92));"
+        "$dark=New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(255,40,44,54));"
+        "$g.FillRectangle($steel,0,40,20,36);"          # knife box uv
+        "$g.FillRectangle($metal,0,80,176,92);"         # cannon barrel box uv
+        "$g.FillRectangle($dark,200,80,40,20);"         # scope box uv
+        "$g.Dispose();"
+        "$bmp.Save($p+'.tmp',[System.Drawing.Imaging.ImageFormat]::Png);$bmp.Dispose();"
+        "Move-Item -Force ($p+'.tmp') $p;"
+        "Write-Output 'weapon regions repainted'"
+    )
+    subprocess.run(["powershell", "-NoProfile", "-Command", script], check=True)
 
 
 if __name__ == "__main__":

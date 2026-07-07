@@ -61,7 +61,7 @@ public final class SeeleConfig
                 .defineInRange("beamDamage", 120.0D, 0.0D, 1000.0D);
         BEAM_EXPLOSION_RADIUS = common
                 .comment("Explosion radius at the beam impact point.")
-                .defineInRange("beamExplosionRadius", 8.0D, 1.0D, 16.0D);
+                .defineInRange("beamExplosionRadius", 12.0D, 1.0D, 24.0D);
         BEAM_CHARGE_TICKS = common
                 .comment("Beam charge-up time in ticks (phase one).")
                 .defineInRange("beamChargeTicks", 50, 5, 400);
@@ -117,8 +117,9 @@ public final class SeeleConfig
                 .comment("Damage against ordinary targets.")
                 .defineInRange("mobDamage", 40.0D, 0.0D, 1000.0D);
         CANNON_CORE_DAMAGE = common
-                .comment("Damage when striking an exposed Angel core. Default kills Ramiel in two core hits.")
-                .defineInRange("coreDamage", 180.0D, 0.0D, 100000.0D);
+                .comment("Damage when striking an exposed Angel core. Default kills Ramiel in two core",
+                        "hits with margin left for its armor reduction.")
+                .defineInRange("coreDamage", 210.0D, 0.0D, 100000.0D);
         CANNON_EXPLOSION_RADIUS = common
                 .comment("Explosion radius at the cannon impact point.")
                 .defineInRange("explosionRadius", 4.0D, 0.0D, 12.0D);

@@ -443,20 +443,20 @@ public class RamielEntity extends FlyingMob implements Enemy, Angel
         {
             SeeleNetwork.CHANNEL.send(
                     PacketDistributor.NEAR.with(() -> new PacketDistributor.TargetPoint(
-                            impact.x, impact.y, impact.z, 192.0D, serverLevel.dimension())),
-                    new ClientboundNukeFxPacket(impact.x, impact.y, impact.z, 1.0F));
-            serverLevel.sendParticles(ParticleTypes.END_ROD, impact.x, impact.y, impact.z, 24, 0.6D, 0.6D, 0.6D, 0.12D);
-            serverLevel.sendParticles(ParticleTypes.EXPLOSION_EMITTER, impact.x, impact.y + 1.0D, impact.z, 2, 1.5D, 1.0D, 1.5D, 0.0D);
+                            impact.x, impact.y, impact.z, 256.0D, serverLevel.dimension())),
+                    new ClientboundNukeFxPacket(impact.x, impact.y, impact.z, 1.6F));
+            serverLevel.sendParticles(ParticleTypes.END_ROD, impact.x, impact.y, impact.z, 32, 1.0D, 1.0D, 1.0D, 0.15D);
+            serverLevel.sendParticles(ParticleTypes.EXPLOSION_EMITTER, impact.x, impact.y + 1.5D, impact.z, 4, 2.5D, 1.5D, 2.5D, 0.0D);
             // Mushroom stem and cap.
-            for (int i = 2; i <= 14; i += 2)
+            for (int i = 2; i <= 22; i += 2)
             {
                 serverLevel.sendParticles(ParticleTypes.LARGE_SMOKE,
-                        impact.x, impact.y + i, impact.z, 6, 0.9D, 0.8D, 0.9D, 0.01D);
+                        impact.x, impact.y + i, impact.z, 8, 1.3D, 1.0D, 1.3D, 0.01D);
             }
             serverLevel.sendParticles(ParticleTypes.CAMPFIRE_COSY_SMOKE,
-                    impact.x, impact.y + 15.0D, impact.z, 40, 5.5D, 1.6D, 5.5D, 0.02D);
+                    impact.x, impact.y + 23.0D, impact.z, 60, 8.5D, 2.2D, 8.5D, 0.02D);
             serverLevel.sendParticles(ParticleTypes.FLAME,
-                    impact.x, impact.y + 0.8D, impact.z, 50, 3.0D, 1.2D, 3.0D, 0.08D);
+                    impact.x, impact.y + 1.0D, impact.z, 70, 4.5D, 1.6D, 4.5D, 0.09D);
         }
         this.playSound(ModSounds.BEAM_FIRE.get(), 5.0F, 1.0F);
     }

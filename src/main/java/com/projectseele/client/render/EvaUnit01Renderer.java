@@ -61,11 +61,25 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
                 partialTick, packedLight, packedOverlay, red, green, blue, alpha);
         boolean firstPerson = this.pilotView;
         forEachBone(model, bone -> bone.setHidden(firstPerson && !PILOT_VIEW_BONES.contains(bone.getName())));
+        if (firstPerson && animatable.getWeapon() != EvaUnit01Entity.WEAPON_CANNON)
+        {
+            // Raise the arms into the pilot's view (added on top of whatever
+            // the animation is doing, so swings still read).
+            raiseArm(model, "arm_l", -0.95F);
+            raiseArm(model, "arm_r", -0.95F);
+            raiseArm(model, "brazoizquierda", -0.95F);
+            raiseArm(model, "brazoderecho", -0.95F);
+        }
         // Weapon visibility applies on top in every view.
         model.getBone("knife").ifPresent(bone ->
                 bone.setHidden(bone.isHidden() || animatable.getWeapon() != EvaUnit01Entity.WEAPON_KNIFE));
         model.getBone("cannon").ifPresent(bone ->
                 bone.setHidden(bone.isHidden() || animatable.getWeapon() != EvaUnit01Entity.WEAPON_CANNON));
+    }
+
+    private static void raiseArm(BakedGeoModel model, String name, float radians)
+    {
+        model.getBone(name).ifPresent(bone -> bone.setRotX(bone.getRotX() + radians));
     }
 
     private static void forEachBone(BakedGeoModel model, Consumer<GeoBone> action)

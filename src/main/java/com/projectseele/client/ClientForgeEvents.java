@@ -99,19 +99,36 @@ public final class ClientForgeEvents
         }
     }
 
-    /** Left-click from the plug drives the Unit's melee, not the pilot's arm. */
+    /**
+     * From the plug the mouse drives the Unit, not the pilot's own hands:
+     * left-click swings, right-click slams (crouch already means "eject",
+     * so the smash lives on the free button instead). With the cannon out,
+     * right-click is the charge trigger handled by the hold-tracking above.
+     */
     @SubscribeEvent
     public static void onInteractionKey(InputEvent.InteractionKeyMappingTriggered event)
     {
         LocalPlayer player = Minecraft.getInstance().player;
-        if (event.isAttack() && ridden(player) != null)
+        EvaUnit01Entity eva = ridden(player);
+        if (eva == null)
+        {
+            return;
+        }
+        if (event.isAttack())
         {
             event.setCanceled(true);
             event.setSwingHand(false);
-            // Crouch + attack = the two-handed smash.
-            send(player.isShiftKeyDown()
-                    ? ServerboundEvaControlPacket.ACTION_SMASH
-                    : ServerboundEvaControlPacket.ACTION_MELEE);
+            send(ServerboundEvaControlPacket.ACTION_MELEE);
+        }
+        else if (event.isUseItem())
+        {
+            // Never let the pilot eat/place things through the plug wall.
+            event.setCanceled(true);
+            event.setSwingHand(false);
+            if (eva.getWeapon() != EvaUnit01Entity.WEAPON_CANNON)
+            {
+                send(ServerboundEvaControlPacket.ACTION_SMASH);
+            }
         }
     }
 

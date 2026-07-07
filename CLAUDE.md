@@ -87,7 +87,7 @@ resources/
 | Ramiel 血量/护甲 | 350 / 6 | `ramiel.maxHealth` / `ramiel.armor`（`finalizeSpawn` 应用） |
 | **AT Field** | 未露核**完全免伤**+近身8格推开 | 硬机制（无 config；`hurt()` 拦截） |
 | **露核窗口** | 蓄力最后20t + 发射后60t | 常量 `EXPOSE_CHARGE_WINDOW` / `EXPOSED_AFTER_FIRE_TICKS` |
-| 光束伤害/爆炸半径 | **120（核弹级）** / 8 | `ramiel.beamDamage` / `beamExplosionRadius` |
+| 光束伤害/爆炸半径 | **120（核弹级）** / 12 | `ramiel.beamDamage` / `beamExplosionRadius` |
 | 光束蓄力/冷却/射程 | 50t / 90t / 64 | `ramiel.beamChargeTicks` 等 |
 | 二阶段蓄力（血量<40%） | 30t | `ramiel.beamChargeTicksEnraged` |
 | 钻头伤害/持续/冷却 | 4×每10t / 80t / 300t | `ramiel.drillDamage` / `drillCooldownTicks` |
@@ -95,7 +95,8 @@ resources/
 | **EVA近战** | 拳20 / 粒子刀60，**接触中和拉米尔AT Field** | 常量（`EvaUnit01Entity`） |
 | **EVA AT Field** | 值池200、普通伤害免疫、使徒伤害耗池溢出入血、5s后回复0.4/t | 常量；G键开关 |
 | **狙击炮蓄力/射程/冷却** | 60t / 512 / 200t（EVA武器，R键切换，蓄力时定身） | `positron_cannon.*` |
-| 狙击炮命中露核核心 | **180（两枪毙命）** | `positron_cannon.coreDamage`；命中壳=`mobDamage` 40 |
+| 狙击炮命中露核核心 | **210（两枪毙命，已计护甲减免）** | `positron_cannon.coreDamage`；命中壳=`mobDamage` 40；命中点爆炸半径 4 |
+| EVA重砸（右键，非炮模式） | 拳35/刀80，9格AOE，3s冷却 | 常量；炮模式右键=蓄力 |
 | 体型 | 拉米尔 12×12 / EVA 24 格（2026-07 用户拍板 ×2） | hitbox+渲染常量 |
 | 步枪伤害/冷却/射程 | 16 / 25t / 96（对使徒被 AT Field 全弹开） | `positron_rifle.*` |
 | 警报总开关/音量 | true / 0.45 | `ramiel.alarmEnabled`（音量为常量） |
