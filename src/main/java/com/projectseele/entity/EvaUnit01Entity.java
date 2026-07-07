@@ -315,7 +315,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         if (entityHit != null)
         {
             end = entityHit.getLocation();
-            if (entityHit.getEntity() instanceof RamielEntity ramiel && ramiel.isCoreHit(end))
+            if (entityHit.getEntity() instanceof RamielEntity ramiel && ramiel.isCoreShot(from, dir))
             {
                 // The Yashima shot: two clean core hits end the Angel.
                 ramiel.hurt(pilot.damageSources().playerAttack(pilot),

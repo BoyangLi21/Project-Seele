@@ -64,11 +64,12 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
         if (firstPerson && animatable.getWeapon() != EvaUnit01Entity.WEAPON_CANNON)
         {
             // Raise the arms into the pilot's view (added on top of whatever
-            // the animation is doing, so swings still read).
-            raiseArm(model, "arm_l", -0.95F);
-            raiseArm(model, "arm_r", -0.95F);
-            raiseArm(model, "brazoizquierda", -0.95F);
-            raiseArm(model, "brazoderecho", -0.95F);
+            // the animation is doing, so swings still read). ~80° up plus a
+            // slight inward tuck to reach the bottom edge of a 70° FOV.
+            raiseArm(model, "arm_l", -1.4F, 0.18F);
+            raiseArm(model, "arm_r", -1.4F, -0.18F);
+            raiseArm(model, "brazoizquierda", -1.4F, 0.18F);
+            raiseArm(model, "brazoderecho", -1.4F, -0.18F);
         }
         // Weapon visibility applies on top in every view.
         model.getBone("knife").ifPresent(bone ->
@@ -77,9 +78,13 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
                 bone.setHidden(bone.isHidden() || animatable.getWeapon() != EvaUnit01Entity.WEAPON_CANNON));
     }
 
-    private static void raiseArm(BakedGeoModel model, String name, float radians)
+    private static void raiseArm(BakedGeoModel model, String name, float pitchRad, float tuckRad)
     {
-        model.getBone(name).ifPresent(bone -> bone.setRotX(bone.getRotX() + radians));
+        model.getBone(name).ifPresent(bone ->
+        {
+            bone.setRotX(bone.getRotX() + pitchRad);
+            bone.setRotZ(bone.getRotZ() + tuckRad);
+        });
     }
 
     private static void forEachBone(BakedGeoModel model, Consumer<GeoBone> action)

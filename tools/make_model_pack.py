@@ -38,8 +38,6 @@ ANIM_MAP = {
     "animation.eva_unit01.idle": "animation.eva_01_robot.idle",
     "animation.eva_unit01.walk": "animation.eva_01_robot.walking",
     "animation.eva_unit01.melee": "animation.eva_01_robot.attack",
-    "animation.eva_unit01.melee_left": "animation.eva_01_robot.attack",
-    "animation.eva_unit01.smash": "animation.eva_01_robot.attack",
 }
 
 
@@ -86,7 +84,9 @@ def main():
     if forearm is None:
         sys.exit(f"bone {RIGHT_FOREARM} not found; model layout changed?")
     # Weapon uv regions land in the texture's top-left corner, which we
-    # repaint below (the source sheet is transparent there).
+    # repaint below (the source sheet is transparent there). Both weapons
+    # are modelled ALONG THE ARM AXIS (pointing down at rest) so raising
+    # the arm aims them forward instead of tilting them like a walking cane.
     px, py, pz = forearm["pivot"]
     bones.append({
         "name": "knife",
@@ -101,8 +101,8 @@ def main():
         "parent": RIGHT_FOREARM,
         "pivot": [px, py, pz],
         "cubes": [
-            {"origin": [px - 4, py - 14, pz - 72], "size": [8, 10, 78], "uv": [0, 80]},
-            {"origin": [px - 2, py - 3, pz - 44], "size": [4, 4, 14], "uv": [200, 80]},
+            {"origin": [px - 4, py - 82, pz - 5], "size": [8, 80, 10], "uv": [0, 80]},
+            {"origin": [px - 8, py - 40, pz - 2], "size": [4, 14, 4], "uv": [200, 80]},
         ],
     })
 
@@ -112,13 +112,36 @@ def main():
     for ours, theirs in ANIM_MAP.items():
         if theirs in src_anims:
             out_anims[ours] = src_anims[theirs]
-    # Static aiming pose (they have no aim animation).
+    # Static aiming pose (they have no aim animation): right arm level with
+    # the shoulder so the along-arm cannon points dead ahead.
     out_anims["animation.eva_unit01.aim"] = {
         "loop": True,
         "animation_length": 0.5,
         "bones": {
-            "brazoderecho": {"rotation": {"0.0": [-85, 0, 0]}},
+            "brazoderecho": {"rotation": {"0.0": [-88, 0, 0]}},
             "brazoizquierda": {"rotation": {"0.0": [-60, 0, 30]}},
+        },
+    }
+    # Distinct left jab and two-handed smash (their sheet only has one
+    # attack animation; mapping all three to it made the buttons feel
+    # identical).
+    out_anims["animation.eva_unit01.melee_left"] = {
+        "loop": False,
+        "animation_length": 0.6,
+        "bones": {
+            "brazoizquierda": {"rotation": {
+                "0.0": [0, 0, 0], "0.12": [38, 0, 14], "0.3": [-128, 8, -6],
+                "0.45": [-96, 4, -2], "0.6": [0, 0, 0]}},
+        },
+    }
+    out_anims["animation.eva_unit01.smash"] = {
+        "loop": False,
+        "animation_length": 0.8,
+        "bones": {
+            "brazoderecho": {"rotation": {
+                "0.0": [0, 0, 0], "0.25": [-172, 0, -8], "0.45": [-38, 0, -4], "0.8": [0, 0, 0]}},
+            "brazoizquierda": {"rotation": {
+                "0.0": [0, 0, 0], "0.25": [-172, 0, 8], "0.45": [-38, 0, 4], "0.8": [0, 0, 0]}},
         },
     }
 
@@ -169,8 +192,8 @@ def repaint_weapon_regions(png_path: Path):
         "$metal=New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(255,72,78,92));"
         "$dark=New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(255,40,44,54));"
         "$g.FillRectangle($steel,0,40,20,36);"          # knife box uv
-        "$g.FillRectangle($metal,0,80,176,92);"         # cannon barrel box uv
-        "$g.FillRectangle($dark,200,80,40,20);"         # scope box uv
+        "$g.FillRectangle($metal,0,80,40,94);"          # cannon barrel box uv (along-arm)
+        "$g.FillRectangle($dark,200,80,20,22);"         # scope box uv
         "$g.Dispose();"
         "$bmp.Save($p+'.tmp',[System.Drawing.Imaging.ImageFormat]::Png);$bmp.Dispose();"
         "Move-Item -Force ($p+'.tmp') $p;"

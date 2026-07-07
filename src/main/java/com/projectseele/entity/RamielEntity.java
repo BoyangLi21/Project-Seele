@@ -87,7 +87,8 @@ public class RamielEntity extends FlyingMob implements Enemy, Angel
     // Operation-Yashima rules: the shell opens for the final stretch of the
     // charge and stays open briefly after firing — snipe the core or nothing.
     // Geometry doubled 2026-07 (user: original scale read too small).
-    public static final float CORE_RADIUS = 4.4F;
+    // Aim tolerance matches the rendered core octahedron (~3.2 blocks).
+    public static final float CORE_RADIUS = 3.4F;
     private static final int EXPOSE_CHARGE_WINDOW = 20;
     private static final int EXPOSED_AFTER_FIRE_TICKS = 60;
     private static final double AT_FIELD_PUSH_RANGE = 14.0D;
@@ -190,10 +191,25 @@ public class RamielEntity extends FlyingMob implements Enemy, Angel
         this.entityData.set(DATA_EXPOSED, exposed);
     }
 
-    /** Whether a hit at this point strikes the exposed core (kill shot). */
-    public boolean isCoreHit(Vec3 hitLocation)
+    /**
+     * Whether an aim ray threads the exposed core (kill shot). Judged on the
+     * ray itself, not the hitbox intersection point — the box surface sits
+     * six blocks out, so a surface test could never reach the core.
+     */
+    public boolean isCoreShot(Vec3 from, Vec3 direction)
     {
-        return this.isExposed() && hitLocation.distanceTo(this.beamOrigin()) <= CORE_RADIUS;
+        if (!this.isExposed())
+        {
+            return false;
+        }
+        Vec3 toCore = this.beamOrigin().subtract(from);
+        double along = toCore.dot(direction.normalize());
+        if (along <= 0.0D)
+        {
+            return false;
+        }
+        double missSqr = toCore.lengthSqr() - along * along;
+        return missSqr <= CORE_RADIUS * CORE_RADIUS;
     }
 
     /** Eased 0..1 shell separation for the renderer. */

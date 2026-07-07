@@ -246,7 +246,7 @@ public final class EvaHud
         if (entityHit != null && entityHit.getEntity() instanceof RamielEntity ramiel)
         {
             Component callout;
-            if (ramiel.isCoreHit(entityHit.getLocation()))
+            if (ramiel.isCoreShot(from, dir))
             {
                 boolean blink = (player.tickCount / 4) % 2 == 0;
                 callout = Component.translatable("hud.projectseele.core_lock")

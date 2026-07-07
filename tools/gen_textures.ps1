@@ -230,11 +230,11 @@ Fill-Region 160 140 8 3 $green2 0.0      # eye_l
 Fill-Region 170 140 8 3 $green2 0.0      # eye_r
 # orange jaw
 Fill-Region 96 152 18 9 $orange2 0.0     # jaw guard
-# cannon
-Fill-Region 0 170 168 86 $metal 0.09     # barrel box uv
+# cannon (barrel modelled along the arm axis; box uv at 120,158)
+Fill-Region 120 158 36 96 $metal 0.06    # barrel box uv
 Fill-Region 208 140 36 18 $metal 0.05    # scope
 # energy band across the barrel region for flavour
-Fill-Region 60 200 24 10 $orange2 0.0
+Fill-Region 128 200 20 8 $orange2 0.0
 
 $bmp.Save("$root\entity\eva_unit01.png", [System.Drawing.Imaging.ImageFormat]::Png)
 $bmp.Dispose()
