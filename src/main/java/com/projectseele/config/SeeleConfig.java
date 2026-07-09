@@ -48,6 +48,8 @@ public final class SeeleConfig
     public static final ForgeConfigSpec.DoubleValue COCKPIT_ARM_SCALE;
     public static final ForgeConfigSpec.DoubleValue COCKPIT_ARM_Y;
     public static final ForgeConfigSpec.DoubleValue COCKPIT_ARM_Z;
+    public static final ForgeConfigSpec.DoubleValue COCKPIT_ARM_YAW;
+    public static final ForgeConfigSpec.DoubleValue COCKPIT_ARM_PITCH;
 
     static
     {
@@ -152,6 +154,13 @@ public final class SeeleConfig
         COCKPIT_ARM_Z = client
                 .comment("First-person real-bone EVA arm-rig depth offset.")
                 .defineInRange("cockpitRigZ", -1.65D, -4.0D, 2.0D);
+        COCKPIT_ARM_YAW = client
+                .comment("First-person arm-rig yaw in degrees. Dial this until the arms face forward",
+                        "(the raw bones face the model's native front, not the camera).")
+                .defineInRange("cockpitRigYaw", 180.0D, -180.0D, 180.0D);
+        COCKPIT_ARM_PITCH = client
+                .comment("First-person arm-rig pitch in degrees (tilt the whole rig up/down).")
+                .defineInRange("cockpitRigPitch", 0.0D, -90.0D, 90.0D);
         client.pop();
         CLIENT_SPEC = client.build();
     }

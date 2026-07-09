@@ -59,6 +59,11 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
         this.pilotArmPass = true;
         poseStack.pushPose();
         poseStack.translate(0.0D, SeeleConfig.COCKPIT_ARM_Y.get(), SeeleConfig.COCKPIT_ARM_Z.get());
+        // Face the rig toward the camera. The raw bones point the model's
+        // native front; these dials (live-editable in client config) turn them
+        // to forward without a recompile.
+        poseStack.mulPose(com.mojang.math.Axis.YP.rotationDegrees(SeeleConfig.COCKPIT_ARM_YAW.get().floatValue()));
+        poseStack.mulPose(com.mojang.math.Axis.XP.rotationDegrees(SeeleConfig.COCKPIT_ARM_PITCH.get().floatValue()));
         float armScale = SeeleConfig.COCKPIT_ARM_SCALE.get().floatValue();
         poseStack.scale(armScale, armScale, armScale);
         try
@@ -114,25 +119,27 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
         if ((!firstPerson || this.pilotArmPass) && animatable.getWeapon() == EvaUnit01Entity.WEAPON_CANNON)
         {
             // The animation establishes a proper two-hand firing stance;
-            // this procedural layer follows the pilot's vertical aim.
-            float pitch = -Mth.clamp(animatable.getXRot(), -55.0F, 55.0F) * Mth.DEG_TO_RAD;
+            // this procedural layer follows the pilot's vertical aim (gentle,
+            // so it tracks aim without flinging the arms overhead).
+            float pitch = -Mth.clamp(animatable.getXRot(), -45.0F, 45.0F) * Mth.DEG_TO_RAD * 0.5F;
             aimArm(model, "arm_r", pitch);
             aimArm(model, "arm_l", pitch * 0.82F);
+            aimArm(model, "Rightarm", pitch);
+            aimArm(model, "Leftarm", pitch * 0.82F);
             aimArm(model, "brazoderecho", pitch);
             aimArm(model, "brazoizquierda", pitch * 0.82F);
         }
         else if (this.pilotArmPass && animatable.getWeapon() != EvaUnit01Entity.WEAPON_CANNON)
         {
-            // Bare hands / knife: lift the arms off their sides into a raised
-            // combat guard so the pilot sees fists in front, not two planks
-            // hanging past the bottom of the screen. Additive, so the swing
-            // animations still read on top. Right arm (+z tuck) leads.
-            poseGuard(model, "arm_r", "forearm_r", -1.02F, -0.62F, 0.30F);
-            poseGuard(model, "arm_l", "forearm_l", -0.92F, -0.55F, -0.30F);
-            poseGuard(model, "Rightarm", "Lowerarm", -1.02F, -0.62F, 0.30F);
-            poseGuard(model, "Leftarm", "Lowerarm2", -0.92F, -0.55F, -0.30F);
-            poseGuard(model, "brazoderecho", "brazoderechobajo", -1.02F, -0.62F, 0.30F);
-            poseGuard(model, "brazoizquierda", "brazobajo", -0.92F, -0.55F, -0.30F);
+            // Bare hands / knife: pin the arms into a fixed raised guard.
+            // ABSOLUTE (setRot, not +=) so the idle sway can't flail them
+            // around the pilot's view. Right arm (+tuck) leads.
+            setGuard(model, "arm_r", "forearm_r", -1.05F, -0.32F, -0.60F);
+            setGuard(model, "arm_l", "forearm_l", -0.95F, 0.32F, -0.55F);
+            setGuard(model, "Rightarm", "Lowerarm", -1.05F, -0.32F, -0.60F);
+            setGuard(model, "Leftarm", "Lowerarm2", -0.95F, 0.32F, -0.55F);
+            setGuard(model, "brazoderecho", "brazoderechobajo", -1.05F, -0.32F, -0.60F);
+            setGuard(model, "brazoizquierda", "brazobajo", -0.95F, 0.32F, -0.55F);
         }
         // Weapon visibility applies on top in every view.
         model.getBone("knife").ifPresent(bone ->
@@ -146,19 +153,21 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
         model.getBone(name).ifPresent(bone -> bone.setRotX(bone.getRotX() + pitchRad));
     }
 
-    /** Raises one arm into a bent-elbow guard: shoulder pitch/yaw + elbow bend. */
-    private static void poseGuard(BakedGeoModel model, String arm, String forearm,
-                                  float shoulderPitch, float shoulderYaw, float elbowYaw)
+    /** Pins one arm to a fixed bent-elbow guard (absolute, kills idle sway). */
+    private static void setGuard(BakedGeoModel model, String arm, String forearm,
+                                 float shoulderPitch, float shoulderYaw, float elbowBend)
     {
         model.getBone(arm).ifPresent(bone ->
         {
-            bone.setRotX(bone.getRotX() + shoulderPitch);
-            bone.setRotY(bone.getRotY() + shoulderYaw);
+            bone.setRotX(shoulderPitch);
+            bone.setRotY(shoulderYaw);
+            bone.setRotZ(0.0F);
         });
         model.getBone(forearm).ifPresent(bone ->
         {
-            bone.setRotX(bone.getRotX() - 0.55F);
-            bone.setRotY(bone.getRotY() + elbowYaw);
+            bone.setRotX(elbowBend);
+            bone.setRotY(0.0F);
+            bone.setRotZ(0.0F);
         });
     }
 
