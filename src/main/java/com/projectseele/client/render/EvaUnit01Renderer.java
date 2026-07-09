@@ -5,7 +5,6 @@ import java.util.function.Consumer;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
-import com.mojang.math.Axis;
 import com.projectseele.entity.EvaUnit01Entity;
 import com.projectseele.config.SeeleConfig;
 import net.minecraft.client.Minecraft;
@@ -25,16 +24,12 @@ import software.bernie.geckolib.renderer.GeoEntityRenderer;
  */
 public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
 {
-    /**
-     * First-person body-awareness bones. Rendering only the arms made them
-     * look detached; upper torso and shoulder armour visually connect them.
-     */
+    /** Camera-space limbs only. Their shoulders begin below the viewport. */
     private static final Set<String> PILOT_BONES = Set.of(
-            "torso_lower", "torso_upper", "pylon_l", "pylon_r",
             "arm_l", "forearm_l", "hand_l", "arm_r", "forearm_r", "hand_r",
             "knife", "cannon", "shield",
-            "CINTURA", "bone", "pecho", "alaiz", "bone8", "bone5", "bone7",
-            "brazoizquierda", "brazobajo", "brazoderecho", "brazoderechobajo");
+            "brazoizquierda", "brazobajo", "brazoderecho", "brazoderechobajo",
+            "Leftarm", "Lowerarm2", "Rightarm", "Lowerarm");
 
     private boolean pilotView;
     private boolean pilotArmPass;
@@ -83,9 +78,9 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
     {
         if (this.pilotArmPass)
         {
-            // This pass already lives in camera space. World body yaw caused
-            // the hands to flip whenever the Eva crossed 180 degrees.
-            poseStack.mulPose(Axis.YP.rotationDegrees(180.0F));
+            // This pass already lives in camera space. No entity/world
+            // rotation belongs here: the pilot looks in the same direction
+            // as the Eva, not back at a model facing the camera.
             return;
         }
         super.applyRotations(entity, poseStack, ageInTicks, rotationYaw, partialTick);

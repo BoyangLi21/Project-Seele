@@ -47,3 +47,5 @@
 | BROWNCOAT `EVANGELION UNIT ONE` | Sketchfab 25.7k 三角面、未绑定骨骼；细节高但不能直接用作 GeckoLib 方块模型 | 页面标注 CC BY；仍需重新拓扑、绑定和制作 Minecraft 贴图，并登记署名 |
 | PurpleGreenCream `EVA 01 (2022)` | 原生 Blockbench 长方体模型，最接近本项目技术路线 | 页面标注 CC BY-NC-SA；需联系作者索取源文件并确认 mod 再发布方式 |
 | EUD 1.1.0 Forge 1.20.1 | 已下载官方文件并逐项审计；实际 jar 只有驾驶服、长枪、NPC 与 EVA 遗迹结构，没有页面所称的 EVA 实体模型/动画 | 不作为 EVA 模型来源；文件仅留在 `run/third_party/` |
+
+SmOd addon 已由用户下载为仓库根目录 `evaaddon1-0.zip`（被 `/*.zip` 忽略）。`tools/make_smod_model_pack.py` 可生成仅限本机测试的 Unit-01/02 GeckoLib 覆盖包；生成物和源素材均不得提交或发布。

@@ -12,8 +12,11 @@ if not exist "%SEELE_HOME%\gradlew.bat" (
     exit /b 1
 )
 cd /d "%SEELE_HOME%"
-rem Refresh the private local-only model pack when its source jar is present.
-if exist "Rei_Chikita_Mod_1.1.7b__jv1.20.1.jar" (
+rem Prefer SmOd's private Unit-01/02 pack, then fall back to Chikita Unit-01.
+if exist "evaaddon1-0.zip" (
+    where python >nul 2>nul
+    if not errorlevel 1 python tools\make_smod_model_pack.py "evaaddon1-0.zip"
+) else if exist "Rei_Chikita_Mod_1.1.7b__jv1.20.1.jar" (
     where python >nul 2>nul
     if not errorlevel 1 python tools\make_model_pack.py "Rei_Chikita_Mod_1.1.7b__jv1.20.1.jar"
 )

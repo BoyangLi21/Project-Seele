@@ -29,6 +29,8 @@ mcmodsrepo
 # Third-party mod jars parked in the repo root for local model extraction
 # (Rei Chikita / EUD). All Rights Reserved — never commit or redistribute.
 /*.jar
+/*.zip
+__pycache__/
 
 # Files from Forge MDK
 forge*changelog.txt
