@@ -383,6 +383,8 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         {
             return;
         }
+        boolean knife = this.getWeapon() == WEAPON_KNIFE;
+        boolean anyHit = false;
         for (LivingEntity target : serverLevel.getEntitiesOfClass(LivingEntity.class, zone,
                 e -> e != this && e != pilot && !this.hasPassenger(e) && e.isAlive()))
         {
@@ -390,9 +392,32 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             // treat EVA contact as neutralized and let it through.
             target.hurt(this.damageSources().mobAttack(this), damage);
             target.knockback(knockback, this.getX() - target.getX(), this.getZ() - target.getZ());
+            anyHit = true;
+            // Impact burst on the body actually struck.
+            Vec3 hit = target.position().add(0.0D, target.getBbHeight() * 0.55D, 0.0D);
+            serverLevel.sendParticles(ParticleTypes.CRIT, hit.x, hit.y, hit.z, 26, 1.4D, 1.4D, 1.4D, 0.55D);
+            serverLevel.sendParticles(knife ? ParticleTypes.ENCHANTED_HIT : ParticleTypes.DAMAGE_INDICATOR,
+                    hit.x, hit.y, hit.z, 14, 1.0D, 1.0D, 1.0D, 0.2D);
         }
-        serverLevel.sendParticles(ParticleTypes.SWEEP_ATTACK,
-                fxCenter.x, fxCenter.y, fxCenter.z, 6, 1.6D, 1.2D, 1.6D, 0.0D);
+        // The swing arc itself: a fan of sweep across the strike front.
+        Vec3 side = this.getForward().yRot((float) Math.toRadians(90.0D));
+        for (int i = -2; i <= 2; i++)
+        {
+            Vec3 p = fxCenter.add(side.scale(i * 1.6D));
+            serverLevel.sendParticles(ParticleTypes.SWEEP_ATTACK, p.x, p.y, p.z, 1, 0.0D, 0.0D, 0.0D, 0.0D);
+        }
+        if (knife)
+        {
+            // High-vibration blade wake.
+            serverLevel.sendParticles(ParticleTypes.ELECTRIC_SPARK,
+                    fxCenter.x, fxCenter.y, fxCenter.z, 30, 2.0D, 1.4D, 2.0D, 0.35D);
+        }
+        if (!anyHit)
+        {
+            // Whiff: a little air displacement so empty swings still feel weighty.
+            serverLevel.sendParticles(ParticleTypes.CLOUD, fxCenter.x, fxCenter.y, fxCenter.z,
+                    6, 1.2D, 0.8D, 1.2D, 0.02D);
+        }
     }
 
     private float getMeleeMultiplier()

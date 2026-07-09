@@ -96,6 +96,10 @@ def scale_position_channels(animation):
     for channels in result.get("bones", {}).values():
         if "position" in channels:
             channels["position"] = scale_values(channels["position"], SCALE)
+        # SmOd's idle bakes a 4x root scale to enlarge its native ~2-block
+        # model. Our pipeline already sizes via geo SCALE + renderer scale,
+        # so this channel makes the Unit gigantic while idle. Drop it.
+        channels.pop("scale", None)
     return result
 
 

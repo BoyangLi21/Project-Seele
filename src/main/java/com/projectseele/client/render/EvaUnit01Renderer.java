@@ -121,6 +121,19 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
             aimArm(model, "brazoderecho", pitch);
             aimArm(model, "brazoizquierda", pitch * 0.82F);
         }
+        else if (this.pilotArmPass && animatable.getWeapon() != EvaUnit01Entity.WEAPON_CANNON)
+        {
+            // Bare hands / knife: lift the arms off their sides into a raised
+            // combat guard so the pilot sees fists in front, not two planks
+            // hanging past the bottom of the screen. Additive, so the swing
+            // animations still read on top. Right arm (+z tuck) leads.
+            poseGuard(model, "arm_r", "forearm_r", -1.02F, -0.62F, 0.30F);
+            poseGuard(model, "arm_l", "forearm_l", -0.92F, -0.55F, -0.30F);
+            poseGuard(model, "Rightarm", "Lowerarm", -1.02F, -0.62F, 0.30F);
+            poseGuard(model, "Leftarm", "Lowerarm2", -0.92F, -0.55F, -0.30F);
+            poseGuard(model, "brazoderecho", "brazoderechobajo", -1.02F, -0.62F, 0.30F);
+            poseGuard(model, "brazoizquierda", "brazobajo", -0.92F, -0.55F, -0.30F);
+        }
         // Weapon visibility applies on top in every view.
         model.getBone("knife").ifPresent(bone ->
                 bone.setHidden(bone.isHidden() || animatable.getWeapon() != EvaUnit01Entity.WEAPON_KNIFE));
@@ -131,6 +144,22 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
     private static void aimArm(BakedGeoModel model, String name, float pitchRad)
     {
         model.getBone(name).ifPresent(bone -> bone.setRotX(bone.getRotX() + pitchRad));
+    }
+
+    /** Raises one arm into a bent-elbow guard: shoulder pitch/yaw + elbow bend. */
+    private static void poseGuard(BakedGeoModel model, String arm, String forearm,
+                                  float shoulderPitch, float shoulderYaw, float elbowYaw)
+    {
+        model.getBone(arm).ifPresent(bone ->
+        {
+            bone.setRotX(bone.getRotX() + shoulderPitch);
+            bone.setRotY(bone.getRotY() + shoulderYaw);
+        });
+        model.getBone(forearm).ifPresent(bone ->
+        {
+            bone.setRotX(bone.getRotX() - 0.55F);
+            bone.setRotY(bone.getRotY() + elbowYaw);
+        });
     }
 
     private static void forEachBone(BakedGeoModel model, Consumer<GeoBone> action)
