@@ -12,7 +12,7 @@ if not exist "%SEELE_HOME%\gradlew.bat" (
     exit /b 1
 )
 cd /d "%SEELE_HOME%"
-rem Prefer SmOd's private Unit-01/02 pack, then fall back to Chikita Unit-01.
+rem SmOd is the primary private Unit-01/02 pack; Chikita is fallback only.
 if exist "evaaddon1-0.zip" (
     where python >nul 2>nul
     if not errorlevel 1 python tools\make_smod_model_pack.py "evaaddon1-0.zip"

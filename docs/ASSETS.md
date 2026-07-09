@@ -34,8 +34,8 @@
 | 资产 | 来源 | 状态 |
 |---|---|---|
 | NERV HQ 1:1 世界存档（`run/saves/NERV_HQ_1to1_Poodcie`） | PMC 项目 `nerv-hq`，作者 Poodcie，官方镜像下载 | 仅本地测试。**如需随 mod 公开发布，必须先取得作者授权**（ROADMAP §9 行动清单） |
-| EVA-01 高精模型资源包（`run/resourcepacks/eva_real_model`，由 `tools/make_model_pack.py` 从本地 jar 生成） | Rei Chikita Mod 1.1.7b（CurseForge），作者 DanielFernandez，**All Rights Reserved** | 仅本地测试，包内含 `_SOURCE.txt` 免责声明。**公开使用前必须取得作者许可**；生成脚本入库，模型产物永不入库 |
-| 仓库根目录的两个第三方 mod jar（Rei Chikita / EUD） | 用户手动下载 | 已被 `.gitignore` 的 `/*.jar` 规则拦截，永不提交。EUD 1.1.0 清单标注 **CC BY-NC 4.0**，含驾驶服、LCL、三枪与 EVA 遗迹结构，但无可驾驶 EVA 模型；公开改用前仍联系作者确认署名方式 |
+| EVA-01/02 主用高精模型资源包（`run/resourcepacks/eva_real_model`，由 `tools/make_smod_model_pack.py` 从本地 zip 生成） | SmOd `EVANGELION: END ADDON V1.0`（Planet Minecraft / Bedrock addon），作者 SmOd774YT，未列开放许可证 | **当前本机测试主模型来源**。仅本地测试，包内含 `_SOURCE.txt` 免责声明。**公开使用前必须取得作者许可**；生成脚本入库，模型产物永不入库 |
+| Rei Chikita / EUD 本地参考文件 | 用户手动下载 | 已被 `.gitignore` 的 `/*.jar` 规则拦截，永不提交。Rei Chikita 只作为 SmOd 缺失时的本机 fallback/参考；EUD 1.1.0 清单标注 **CC BY-NC 4.0**，含驾驶服、LCL、三枪与 EVA 遗迹结构，但无可驾驶 EVA 模型；公开改用前仍联系作者确认署名方式 |
 
 `run/` 已 gitignore，上表资产不会进入版本库与发行物。
 
@@ -43,7 +43,7 @@
 
 | 候选 | 技术情况 | 授权/下一步 |
 |---|---|---|
-| SmOd `EVANGELION: END ADDON V1.0` | Bedrock 1.21 addon，含 Unit-01/02 与动画；Bedrock geometry 可转换为 GeckoLib | Planet Minecraft 未列开放许可证；必须先联系 SmOd 获得移植与再发布许可 |
+| SmOd `EVANGELION: END ADDON V1.0` | Bedrock 1.21 addon，含 Unit-01/02 与动画；Bedrock geometry 可转换为 GeckoLib；当前本机测试优先使用 | Planet Minecraft 未列开放许可证；必须先联系 SmOd 获得移植与再发布许可 |
 | BROWNCOAT `EVANGELION UNIT ONE` | Sketchfab 25.7k 三角面、未绑定骨骼；细节高但不能直接用作 GeckoLib 方块模型 | 页面标注 CC BY；仍需重新拓扑、绑定和制作 Minecraft 贴图，并登记署名 |
 | PurpleGreenCream `EVA 01 (2022)` | 原生 Blockbench 长方体模型，最接近本项目技术路线 | 页面标注 CC BY-NC-SA；需联系作者索取源文件并确认 mod 再发布方式 |
 | EUD 1.1.0 Forge 1.20.1 | 已下载官方文件并逐项审计；实际 jar 只有驾驶服、长枪、NPC 与 EVA 遗迹结构，没有页面所称的 EVA 实体模型/动画 | 不作为 EVA 模型来源；文件仅留在 `run/third_party/` |
