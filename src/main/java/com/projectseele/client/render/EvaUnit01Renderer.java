@@ -24,15 +24,28 @@ import software.bernie.geckolib.renderer.GeoEntityRenderer;
  */
 public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
 {
-    /** Camera-space limbs only. Their shoulders begin below the viewport. */
-    private static final Set<String> PILOT_BONES = Set.of(
-            "arm_l", "forearm_l", "hand_l", "arm_r", "forearm_r", "hand_r",
-            "knife", "cannon", "shield",
-            "brazoizquierda", "brazobajo", "brazoderecho", "brazoderechobajo",
-            "Leftarm", "Lowerarm2", "Rightarm", "Lowerarm");
+    private static final int PILOT_SIDE_NONE = 0;
+    private static final int PILOT_SIDE_RIGHT = 1;
+    private static final int PILOT_SIDE_LEFT = 2;
+    private static final double PILOT_ARM_SIDE_X = 1.08D;
+    private static final double PILOT_ARM_SIDE_Y = -0.18D;
+    private static final double PILOT_ARM_SIDE_Z = -0.08D;
+
+    /** Camera-space right limb plus right-hand weapons. */
+    private static final Set<String> PILOT_RIGHT_BONES = Set.of(
+            "arm_r", "forearm_r", "hand_r", "knife", "cannon",
+            "brazoderecho", "brazoderechobajo",
+            "Rightarm", "Lowerarm");
+
+    /** Camera-space left limb and Unit-00 shield. */
+    private static final Set<String> PILOT_LEFT_BONES = Set.of(
+            "arm_l", "forearm_l", "hand_l", "shield",
+            "brazoizquierda", "brazobajo",
+            "Leftarm", "Lowerarm2");
 
     private boolean pilotView;
     private boolean pilotArmPass;
+    private int pilotArmSide = PILOT_SIDE_NONE;
 
     public EvaUnit01Renderer(EntityRendererProvider.Context context)
     {
@@ -57,8 +70,27 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
                                 MultiBufferSource bufferSource, int packedLight)
     {
         this.pilotArmPass = true;
+        try
+        {
+            renderPilotArmSide(entity, partialTick, poseStack, bufferSource, packedLight,
+                    PILOT_SIDE_LEFT, -PILOT_ARM_SIDE_X);
+            renderPilotArmSide(entity, partialTick, poseStack, bufferSource, packedLight,
+                    PILOT_SIDE_RIGHT, PILOT_ARM_SIDE_X);
+        }
+        finally
+        {
+            this.pilotArmSide = PILOT_SIDE_NONE;
+            this.pilotArmPass = false;
+        }
+    }
+
+    private void renderPilotArmSide(EvaUnit01Entity entity, float partialTick, PoseStack poseStack,
+                                    MultiBufferSource bufferSource, int packedLight, int side, double x)
+    {
+        this.pilotArmSide = side;
         poseStack.pushPose();
         poseStack.translate(0.0D, SeeleConfig.COCKPIT_ARM_Y.get(), SeeleConfig.COCKPIT_ARM_Z.get());
+        poseStack.translate(x, PILOT_ARM_SIDE_Y, PILOT_ARM_SIDE_Z);
         // Face the rig toward the camera. The raw bones point the model's
         // native front; these dials (live-editable in client config) turn them
         // to forward without a recompile.
@@ -66,15 +98,8 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
         poseStack.mulPose(com.mojang.math.Axis.XP.rotationDegrees(SeeleConfig.COCKPIT_ARM_PITCH.get().floatValue()));
         float armScale = SeeleConfig.COCKPIT_ARM_SCALE.get().floatValue();
         poseStack.scale(armScale, armScale, armScale);
-        try
-        {
-            super.render(entity, 0.0F, partialTick, poseStack, bufferSource, packedLight);
-        }
-        finally
-        {
-            poseStack.popPose();
-            this.pilotArmPass = false;
-        }
+        super.render(entity, 0.0F, partialTick, poseStack, bufferSource, packedLight);
+        poseStack.popPose();
     }
 
     @Override
@@ -102,9 +127,11 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
         boolean firstPerson = this.pilotView;
         if (this.pilotArmPass)
         {
+            Set<String> activeBones = this.pilotArmSide == PILOT_SIDE_RIGHT
+                    ? PILOT_RIGHT_BONES : PILOT_LEFT_BONES;
             forEachBone(model, bone ->
             {
-                bone.setHidden(!PILOT_BONES.contains(bone.getName()));
+                bone.setHidden(!activeBones.contains(bone.getName()));
                 bone.setChildrenHidden(false);
             });
         }
@@ -132,6 +159,7 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
         }
         else if (!firstPerson && animatable.getWeapon() == EvaUnit01Entity.WEAPON_CANNON)
         {
+            setWorldCannonPose(model);
             // The animation establishes a proper two-hand firing stance;
             // this procedural layer follows the pilot's vertical aim (gentle,
             // so it tracks aim without flinging the arms overhead).
@@ -148,7 +176,14 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
             // Bare hands / knife: keep a ready guard, but leave a clear gap
             // between the palms. The previous symmetric tuck pulled both
             // hands into the same centerline.
-            setOpenGuardPose(model);
+            if (animatable.getWeapon() == EvaUnit01Entity.WEAPON_KNIFE)
+            {
+                setPilotKnifePose(model);
+            }
+            else
+            {
+                setOpenGuardPose(model);
+            }
         }
         // Weapon visibility applies on top in every view.
         setWeaponVisibility(model, "knife", animatable.getWeapon() == EvaUnit01Entity.WEAPON_KNIFE,
@@ -164,18 +199,38 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
 
     private static void setPilotCannonPose(BakedGeoModel model)
     {
-        setArmPose(model, "arm_r", "forearm_r", -1.60F, -0.08F, -0.06F, -0.12F, 0.0F, 0.0F);
-        setArmPose(model, "arm_l", "forearm_l", -1.40F, 0.30F, 0.16F, -0.24F, -0.04F, -0.04F);
-        setArmPose(model, "Rightarm", "Lowerarm", -1.60F, -0.08F, -0.06F, -0.12F, 0.0F, 0.0F);
-        setArmPose(model, "Leftarm", "Lowerarm2", -1.40F, 0.30F, 0.16F, -0.24F, -0.04F, -0.04F);
-        setArmPose(model, "brazoderecho", "brazoderechobajo", -1.60F, -0.08F, -0.06F, -0.12F, 0.0F, 0.0F);
-        setArmPose(model, "brazoizquierda", "brazobajo", -1.40F, 0.30F, 0.16F, -0.24F, -0.04F, -0.04F);
+        setArmPose(model, "arm_r", "forearm_r", -1.58F, -0.20F, -0.08F, -0.14F, 0.0F, 0.0F);
+        setArmPose(model, "arm_l", "forearm_l", -1.48F, 0.42F, 0.20F, -0.22F, -0.02F, -0.02F);
+        setArmPose(model, "Rightarm", "Lowerarm", -1.58F, -0.20F, -0.08F, -0.14F, 0.0F, 0.0F);
+        setArmPose(model, "Leftarm", "Lowerarm2", -1.48F, 0.42F, 0.20F, -0.22F, -0.02F, -0.02F);
+        setArmPose(model, "brazoderecho", "brazoderechobajo", -1.58F, -0.20F, -0.08F, -0.14F, 0.0F, 0.0F);
+        setArmPose(model, "brazoizquierda", "brazobajo", -1.48F, 0.42F, 0.20F, -0.22F, -0.02F, -0.02F);
         model.getBone("cannon").ifPresent(bone ->
         {
             bone.setRotX(0.0F);
             bone.setRotY(0.0F);
             bone.setRotZ(0.0F);
         });
+    }
+
+    private static void setWorldCannonPose(BakedGeoModel model)
+    {
+        setArmPose(model, "arm_r", "forearm_r", -1.62F, -0.08F, -0.04F, -0.10F, 0.0F, 0.0F);
+        setArmPose(model, "arm_l", "forearm_l", -1.52F, 0.36F, 0.18F, -0.24F, -0.02F, -0.02F);
+        setArmPose(model, "Rightarm", "Lowerarm", -1.62F, -0.08F, -0.04F, -0.10F, 0.0F, 0.0F);
+        setArmPose(model, "Leftarm", "Lowerarm2", -1.52F, 0.36F, 0.18F, -0.24F, -0.02F, -0.02F);
+        setArmPose(model, "brazoderecho", "brazoderechobajo", -1.62F, -0.08F, -0.04F, -0.10F, 0.0F, 0.0F);
+        setArmPose(model, "brazoizquierda", "brazobajo", -1.52F, 0.36F, 0.18F, -0.24F, -0.02F, -0.02F);
+    }
+
+    private static void setPilotKnifePose(BakedGeoModel model)
+    {
+        setArmPose(model, "arm_r", "forearm_r", -1.18F, -0.58F, -0.28F, -0.18F, 0.0F, -0.08F);
+        setArmPose(model, "arm_l", "forearm_l", -0.86F, 0.62F, 0.42F, -0.28F, 0.0F, 0.10F);
+        setArmPose(model, "Rightarm", "Lowerarm", -1.18F, -0.58F, -0.28F, -0.18F, 0.0F, -0.08F);
+        setArmPose(model, "Leftarm", "Lowerarm2", -0.86F, 0.62F, 0.42F, -0.28F, 0.0F, 0.10F);
+        setArmPose(model, "brazoderecho", "brazoderechobajo", -1.18F, -0.58F, -0.28F, -0.18F, 0.0F, -0.08F);
+        setArmPose(model, "brazoizquierda", "brazobajo", -0.86F, 0.62F, 0.42F, -0.28F, 0.0F, 0.10F);
     }
 
     private static void setOpenGuardPose(BakedGeoModel model)
@@ -210,10 +265,7 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
     private static void setWeaponVisibility(BakedGeoModel model, String name, boolean active, boolean pilotArmPass)
     {
         model.getBone(name).ifPresent(bone ->
-        {
-            boolean hiddenByWholeBodyPass = !pilotArmPass && bone.isHidden();
-            bone.setHidden(hiddenByWholeBodyPass || !active);
-        });
+                bone.setHidden(bone.isHidden() || !active));
     }
 
     private static void forEachBone(BakedGeoModel model, Consumer<GeoBone> action)

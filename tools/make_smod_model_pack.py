@@ -47,7 +47,7 @@ def weapon_bones(bones):
     px, py, pz = forearm["pivot"]
     return [
         {"name": "knife", "parent": "Lowerarm", "pivot": [px, py, pz], "cubes": [
-            {"origin": [px - 2, py - 36, pz - 5], "size": [4, 32, 4], "uv": [400, 0]},
+            {"origin": [px - 3, py - 54, pz - 16], "size": [6, 50, 5], "uv": [400, 0]},
         ]},
         {"name": "cannon", "parent": "Lowerarm", "pivot": [px, py, pz], "cubes": [
             {"origin": [px - 5, py - 86, pz - 8], "size": [10, 84, 13], "uv": [400, 80]},
