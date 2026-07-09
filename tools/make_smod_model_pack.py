@@ -47,12 +47,13 @@ def weapon_bones(bones):
     px, py, pz = forearm["pivot"]
     return [
         {"name": "knife", "parent": "Lowerarm", "pivot": [px, py, pz], "cubes": [
-            {"origin": [px - 3, py - 54, pz - 16], "size": [6, 50, 5], "uv": [400, 0]},
+            {"origin": [px - 3, py - 13, pz - 58], "size": [6, 5, 52], "uv": [400, 0]},
+            {"origin": [px - 5, py - 10, pz - 10], "size": [10, 8, 8], "uv": [472, 80]},
         ]},
-        {"name": "cannon", "parent": "Lowerarm", "pivot": [px, py, pz], "cubes": [
-            {"origin": [px - 5, py - 86, pz - 8], "size": [10, 84, 13], "uv": [400, 80]},
-            {"origin": [px - 3, py - 96, pz - 18], "size": [6, 92, 6], "uv": [400, 80]},
-            {"origin": [px - 9, py - 44, pz - 2], "size": [5, 18, 5], "uv": [472, 80]},
+        {"name": "cannon", "parent": "Upperbody", "pivot": [px, py + 6, pz], "cubes": [
+            {"origin": [px - 6, py - 10, pz - 112], "size": [12, 14, 108], "uv": [400, 80]},
+            {"origin": [px - 4, py - 6, pz - 136], "size": [8, 8, 28], "uv": [400, 80]},
+            {"origin": [px - 11, py - 1, pz - 52], "size": [5, 7, 22], "uv": [472, 80]},
         ]},
     ]
 

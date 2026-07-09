@@ -27,9 +27,9 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
     private static final int PILOT_SIDE_NONE = 0;
     private static final int PILOT_SIDE_RIGHT = 1;
     private static final int PILOT_SIDE_LEFT = 2;
-    private static final double PILOT_ARM_SIDE_X = 1.08D;
-    private static final double PILOT_ARM_SIDE_Y = -0.18D;
-    private static final double PILOT_ARM_SIDE_Z = -0.08D;
+    private static final double PILOT_ARM_SIDE_X = 2.65D;
+    private static final double PILOT_ARM_SIDE_Y = -0.24D;
+    private static final double PILOT_ARM_SIDE_Z = -0.42D;
 
     /** Camera-space right limb plus right-hand weapons. */
     private static final Set<String> PILOT_RIGHT_BONES = Set.of(
@@ -131,6 +131,7 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
                     ? PILOT_RIGHT_BONES : PILOT_LEFT_BONES;
             forEachBone(model, bone ->
             {
+                resetPilotBone(bone);
                 bone.setHidden(!activeBones.contains(bone.getName()));
                 bone.setChildrenHidden(false);
             });
@@ -195,6 +196,19 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
     private static void aimArm(BakedGeoModel model, String name, float pitchRad)
     {
         model.getBone(name).ifPresent(bone -> bone.setRotX(bone.getRotX() + pitchRad));
+    }
+
+    private static void resetPilotBone(GeoBone bone)
+    {
+        bone.setRotX(0.0F);
+        bone.setRotY(0.0F);
+        bone.setRotZ(0.0F);
+        bone.setPosX(0.0F);
+        bone.setPosY(0.0F);
+        bone.setPosZ(0.0F);
+        bone.setScaleX(1.0F);
+        bone.setScaleY(1.0F);
+        bone.setScaleZ(1.0F);
     }
 
     private static void setPilotCannonPose(BakedGeoModel model)

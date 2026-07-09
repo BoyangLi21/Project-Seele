@@ -86,25 +86,29 @@ def main():
     if forearm is None:
         sys.exit(f"bone {RIGHT_FOREARM} not found; model layout changed?")
     # Weapon uv regions land in the texture's top-left corner, which we
-    # repaint below (the source sheet is transparent there). Both weapons
-    # are modelled ALONG THE ARM AXIS (pointing down at rest) so raising
-    # the arm aims them forward instead of tilting them like a walking cane.
+    # repaint below (the source sheet is transparent there). The old grafts
+    # extended along the forearm's Y axis, so the cannon looked like a tower
+    # strapped to the wrist. Model them along the forward -Z axis instead.
     px, py, pz = forearm["pivot"]
     bones.append({
         "name": "knife",
         "parent": RIGHT_FOREARM,
         "pivot": [px, py, pz],
         "cubes": [
-            {"origin": [px - 2, py - 34, pz - 2], "size": [4, 28, 4], "uv": [0, 40]}
+            {"origin": [px - 2.5, py - 13, pz - 50], "size": [5, 5, 46], "uv": [0, 40]},
+            {"origin": [px - 4.0, py - 10, pz - 9], "size": [8, 8, 7], "uv": [200, 80]},
         ],
     })
+    cannon_parent = "pecho"
     bones.append({
         "name": "cannon",
-        "parent": RIGHT_FOREARM,
-        "pivot": [px, py, pz],
+        "parent": cannon_parent,
+        "pivot": [px, py + 6, pz],
         "cubes": [
-            {"origin": [px - 4, py - 82, pz - 5], "size": [8, 80, 10], "uv": [0, 80]},
-            {"origin": [px - 8, py - 40, pz - 2], "size": [4, 14, 4], "uv": [200, 80]},
+            {"origin": [px - 6, py - 10, pz - 104], "size": [12, 14, 104], "uv": [0, 80]},
+            {"origin": [px - 4, py - 6, pz - 126], "size": [8, 8, 24], "uv": [0, 80]},
+            {"origin": [px - 11, py - 1, pz - 46], "size": [5, 7, 20], "uv": [200, 80]},
+            {"origin": [px + 6, py - 2, pz - 36], "size": [5, 8, 18], "uv": [200, 102]},
         ],
     })
 
@@ -120,12 +124,12 @@ def main():
         "loop": True,
         "animation_length": 0.5,
         "bones": {
-            "brazoderecho": {"rotation": {"0.0": [-92, -5, -4]}},
-            "brazoderechobajo": {"rotation": {"0.0": [-10, 0, 0]}},
-            "brazoizquierda": {"rotation": {"0.0": [-78, 4, 34]}},
-            "brazobajo": {"rotation": {"0.0": [-48, -24, -8]}},
-            "pecho": {"rotation": {"0.0": [6, -7, 0]}},
-            "cabeza": {"rotation": {"0.0": [-5, 7, 0]}},
+            "brazoderecho": {"rotation": {"0.0": [-82, -8, -10]}},
+            "brazoderechobajo": {"rotation": {"0.0": [-28, 0, 0]}},
+            "brazoizquierda": {"rotation": {"0.0": [-76, 12, 24]}},
+            "brazobajo": {"rotation": {"0.0": [-22, -8, -4]}},
+            "pecho": {"rotation": {"0.0": [2, -4, 0]}},
+            "cabeza": {"rotation": {"0.0": [-3, 4, 0]}},
         },
     }
     out_anims["animation.eva_unit01.crouch"] = {
@@ -158,22 +162,36 @@ def main():
         "loop": True,
         "animation_length": 1.8,
         "bones": {
-            "todo": {"rotation": {"0.0": [90, 0, 0]}, "position": {"0.0": [0, 8, -12]}},
-            "brazoizquierda": {"rotation": {"0.0": [-142, 0, 12]}},
-            "brazoderecho": {"rotation": {"0.0": [-142, 0, -12]}},
-            "PIERNAIZQUIERD": {"rotation": {"0.0": [0, 0, 8]}},
-            "PIERNADERECHA": {"rotation": {"0.0": [0, 0, 8]}},
+            "todo": {"position": {"0.0": [0, -62, -4]}},
+            "CINTURA": {"rotation": {"0.0": [52, 0, 0]}},
+            "pecho": {"rotation": {"0.0": [18, 0, 0], "0.9": [20, 0, 0], "1.8": [18, 0, 0]}},
+            "cabeza": {"rotation": {"0.0": [-36, 0, 0]}},
+            "brazoizquierda": {"rotation": {"0.0": [-112, 0, 18]}},
+            "brazobajo": {"rotation": {"0.0": [-58, 0, 0]}},
+            "brazoderecho": {"rotation": {"0.0": [-112, 0, -18]}},
+            "brazoderechobajo": {"rotation": {"0.0": [-58, 0, 0]}},
+            "PIERNAIZQUIERD": {"rotation": {"0.0": [0, 0, -62]}},
+            "PIERNABAJAIZQUIERDA": {"rotation": {"0.0": [0, 0, 112]}},
+            "PIERNADERECHA": {"rotation": {"0.0": [0, 0, -62]}},
+            "PIERNABAJAIZQUIERDA2": {"rotation": {"0.0": [0, 0, 112]}},
         },
     }
     out_anims["animation.eva_unit01.crawl"] = {
         "loop": True,
         "animation_length": 1.2,
         "bones": {
-            "todo": {"rotation": {"0.0": [90, 0, 0]}, "position": {"0.0": [0, 8, -12]}},
-            "brazoizquierda": {"rotation": {"0.0": [-158, 0, 12], "0.6": [-118, 0, 12], "1.2": [-158, 0, 12]}},
-            "brazoderecho": {"rotation": {"0.0": [-118, 0, -12], "0.6": [-158, 0, -12], "1.2": [-118, 0, -12]}},
-            "PIERNAIZQUIERD": {"rotation": {"0.0": [0, 0, -16], "0.6": [0, 0, 24], "1.2": [0, 0, -16]}},
-            "PIERNADERECHA": {"rotation": {"0.0": [0, 0, 24], "0.6": [0, 0, -16], "1.2": [0, 0, 24]}},
+            "todo": {"position": {"0.0": [0, -62, -4], "0.3": [0, -60, -2], "0.6": [0, -62, -4], "0.9": [0, -60, -2], "1.2": [0, -62, -4]}},
+            "CINTURA": {"rotation": {"0.0": [52, 4, 0], "0.6": [52, -4, 0], "1.2": [52, 4, 0]}},
+            "pecho": {"rotation": {"0.0": [18, -3, 0], "0.6": [18, 3, 0], "1.2": [18, -3, 0]}},
+            "cabeza": {"rotation": {"0.0": [-34, 3, 0], "0.6": [-34, -3, 0], "1.2": [-34, 3, 0]}},
+            "brazoizquierda": {"rotation": {"0.0": [-128, 0, 18], "0.6": [-92, 0, 18], "1.2": [-128, 0, 18]}},
+            "brazobajo": {"rotation": {"0.0": [-42, 0, 0], "0.6": [-72, 0, 0], "1.2": [-42, 0, 0]}},
+            "brazoderecho": {"rotation": {"0.0": [-92, 0, -18], "0.6": [-128, 0, -18], "1.2": [-92, 0, -18]}},
+            "brazoderechobajo": {"rotation": {"0.0": [-72, 0, 0], "0.6": [-42, 0, 0], "1.2": [-72, 0, 0]}},
+            "PIERNAIZQUIERD": {"rotation": {"0.0": [0, 0, -70], "0.6": [0, 0, -48], "1.2": [0, 0, -70]}},
+            "PIERNABAJAIZQUIERDA": {"rotation": {"0.0": [0, 0, 118], "0.6": [0, 0, 96], "1.2": [0, 0, 118]}},
+            "PIERNADERECHA": {"rotation": {"0.0": [0, 0, -48], "0.6": [0, 0, -70], "1.2": [0, 0, -48]}},
+            "PIERNABAJAIZQUIERDA2": {"rotation": {"0.0": [0, 0, 96], "0.6": [0, 0, 118], "1.2": [0, 0, 96]}},
         },
     }
     out_anims["animation.eva_unit01.fall"] = {
