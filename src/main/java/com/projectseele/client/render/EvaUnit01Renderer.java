@@ -116,7 +116,21 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
                 bone.setChildrenHidden(false);
             });
         }
-        if ((!firstPerson || this.pilotArmPass) && animatable.getWeapon() == EvaUnit01Entity.WEAPON_CANNON)
+        if (this.pilotArmPass && animatable.getWeapon() == EvaUnit01Entity.WEAPON_CANNON)
+        {
+            // First-person needs a stricter pose than the world animation:
+            // the left hand supports the barrel instead of twisting across
+            // the camera, and the right-hand weapon remains inside the view.
+            setPilotCannonPose(model);
+            float pitch = -Mth.clamp(animatable.getXRot(), -45.0F, 45.0F) * Mth.DEG_TO_RAD * 0.35F;
+            aimArm(model, "arm_r", pitch);
+            aimArm(model, "arm_l", pitch * 0.65F);
+            aimArm(model, "Rightarm", pitch);
+            aimArm(model, "Leftarm", pitch * 0.65F);
+            aimArm(model, "brazoderecho", pitch);
+            aimArm(model, "brazoizquierda", pitch * 0.65F);
+        }
+        else if (!firstPerson && animatable.getWeapon() == EvaUnit01Entity.WEAPON_CANNON)
         {
             // The animation establishes a proper two-hand firing stance;
             // this procedural layer follows the pilot's vertical aim (gentle,
@@ -131,21 +145,16 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
         }
         else if (this.pilotArmPass && animatable.getWeapon() != EvaUnit01Entity.WEAPON_CANNON)
         {
-            // Bare hands / knife: pin the arms into a fixed raised guard.
-            // ABSOLUTE (setRot, not +=) so the idle sway can't flail them
-            // around the pilot's view. Right arm (+tuck) leads.
-            setGuard(model, "arm_r", "forearm_r", -1.05F, -0.32F, -0.60F);
-            setGuard(model, "arm_l", "forearm_l", -0.95F, 0.32F, -0.55F);
-            setGuard(model, "Rightarm", "Lowerarm", -1.05F, -0.32F, -0.60F);
-            setGuard(model, "Leftarm", "Lowerarm2", -0.95F, 0.32F, -0.55F);
-            setGuard(model, "brazoderecho", "brazoderechobajo", -1.05F, -0.32F, -0.60F);
-            setGuard(model, "brazoizquierda", "brazobajo", -0.95F, 0.32F, -0.55F);
+            // Bare hands / knife: keep a ready guard, but leave a clear gap
+            // between the palms. The previous symmetric tuck pulled both
+            // hands into the same centerline.
+            setOpenGuardPose(model);
         }
         // Weapon visibility applies on top in every view.
-        model.getBone("knife").ifPresent(bone ->
-                bone.setHidden(bone.isHidden() || animatable.getWeapon() != EvaUnit01Entity.WEAPON_KNIFE));
-        model.getBone("cannon").ifPresent(bone ->
-                bone.setHidden(bone.isHidden() || animatable.getWeapon() != EvaUnit01Entity.WEAPON_CANNON));
+        setWeaponVisibility(model, "knife", animatable.getWeapon() == EvaUnit01Entity.WEAPON_KNIFE,
+                this.pilotArmPass);
+        setWeaponVisibility(model, "cannon", animatable.getWeapon() == EvaUnit01Entity.WEAPON_CANNON,
+                this.pilotArmPass);
     }
 
     private static void aimArm(BakedGeoModel model, String name, float pitchRad)
@@ -153,21 +162,57 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
         model.getBone(name).ifPresent(bone -> bone.setRotX(bone.getRotX() + pitchRad));
     }
 
-    /** Pins one arm to a fixed bent-elbow guard (absolute, kills idle sway). */
-    private static void setGuard(BakedGeoModel model, String arm, String forearm,
-                                 float shoulderPitch, float shoulderYaw, float elbowBend)
+    private static void setPilotCannonPose(BakedGeoModel model)
+    {
+        setArmPose(model, "arm_r", "forearm_r", -1.60F, -0.08F, -0.06F, -0.12F, 0.0F, 0.0F);
+        setArmPose(model, "arm_l", "forearm_l", -1.40F, 0.30F, 0.16F, -0.24F, -0.04F, -0.04F);
+        setArmPose(model, "Rightarm", "Lowerarm", -1.60F, -0.08F, -0.06F, -0.12F, 0.0F, 0.0F);
+        setArmPose(model, "Leftarm", "Lowerarm2", -1.40F, 0.30F, 0.16F, -0.24F, -0.04F, -0.04F);
+        setArmPose(model, "brazoderecho", "brazoderechobajo", -1.60F, -0.08F, -0.06F, -0.12F, 0.0F, 0.0F);
+        setArmPose(model, "brazoizquierda", "brazobajo", -1.40F, 0.30F, 0.16F, -0.24F, -0.04F, -0.04F);
+        model.getBone("cannon").ifPresent(bone ->
+        {
+            bone.setRotX(0.0F);
+            bone.setRotY(0.0F);
+            bone.setRotZ(0.0F);
+        });
+    }
+
+    private static void setOpenGuardPose(BakedGeoModel model)
+    {
+        setArmPose(model, "arm_r", "forearm_r", -0.96F, -0.56F, -0.38F, -0.32F, 0.0F, -0.10F);
+        setArmPose(model, "arm_l", "forearm_l", -0.96F, 0.56F, 0.38F, -0.32F, 0.0F, 0.10F);
+        setArmPose(model, "Rightarm", "Lowerarm", -0.96F, -0.56F, -0.38F, -0.32F, 0.0F, -0.10F);
+        setArmPose(model, "Leftarm", "Lowerarm2", -0.96F, 0.56F, 0.38F, -0.32F, 0.0F, 0.10F);
+        setArmPose(model, "brazoderecho", "brazoderechobajo", -0.96F, -0.56F, -0.38F, -0.32F, 0.0F, -0.10F);
+        setArmPose(model, "brazoizquierda", "brazobajo", -0.96F, 0.56F, 0.38F, -0.32F, 0.0F, 0.10F);
+    }
+
+    /** Pins one arm to a fixed bent-elbow pose (absolute, kills idle sway). */
+    private static void setArmPose(BakedGeoModel model, String arm, String forearm,
+                                   float shoulderPitch, float shoulderYaw, float shoulderRoll,
+                                   float elbowPitch, float elbowYaw, float elbowRoll)
     {
         model.getBone(arm).ifPresent(bone ->
         {
             bone.setRotX(shoulderPitch);
             bone.setRotY(shoulderYaw);
-            bone.setRotZ(0.0F);
+            bone.setRotZ(shoulderRoll);
         });
         model.getBone(forearm).ifPresent(bone ->
         {
-            bone.setRotX(elbowBend);
-            bone.setRotY(0.0F);
-            bone.setRotZ(0.0F);
+            bone.setRotX(elbowPitch);
+            bone.setRotY(elbowYaw);
+            bone.setRotZ(elbowRoll);
+        });
+    }
+
+    private static void setWeaponVisibility(BakedGeoModel model, String name, boolean active, boolean pilotArmPass)
+    {
+        model.getBone(name).ifPresent(bone ->
+        {
+            boolean hiddenByWholeBodyPass = !pilotArmPass && bone.isHidden();
+            bone.setHidden(hiddenByWholeBodyPass || !active);
         });
     }
 

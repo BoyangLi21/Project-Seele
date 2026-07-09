@@ -90,10 +90,10 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     private static final float NORMAL_WIDTH = 8.5F;
     private static final float NORMAL_HEIGHT = 30.0F;
     private static final float CROUCH_HEIGHT = 21.0F;
-    // "Prone" is a kneeling firing brace, not a face-down sprawl: narrow and
-    // low but still upright enough to aim and advance on the knees.
-    private static final float PRONE_WIDTH = 10.0F;
-    private static final float PRONE_HEIGHT = 17.0F;
+    // Z is a true belly-down crawl: wide and very low, distinct from the
+    // Shift kneel / Unit-00 shield brace.
+    private static final float PRONE_WIDTH = 24.0F;
+    private static final float PRONE_HEIGHT = 8.5F;
     private static final float WALK_SPEED = 0.42F;
     private static final float CROUCH_SPEED = 0.18F;
     private static final float PRONE_SPEED = 0.10F;
@@ -881,7 +881,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         // the Unit's own eyes (the airframe hides itself from its pilot).
         float rad = (float) Math.toRadians(this.yBodyRot);
         double behind = 0.35D;
-        double plugHeight = this.isPilotProne() ? 13.0D : this.isPilotCrouching() ? 17.7D : 25.0D;
+        double plugHeight = this.isPilotProne() ? 6.2D : this.isPilotCrouching() ? 17.7D : 25.0D;
         move.accept(passenger,
                 this.getX() + Math.sin(rad) * behind,
                 this.getY() + plugHeight,
