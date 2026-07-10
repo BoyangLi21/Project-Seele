@@ -117,6 +117,10 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             SynchedEntityData.defineId(EvaUnit01Entity.class, EntityDataSerializers.BOOLEAN);
     private static final EntityDataAccessor<Boolean> DATA_PRONE =
             SynchedEntityData.defineId(EvaUnit01Entity.class, EntityDataSerializers.BOOLEAN);
+    private static final EntityDataAccessor<Boolean> DATA_MELEE_LEFT =
+            SynchedEntityData.defineId(EvaUnit01Entity.class, EntityDataSerializers.BOOLEAN);
+    private static final EntityDataAccessor<Integer> DATA_MELEE_SEQUENCE =
+            SynchedEntityData.defineId(EvaUnit01Entity.class, EntityDataSerializers.INT);
 
     private static final RawAnimation ANIM_IDLE = RawAnimation.begin().thenLoop("animation.eva_unit01.idle");
     private static final RawAnimation ANIM_WALK = RawAnimation.begin().thenLoop("animation.eva_unit01.walk");
@@ -150,6 +154,9 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     private boolean proneDimensions;
     private boolean wasAirborne;
     private int activationTicks;
+    private int clientMeleeSequence;
+    private int clientMeleeStartTick = -1000;
+    private boolean clientMeleeLeft;
 
     public EvaUnit01Entity(EntityType<? extends EvaUnit01Entity> type, Level level)
     {
@@ -179,6 +186,8 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         this.entityData.define(DATA_CROUCHING, false);
         this.entityData.define(DATA_SPRINTING, false);
         this.entityData.define(DATA_PRONE, false);
+        this.entityData.define(DATA_MELEE_LEFT, false);
+        this.entityData.define(DATA_MELEE_SEQUENCE, 0);
     }
 
     @Override
@@ -266,6 +275,23 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         return this.entityData.get(DATA_PRONE);
     }
 
+    public boolean isSwingingLeftArm()
+    {
+        return this.swingingArm == InteractionHand.OFF_HAND;
+    }
+
+    /** Camera-rig attack state, driven by the same server command as GeckoLib. */
+    public float getCockpitAttackAnim(float partialTick)
+    {
+        float elapsed = this.tickCount - this.clientMeleeStartTick + partialTick;
+        return elapsed >= 0.0F && elapsed < 10.0F ? elapsed / 10.0F : 0.0F;
+    }
+
+    public boolean isCockpitSwingingLeft()
+    {
+        return this.clientMeleeLeft;
+    }
+
     // ----- pilot commands (validated by the packet handler) -----
 
     public void cycleWeapon(ServerPlayer pilot)
@@ -317,6 +343,10 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         }
         this.meleeCooldown = MELEE_COOLDOWN_TICKS;
         this.leftSwing = !this.leftSwing;
+        this.entityData.set(DATA_MELEE_LEFT, this.leftSwing);
+        this.entityData.set(DATA_MELEE_SEQUENCE,
+                (this.entityData.get(DATA_MELEE_SEQUENCE) + 1) & Integer.MAX_VALUE);
+        this.swing(this.leftSwing ? InteractionHand.OFF_HAND : InteractionHand.MAIN_HAND, true);
         boolean knife = this.getWeapon() == WEAPON_KNIFE;
         String animation = knife
                 ? (this.leftSwing ? "knife_left" : "knife")
@@ -586,7 +616,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
                 new ClientboundCannonBeamPacket(muzzle.x, muzzle.y, muzzle.z, end.x, end.y, end.z));
         SeeleNetwork.CHANNEL.send(PacketDistributor.NEAR.with(() -> new PacketDistributor.TargetPoint(
                         impact.x, impact.y, impact.z, 320.0D, level.dimension())),
-                new ClientboundNukeFxPacket(impact.x, impact.y, impact.z, 1.8F));
+                new ClientboundNukeFxPacket(impact.x, impact.y, impact.z, 5.4F, false));
         level.sendParticles(ParticleTypes.END_ROD, impact.x, impact.y, impact.z, 54, 1.4D, 1.4D, 1.4D, 0.24D);
         level.sendParticles(ParticleTypes.EXPLOSION_EMITTER,
                 impact.x, impact.y + 1.5D, impact.z, 6, 3.5D, 1.8D, 3.5D, 0.0D);
@@ -868,6 +898,16 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         {
             this.updatePoseDimensions();
         }
+        if (DATA_MELEE_SEQUENCE.equals(key))
+        {
+            int sequence = this.entityData.get(DATA_MELEE_SEQUENCE);
+            if (sequence != this.clientMeleeSequence)
+            {
+                this.clientMeleeSequence = sequence;
+                this.clientMeleeLeft = this.entityData.get(DATA_MELEE_LEFT);
+                this.clientMeleeStartTick = this.tickCount;
+            }
+        }
     }
 
     @Override
@@ -881,7 +921,11 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         // the Unit's own eyes (the airframe hides itself from its pilot).
         float rad = (float) Math.toRadians(this.yBodyRot);
         double behind = 0.35D;
-        double plugHeight = this.isPilotProne() ? 6.2D : this.isPilotCrouching() ? 17.7D : 25.0D;
+        // In the quadruped stance the torso sits above the planted limbs;
+        // anchoring the pilot at the old 6.2 blocks put both first- and
+        // third-person cameras underneath the chest. Follow the horizontal
+        // head/upper torso instead.
+        double plugHeight = this.isPilotProne() ? 10.5D : this.isPilotCrouching() ? 17.7D : 25.0D;
         move.accept(passenger,
                 this.getX() + Math.sin(rad) * behind,
                 this.getY() + plugHeight,
@@ -942,17 +986,20 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     {
         controllers.add(new AnimationController<>(this, "base", 6, state ->
         {
-            if (!this.onGround())
+            // Stance changes resize the hitbox and can leave the Unit one
+            // frame off the ground. Keep the requested pose authoritative so
+            // PRONE never flashes back to an upright jump/fall animation.
+            if (this.isPilotProne())
             {
-                return state.setAndContinue(this.getDeltaMovement().y > 0.02D ? ANIM_JUMP : ANIM_FALL);
+                return state.setAndContinue(state.isMoving() ? ANIM_CRAWL : ANIM_PRONE);
             }
             if (this.isPilotCrouching())
             {
                 return state.setAndContinue(state.isMoving() ? ANIM_CROUCH_WALK : ANIM_CROUCH);
             }
-            if (this.isPilotProne())
+            if (!this.onGround())
             {
-                return state.setAndContinue(state.isMoving() ? ANIM_CRAWL : ANIM_PRONE);
+                return state.setAndContinue(this.getDeltaMovement().y > 0.02D ? ANIM_JUMP : ANIM_FALL);
             }
             if (state.isMoving())
             {
@@ -962,7 +1009,8 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         }));
         controllers.add(new AnimationController<>(this, "arms", 8, state ->
         {
-            if (this.getWeapon() == WEAPON_CANNON)
+            if (this.getWeapon() == WEAPON_CANNON
+                    && !this.isPilotCrouching() && !this.isPilotProne())
             {
                 return state.setAndContinue(ANIM_AIM);
             }

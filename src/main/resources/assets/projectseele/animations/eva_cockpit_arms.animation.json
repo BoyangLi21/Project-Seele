@@ -1,0 +1,23 @@
+{
+  "format_version": "1.8.0",
+  "animations": {
+    "animation.eva_unit01.idle": {"loop": true, "animation_length": 1, "bones": {}},
+    "animation.eva_unit01.walk": {"loop": true, "animation_length": 1, "bones": {}},
+    "animation.eva_unit01.run": {"loop": true, "animation_length": 1, "bones": {}},
+    "animation.eva_unit01.crouch": {"loop": true, "animation_length": 1, "bones": {}},
+    "animation.eva_unit01.crouch_walk": {"loop": true, "animation_length": 1, "bones": {}},
+    "animation.eva_unit01.prone": {"loop": true, "animation_length": 1, "bones": {}},
+    "animation.eva_unit01.crawl": {"loop": true, "animation_length": 1, "bones": {}},
+    "animation.eva_unit01.jump": {"loop": true, "animation_length": 1, "bones": {}},
+    "animation.eva_unit01.fall": {"loop": true, "animation_length": 1, "bones": {}},
+    "animation.eva_unit01.aim": {"loop": true, "animation_length": 1, "bones": {}},
+    "animation.eva_unit01.melee": {"animation_length": 0.5, "bones": {}},
+    "animation.eva_unit01.melee_left": {"animation_length": 0.5, "bones": {}},
+    "animation.eva_unit01.knife": {"animation_length": 0.5, "bones": {}},
+    "animation.eva_unit01.knife_left": {"animation_length": 0.5, "bones": {}},
+    "animation.eva_unit01.smash": {"animation_length": 0.7, "bones": {}},
+    "animation.eva_unit01.cannon_fire": {"animation_length": 0.5, "bones": {}},
+    "animation.eva_unit01.land": {"animation_length": 0.4, "bones": {}},
+    "animation.eva_unit01.stomp": {"animation_length": 0.6, "bones": {}}
+  }
+}

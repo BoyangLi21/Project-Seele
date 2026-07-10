@@ -47,15 +47,40 @@ def weapon_bones(bones):
     px, py, pz = forearm["pivot"]
     return [
         {"name": "knife", "parent": "Lowerarm", "pivot": [px, py, pz], "cubes": [
-            {"origin": [px - 3, py - 13, pz - 58], "size": [6, 5, 52], "uv": [400, 0]},
-            {"origin": [px - 5, py - 10, pz - 10], "size": [10, 8, 8], "uv": [472, 80]},
+            # SmOd's forearm points down its local -Y axis. Keeping the blade
+            # on that axis makes it point forward after the arm aims, instead
+            # of rotating into a vertical white slab.
+            {"origin": [px - 3, py - 70, pz - 2], "size": [6, 26, 4], "uv": [400, 0]},
+            {"origin": [px - 2.5, py - 86, pz - 1.5], "size": [5, 16, 3], "uv": [400, 0]},
+            {"origin": [px - 1.5, py - 96, pz - 1], "size": [3, 10, 2], "uv": [400, 0]},
+            {"origin": [px - 3.5, py - 86, pz + 1.5], "size": [1, 42, 1], "uv": [472, 80]},
+            {"origin": [px - 5, py - 46, pz - 5], "size": [10, 12, 10], "uv": [472, 80]},
         ]},
-        {"name": "cannon", "parent": "Upperbody", "pivot": [px, py + 6, pz], "cubes": [
-            {"origin": [px - 6, py - 10, pz - 112], "size": [12, 14, 108], "uv": [400, 80]},
-            {"origin": [px - 4, py - 6, pz - 136], "size": [8, 8, 28], "uv": [400, 80]},
-            {"origin": [px - 11, py - 1, pz - 52], "size": [5, 7, 22], "uv": [472, 80]},
+        {"name": "cannon", "parent": "Lowerarm", "pivot": [px, py, pz], "cubes": [
+            {"origin": [px - 8, py - 64, pz - 8], "size": [16, 54, 16], "uv": [400, 80]},
+            {"origin": [px - 6, py - 102, pz - 6], "size": [12, 38, 12], "uv": [400, 80]},
+            {"origin": [px - 4, py - 128, pz - 4], "size": [8, 26, 8], "uv": [400, 80]},
+            {"origin": [px - 7, py - 134, pz - 7], "size": [14, 7, 14], "uv": [472, 80]},
+            {"origin": [px - 12, py - 55, pz - 3], "size": [6, 24, 6], "uv": [472, 80]},
         ]},
     ]
+
+
+def enlarge_head_details(bones):
+    """Make SmOd's very small face readable at Project SEELE's camera scale."""
+    head = next(bone for bone in bones if bone["name"] == "Head")
+    px, py, pz = head["pivot"]
+    sx, sy, sz = 1.28, 1.15, 1.28
+    for cube in head.get("cubes", []):
+        ox, oy, oz = cube["origin"]
+        wx, wy, wz = cube["size"]
+        cube["origin"] = [px + (ox - px) * sx, py + (oy - py) * sy, pz + (oz - pz) * sz]
+        cube["size"] = [wx * sx, wy * sy, wz * sz]
+        if "pivot" in cube:
+            qx, qy, qz = cube["pivot"]
+            cube["pivot"] = [px + (qx - px) * sx, py + (qy - py) * sy, pz + (qz - pz) * sz]
+        if isinstance(cube.get("inflate"), (int, float)):
+            cube["inflate"] *= 1.18
 
 
 def scale_geometry(data):
@@ -69,6 +94,8 @@ def scale_geometry(data):
         for cube in bone.get("cubes", []):
             cube["origin"] = scale_values(cube["origin"], SCALE)
             cube["size"] = scale_values(cube["size"], SCALE)
+            if isinstance(cube.get("inflate"), (int, float)):
+                cube["inflate"] *= SCALE
             if "pivot" in cube:
                 cube["pivot"] = scale_values(cube["pivot"], SCALE)
             if isinstance(cube.get("uv"), list):
@@ -79,6 +106,7 @@ def scale_geometry(data):
                         face["uv"] = scale_values(face["uv"], SCALE)
                     if "uv_size" in face:
                         face["uv_size"] = scale_values(face["uv_size"], SCALE)
+    enlarge_head_details(geometry["bones"])
     geometry["bones"].extend(weapon_bones(geometry["bones"]))
     data["format_version"] = "1.12.0"
     return data
@@ -105,16 +133,118 @@ def scale_position_channels(animation):
     return result
 
 
+def retime_animation(animation, factor):
+    """Shorten a Bedrock animation without changing its authored poses."""
+    result = copy.deepcopy(animation)
+    if isinstance(result.get("animation_length"), (int, float)):
+        result["animation_length"] *= factor
+    for channels in result.get("bones", {}).values():
+        for name, values in list(channels.items()):
+            if not isinstance(values, dict):
+                continue
+            timed = {}
+            for key, value in values.items():
+                try:
+                    timed[f"{float(key) * factor:.4f}".rstrip("0").rstrip(".")] = value
+                except (TypeError, ValueError):
+                    timed[key] = value
+            channels[name] = timed
+    return result
+
+
 def build_animations(source, unit):
     built_in = json.loads((REPO / "src/main/resources/assets/projectseele/animations/eva_unit01.animation.json")
                           .read_text(encoding="utf-8"))["animations"]
     output = {name: remap_animation(animation) for name, animation in built_in.items()}
+    install_smod_pose_overrides(output)
     source_animations = source["animations"]
     output["animation.eva_unit01.idle"] = scale_position_channels(
         source_animations[f"animation.entity_eva{unit}.idle_1"])
     output["animation.eva_unit01.walk"] = scale_position_channels(
         source_animations[f"animation.entity_eva{unit}.move"])
+    output["animation.eva_unit01.run"] = retime_animation(scale_position_channels(
+        source_animations[f"animation.entity_eva{unit}.move"]), 0.58)
     return {"format_version": "1.8.0", "animations": output}
+
+
+def install_smod_pose_overrides(output):
+    # The built-in prone pose was authored for Project SEELE's placeholder
+    # bones. On SmOd's taller rig it reads like belly-swimming. These overrides
+    # keep the Unit supported by hands and knees: a low, animal-like crawl.
+    output["animation.eva_unit01.crouch"] = {
+        "loop": True,
+        "animation_length": 1.6,
+        "bones": {
+            "bone7": {"position": {"0.0": [0, -28, 2], "0.8": [0, -27, 2], "1.6": [0, -28, 2]}},
+            "Body": {"rotation": {"0.0": [12, 0, 0]}},
+            "Lowerbody": {"rotation": {"0.0": [10, -3, 0]}},
+            "Upperbody": {"rotation": {"0.0": [-8, 4, 0]}},
+            "Head": {"rotation": {"0.0": [-18, -3, 0]}},
+            "Rightleg": {"rotation": {"0.0": [-78, 0, 7]}},
+            "bone16": {"rotation": {"0.0": [125, 0, 0]}},
+            "bone17": {"rotation": {"0.0": [-48, 0, 0]}},
+            "Leftleg": {"rotation": {"0.0": [20, 0, -4]}},
+            "bone6": {"rotation": {"0.0": [48, 0, 0]}},
+            "bone5": {"rotation": {"0.0": [-20, 0, 0]}},
+            "Rightarm": {"rotation": {"0.0": [-28, 0, -7]}},
+            "Lowerarm": {"rotation": {"0.0": [-12, 0, 0]}},
+            "Leftarm": {"rotation": {"0.0": [-24, 0, 7]}},
+            "Lowerarm2": {"rotation": {"0.0": [-10, 0, 0]}},
+        },
+    }
+    output["animation.eva_unit01.crouch_walk"] = {
+        "loop": True,
+        "animation_length": 1.2,
+        "bones": {
+            "bone7": {"position": {"0.0": [0, -20, 1], "0.3": [0, -18, 1], "0.6": [0, -20, 1], "0.9": [0, -18, 1], "1.2": [0, -20, 1]}},
+            "Body": {"rotation": {"0.0": [14, 0, 0]}},
+            "Lowerbody": {"rotation": {"0.0": [8, 4, 0], "0.6": [8, -4, 0], "1.2": [8, 4, 0]}},
+            "Upperbody": {"rotation": {"0.0": [-6, -4, 0], "0.6": [-6, 4, 0], "1.2": [-6, -4, 0]}},
+            "Head": {"rotation": {"0.0": [-16, 3, 0], "0.6": [-16, -3, 0], "1.2": [-16, 3, 0]}},
+            "Rightleg": {"rotation": {"0.0": [-38, 0, 4], "0.6": [8, 0, 4], "1.2": [-38, 0, 4]}},
+            "bone16": {"rotation": {"0.0": [78, 0, 0], "0.6": [46, 0, 0], "1.2": [78, 0, 0]}},
+            "Leftleg": {"rotation": {"0.0": [8, 0, -4], "0.6": [-38, 0, -4], "1.2": [8, 0, -4]}},
+            "bone6": {"rotation": {"0.0": [46, 0, 0], "0.6": [78, 0, 0], "1.2": [46, 0, 0]}},
+            "Rightarm": {"rotation": {"0.0": [12, 0, -6], "0.6": [-30, 0, -6], "1.2": [12, 0, -6]}},
+            "Leftarm": {"rotation": {"0.0": [-30, 0, 6], "0.6": [12, 0, 6], "1.2": [-30, 0, 6]}},
+        },
+    }
+    output["animation.eva_unit01.prone"] = {
+        "loop": True,
+        "animation_length": 1.8,
+        "bones": {
+            "bone7": {"position": {"0.0": [0, -52, -6], "0.9": [0, -50, -5], "1.8": [0, -52, -6]}},
+            "Lowerbody": {"rotation": {"0.0": [42, 0, 0]}},
+            "Upperbody": {"rotation": {"0.0": [34, 0, 0], "0.9": [36, 0, 0], "1.8": [34, 0, 0]}},
+            "Head": {"rotation": {"0.0": [-54, 0, 0]}},
+            "Rightarm": {"rotation": {"0.0": [-72, 0, -10]}},
+            "Lowerarm": {"rotation": {"0.0": [52, 0, 0]}},
+            "Leftarm": {"rotation": {"0.0": [-72, 0, 10]}},
+            "Lowerarm2": {"rotation": {"0.0": [52, 0, 0]}},
+            "Rightleg": {"rotation": {"0.0": [-82, 0, 8]}},
+            "bone16": {"rotation": {"0.0": [118, 0, 0]}},
+            "Leftleg": {"rotation": {"0.0": [-82, 0, -8]}},
+            "bone6": {"rotation": {"0.0": [118, 0, 0]}},
+        },
+    }
+    output["animation.eva_unit01.crawl"] = {
+        "loop": True,
+        "animation_length": 1.2,
+        "bones": {
+            "bone7": {"position": {"0.0": [0, -52, -6], "0.3": [0, -49, -4], "0.6": [0, -52, -6], "0.9": [0, -49, -4], "1.2": [0, -52, -6]}},
+            "Lowerbody": {"rotation": {"0.0": [42, 4, 0], "0.6": [42, -4, 0], "1.2": [42, 4, 0]}},
+            "Upperbody": {"rotation": {"0.0": [34, -3, 0], "0.6": [34, 3, 0], "1.2": [34, -3, 0]}},
+            "Head": {"rotation": {"0.0": [-52, 3, 0], "0.6": [-52, -3, 0], "1.2": [-52, 3, 0]}},
+            "Rightarm": {"rotation": {"0.0": [-60, 0, -10], "0.6": [-82, 0, -10], "1.2": [-60, 0, -10]}},
+            "Lowerarm": {"rotation": {"0.0": [42, 0, 0], "0.6": [62, 0, 0], "1.2": [42, 0, 0]}},
+            "Leftarm": {"rotation": {"0.0": [-82, 0, 10], "0.6": [-60, 0, 10], "1.2": [-82, 0, 10]}},
+            "Lowerarm2": {"rotation": {"0.0": [62, 0, 0], "0.6": [42, 0, 0], "1.2": [62, 0, 0]}},
+            "Rightleg": {"rotation": {"0.0": [-72, 0, 8], "0.6": [-90, 0, 8], "1.2": [-72, 0, 8]}},
+            "bone16": {"rotation": {"0.0": [106, 0, 0], "0.6": [124, 0, 0], "1.2": [106, 0, 0]}},
+            "Leftleg": {"rotation": {"0.0": [-90, 0, -8], "0.6": [-72, 0, -8], "1.2": [-90, 0, -8]}},
+            "bone6": {"rotation": {"0.0": [124, 0, 0], "0.6": [106, 0, 0], "1.2": [124, 0, 0]}},
+        },
+    }
 
 
 def render_texture(source_path, target_path):

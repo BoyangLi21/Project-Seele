@@ -45,11 +45,6 @@ public final class SeeleConfig
     // ----- client -----
     public static final ForgeConfigSpec.BooleanValue ALARM_VIGNETTE;
     public static final ForgeConfigSpec.DoubleValue FX_INTENSITY;
-    public static final ForgeConfigSpec.DoubleValue COCKPIT_ARM_SCALE;
-    public static final ForgeConfigSpec.DoubleValue COCKPIT_ARM_Y;
-    public static final ForgeConfigSpec.DoubleValue COCKPIT_ARM_Z;
-    public static final ForgeConfigSpec.DoubleValue COCKPIT_ARM_YAW;
-    public static final ForgeConfigSpec.DoubleValue COCKPIT_ARM_PITCH;
 
     static
     {
@@ -132,7 +127,7 @@ public final class SeeleConfig
                 .defineInRange("coreDamage", 210.0D, 0.0D, 100000.0D);
         CANNON_EXPLOSION_RADIUS = common
                 .comment("Explosion radius at the cannon impact point.")
-                .defineInRange("explosionRadius", 18.0D, 0.0D, 32.0D);
+                .defineInRange("explosionRadius", 54.0D, 0.0D, 96.0D);
         common.pop();
 
         COMMON_SPEC = common.build();
@@ -145,22 +140,6 @@ public final class SeeleConfig
         FX_INTENSITY = client
                 .comment("Global brightness/opacity multiplier for beam and explosion effects (0 disables cross explosions).")
                 .defineInRange("fxIntensity", 1.0D, 0.0D, 1.0D);
-        COCKPIT_ARM_SCALE = client
-                .comment("First-person real-bone EVA arm-rig scale.")
-                .defineInRange("cockpitRigScale", 0.10D, 0.02D, 0.30D);
-        COCKPIT_ARM_Y = client
-                .comment("First-person real-bone EVA arm-rig vertical offset.")
-                .defineInRange("cockpitRigY", -2.65D, -4.0D, 4.0D);
-        COCKPIT_ARM_Z = client
-                .comment("First-person real-bone EVA arm-rig depth offset.")
-                .defineInRange("cockpitRigZ", -1.65D, -4.0D, 2.0D);
-        COCKPIT_ARM_YAW = client
-                .comment("First-person arm-rig yaw in degrees. Dial this until the arms face forward",
-                        "(the raw bones face the model's native front, not the camera).")
-                .defineInRange("cockpitRigYaw", 180.0D, -180.0D, 180.0D);
-        COCKPIT_ARM_PITCH = client
-                .comment("First-person arm-rig pitch in degrees (tilt the whole rig up/down).")
-                .defineInRange("cockpitRigPitch", 0.0D, -90.0D, 90.0D);
         client.pop();
         CLIENT_SPEC = client.build();
     }

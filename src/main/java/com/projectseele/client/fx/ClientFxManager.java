@@ -16,6 +16,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.sounds.SoundEvents;
 import net.minecraft.util.Mth;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.api.distmarker.Dist;
@@ -74,14 +75,18 @@ public final class ClientFxManager
         if (com.projectseele.config.SeeleConfig.FX_INTENSITY.get() > 0.0D)
         {
             ACTIVE.add(new NukeExplosion(pos, packet.scale));
-            // The nuke carries its own small cross of light.
-            ACTIVE.add(new CrossExplosion(pos, packet.scale * 0.5F));
+            if (packet.angelCross)
+            {
+                ACTIVE.add(new CrossExplosion(pos, packet.scale * 0.5F));
+            }
         }
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.level != null)
         {
             minecraft.level.playLocalSound(packet.x, packet.y, packet.z,
-                    ModSounds.CROSS_EXPLOSION.get(), SoundSource.HOSTILE, 5.0F, 0.72F, false);
+                    packet.angelCross ? ModSounds.CROSS_EXPLOSION.get() : SoundEvents.GENERIC_EXPLODE,
+                    packet.angelCross ? SoundSource.HOSTILE : SoundSource.PLAYERS,
+                    5.0F, packet.angelCross ? 0.72F : 0.58F, false);
         }
     }
 
@@ -174,7 +179,8 @@ public final class ClientFxManager
         CrossExplosion(Vec3 pos, float scale)
         {
             super(pos);
-            this.scale = scale;
+            // Angel crosses are skyline-scale, not ordinary particle bursts.
+            this.scale = scale * 10.0F;
         }
 
         @Override
@@ -283,7 +289,7 @@ public final class ClientFxManager
     /**
      * Nuke-grade beam impact: a blinding radial flash, an expanding fireball
      * of light ribbons and a fast double shockwave. The mushroom smoke itself
-     * is server-side particles; the cross of light is a separate instance.
+     * is server-side particles. Angel callers may add a separate cross.
      */
     private static final class NukeExplosion extends WorldFx
     {
