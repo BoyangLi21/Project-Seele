@@ -4,7 +4,7 @@ Rei Chikita mod's detailed model.
 
 Usage:  python tools/make_model_pack.py [path-to-chikita-jar]
 
-Output: run/resourcepacks/eva_real_model/   (run/ is gitignored)
+Output: run/resourcepacks/eva_chikita_reference/   (run/ is gitignored)
 
 The source model is All Rights Reserved (author: DanielFernandez / Rei
 Chikita Mod). This pack is for private testing on our own machines only and
@@ -26,7 +26,10 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 JAR = Path(sys.argv[1]) if len(sys.argv) > 1 else REPO / "Rei_Chikita_Mod_1.1.7b__jv1.20.1.jar"
-OUT = REPO / "run" / "resourcepacks" / "eva_real_model"
+# Keep the Chikita conversion physically separate from the active SmOd pack.
+# Older desktop launchers used to call this script on every start; sharing the
+# eva_real_model directory made that stale launcher silently replace SmOd.
+OUT = REPO / "run" / "resourcepacks" / "eva_chikita_reference"
 ASSET_BASE = "assets/rei_chikita_mod_updated_20_df"
 GEO_PATH = f"{ASSET_BASE}/geo/eva_01_animated.geo.json"
 ANIM_PATH = f"{ASSET_BASE}/animations/eva_01_animated.animation.json"
@@ -287,7 +290,7 @@ def main():
     (OUT / "pack.mcmeta").write_text(json.dumps({
         "pack": {
             "pack_format": 15,
-            "description": "EVA-01 real model (LOCAL TEST ONLY - Rei Chikita assets)",
+            "description": "Chikita EVA reference (LOCAL TEST ONLY - not enabled)",
         }
     }, indent=2), encoding="utf-8")
     (OUT / "_SOURCE.txt").write_text(
@@ -304,7 +307,7 @@ def main():
     tex_path.write_bytes(texture)
     repaint_weapon_regions(tex_path)
     print(f"pack written -> {OUT}")
-    print("enable it in-game: Options > Resource Packs > eva_real_model")
+    print("reference pack only; leave eva_chikita_reference disabled while testing SmOd")
 
 
 def repaint_weapon_regions(png_path: Path):

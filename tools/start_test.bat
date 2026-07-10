@@ -12,13 +12,26 @@ if not exist "%SEELE_HOME%\gradlew.bat" (
     exit /b 1
 )
 cd /d "%SEELE_HOME%"
-rem SmOd is the primary private Unit-01/02 pack; Chikita is fallback only.
-if exist "evaaddon1-0.zip" (
-    where python >nul 2>nul
-    if not errorlevel 1 python tools\make_smod_model_pack.py "evaaddon1-0.zip"
-) else if exist "Rei_Chikita_Mod_1.1.7b__jv1.20.1.jar" (
-    where python >nul 2>nul
-    if not errorlevel 1 python tools\make_model_pack.py "Rei_Chikita_Mod_1.1.7b__jv1.20.1.jar"
+rem SmOd is the required private Unit-01/02 model source.
+rem Never fall back to Chikita: both converters used to share one output and
+rem an old desktop launcher could silently replace the active model pack.
+if not exist "evaaddon1-0.zip" (
+    echo SmOd source evaaddon1-0.zip was not found in %SEELE_HOME%.
+    echo Project SEELE will not start with a fallback EVA model.
+    pause
+    exit /b 1
+)
+where python >nul 2>nul
+if errorlevel 1 (
+    echo Python was not found; the local SmOd model pack cannot be generated.
+    pause
+    exit /b 1
+)
+python tools\make_smod_model_pack.py "evaaddon1-0.zip"
+if errorlevel 1 (
+    echo SmOd model-pack generation failed.
+    pause
+    exit /b 1
 )
 echo Starting Project SEELE test client (first launch takes a minute)...
 call gradlew.bat runClient
