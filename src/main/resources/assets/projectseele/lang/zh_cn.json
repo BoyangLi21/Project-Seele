@@ -25,14 +25,12 @@
   "entity.projectseele.eva_unit01": "EVA初号机",
   "entity.projectseele.eva_unit00": "EVA零号机",
   "entity.projectseele.eva_unit02": "EVA二号机",
-
   "key.categories.projectseele": "Project SEELE",
   "key.projectseele.cycle_weapon": "EVA：切换武器",
   "key.projectseele.toggle_at_field": "EVA：展开/收起 A.T. Field",
   "key.projectseele.exit_eva": "EVA：弹出插入栓",
   "key.projectseele.stomp": "EVA：踩踏",
   "key.projectseele.toggle_prone": "EVA：趴下/起身",
-
   "msg.projectseele.weapon_fists": "武器：徒手",
   "msg.projectseele.weapon_knife": "武器：高振动粒子刀",
   "msg.projectseele.weapon_cannon": "武器：阳电子狙击炮",
@@ -40,7 +38,6 @@
   "msg.projectseele.at_field_off": "A.T. Field 收起",
   "msg.projectseele.at_field_low": "A.T. Field 能量不足",
   "msg.projectseele.cannot_stand": "上方空间不足，无法起身",
-
   "hud.projectseele.eva_status": "EVA-01 初号机",
   "hud.projectseele.emergency": "！！紧急事态 —— 机体大破！！",
   "hud.projectseele.plug_insertion": "插入栓固定 —— LCL 注入中",
@@ -64,10 +61,8 @@
   "hud.projectseele.controls": "SPACE 跳跃  SHIFT 单膝跪地  Z 趴下  B 踩踏  V 弹出",
   "hud.projectseele.controls_unit00": "G 展开力场 + 按住 SHIFT：单膝举盾   V 弹出",
   "boss.projectseele.ramiel_at_field": "拉米尔 — A.T. FIELD",
-
   "title.projectseele.angel_alarm": "使徒，来袭",
   "subtitle.projectseele.angel_alarm": "Pattern：蓝色 —— 全员进入一级战斗配置",
-
   "subtitles.projectseele.alarm": "空袭警报回荡",
   "subtitles.projectseele.beam_charge": "拉米尔正在蓄能",
   "subtitles.projectseele.beam_fire": "阳电子光束轰鸣",
@@ -77,11 +72,11 @@
   "subtitles.projectseele.drill": "钻击直下",
   "subtitles.projectseele.ramiel_hum": "不祥的低鸣",
   "subtitles.projectseele.rifle_fire": "阳电子步枪射击",
-
   "advancements.projectseele.witness_angel.title": "使徒，来袭",
   "advancements.projectseele.witness_angel.description": "目击使徒袭来，并活着听完警报",
   "advancements.projectseele.first_victory.title": "初战告捷",
   "advancements.projectseele.first_victory.description": "击败第五使徒拉米尔",
   "advancements.projectseele.yashima_untouched.title": "无伤屋岛",
-  "advancements.projectseele.yashima_untouched.description": "全程未被拉米尔命中并将其击败"
+  "advancements.projectseele.yashima_untouched.description": "全程未被拉米尔命中并将其击败",
+  "message.projectseele.scenario_released": "机体自生命之树解放"
 }

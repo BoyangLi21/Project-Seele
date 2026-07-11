@@ -252,12 +252,27 @@ def install_smod_pose_overrides(output):
         "loop": True,
         "animation_length": 1.2,
         "bones": {
-            "Upperbody": {"rotation": {"0.0": [4, -24, 0]}},
-            "Head": {"rotation": {"0.0": [-4, 17, 0]}},
-            "Rightarm": {"rotation": {"0.0": [-52, -16, -4], "0.6": [-53.5, -16, -4], "1.2": [-52, -16, -4]}},
+            "Upperbody": {"rotation": {"0.0": [2, -8, 0]}},
+            "Head": {"rotation": {"0.0": [-2, 6, 0]}},
+            "Rightarm": {"rotation": {"0.0": [-52, -8, -4], "0.6": [-53.5, -8, -4], "1.2": [-52, -8, -4]}},
             "Lowerarm": {"rotation": {"0.0": [-40, 0, 0]}},
-            "Leftarm": {"rotation": {"0.0": [-74, -28, 12], "0.6": [-75, -28, 12], "1.2": [-74, -28, 12]}},
-            "Lowerarm2": {"rotation": {"0.0": [-24, -20, 0]}},
+            "Leftarm": {"rotation": {"0.0": [-70, -18, 10], "0.6": [-71, -18, 10], "1.2": [-70, -18, 10]}},
+            "Lowerarm2": {"rotation": {"0.0": [-22, -14, 0]}},
+        },
+    }
+    # Nailed to the Tree: arms straight out, head bowed, gentle sway.
+    output["animation.eva_unit01.crucified"] = {
+        "loop": True,
+        "animation_length": 3.0,
+        "bones": {
+            "Leftarm": {"rotation": {"0.0": [0, 0, 86], "1.5": [0, 0, 84.5], "3.0": [0, 0, 86]}},
+            "Rightarm": {"rotation": {"0.0": [0, 0, -86], "1.5": [0, 0, -84.5], "3.0": [0, 0, -86]}},
+            "Lowerarm": {"rotation": {"0.0": [0, 0, 0]}},
+            "Lowerarm2": {"rotation": {"0.0": [0, 0, 0]}},
+            "Head": {"rotation": {"0.0": [14, 0, 0], "1.5": [16, 0, 0], "3.0": [14, 0, 0]}},
+            "Leftleg": {"rotation": {"0.0": [0, 0, -2]}},
+            "Rightleg": {"rotation": {"0.0": [0, 0, 2]}},
+            "Upperbody": {"rotation": {"0.0": [3, 0, 0]}},
         },
     }
 

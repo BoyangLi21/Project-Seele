@@ -91,6 +91,16 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
                     bone.setHidden(true);
                 }
             });
+            if (animatable.getWeapon() != EvaUnit01Entity.WEAPON_CANNON
+                    && !animatable.isPilotProne() && !animatable.isCrucified())
+            {
+                // Idle arms hang at the sides, below the pilot camera; raise
+                // them into frame (additive, so swings still read on top).
+                raiseArm(model, "arm_r", "forearm_r");
+                raiseArm(model, "arm_l", "forearm_l");
+                raiseArm(model, "Rightarm", "Lowerarm");
+                raiseArm(model, "Leftarm", "Lowerarm2");
+            }
         }
         if (!firstPerson && animatable.getWeapon() == EvaUnit01Entity.WEAPON_CANNON)
         {
@@ -109,6 +119,13 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
     private static void aimArm(BakedGeoModel model, String name, float pitchRad)
     {
         model.getBone(name).ifPresent(bone -> bone.setRotX(bone.getRotX() + pitchRad));
+    }
+
+    /** First-person guard: shoulder up ~66°, elbow bent, added over the anim. */
+    private static void raiseArm(BakedGeoModel model, String arm, String forearm)
+    {
+        model.getBone(arm).ifPresent(bone -> bone.setRotX(bone.getRotX() - 1.15F));
+        model.getBone(forearm).ifPresent(bone -> bone.setRotX(bone.getRotX() - 0.30F));
     }
 
     private static void setWeaponVisibility(BakedGeoModel model, String name, boolean active)

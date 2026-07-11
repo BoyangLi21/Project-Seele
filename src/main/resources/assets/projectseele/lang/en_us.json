@@ -25,14 +25,12 @@
   "entity.projectseele.eva_unit01": "EVA Unit-01",
   "entity.projectseele.eva_unit00": "EVA Unit-00",
   "entity.projectseele.eva_unit02": "EVA Unit-02",
-
   "key.categories.projectseele": "Project SEELE",
   "key.projectseele.cycle_weapon": "EVA: Cycle Weapon",
   "key.projectseele.toggle_at_field": "EVA: Toggle A.T. Field",
   "key.projectseele.exit_eva": "EVA: Eject Entry Plug",
   "key.projectseele.stomp": "EVA: Stomp",
   "key.projectseele.toggle_prone": "EVA: Toggle Prone",
-
   "msg.projectseele.weapon_fists": "Weapon: Bare Hands",
   "msg.projectseele.weapon_knife": "Weapon: Progressive Knife",
   "msg.projectseele.weapon_cannon": "Weapon: Positron Sniper Cannon",
@@ -40,7 +38,6 @@
   "msg.projectseele.at_field_off": "A.T. Field withdrawn",
   "msg.projectseele.at_field_low": "A.T. Field energy too low",
   "msg.projectseele.cannot_stand": "Not enough overhead clearance to stand",
-
   "hud.projectseele.eva_status": "EVA-01",
   "hud.projectseele.emergency": "!! EMERGENCY — HULL CRITICAL !!",
   "hud.projectseele.plug_insertion": "ENTRY PLUG INSERTION — LCL CHARGE",
@@ -64,10 +61,8 @@
   "hud.projectseele.controls": "SPACE jump  SHIFT kneel  Z prone  B stomp  V eject",
   "hud.projectseele.controls_unit00": "G field + hold SHIFT: brace shield   V eject",
   "boss.projectseele.ramiel_at_field": "RAMIEL — A.T. FIELD",
-
   "title.projectseele.angel_alarm": "ANGEL ATTACK",
   "subtitle.projectseele.angel_alarm": "Pattern BLUE — all personnel, first-stage alert",
-
   "subtitles.projectseele.alarm": "Air-raid siren wails",
   "subtitles.projectseele.beam_charge": "Ramiel charges energy",
   "subtitles.projectseele.beam_fire": "Positron beam fires",
@@ -77,11 +72,11 @@
   "subtitles.projectseele.drill": "Drill bores down",
   "subtitles.projectseele.ramiel_hum": "Ominous humming",
   "subtitles.projectseele.rifle_fire": "Positron rifle fires",
-
   "advancements.projectseele.witness_angel.title": "Angel, Attack",
   "advancements.projectseele.witness_angel.description": "Witness an Angel assault and live to hear the sirens",
   "advancements.projectseele.first_victory.title": "First Victory",
   "advancements.projectseele.first_victory.description": "Defeat Ramiel, the Fifth Angel",
   "advancements.projectseele.yashima_untouched.title": "Operation Yashima, Untouched",
-  "advancements.projectseele.yashima_untouched.description": "Slay Ramiel without ever being hit by it"
+  "advancements.projectseele.yashima_untouched.description": "Slay Ramiel without ever being hit by it",
+  "message.projectseele.scenario_released": "The Unit descends from the Tree"
 }

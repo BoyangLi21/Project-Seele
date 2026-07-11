@@ -25,11 +25,13 @@ public class ModEntities
                     .clientTrackingRange(12)
                     .build("ramiel"));
 
+    // Tracking ranges below are wide because scenario staging can park these
+    // entities hundreds of blocks up the Tree of Life.
     public static final RegistryObject<EntityType<EvaUnit01Entity>> EVA_UNIT01 = ENTITY_TYPES.register("eva_unit01",
             () -> EntityType.Builder.of(EvaUnit01Entity::new, MobCategory.MISC)
                     .sized(8.5F, 30.0F)
                     .fireImmune()
-                    .clientTrackingRange(12)
+                    .clientTrackingRange(64)
                     .build("eva_unit01"));
 
     public static final RegistryObject<EntityType<EvaUnit01Entity>> EVA_UNIT00 = ENTITY_TYPES.register("eva_unit00",

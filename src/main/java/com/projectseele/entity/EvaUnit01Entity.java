@@ -117,6 +117,9 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             SynchedEntityData.defineId(EvaUnit01Entity.class, EntityDataSerializers.BOOLEAN);
     private static final EntityDataAccessor<Boolean> DATA_PRONE =
             SynchedEntityData.defineId(EvaUnit01Entity.class, EntityDataSerializers.BOOLEAN);
+    // Nailed to Tiferet by the SEELE scenario: pose locked, gravity off.
+    private static final EntityDataAccessor<Boolean> DATA_CRUCIFIED =
+            SynchedEntityData.defineId(EvaUnit01Entity.class, EntityDataSerializers.BOOLEAN);
     private static final EntityDataAccessor<Boolean> DATA_MELEE_LEFT =
             SynchedEntityData.defineId(EvaUnit01Entity.class, EntityDataSerializers.BOOLEAN);
     private static final EntityDataAccessor<Integer> DATA_MELEE_SEQUENCE =
@@ -132,6 +135,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     private static final RawAnimation ANIM_JUMP = RawAnimation.begin().thenLoop("animation.eva_unit01.jump");
     private static final RawAnimation ANIM_FALL = RawAnimation.begin().thenLoop("animation.eva_unit01.fall");
     private static final RawAnimation ANIM_PRONE = RawAnimation.begin().thenLoop("animation.eva_unit01.prone");
+    private static final RawAnimation ANIM_CRUCIFIED = RawAnimation.begin().thenLoop("animation.eva_unit01.crucified");
     private static final RawAnimation ANIM_CRAWL = RawAnimation.begin().thenLoop("animation.eva_unit01.crawl");
     private static final RawAnimation ANIM_AIM = RawAnimation.begin().thenLoop("animation.eva_unit01.aim");
     private static final RawAnimation ANIM_MELEE = RawAnimation.begin().thenPlay("animation.eva_unit01.melee");
@@ -190,6 +194,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         this.entityData.define(DATA_CROUCHING, false);
         this.entityData.define(DATA_SPRINTING, false);
         this.entityData.define(DATA_PRONE, false);
+        this.entityData.define(DATA_CRUCIFIED, false);
         this.entityData.define(DATA_MELEE_LEFT, false);
         this.entityData.define(DATA_MELEE_SEQUENCE, 0);
         this.entityData.define(DATA_SMASH_SEQUENCE, 0);
@@ -278,6 +283,25 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     public boolean isPilotProne()
     {
         return this.entityData.get(DATA_PRONE);
+    }
+
+    public boolean isCrucified()
+    {
+        return this.entityData.get(DATA_CRUCIFIED);
+    }
+
+    /** Nail to / release from the Tree. Gravity and pose follow the flag. */
+    public void setCrucified(boolean crucified)
+    {
+        this.entityData.set(DATA_CRUCIFIED, crucified);
+        this.setNoGravity(crucified);
+        if (crucified)
+        {
+            this.setDeltaMovement(Vec3.ZERO);
+            this.entityData.set(DATA_CROUCHING, false);
+            this.entityData.set(DATA_PRONE, false);
+            this.entityData.set(DATA_SPRINTING, false);
+        }
     }
 
     public boolean isSwingingLeftArm()
@@ -574,6 +598,12 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         if (this.getControllingPassenger() == pilot)
         {
             pilot.stopRiding();
+            if (this.isCrucified())
+            {
+                // Stepping out of a cross hundreds of blocks up.
+                pilot.addEffect(new net.minecraft.world.effect.MobEffectInstance(
+                        net.minecraft.world.effect.MobEffects.SLOW_FALLING, 20 * 60, 0));
+            }
         }
     }
 
@@ -810,6 +840,11 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     @Override
     protected void tickRidden(Player player, Vec3 input)
     {
+        if (this.isCrucified())
+        {
+            // Nailed to the Tree: no steering, no movement; V still ejects.
+            return;
+        }
         super.tickRidden(player, input);
         // The Unit turns with the pilot's view, horse-style.
         this.setRot(player.getYRot(), player.getXRot() * 0.5F);

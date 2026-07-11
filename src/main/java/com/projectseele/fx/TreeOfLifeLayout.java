@@ -10,8 +10,9 @@ import net.minecraft.world.phys.Vec3;
  */
 public final class TreeOfLifeLayout
 {
-    public static final float COLUMN_X = 26.0F;
-    public static final float ROW_Y = 18.0F;
+    // Sky-cathedral scale (user: at least five times the first draft).
+    public static final float COLUMN_X = 130.0F;
+    public static final float ROW_Y = 90.0F;
     public static final int TIFERET = 5;
 
     /** Local plane coordinates (x across, y up), index 0..9 = Keter..Malkuth. */
