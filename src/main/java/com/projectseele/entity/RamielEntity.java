@@ -327,7 +327,9 @@ public class RamielEntity extends FlyingMob implements Enemy, Angel
         {
             return false;
         }
-        if (!this.isExposed() && this.hasAtField() && !source.is(DamageTypeTags.BYPASSES_INVULNERABILITY))
+        if (!this.isExposed() && this.hasAtField()
+                && !source.is(DamageTypeTags.BYPASSES_INVULNERABILITY)
+                && !com.projectseele.combat.AtFieldRules.bypassesAtField(source))
         {
             boolean evaMelee = source.getDirectEntity() instanceof EvaUnit01Entity
                     && !source.is(DamageTypeTags.IS_EXPLOSION);

@@ -31,6 +31,7 @@ public class ModCreativeTabs
                         output.accept(ModItems.MASS_PRODUCTION_EVA_SPAWN_EGG.get());
                         output.accept(ModItems.NERV_CONSTRUCTION_KIT.get());
                         output.accept(ModItems.NERV_BEACON.get());
+                        output.accept(ModItems.LANCE_OF_LONGINUS.get());
                         output.accept(ModItems.SEELE_SCENARIO.get());
                     })
                     .build());

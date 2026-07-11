@@ -6,6 +6,8 @@ import com.projectseele.item.SeeleScenarioItem;
 import com.projectseele.item.NervConstructionKitItem;
 import com.projectseele.item.NervBeaconItem;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.item.SwordItem;
+import net.minecraft.world.item.Tiers;
 import net.minecraftforge.common.ForgeSpawnEggItem;
 import net.minecraftforge.registries.DeferredRegister;
 import net.minecraftforge.registries.ForgeRegistries;
@@ -49,4 +51,7 @@ public class ModItems
             () -> new NervConstructionKitItem(new Item.Properties().stacksTo(1)));
     public static final RegistryObject<Item> NERV_BEACON = ITEMS.register("nerv_beacon",
             () -> new NervBeaconItem(new Item.Properties().stacksTo(1).fireResistant()));
+    public static final RegistryObject<Item> LANCE_OF_LONGINUS = ITEMS.register("lance_of_longinus",
+            () -> new SwordItem(Tiers.NETHERITE, 116, -2.8F,
+                    new Item.Properties().stacksTo(1).durability(2031).fireResistant()));
 }

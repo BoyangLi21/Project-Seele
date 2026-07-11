@@ -83,7 +83,7 @@ public class ShamshelEntity extends Monster implements Angel
     @Override
     public boolean hurt(DamageSource source, float amount)
     {
-        if (this.atField > 0.0F)
+        if (this.atField > 0.0F && !com.projectseele.combat.AtFieldRules.bypassesAtField(source))
         {
             if (source.getEntity() instanceof EvaUnit01Entity eva
                     && eva.getWeapon() != EvaUnit01Entity.WEAPON_CANNON)

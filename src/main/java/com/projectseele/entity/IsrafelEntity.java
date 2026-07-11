@@ -81,7 +81,7 @@ public class IsrafelEntity extends Monster implements Angel, GeoEntity
         {
             return this.resolved && super.hurt(source, amount);
         }
-        if (this.atField > 0.0F)
+        if (this.atField > 0.0F && !com.projectseele.combat.AtFieldRules.bypassesAtField(source))
         {
             if (source.getEntity() instanceof EvaUnit01Entity eva
                     && eva.getWeapon() != EvaUnit01Entity.WEAPON_CANNON)
