@@ -500,7 +500,7 @@ public final class ClientFxManager
                 Vector3f b = node(path[1]);
                 Vector3f dir = new Vector3f(b).sub(a).normalize();
                 // In-plane normal (the tree stands in local XY).
-                Vector3f offset = new Vector3f(-dir.y, dir.x, 0.0F).mul(3.8F);
+                Vector3f offset = new Vector3f(-dir.y, dir.x, 0.0F).mul(1.2F);
                 Vector3f mid = new Vector3f(a).lerp(b, 0.5F);
                 Vector3f grow = new Vector3f(b).sub(a).mul(0.5F * lit);
                 Vector3f from = new Vector3f(mid).sub(grow);
@@ -511,10 +511,10 @@ public final class ClientFxManager
                     Vector3f shift = new Vector3f(offset).mul(s);
                     RibbonRenderer.drawStarRibbon(pose, consumer,
                             new Vector3f(from).add(shift), new Vector3f(to).add(shift),
-                            2.3F, 2.3F, 1.0F, 0.16F, 0.06F, alpha * 0.62F);
+                            0.78F, 0.78F, 1.0F, 0.0F, 0.0F, alpha * 0.58F);
                     RibbonRenderer.drawStarRibbon(pose, consumer,
                             new Vector3f(from).add(shift), new Vector3f(to).add(shift),
-                            0.95F, 0.95F, 1.0F, 0.52F, 0.28F, alpha);
+                            0.28F, 0.28F, 1.0F, 0.0F, 0.0F, alpha);
                 }
             }
 
@@ -532,16 +532,16 @@ public final class ClientFxManager
                 }
                 Vector3f c = node(i);
                 boolean centre = i == TIFERET;
-                float radius = (centre ? 52.0F : 38.0F) * (0.9F + 0.1F * lit)
+                float radius = (centre ? 18.0F : 14.0F) * (0.9F + 0.1F * lit)
                         * (1.0F + 0.045F * Mth.sin(t * 0.07F + i * 1.7F));
                 float alpha = base * lit;
                 poseStack.pushPose();
                 poseStack.translate(c.x, c.y, c.z);
                 Matrix4f nodePose = poseStack.last().pose();
                 RibbonRenderer.drawPolyRing(nodePose, consumer, axisX, axisY, 32,
-                        radius, 4.0F, 1.0F, 0.14F, 0.05F, alpha * 0.85F);
+                        radius, 1.4F, 1.0F, 0.0F, 0.0F, alpha * 0.85F);
                 RibbonRenderer.drawPolyRing(nodePose, consumer, axisX, axisY, 32,
-                        radius * 0.72F, 1.8F, 1.0F, 0.50F, 0.28F, alpha);
+                        radius * 0.72F, 0.55F, 1.0F, 0.0F, 0.0F, alpha);
                 if (centre)
                 {
                     drawTiferetGlory(nodePose, consumer, t, alpha, this.hasUnit);
@@ -556,11 +556,10 @@ public final class ClientFxManager
         private static void drawTiferetGlory(Matrix4f pose, VertexConsumer consumer,
                                              float t, float alpha, boolean hasUnit)
         {
-            float s = 7.0F;
-            // Additive blending swallows dark colors; keep the violet bright.
-            float pr = 0.82F;
-            float pg = 0.48F;
-            float pb = 1.0F;
+            float s = 2.0F;
+            float pr = 1.0F;
+            float pg = 0.0F;
+            float pb = 0.0F;
             // Wings of light first, so the body draws over them.
             float shimmer = 0.9F + 0.1F * Mth.sin(t * 0.06F);
             for (int side = -1; side <= 1; side += 2)
@@ -571,14 +570,14 @@ public final class ClientFxManager
                     float len = (22.0F - f * 4.5F) * shimmer * s;
                     Vector3f tip = new Vector3f(side * Mth.cos(ang) * len, 2.0F * s + Mth.sin(ang) * len, 0.4F);
                     RibbonRenderer.drawStarRibbon(pose, consumer, new Vector3f(0.0F, 2.0F * s, 0.4F), tip,
-                            (2.6F - f * 0.6F) * s, 0.4F, 1.0F, 0.34F, 0.10F, alpha * (0.55F - f * 0.12F));
+                            (2.6F - f * 0.6F) * s, 0.4F, 1.0F, 0.0F, 0.0F, alpha * (0.55F - f * 0.12F));
                 }
             }
             if (hasUnit)
             {
                 return; // the real Unit-01 hangs here; wings only
             }
-            // The cross pose: purple torso, outstretched arms, horned head.
+            // The cross pose: pure-red torso, outstretched arms, horned head.
             Vector3f hip = new Vector3f(0.0F, -4.6F * s, 0.0F);
             Vector3f neck = new Vector3f(0.0F, 3.4F * s, 0.0F);
             RibbonRenderer.drawStarRibbon(pose, consumer, hip, neck, 1.35F * s, 1.0F * s, pr, pg, pb, alpha);
@@ -590,14 +589,14 @@ public final class ClientFxManager
             // The horn.
             RibbonRenderer.drawStarRibbon(pose, consumer,
                     new Vector3f(0.0F, 4.9F * s, -0.3F), new Vector3f(0.0F, 6.6F * s, -0.9F),
-                    0.22F * s, 0.06F, 0.92F, 0.90F, 0.95F, alpha);
+                    0.22F * s, 0.06F, 1.0F, 0.0F, 0.0F, alpha);
             // Legs together, crucified.
             RibbonRenderer.drawStarRibbon(pose, consumer, hip,
                     new Vector3f(0.0F, -9.6F * s, 0.0F), 0.9F * s, 0.5F * s, pr, pg, pb, alpha * 0.95F);
             // Core glow.
             RibbonRenderer.drawStarRibbon(pose, consumer,
                     new Vector3f(-0.9F * s, 0.8F * s, 0.5F), new Vector3f(0.9F * s, 0.8F * s, 0.5F),
-                    0.8F * s, 0.8F * s, 0.35F, 1.0F, 0.45F, alpha);
+                    0.8F * s, 0.8F * s, 1.0F, 0.0F, 0.0F, alpha);
         }
     }
 

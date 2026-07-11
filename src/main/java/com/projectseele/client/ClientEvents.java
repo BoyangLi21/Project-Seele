@@ -4,6 +4,7 @@ import com.projectseele.ProjectSeele;
 import com.projectseele.client.render.EvaUnit01Renderer;
 import com.projectseele.client.render.RamielRenderer;
 import com.projectseele.client.render.ColossalHumanoidRenderer;
+import com.projectseele.client.render.HybridAddonRenderer;
 import com.projectseele.registry.ModEntities;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.EntityRenderersEvent;
@@ -22,14 +23,14 @@ public class ClientEvents
         event.registerEntityRenderer(ModEntities.EVA_UNIT01.get(), EvaUnit01Renderer::new);
         event.registerEntityRenderer(ModEntities.EVA_UNIT00.get(), EvaUnit01Renderer::new);
         event.registerEntityRenderer(ModEntities.EVA_UNIT02.get(), EvaUnit01Renderer::new);
-        event.registerEntityRenderer(ModEntities.SACHIEL.get(),
-                context -> new ColossalHumanoidRenderer<>(context, ColossalHumanoidRenderer.Style.SACHIEL));
+        event.registerEntityRenderer(ModEntities.SACHIEL.get(), context -> new HybridAddonRenderer<>(context,
+                ColossalHumanoidRenderer.Style.SACHIEL, "sachiel", 8.0F));
         event.registerEntityRenderer(ModEntities.SHAMSHEL.get(),
                 context -> new ColossalHumanoidRenderer<>(context, ColossalHumanoidRenderer.Style.SHAMSHEL));
         event.registerEntityRenderer(ModEntities.ZERUEL.get(),
                 context -> new ColossalHumanoidRenderer<>(context, ColossalHumanoidRenderer.Style.ZERUEL));
-        event.registerEntityRenderer(ModEntities.MASS_PRODUCTION_EVA.get(),
-                context -> new ColossalHumanoidRenderer<>(context, ColossalHumanoidRenderer.Style.MASS_PRODUCTION));
+        event.registerEntityRenderer(ModEntities.MASS_PRODUCTION_EVA.get(), context -> new HybridAddonRenderer<>(context,
+                ColossalHumanoidRenderer.Style.MASS_PRODUCTION, "mass_production_eva", 10.0F));
     }
 
     @SubscribeEvent

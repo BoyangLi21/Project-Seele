@@ -1,0 +1,64 @@
+#!/usr/bin/env python3
+"""Install SmOd Angel/MP geometry into the LOCAL-ONLY development pack.
+
+Nothing produced by this script belongs in the public jar. Obtain SmOd774YT's
+permission before distributing the generated resource pack.
+"""
+import json
+import sys
+import zipfile
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parent.parent
+SOURCE = Path(sys.argv[1]) if len(sys.argv) > 1 else REPO / "evaaddon1-0.zip"
+OUT = REPO / "run/resourcepacks/eva_real_model/assets/projectseele"
+
+ASSETS = {
+    "mass_production_eva": {
+        "geo": "models/entity/entity_mp.json",
+        "animation": "animations/entity_mp.animation.json",
+        "texture": "textures/entity/pamobile/entity_mp.png",
+    },
+    "sachiel": {
+        "geo": "models/entity/entity_sachiel.json",
+        "animation": "animations/entity_sachiel.animation.json",
+        "texture": "textures/entity/pamobile/entity_sachiel.png",
+    },
+}
+
+
+def read_unique(archive, suffix):
+    matches = [entry for entry in archive.namelist() if entry.endswith(suffix)]
+    if len(matches) != 1:
+        raise RuntimeError(f"expected one {suffix}, found {len(matches)}")
+    return archive.read(matches[0])
+
+
+def main():
+    with zipfile.ZipFile(SOURCE) as archive:
+        for target, source in ASSETS.items():
+            geometry = json.loads(read_unique(archive, source["geo"]))
+            geometry["minecraft:geometry"][0]["description"]["identifier"] = f"geometry.{target}"
+            animation = json.loads(read_unique(archive, source["animation"]))
+            texture = read_unique(archive, source["texture"])
+
+            geo_path = OUT / "geo" / f"{target}.geo.json"
+            animation_path = OUT / "animations" / f"{target}.animation.json"
+            texture_path = OUT / "textures/entity" / f"{target}.png"
+            for path in (geo_path, animation_path, texture_path):
+                path.parent.mkdir(parents=True, exist_ok=True)
+            geo_path.write_text(json.dumps(geometry, indent=2), encoding="utf-8")
+            animation_path.write_text(json.dumps(animation, indent=2), encoding="utf-8")
+            texture_path.write_bytes(texture)
+
+    source_note = REPO / "run/resourcepacks/eva_real_model/_SOURCE.txt"
+    existing = source_note.read_text(encoding="utf-8") if source_note.exists() else ""
+    notice = ("\nMass-Production EVA and Sachiel model/texture/animations also extracted "
+              "from the same SmOd774YT addon. LOCAL TESTING ONLY.\n")
+    if notice.strip() not in existing:
+        source_note.write_text(existing.rstrip() + "\n" + notice, encoding="utf-8")
+    print("Installed local SmOd models: " + ", ".join(ASSETS))
+
+
+if __name__ == "__main__":
+    main()

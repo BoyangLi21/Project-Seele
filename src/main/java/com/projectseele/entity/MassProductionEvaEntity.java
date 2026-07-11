@@ -12,10 +12,19 @@ import net.minecraft.world.entity.ai.goal.target.NearestAttackableTargetGoal;
 import net.minecraft.world.entity.monster.Monster;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
+import software.bernie.geckolib.animatable.GeoEntity;
+import software.bernie.geckolib.core.animatable.instance.AnimatableInstanceCache;
+import software.bernie.geckolib.core.animation.AnimatableManager;
+import software.bernie.geckolib.core.animation.AnimationController;
+import software.bernie.geckolib.core.animation.RawAnimation;
+import software.bernie.geckolib.util.GeckoLibUtil;
 
 /** White SEELE mass-production unit. It revives until an EVA knife destroys its exposed core. */
-public class MassProductionEvaEntity extends Monster
+public class MassProductionEvaEntity extends Monster implements GeoEntity
 {
+    private static final RawAnimation ANIM_IDLE = RawAnimation.begin().thenLoop("animation.entity_mp.idle_1");
+    private static final RawAnimation ANIM_WALK = RawAnimation.begin().thenLoop("animation.entity_mp.move");
+    private final AnimatableInstanceCache geoCache = GeckoLibUtil.createInstanceCache(this);
     private int reviveTicks;
     private boolean coreBroken;
     private int attackCooldown;
@@ -108,5 +117,18 @@ public class MassProductionEvaEntity extends Monster
     public boolean isReviving()
     {
         return this.reviveTicks > 0;
+    }
+
+    @Override
+    public void registerControllers(AnimatableManager.ControllerRegistrar controllers)
+    {
+        controllers.add(new AnimationController<>(this, "base", 6, state ->
+                state.setAndContinue(state.isMoving() ? ANIM_WALK : ANIM_IDLE)));
+    }
+
+    @Override
+    public AnimatableInstanceCache getAnimatableInstanceCache()
+    {
+        return this.geoCache;
     }
 }

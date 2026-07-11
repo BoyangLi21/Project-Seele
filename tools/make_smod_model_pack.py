@@ -252,8 +252,6 @@ def install_smod_pose_overrides(output):
         "loop": True,
         "animation_length": 1.2,
         "bones": {
-            "Upperbody": {"rotation": {"0.0": [2, -8, 0]}},
-            "Head": {"rotation": {"0.0": [-2, 6, 0]}},
             "Rightarm": {"rotation": {"0.0": [-52, -8, -4], "0.6": [-53.5, -8, -4], "1.2": [-52, -8, -4]}},
             "Lowerarm": {"rotation": {"0.0": [-40, 0, 0]}},
             "Leftarm": {"rotation": {"0.0": [-70, -18, 10], "0.6": [-71, -18, 10], "1.2": [-70, -18, 10]}},

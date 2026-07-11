@@ -36,8 +36,8 @@ import net.minecraftforge.network.PacketDistributor;
 public class SeeleScenarioItem extends Item
 {
     private static final double AIM_RANGE = 160.0D;
-    private static final double TREE_DISTANCE = 260.0D;
-    private static final double TREE_BASE_HEIGHT = 100.0D;
+    private static final double TREE_DISTANCE = 140.0D;
+    private static final double TREE_BASE_HEIGHT = 40.0D;
 
     public SeeleScenarioItem(Properties properties)
     {
@@ -77,7 +77,7 @@ public class SeeleScenarioItem extends Item
             yaw = (float) Mth.atan2(toViewer.x, toViewer.z);
             Vec3 tiferet = TreeOfLifeLayout.worldNode(origin, yaw, TreeOfLifeLayout.TIFERET);
             aimedUnit.teleportTo(tiferet.x, tiferet.y - aimedUnit.getBbHeight() * 0.5D, tiferet.z);
-            aimedUnit.setYRot((float) Math.toDegrees(yaw) + 180.0F);
+            aimedUnit.setYRot(-(float) Math.toDegrees(yaw));
             aimedUnit.setCrucified(true);
         }
         else
@@ -93,6 +93,18 @@ public class SeeleScenarioItem extends Item
             yaw = (float) Mth.atan2(toViewer.x, toViewer.z);
         }
 
+        // Every staged EVA presents the same front to the Tree's audience;
+        // do not let nearby Units face sideways while the nine vessels align.
+        float formationYaw = -(float) Math.toDegrees(yaw);
+        AABB formationArea = new AABB(origin, origin).inflate(320.0D);
+        for (EvaUnit01Entity unit : server.getEntitiesOfClass(EvaUnit01Entity.class, formationArea))
+        {
+            unit.setYRot(formationYaw);
+            unit.yRotO = formationYaw;
+            unit.yBodyRot = formationYaw;
+            unit.yHeadRot = formationYaw;
+        }
+
         for (int i = 0; i < TreeOfLifeLayout.NODES.length; i++)
         {
             if (i == TreeOfLifeLayout.TIFERET)
@@ -106,7 +118,12 @@ public class SeeleScenarioItem extends Item
             }
             Vec3 node = TreeOfLifeLayout.worldNode(origin, yaw, i);
             mass.moveTo(node.x, node.y - mass.getBbHeight() * 0.5D, node.z,
-                    (float) Math.toDegrees(yaw) + 180.0F, 0.0F);
+                    formationYaw, 0.0F);
+            mass.yRotO = formationYaw;
+            mass.yBodyRot = formationYaw;
+            mass.yBodyRotO = formationYaw;
+            mass.yHeadRot = formationYaw;
+            mass.yHeadRotO = formationYaw;
             mass.setNoGravity(true);
             mass.setNoAi(true);
             mass.setPersistenceRequired();

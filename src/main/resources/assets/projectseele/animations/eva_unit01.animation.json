@@ -1666,24 +1666,6 @@
       "loop": true,
       "animation_length": 1.2,
       "bones": {
-        "torso_upper": {
-          "rotation": {
-            "0.0": [
-              2,
-              -8,
-              0
-            ]
-          }
-        },
-        "head": {
-          "rotation": {
-            "0.0": [
-              -2,
-              6,
-              0
-            ]
-          }
-        },
         "arm_r": {
           "rotation": {
             "0.0": [

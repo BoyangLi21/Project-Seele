@@ -19,10 +19,19 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.Level.ExplosionInteraction;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.network.PacketDistributor;
+import software.bernie.geckolib.animatable.GeoEntity;
+import software.bernie.geckolib.core.animatable.instance.AnimatableInstanceCache;
+import software.bernie.geckolib.core.animation.AnimatableManager;
+import software.bernie.geckolib.core.animation.AnimationController;
+import software.bernie.geckolib.core.animation.RawAnimation;
+import software.bernie.geckolib.util.GeckoLibUtil;
 
 /** Third Angel: a close-range giant that ends the fight with a cross-shaped self-destruction. */
-public class SachielEntity extends Monster implements Angel
+public class SachielEntity extends Monster implements Angel, GeoEntity
 {
+    private static final RawAnimation ANIM_IDLE = RawAnimation.begin().thenLoop("animation.Sachiel.idle");
+    private static final RawAnimation ANIM_WALK = RawAnimation.begin().thenLoop("animation.Sachiel.move");
+    private final AnimatableInstanceCache geoCache = GeckoLibUtil.createInstanceCache(this);
     private static final float AT_FIELD_MAX = 900.0F;
     private float atField = AT_FIELD_MAX;
     private int spearCooldown = 45;
@@ -136,5 +145,18 @@ public class SachielEntity extends Monster implements Angel
     public float getAtField()
     {
         return this.atField;
+    }
+
+    @Override
+    public void registerControllers(AnimatableManager.ControllerRegistrar controllers)
+    {
+        controllers.add(new AnimationController<>(this, "base", 6, state ->
+                state.setAndContinue(state.isMoving() ? ANIM_WALK : ANIM_IDLE)));
+    }
+
+    @Override
+    public AnimatableInstanceCache getAnimatableInstanceCache()
+    {
+        return this.geoCache;
     }
 }
