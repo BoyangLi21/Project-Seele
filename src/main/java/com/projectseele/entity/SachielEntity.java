@@ -137,7 +137,7 @@ public class SachielEntity extends Monster implements Angel, GeoEntity
         Vec3 center = this.position().add(0.0D, 8.0D, 0.0D);
         CrossExplosionFX.spawn(server, center, 2.2F);
         SeeleNetwork.CHANNEL.send(PacketDistributor.TRACKING_ENTITY_AND_SELF.with(() -> this),
-                new ClientboundNukeFxPacket(center.x, center.y, center.z, 3.2F, true));
+                new ClientboundNukeFxPacket(center.x, center.y, center.z, 3.2F, false));
         server.explode(this, this.getX(), this.getY() + 4.0D, this.getZ(), 16.0F, ExplosionInteraction.MOB);
         this.discard();
     }

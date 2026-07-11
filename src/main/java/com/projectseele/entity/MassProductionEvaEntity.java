@@ -101,7 +101,8 @@ public class MassProductionEvaEntity extends Monster implements GeoEntity
             return false;
         }
         if (source.getEntity() instanceof EvaUnit01Entity eva
-                && eva.getWeapon() == EvaUnit01Entity.WEAPON_KNIFE
+                && (eva.getWeapon() == EvaUnit01Entity.WEAPON_KNIFE
+                    || eva.getWeapon() == EvaUnit01Entity.WEAPON_LANCE)
                 && this.getHealth() <= this.getMaxHealth() * 0.28F)
         {
             this.coreBroken = true;

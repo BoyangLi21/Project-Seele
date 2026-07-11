@@ -69,7 +69,7 @@ public final class ThirdImpactDirector
             {
                 Vec3 centre = TreeOfLifeLayout.worldNode(impact.origin, impact.yaw, TreeOfLifeLayout.TIFERET);
                 SeeleNetwork.CHANNEL.send(PacketDistributor.ALL.noArg(),
-                        new ClientboundNukeFxPacket(centre.x, centre.y, centre.z, 3.6F, true));
+                        new ClientboundNukeFxPacket(centre.x, centre.y, centre.z, 3.6F, false));
                 CrossExplosionFX.spawn(impact.level, centre, 1.6F);
                 broadcast(impact, "message.projectseele.impact_threshold");
             }

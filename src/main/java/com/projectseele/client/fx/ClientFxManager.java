@@ -173,7 +173,7 @@ public final class ClientFxManager
     }
 
     /**
-     * The EVA signature: a tall vertical pillar of light with a shorter cross
+     * The Angel signature: a tall vertical pillar of light with a shorter cross
      * arm, expanding out of the ground, holding, then dissolving — plus a
      * ground-level shockwave ring.
      */
