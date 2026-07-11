@@ -4,6 +4,7 @@ import com.projectseele.ProjectSeele;
 import com.projectseele.item.PositronRifleItem;
 import com.projectseele.item.SeeleScenarioItem;
 import com.projectseele.item.NervConstructionKitItem;
+import com.projectseele.item.NervBeaconItem;
 import net.minecraft.world.item.Item;
 import net.minecraftforge.common.ForgeSpawnEggItem;
 import net.minecraftforge.registries.DeferredRegister;
@@ -44,4 +45,6 @@ public class ModItems
             () -> new SeeleScenarioItem(new Item.Properties().stacksTo(1).fireResistant()));
     public static final RegistryObject<Item> NERV_CONSTRUCTION_KIT = ITEMS.register("nerv_construction_kit",
             () -> new NervConstructionKitItem(new Item.Properties().stacksTo(1)));
+    public static final RegistryObject<Item> NERV_BEACON = ITEMS.register("nerv_beacon",
+            () -> new NervBeaconItem(new Item.Properties().stacksTo(1).fireResistant()));
 }
