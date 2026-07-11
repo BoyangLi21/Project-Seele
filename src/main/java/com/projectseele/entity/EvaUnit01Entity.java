@@ -40,6 +40,7 @@ import net.minecraft.world.entity.projectile.ProjectileUtil;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.ServerLevelAccessor;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.EntityHitResult;
@@ -171,6 +172,8 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     private boolean clientMeleeLeft;
     private int clientSmashSequence;
     private int clientSmashStartTick = -1000;
+    private boolean launchBedArmed;
+    private int launchTicks;
 
     public EvaUnit01Entity(EntityType<? extends EvaUnit01Entity> type, Level level)
     {
@@ -733,6 +736,23 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         if (this.getActivationTicks() > 0)
         {
             this.entityData.set(DATA_ACTIVATION_TICKS, this.getActivationTicks() - 1);
+            if (this.getActivationTicks() == 20 && this.launchBedArmed)
+            {
+                this.launchBedArmed = false;
+                this.launchTicks = 24;
+                this.playSound(SoundEvents.PISTON_EXTEND, 3.0F, 0.48F);
+                if (this.level() instanceof ServerLevel serverLevel)
+                {
+                    serverLevel.sendParticles(ParticleTypes.CLOUD, this.getX(), this.getY() + 0.4D, this.getZ(),
+                            46, 4.0D, 0.5D, 4.0D, 0.12D);
+                }
+            }
+        }
+        if (this.launchTicks > 0)
+        {
+            this.launchTicks--;
+            this.fallDistance = 0.0F;
+            this.setDeltaMovement(0.0D, 1.32D, 0.0D);
         }
         if (!this.onGround())
         {
@@ -858,6 +878,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             {
                 player.startRiding(this);
                 this.entityData.set(DATA_ACTIVATION_TICKS, 120);
+                this.launchBedArmed = this.level().getBlockState(this.blockPosition().below()).is(Blocks.LODESTONE);
             }
             return InteractionResult.sidedSuccess(this.level().isClientSide);
         }
@@ -899,6 +920,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         this.chargingHeld = false;
         this.entityData.set(DATA_CANNON_CHARGE, 0);
         this.entityData.set(DATA_ACTIVATION_TICKS, 0);
+        this.launchBedArmed = false;
         this.clearPilotMotion();
     }
 
@@ -933,7 +955,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     @Override
     protected Vec3 getRiddenInput(Player player, Vec3 input)
     {
-        if (this.getActivationTicks() > 20)
+        if (this.getActivationTicks() > 20 || this.launchTicks > 0)
         {
             return Vec3.ZERO;
         }
@@ -944,7 +966,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     @Override
     protected float getRiddenSpeed(Player player)
     {
-        if (this.getActivationTicks() > 20)
+        if (this.getActivationTicks() > 20 || this.launchTicks > 0)
         {
             return 0.0F;
         }

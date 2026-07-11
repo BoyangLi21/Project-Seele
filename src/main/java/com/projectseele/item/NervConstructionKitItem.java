@@ -1,5 +1,7 @@
 package com.projectseele.item;
 
+import com.projectseele.entity.EvaUnit01Entity;
+import com.projectseele.registry.ModEntities;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
@@ -9,7 +11,7 @@ import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 
-/** Builds an original compact NERV sortie complex for visual and combat testing. */
+/** Builds an original three-bay NERV underground sortie complex. */
 public class NervConstructionKitItem extends Item
 {
     public NervConstructionKitItem(Properties properties)
@@ -28,97 +30,165 @@ public class NervConstructionKitItem extends Item
         BlockState floor = Blocks.SMOOTH_STONE.defaultBlockState();
         BlockState armor = Blocks.GRAY_CONCRETE.defaultBlockState();
         BlockState nerv = Blocks.BLACK_CONCRETE.defaultBlockState();
-        BlockState warning = Blocks.ORANGE_CONCRETE.defaultBlockState();
         BlockState glass = Blocks.TINTED_GLASS.defaultBlockState();
 
-        for (int x = -24; x <= 24; x++)
+        // Armoured surface apron. The shafts are cut through it afterwards.
+        for (int x = -44; x <= 44; x++)
         {
-            for (int z = -24; z <= 24; z++)
+            for (int z = -30; z <= 38; z++)
             {
-                level.setBlock(origin.offset(x, 0, z), floor, 3);
+                BlockState surface = (Math.abs(x) % 12 == 0 || Math.abs(z) % 12 == 0)
+                        ? armor : floor;
+                level.setBlock(origin.offset(x, 0, z), surface, 3);
             }
         }
-        // Central 11x11 launch shaft and alternating warning stripes.
-        for (int y = 1; y <= 34; y++)
+        BlockPos unit00Bay = origin.offset(-22, 0, 0);
+        BlockPos unit01Bay = origin;
+        BlockPos unit02Bay = origin.offset(22, 0, 0);
+        buildLaunchShaft(level, unit00Bay, Blocks.ORANGE_CONCRETE.defaultBlockState());
+        buildLaunchShaft(level, unit01Bay, Blocks.PURPLE_CONCRETE.defaultBlockState());
+        buildLaunchShaft(level, unit02Bay, Blocks.RED_CONCRETE.defaultBlockState());
+
+        // Underground transverse access gallery joining all three cages.
+        for (int x = -36; x <= 36; x++)
         {
-            for (int x = -6; x <= 6; x++)
+            for (int y = -27; y <= -21; y++)
             {
-                for (int z = -6; z <= 6; z++)
+                for (int z = 10; z <= 16; z++)
                 {
-                    boolean wall = Math.abs(x) >= 5 || Math.abs(z) >= 5;
-                    if (wall)
+                    boolean shell = y == -27 || y == -21 || z == 10 || z == 16;
+                    level.setBlock(origin.offset(x, y, z), shell ? armor : Blocks.AIR.defaultBlockState(), 3);
+                    if (shell && y == -21 && x % 6 == 0)
                     {
-                        level.setBlock(origin.offset(x, y, z), (y / 3) % 2 == 0 ? armor : warning, 3);
+                        level.setBlock(origin.offset(x, y, z), Blocks.SEA_LANTERN.defaultBlockState(), 3);
                     }
                 }
             }
         }
-        // EVA restraint cage: four pylons, cross braces and a luminous launch bed.
-        for (int y = 1; y <= 25; y++)
+
+        buildCommandBunker(level, origin.offset(0, 1, 27), armor, nerv, glass);
+        for (int[] tower : new int[][] {{-38,-24},{-38,28},{38,-24},{38,28}})
         {
-            for (int sx : new int[] {-4, 4})
-            {
-                for (int sz : new int[] {-4, 4})
-                {
-                    level.setBlock(origin.offset(sx, y, sz), nerv, 3);
-                }
-            }
-            if (y % 6 == 0)
-            {
-                for (int x = -4; x <= 4; x++)
-                {
-                    level.setBlock(origin.offset(x, y, -4), nerv, 3);
-                    level.setBlock(origin.offset(x, y, 4), nerv, 3);
-                }
-            }
+            buildRetractableTower(level, origin.offset(tower[0], 1, tower[1]), armor, glass);
         }
-        for (int x = -4; x <= 4; x++)
-        {
-            for (int z = -4; z <= 4; z++)
-            {
-                level.setBlock(origin.offset(x, 1, z), (Math.abs(x) == 4 || Math.abs(z) == 4)
-                        ? Blocks.SEA_LANTERN.defaultBlockState() : nerv, 3);
-            }
-        }
-        // Low command pyramid beside the shaft.
-        BlockPos pyramid = origin.offset(14, 1, 12);
-        for (int y = 0; y < 9; y++)
-        {
-            int radius = 10 - y;
-            for (int x = -radius; x <= radius; x++)
-            {
-                for (int z = -radius; z <= radius; z++)
-                {
-                    if (Math.abs(x) == radius || Math.abs(z) == radius || y == 0)
-                    {
-                        level.setBlock(pyramid.offset(x, y, z), y >= 6 ? glass : armor, 3);
-                    }
-                }
-            }
-        }
-        // Four retractable-city silhouettes around the perimeter.
-        for (int[] tower : new int[][] {{-18,-18},{-18,18},{18,-18},{18,18}})
-        {
-            for (int y = 1; y <= 18; y++)
-            {
-                int half = y > 14 ? 2 : 3;
-                for (int x = -half; x <= half; x++)
-                {
-                    for (int z = -half; z <= half; z++)
-                    {
-                        if (Math.abs(x) == half || Math.abs(z) == half)
-                        {
-                            level.setBlock(origin.offset(tower[0] + x, y, tower[1] + z),
-                                    y % 5 == 0 ? glass : armor, 3);
-                        }
-                    }
-                }
-            }
-        }
+        deployUnit(level, unit00Bay, ModEntities.EVA_UNIT00.get().create(level));
+        deployUnit(level, unit01Bay, ModEntities.EVA_UNIT01.get().create(level));
+        deployUnit(level, unit02Bay, ModEntities.EVA_UNIT02.get().create(level));
         if (context.getPlayer() != null)
         {
             context.getPlayer().displayClientMessage(Component.translatable("message.projectseele.nerv_built"), false);
         }
         return InteractionResult.CONSUME;
+    }
+
+    private static void buildLaunchShaft(ServerLevel level, BlockPos centre, BlockState accent)
+    {
+        BlockState wall = Blocks.REINFORCED_DEEPSLATE.defaultBlockState();
+        BlockState frame = Blocks.IRON_BLOCK.defaultBlockState();
+        BlockState dark = Blocks.BLACK_CONCRETE.defaultBlockState();
+        BlockState light = Blocks.SEA_LANTERN.defaultBlockState();
+        for (int y = -31; y <= 7; y++)
+        {
+            for (int x = -7; x <= 7; x++)
+            {
+                for (int z = -7; z <= 7; z++)
+                {
+                    boolean outer = Math.abs(x) == 7 || Math.abs(z) == 7;
+                    level.setBlock(centre.offset(x, y, z), outer ? wall : Blocks.AIR.defaultBlockState(), 3);
+                }
+            }
+            for (int sx : new int[] {-6, 6})
+            {
+                for (int sz : new int[] {-6, 6})
+                {
+                    level.setBlock(centre.offset(sx, y, sz), y % 5 == 0 ? light : frame, 3);
+                }
+            }
+            if (y >= -29 && y <= -4 && y % 6 == 0)
+            {
+                for (int x = -5; x <= 5; x++)
+                {
+                    level.setBlock(centre.offset(x, y, -6), dark, 3);
+                    level.setBlock(centre.offset(x, y, 6), dark, 3);
+                }
+            }
+        }
+        // Luminous carrier platform and colour-coded depth markings.
+        for (int x = -6; x <= 6; x++)
+        {
+            for (int z = -6; z <= 6; z++)
+            {
+                boolean rim = Math.abs(x) == 6 || Math.abs(z) == 6;
+                level.setBlock(centre.offset(x, -30, z), rim ? light : dark, 3);
+            }
+            for (int y = -28; y <= 4; y += 4)
+            {
+                level.setBlock(centre.offset(x, y, 7), accent, 3);
+            }
+        }
+        level.setBlock(centre.offset(0, -30, 0), Blocks.LODESTONE.defaultBlockState(), 3);
+        // Split surface shutter, left open along the centreline for sorties.
+        for (int i = -7; i <= 7; i++)
+        {
+            level.setBlock(centre.offset(i, 1, -8), accent, 3);
+            level.setBlock(centre.offset(i, 1, 8), accent, 3);
+            level.setBlock(centre.offset(-8, 1, i), frame, 3);
+            level.setBlock(centre.offset(8, 1, i), frame, 3);
+        }
+    }
+
+    private static void deployUnit(ServerLevel level, BlockPos bay, EvaUnit01Entity unit)
+    {
+        if (unit == null)
+        {
+            return;
+        }
+        unit.moveTo(bay.getX() + 0.5D, bay.getY() - 29.0D, bay.getZ() + 0.5D, 0.0F, 0.0F);
+        unit.setPersistenceRequired();
+        level.addFreshEntity(unit);
+    }
+
+    private static void buildCommandBunker(ServerLevel level, BlockPos centre, BlockState armor,
+                                           BlockState nerv, BlockState glass)
+    {
+        for (int y = 0; y <= 9; y++)
+        {
+            int rx = 15 - y;
+            int rz = 8 - Math.min(y, 6);
+            for (int x = -rx; x <= rx; x++)
+            {
+                for (int z = -rz; z <= rz; z++)
+                {
+                    boolean shell = Math.abs(x) == rx || Math.abs(z) == rz || y == 0;
+                    if (shell)
+                    {
+                        level.setBlock(centre.offset(x, y, z), y >= 5 && Math.abs(z) == rz ? glass : armor, 3);
+                    }
+                }
+            }
+        }
+        for (int x = -10; x <= 10; x++)
+        {
+            level.setBlock(centre.offset(x, 1, -8), x % 4 == 0 ? Blocks.REDSTONE_LAMP.defaultBlockState() : nerv, 3);
+        }
+    }
+
+    private static void buildRetractableTower(ServerLevel level, BlockPos base,
+                                              BlockState armor, BlockState glass)
+    {
+        for (int y = 0; y <= 22; y++)
+        {
+            int half = y > 17 ? 2 : 3;
+            for (int x = -half; x <= half; x++)
+            {
+                for (int z = -half; z <= half; z++)
+                {
+                    if (Math.abs(x) == half || Math.abs(z) == half)
+                    {
+                        level.setBlock(base.offset(x, y, z), y % 5 == 2 ? glass : armor, 3);
+                    }
+                }
+            }
+        }
     }
 }
