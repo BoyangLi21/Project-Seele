@@ -129,12 +129,14 @@ public final class EvaHud
         guiGraphics.fill(width - m - cLen, height - m - 2, width - m, height - m, frame);
         guiGraphics.fill(width - m - 2, height - m - cLen, width - m, height - m, frame);
 
-        // --- top-centre: synchro readout (placeholder until Phase 2.3) ---
+        // --- top-centre: synchronization follows the live airframe ---
         float time = (System.currentTimeMillis() % 600000L) / 1000.0F;
-        float synchro = 41.3F + 1.8F * Mth.sin(time * 0.13F) + 0.6F * Mth.sin(time * 1.7F);
+        float synchro = eva.getSynchronizationRatio(partialTick);
+        ChatFormatting synchroColour = synchro < 25.0F ? ChatFormatting.RED
+                : synchro >= 50.0F ? ChatFormatting.GREEN : ChatFormatting.GOLD;
         guiGraphics.drawCenteredString(gui.getFont(),
                 Component.literal(String.format("SYNCHRO  %.1f%%", synchro))
-                        .withStyle(ChatFormatting.GOLD),
+                        .withStyle(synchroColour),
                 width / 2, m + 6, NERV_ORANGE);
         String roleKey = switch (eva.getUnitVariant())
         {

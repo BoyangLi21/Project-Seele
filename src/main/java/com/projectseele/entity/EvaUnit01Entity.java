@@ -310,6 +310,28 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         return Mth.clamp((120.0F - this.getActivationTicks() + partialTick) / 120.0F, 0.0F, 1.0F);
     }
 
+    /** Cockpit synchronization readout derived from the live airframe state. */
+    public float getSynchronizationRatio(float partialTick)
+    {
+        float nominal = switch (this.getUnitVariant())
+        {
+            case UNIT_00 -> 38.2F;
+            case UNIT_02 -> 52.4F;
+            default -> 41.3F;
+        };
+        if (this.getActivationTicks() > 0)
+        {
+            return nominal * getActivationProgress(partialTick);
+        }
+        float hullPenalty = (1.0F - this.getHealth() / this.getMaxHealth()) * 11.0F;
+        float fieldGain = this.isAtFieldOn() ? 1.6F : 0.0F;
+        float motion = this.getDeltaMovement().horizontalDistanceSqr() > 0.002D
+                ? Mth.sin((this.tickCount + partialTick) * 0.38F) * 1.25F
+                : Mth.sin((this.tickCount + partialTick) * 0.08F) * 0.45F;
+        float cannonLoad = this.getCannonCharge() > 0 ? -1.8F * this.chargeProgress() : 0.0F;
+        return Mth.clamp(nominal - hullPenalty + fieldGain + motion + cannonLoad, 0.0F, 99.9F);
+    }
+
     /** Nail to / release from the Tree. Gravity and pose follow the flag. */
     public void setCrucified(boolean crucified)
     {
