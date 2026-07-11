@@ -63,6 +63,16 @@ def weapon_bones(bones):
             {"origin": [px - 7, py - 134, pz - 7], "size": [14, 7, 14], "uv": [472, 80]},
             {"origin": [px - 12, py - 55, pz - 3], "size": [6, 24, 6], "uv": [472, 80]},
         ]},
+        {"name": "lance", "parent": "Lowerarm", "pivot": [px, py, pz], "cubes": [
+            {"origin": [px - 3, py - 75, pz - 3], "size": [6, 75, 6], "uv": [400, 220]},
+            {"origin": [px - 3, py - 150, pz - 3], "size": [6, 75, 6], "uv": [400, 220]},
+            {"origin": [px - 3, py - 225, pz - 3], "size": [6, 75, 6], "uv": [400, 220]},
+            {"origin": [px - 12, py - 290, pz - 2.5], "size": [5, 68, 5], "uv": [424, 220],
+             "rotation": [0, 0, -7], "pivot": [px, py - 222, pz]},
+            {"origin": [px + 7, py - 290, pz - 2.5], "size": [5, 68, 5], "uv": [448, 220],
+             "rotation": [0, 0, 7], "pivot": [px, py - 222, pz]},
+            {"origin": [px - 9, py - 6, pz - 9], "size": [18, 18, 18], "uv": [472, 220]},
+        ]},
     ]
 
 
@@ -287,8 +297,9 @@ def render_texture(source_path, target_path):
         "$steel=New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(255,215,220,230));"
         "$metal=New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(255,66,72,86));"
         "$dark=New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(255,30,34,43));"
+        "$red=New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(255,196,14,28));"
         "$g.FillRectangle($steel,400,0,42,72);$g.FillRectangle($metal,400,80,72,128);"
-        "$g.FillRectangle($dark,472,80,32,40);$g.Dispose();"
+        "$g.FillRectangle($dark,472,80,32,40);$g.FillRectangle($red,400,220,104,148);$g.Dispose();"
         f"$bmp.Save('{target_path}',[System.Drawing.Imaging.ImageFormat]::Png);$bmp.Dispose();"
     )
     subprocess.run(["powershell", "-NoProfile", "-Command", script], check=True)

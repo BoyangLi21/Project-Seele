@@ -57,8 +57,9 @@ public class ColossalHumanoidRenderer<T extends LivingEntity> extends EntityRend
         }
         else
         {
+            MassProductionEvaEntity mass = entity instanceof MassProductionEvaEntity mp ? mp : null;
             renderMassProduction(stack, consumer, walk,
-                    entity instanceof MassProductionEvaEntity mass && mass.isReviving());
+                    mass != null && mass.isReviving(), mass != null && mass.isRitualFormation());
         }
         stack.popPose();
         super.render(entity, yaw, partialTick, stack, buffers, packedLight);
@@ -84,7 +85,8 @@ public class ColossalHumanoidRenderer<T extends LivingEntity> extends EntityRend
         segment(stack, c, v(2.2F,3.7F + walk,0), v(2.0F,0.6F,0), 1.0F, bone);
     }
 
-    private static void renderMassProduction(PoseStack stack, VertexConsumer c, float walk, boolean reviving)
+    private static void renderMassProduction(PoseStack stack, VertexConsumer c, float walk,
+                                             boolean reviving, boolean ritual)
     {
         float fade = reviving ? 0.42F : 1.0F;
         float[] white = {0.88F, 0.86F, 0.80F, fade};
@@ -95,10 +97,20 @@ public class ColossalHumanoidRenderer<T extends LivingEntity> extends EntityRend
         boxAt(stack, c, 0, 23.0F, 0, 2.5F, 2.5F, 2.1F, white);
         boxAt(stack, c, 0, 22.2F, -2.15F, 1.9F, 0.45F, 0.25F, red);
         boxAt(stack, c, 0, 17.6F, -2.48F, 1.2F, 1.2F, 0.28F, red);
-        segment(stack, c, v(-3.7F,19.2F,0), v(-5.1F,13.6F + walk,0), 1.25F, white);
-        segment(stack, c, v(-5.1F,13.6F + walk,0), v(-4.6F,8.0F + walk,0), 0.92F, dark);
-        segment(stack, c, v(3.7F,19.2F,0), v(5.1F,13.6F - walk,0), 1.25F, white);
-        segment(stack, c, v(5.1F,13.6F - walk,0), v(4.6F,8.0F - walk,0), 0.92F, dark);
+        if (ritual)
+        {
+            segment(stack, c, v(-3.7F,19.2F,0), v(-10.2F,19.2F,0), 1.25F, white);
+            segment(stack, c, v(-10.2F,19.2F,0), v(-16.2F,18.7F,0), 0.92F, dark);
+            segment(stack, c, v(3.7F,19.2F,0), v(10.2F,19.2F,0), 1.25F, white);
+            segment(stack, c, v(10.2F,19.2F,0), v(16.2F,18.7F,0), 0.92F, dark);
+        }
+        else
+        {
+            segment(stack, c, v(-3.7F,19.2F,0), v(-5.1F,13.6F + walk,0), 1.25F, white);
+            segment(stack, c, v(-5.1F,13.6F + walk,0), v(-4.6F,8.0F + walk,0), 0.92F, dark);
+            segment(stack, c, v(3.7F,19.2F,0), v(5.1F,13.6F - walk,0), 1.25F, white);
+            segment(stack, c, v(5.1F,13.6F - walk,0), v(4.6F,8.0F - walk,0), 0.92F, dark);
+        }
         segment(stack, c, v(-1.8F,10.5F,0), v(-2.3F,5.3F - walk,0), 1.30F, white);
         segment(stack, c, v(-2.3F,5.3F - walk,0), v(-2.0F,0.8F,0), 1.0F, dark);
         segment(stack, c, v(1.8F,10.5F,0), v(2.3F,5.3F + walk,0), 1.30F, white);

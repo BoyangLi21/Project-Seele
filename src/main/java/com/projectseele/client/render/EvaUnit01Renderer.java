@@ -99,6 +99,7 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
         // Weapon visibility applies on top in every view.
         setWeaponVisibility(model, "knife", animatable.getWeapon() == EvaUnit01Entity.WEAPON_KNIFE);
         setWeaponVisibility(model, "cannon", animatable.getWeapon() == EvaUnit01Entity.WEAPON_CANNON);
+        setWeaponVisibility(model, "lance", animatable.getWeapon() == EvaUnit01Entity.WEAPON_LANCE);
     }
 
     /** Apply the final shared pose only after GeckoLib has evaluated animations. */
@@ -134,8 +135,8 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
                 }
                 case "arm_r", "Rightarm" -> setRotation(bone, -0.91F + pitch, -0.12F, -0.07F);
                 case "forearm_r", "Lowerarm" -> setRotation(bone, -0.70F, 0.0F, 0.0F);
-                case "arm_l", "Leftarm" -> setRotation(bone, -1.12F + pitch * 0.82F, -0.31F, 0.17F);
-                case "forearm_l", "Lowerarm2" -> setRotation(bone, -0.52F, -0.20F, 0.0F);
+                case "arm_l", "Leftarm" -> setRotation(bone, -1.22F + pitch * 0.82F, 0.10F, -0.22F);
+                case "forearm_l", "Lowerarm2" -> setRotation(bone, -0.45F, 0.12F, 0.0F);
                 default -> { }
             }
             return;
@@ -145,16 +146,33 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
         {
             return;
         }
+        if (entity.getWeapon() == EvaUnit01Entity.WEAPON_LANCE)
+        {
+            // Longinus is held low in both hands. Pilot and external views
+            // share these exact joints; there is no detached cockpit prop.
+            switch (name)
+            {
+                case "arm_r", "Rightarm" -> setRotation(bone, -0.96F, -0.10F, -0.08F);
+                case "forearm_r", "Lowerarm" -> setRotation(bone, -0.44F, 0.0F, 0.0F);
+                case "arm_l", "Leftarm" -> setRotation(bone, -0.92F, 0.24F, 0.15F);
+                case "forearm_l", "Lowerarm2" -> setRotation(bone, -0.58F, 0.16F, 0.0F);
+                default -> { }
+            }
+            return;
+        }
         boolean moving = entity.getDeltaMovement().horizontalDistanceSqr() > 0.001D;
         float phase = moving ? Mth.sin((entity.tickCount + partialTick) * 0.42F) * 0.20F : 0.0F;
-        float rightBase = entity.getWeapon() == EvaUnit01Entity.WEAPON_KNIFE ? -0.82F : -0.55F;
+        // A forward ready-guard keeps the real shoulder-to-hand chain within
+        // the EVA's eye line. It reads naturally in third person and means
+        // first person does not need a second pair of floating arms.
+        float rightBase = entity.getWeapon() == EvaUnit01Entity.WEAPON_KNIFE ? -1.34F : -1.18F;
         switch (name)
         {
-            case "arm_r", "Rightarm" -> setRotation(bone, rightBase + phase, -0.05F, -0.08F);
+            case "arm_r", "Rightarm" -> setRotation(bone, rightBase + phase, -0.08F, -0.10F);
             case "forearm_r", "Lowerarm" -> setRotation(bone,
-                    entity.getWeapon() == EvaUnit01Entity.WEAPON_KNIFE ? -0.58F : -0.38F, 0.0F, 0.0F);
-            case "arm_l", "Leftarm" -> setRotation(bone, -0.55F - phase, 0.05F, 0.08F);
-            case "forearm_l", "Lowerarm2" -> setRotation(bone, -0.38F, 0.0F, 0.0F);
+                    entity.getWeapon() == EvaUnit01Entity.WEAPON_KNIFE ? -0.46F : -0.32F, 0.0F, 0.0F);
+            case "arm_l", "Leftarm" -> setRotation(bone, -1.18F - phase, 0.08F, 0.10F);
+            case "forearm_l", "Lowerarm2" -> setRotation(bone, -0.32F, 0.0F, 0.0F);
             default -> { }
         }
     }

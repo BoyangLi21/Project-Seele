@@ -1,6 +1,7 @@
 package com.projectseele.entity;
 
 import com.projectseele.config.SeeleConfig;
+import com.projectseele.combat.AtFieldRules;
 import com.projectseele.fx.AtFieldFX;
 import com.projectseele.network.ClientboundCannonBeamPacket;
 import com.projectseele.network.ClientboundNukeFxPacket;
@@ -65,12 +66,14 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     public static final int WEAPON_FISTS = 0;
     public static final int WEAPON_KNIFE = 1;
     public static final int WEAPON_CANNON = 2;
+    public static final int WEAPON_LANCE = 3;
     public static final int UNIT_00 = 0;
     public static final int UNIT_01 = 1;
     public static final int UNIT_02 = 2;
 
     private static final float MELEE_FIST_DAMAGE = 20.0F;
     private static final float MELEE_KNIFE_DAMAGE = 60.0F;
+    private static final float MELEE_LANCE_DAMAGE = 120.0F;
     private static final int MELEE_COOLDOWN_TICKS = 12;
     // Reach geometry for the 30-block frame.
     private static final double MELEE_REACH = 10.0D;
@@ -78,6 +81,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     // Smash: crouch + attack. Slow, heavy, area knockdown.
     private static final float SMASH_FIST_DAMAGE = 35.0F;
     private static final float SMASH_KNIFE_DAMAGE = 80.0F;
+    private static final float SMASH_LANCE_DAMAGE = 160.0F;
     private static final int SMASH_COOLDOWN_TICKS = 60;
     private static final double SMASH_RADIUS = 11.0D;
     private static final float STOMP_DAMAGE = 50.0F;
@@ -331,7 +335,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
 
     public void cycleWeapon(ServerPlayer pilot)
     {
-        int next = (this.getWeapon() + 1) % 3;
+        int next = (this.getWeapon() + 1) % 4;
         this.entityData.set(DATA_WEAPON, next);
         this.entityData.set(DATA_CANNON_CHARGE, 0);
         this.chargingHeld = false;
@@ -339,6 +343,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         {
             case WEAPON_KNIFE -> "msg.projectseele.weapon_knife";
             case WEAPON_CANNON -> "msg.projectseele.weapon_cannon";
+            case WEAPON_LANCE -> "msg.projectseele.weapon_lance";
             default -> "msg.projectseele.weapon_fists";
         };
         pilot.displayClientMessage(Component.translatable(key), true);
@@ -383,17 +388,19 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
                 (this.entityData.get(DATA_MELEE_SEQUENCE) + 1) & Integer.MAX_VALUE);
         this.swing(this.leftSwing ? InteractionHand.OFF_HAND : InteractionHand.MAIN_HAND, true);
         boolean knife = this.getWeapon() == WEAPON_KNIFE;
-        String animation = knife
+        boolean lance = this.getWeapon() == WEAPON_LANCE;
+        String animation = knife || lance
                 ? (this.leftSwing ? "knife_left" : "knife")
                 : (this.leftSwing ? "melee_left" : "melee");
         this.triggerAnim("strike", animation);
-        float damage = (knife ? MELEE_KNIFE_DAMAGE : MELEE_FIST_DAMAGE) * this.getMeleeMultiplier();
+        float baseDamage = lance ? MELEE_LANCE_DAMAGE : knife ? MELEE_KNIFE_DAMAGE : MELEE_FIST_DAMAGE;
+        float damage = baseDamage * this.getMeleeMultiplier();
         Vec3 forward = this.getForward().multiply(1.0D, 0.0D, 1.0D).normalize();
         Vec3 center = this.position().add(forward.scale(MELEE_REACH)).add(0.0D, 14.0D, 0.0D);
         AABB zone = new AABB(center, center).inflate(MELEE_RADIUS, 10.0D, MELEE_RADIUS);
         this.strikeZone(pilot, zone, damage, 1.1D, center);
-        this.playSound(knife ? SoundEvents.PLAYER_ATTACK_SWEEP : SoundEvents.IRON_GOLEM_ATTACK, 2.5F,
-                knife ? 0.7F : 0.8F);
+        this.playSound(knife || lance ? SoundEvents.PLAYER_ATTACK_SWEEP : SoundEvents.IRON_GOLEM_ATTACK, 2.5F,
+                lance ? 0.48F : knife ? 0.7F : 0.8F);
     }
 
     /** Crouch + attack: a slow two-handed slam that flattens the area ahead. */
@@ -409,7 +416,9 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         this.triggerAnim("strike", "smash");
 
         boolean knife = this.getWeapon() == WEAPON_KNIFE;
-        float damage = (knife ? SMASH_KNIFE_DAMAGE : SMASH_FIST_DAMAGE) * this.getMeleeMultiplier();
+        boolean lance = this.getWeapon() == WEAPON_LANCE;
+        float baseDamage = lance ? SMASH_LANCE_DAMAGE : knife ? SMASH_KNIFE_DAMAGE : SMASH_FIST_DAMAGE;
+        float damage = baseDamage * this.getMeleeMultiplier();
         Vec3 forward = this.getForward().multiply(1.0D, 0.0D, 1.0D).normalize();
         Vec3 center = this.position().add(forward.scale(MELEE_REACH + 1.0D)).add(0.0D, 4.0D, 0.0D);
         AABB zone = new AABB(center, center).inflate(SMASH_RADIUS, 8.5D, SMASH_RADIUS);
@@ -453,6 +462,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             return;
         }
         boolean knife = this.getWeapon() == WEAPON_KNIFE;
+        boolean lance = this.getWeapon() == WEAPON_LANCE;
         boolean anyHit = false;
         for (LivingEntity target : serverLevel.getEntitiesOfClass(LivingEntity.class, zone,
                 e -> e != this && e != pilot && !this.hasPassenger(e) && e.isAlive()))
@@ -465,7 +475,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             // Impact burst on the body actually struck.
             Vec3 hit = target.position().add(0.0D, target.getBbHeight() * 0.55D, 0.0D);
             serverLevel.sendParticles(ParticleTypes.CRIT, hit.x, hit.y, hit.z, 26, 1.4D, 1.4D, 1.4D, 0.55D);
-            serverLevel.sendParticles(knife ? ParticleTypes.ENCHANTED_HIT : ParticleTypes.DAMAGE_INDICATOR,
+            serverLevel.sendParticles(knife || lance ? ParticleTypes.ENCHANTED_HIT : ParticleTypes.DAMAGE_INDICATOR,
                     hit.x, hit.y, hit.z, 14, 1.0D, 1.0D, 1.0D, 0.2D);
         }
         // The swing arc itself: a fan of sweep across the strike front.
@@ -480,6 +490,13 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             // High-vibration blade wake.
             serverLevel.sendParticles(ParticleTypes.ELECTRIC_SPARK,
                     fxCenter.x, fxCenter.y, fxCenter.z, 30, 2.0D, 1.4D, 2.0D, 0.35D);
+        }
+        if (lance)
+        {
+            serverLevel.sendParticles(ParticleTypes.END_ROD,
+                    fxCenter.x, fxCenter.y, fxCenter.z, 44, 2.4D, 2.0D, 2.4D, 0.45D);
+            serverLevel.sendParticles(ParticleTypes.ELECTRIC_SPARK,
+                    fxCenter.x, fxCenter.y, fxCenter.z, 52, 2.8D, 2.2D, 2.8D, 0.55D);
         }
         if (!anyHit)
         {
@@ -769,6 +786,10 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     public boolean hurt(DamageSource source, float amount)
     {
         if (source.is(DamageTypeTags.BYPASSES_INVULNERABILITY))
+        {
+            return super.hurt(source, amount);
+        }
+        if (AtFieldRules.bypassesAtField(source))
         {
             return super.hurt(source, amount);
         }

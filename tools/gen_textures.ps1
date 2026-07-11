@@ -199,6 +199,7 @@ $white2  = @(226, 228, 236)
 $green2  = @(64, 240, 96)
 $orange2 = @(255, 130, 20)
 $metal   = @(74, 80, 94)
+$lanceRed = @(196, 14, 28)
 
 # purple armour
 Fill-Region 0 0 72 40 $purple 0.10        # chest
@@ -235,6 +236,8 @@ Fill-Region 120 158 36 96 $metal 0.06    # barrel box uv
 Fill-Region 208 140 36 18 $metal 0.05    # scope
 # energy band across the barrel region for flavour
 Fill-Region 128 200 20 8 $orange2 0.0
+# Longinus shaft/forks. Each long cube repeats this compact red box-UV area.
+Fill-Region 0 172 96 78 $lanceRed 0.04
 
 $bmp.Save("$root\entity\eva_unit01.png", [System.Drawing.Imaging.ImageFormat]::Png)
 $bmp.Dispose()

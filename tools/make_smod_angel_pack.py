@@ -45,6 +45,21 @@ def main():
             geometry = json.loads(read_unique(archive, source["geo"]))
             geometry["minecraft:geometry"][0]["description"]["identifier"] = f"geometry.{target}"
             animation = json.loads(read_unique(archive, source["animation"]))
+            if target == "mass_production_eva":
+                animation["animations"]["animation.entity_mp.ritual"] = {
+                    "loop": True,
+                    "animation_length": 2.4,
+                    "bones": {
+                        "Upperbody": {"rotation": {"0.0": [3, 0, 0]}},
+                        "Head": {"rotation": {"0.0": [15, 0, 0], "1.2": [18, 0, 0], "2.4": [15, 0, 0]}},
+                        "Rightarm": {"rotation": {"0.0": [0, 0, -88]}},
+                        "Lowerarm": {"rotation": {"0.0": [0, 0, 0]}},
+                        "Leftarm": {"rotation": {"0.0": [0, 0, 88]}},
+                        "Lowerarm2": {"rotation": {"0.0": [0, 0, 0]}},
+                        "Rightleg": {"rotation": {"0.0": [2, 0, 2]}},
+                        "Leftleg": {"rotation": {"0.0": [-2, 0, -2]}},
+                    },
+                }
             texture = read_unique(archive, source["texture"])
 
             geo_path = OUT / "geo" / f"{target}.geo.json"

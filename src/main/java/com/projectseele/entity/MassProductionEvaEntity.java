@@ -24,6 +24,7 @@ public class MassProductionEvaEntity extends Monster implements GeoEntity
 {
     private static final RawAnimation ANIM_IDLE = RawAnimation.begin().thenLoop("animation.entity_mp.idle_1");
     private static final RawAnimation ANIM_WALK = RawAnimation.begin().thenLoop("animation.entity_mp.move");
+    private static final RawAnimation ANIM_RITUAL = RawAnimation.begin().thenLoop("animation.entity_mp.ritual");
     private final AnimatableInstanceCache geoCache = GeckoLibUtil.createInstanceCache(this);
     private int reviveTicks;
     private boolean coreBroken;
@@ -119,11 +120,23 @@ public class MassProductionEvaEntity extends Monster implements GeoEntity
         return this.reviveTicks > 0;
     }
 
+    /** Inert vessels parked on the Sephirot during the Third Impact tableau. */
+    public boolean isRitualFormation()
+    {
+        return this.isNoAi() && this.isNoGravity();
+    }
+
     @Override
     public void registerControllers(AnimatableManager.ControllerRegistrar controllers)
     {
         controllers.add(new AnimationController<>(this, "base", 6, state ->
-                state.setAndContinue(state.isMoving() ? ANIM_WALK : ANIM_IDLE)));
+        {
+            if (this.isRitualFormation())
+            {
+                return state.setAndContinue(ANIM_RITUAL);
+            }
+            return state.setAndContinue(state.isMoving() ? ANIM_WALK : ANIM_IDLE);
+        }));
     }
 
     @Override

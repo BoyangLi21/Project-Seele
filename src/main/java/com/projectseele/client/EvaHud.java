@@ -211,6 +211,7 @@ public final class EvaHud
         {
             case EvaUnit01Entity.WEAPON_KNIFE -> "msg.projectseele.weapon_knife";
             case EvaUnit01Entity.WEAPON_CANNON -> "msg.projectseele.weapon_cannon";
+            case EvaUnit01Entity.WEAPON_LANCE -> "msg.projectseele.weapon_lance";
             default -> "msg.projectseele.weapon_fists";
         };
         guiGraphics.drawString(gui.getFont(),

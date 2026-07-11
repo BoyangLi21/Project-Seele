@@ -33,6 +33,20 @@ if errorlevel 1 (
     pause
     exit /b 1
 )
+python tools\make_smod_angel_pack.py "evaaddon1-0.zip"
+if errorlevel 1 (
+    echo SmOd Angel model-pack generation failed.
+    pause
+    exit /b 1
+)
+if exist "eud-1.1.0-forge-1.20.1.jar" (
+    python tools\make_eud_weapon_pack.py
+    if errorlevel 1 (
+        echo EUD Longinus model generation failed.
+        pause
+        exit /b 1
+    )
+)
 echo Starting Project SEELE test client (first launch takes a minute)...
 call gradlew.bat runClient
 pause
