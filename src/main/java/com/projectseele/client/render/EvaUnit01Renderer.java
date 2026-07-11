@@ -33,6 +33,14 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
 {
     /** Bone subtrees hidden from the pilot camera (their own head). */
     private static final Set<String> HEAD_BONES = Set.of("head", "Head", "Neck", "horn");
+    /**
+     * Bones whose OWN cubes hide in first person (children keep rendering,
+     * so the arms survive): the chest plate and shoulder pylons sit right at
+     * eye height and otherwise wall off the pilot's forward view.
+     */
+    private static final Set<String> TORSO_COVER_BONES = Set.of(
+            "torso_upper", "pylon_l", "pylon_r",
+            "Upperbody", "Armor2", "Armor3", "Armor4");
 
     private boolean pilotView;
 
@@ -70,13 +78,17 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
         });
         if (firstPerson)
         {
-            // Hide only the pilot's own head; the rest of the body IS the
-            // first-person view.
+            // Hide the pilot's own head and the chest/shoulder armor at eye
+            // level; arms, legs and weapons remain — the body IS the view.
             forEachBone(model, bone ->
             {
                 if (HEAD_BONES.contains(bone.getName()))
                 {
                     hideSubtree(bone);
+                }
+                else if (TORSO_COVER_BONES.contains(bone.getName()))
+                {
+                    bone.setHidden(true);
                 }
             });
         }

@@ -11,6 +11,7 @@ import com.projectseele.client.render.RibbonRenderer;
 import com.projectseele.network.ClientboundAtFieldRipplePacket;
 import com.projectseele.network.ClientboundCannonBeamPacket;
 import com.projectseele.network.ClientboundCrossExplosionPacket;
+import com.projectseele.fx.TreeOfLifeLayout;
 import com.projectseele.network.ClientboundThirdImpactPacket;
 import com.projectseele.registry.ModSounds;
 import net.minecraft.client.Minecraft;
@@ -93,16 +94,9 @@ public final class ClientFxManager
 
     public static void addThirdImpact(ClientboundThirdImpactPacket packet)
     {
-        // Face the tree toward whoever witnesses the ritual begin.
-        Vec3 origin = new Vec3(packet.x, packet.y, packet.z);
-        float faceYaw = 0.0F;
-        Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.player != null)
-        {
-            Vec3 toViewer = minecraft.player.position().subtract(origin);
-            faceYaw = (float) Mth.atan2(toViewer.x, toViewer.z);
-        }
-        ACTIVE.add(new KabbalahTree(origin, faceYaw));
+        // The server dictates the facing so the light geometry lands exactly
+        // on the Mass-Production Evas it parked on the Sephirot.
+        ACTIVE.add(new KabbalahTree(new Vec3(packet.x, packet.y, packet.z), packet.yaw));
     }
 
     public static void clear()
@@ -436,46 +430,20 @@ public final class ClientFxManager
     }
 
     /**
-     * The End-of-Evangelion Sephirothic tree: the canonical Golden Dawn
-     * layout (ten Sephirot in three pillars, twenty-two paths) hung INVERTED
-     * in the sky — Keter at the bottom above the ritual site, Malkuth at the
-     * apex — drawn as burning double-line geometry with ring-shaped Sephirot.
-     * It does not spin: it hangs, breathes, and lights up node by node from
-     * Keter upward. Tiferet carries the cruciform blaze at the centre.
+     * The End-of-Evangelion Sephirothic tree, sharing TreeOfLifeLayout with
+     * the server: upright Golden Dawn diagram (Keter apex, Malkuth base),
+     * ring-shaped Sephirot joined by burning double lines, igniting down the
+     * emanation order. The outer rings frame the real Mass-Production Eva
+     * entities the server parked there; Tiferet carries the crucified
+     * Unit-01 with wings of light.
      */
     private static final class KabbalahTree extends WorldFx
     {
         private static final int LIFETIME = 20 * 180;
-        private static final float RISE_HEIGHT = 55.0F;
-        private static final int RISE_TICKS = 120;
-        /** Node reveal cadence: Keter first, then upward, one per interval. */
+        /** Node reveal cadence: Keter first, then down the tree. */
         private static final int NODE_LIGHT_INTERVAL = 9;
         private static final int NODE_LIGHT_TIME = 24;
-
-        // Canonical Golden Dawn proportions (columns x = -1, 0, +1), upright:
-        // Keter at the apex, Malkuth at the base, in the plane z = 0 facing
-        // the viewer. Width and height chosen sky-scale.
-        private static final float COLUMN_X = 26.0F;
-        private static final float ROW_Y = 18.0F;
-        private static final Vector3f[] NODES = {
-                sephira(0.0F, 6.4F),    // 1 Keter (apex)
-                sephira(-1.0F, 5.4F),   // 2 Chokmah
-                sephira(1.0F, 5.4F),    // 3 Binah
-                sephira(-1.0F, 4.0F),   // 4 Chesed
-                sephira(1.0F, 4.0F),    // 5 Gevurah
-                sephira(0.0F, 3.2F),    // 6 Tiferet (centre: Unit-01 crucified)
-                sephira(-1.0F, 2.0F),   // 7 Netzach
-                sephira(1.0F, 2.0F),    // 8 Hod
-                sephira(0.0F, 1.2F),    // 9 Yesod
-                sephira(0.0F, 0.0F)     // 10 Malkuth (base)
-        };
-        /** The canonical 22 paths (verified against the traditional diagram). */
-        private static final int[][] PATHS = {
-                {0,1},{0,2},{0,5},{1,2},{1,3},{1,5},{2,4},{2,5},
-                {3,4},{3,5},{3,6},{4,5},{4,7},{5,6},{5,7},{5,8},
-                {6,7},{6,8},{7,8},{6,9},{7,9},{8,9}
-        };
-        private static final int TIFERET = 5;
+        private static final int TIFERET = TreeOfLifeLayout.TIFERET;
 
         private final float faceYaw;
 
@@ -485,9 +453,9 @@ public final class ClientFxManager
             this.faceYaw = faceYaw;
         }
 
-        private static Vector3f sephira(float column, float row)
+        private static Vector3f node(int index)
         {
-            return new Vector3f(column * COLUMN_X, row * ROW_Y, 0.0F);
+            return new Vector3f(TreeOfLifeLayout.localX(index), TreeOfLifeLayout.localY(index), 0.0F);
         }
 
         @Override
@@ -496,10 +464,10 @@ public final class ClientFxManager
             return LIFETIME;
         }
 
-        /** 0..1 ignition of one Sephira: Keter first, climbing the tree. */
+        /** 0..1 ignition of one Sephira: Keter first, down the emanations. */
         private static float nodeLight(float t, int index)
         {
-            return Mth.clamp((t - 30.0F - index * NODE_LIGHT_INTERVAL) / NODE_LIGHT_TIME, 0.0F, 1.0F);
+            return Mth.clamp((t - 10.0F - index * NODE_LIGHT_INTERVAL) / NODE_LIGHT_TIME, 0.0F, 1.0F);
         }
 
         @Override
@@ -514,22 +482,20 @@ public final class ClientFxManager
                 return;
             }
 
-            float rise = RISE_HEIGHT * easeOutCubic(Mth.clamp(t / RISE_TICKS, 0.0F, 1.0F));
             poseStack.pushPose();
-            poseStack.translate(0.0D, rise, 0.0D);
             poseStack.mulPose(com.mojang.math.Axis.YP.rotation(this.faceYaw));
             Matrix4f pose = poseStack.last().pose();
 
             // Paths: burning double lines, lit once both endpoints burn.
-            for (int[] path : PATHS)
+            for (int[] path : TreeOfLifeLayout.PATHS)
             {
                 float lit = Math.min(nodeLight(t, path[0]), nodeLight(t, path[1]));
                 if (lit <= 0.0F)
                 {
                     continue;
                 }
-                Vector3f a = NODES[path[0]];
-                Vector3f b = NODES[path[1]];
+                Vector3f a = node(path[0]);
+                Vector3f b = node(path[1]);
                 Vector3f dir = new Vector3f(b).sub(a).normalize();
                 // In-plane normal (the tree stands in local XY).
                 Vector3f offset = new Vector3f(-dir.y, dir.x, 0.0F).mul(0.95F);
@@ -550,80 +516,44 @@ public final class ClientFxManager
                 }
             }
 
-            // Sephirot: luminous rings; every outer node carries a white
-            // Mass-Production Eva hovering with its wings spread, and Tiferet
-            // carries the crucified Unit-01 with wings of light (EoE staging).
+            // Sephirot rings. The outer nodes frame the real Mass-Production
+            // Eva entities parked there by the server; Tiferet carries the
+            // crucified Unit-01 with wings of light (EoE staging).
             Vector3f axisX = new Vector3f(1.0F, 0.0F, 0.0F);
             Vector3f axisY = new Vector3f(0.0F, 1.0F, 0.0F);
-            for (int i = 0; i < NODES.length; i++)
+            for (int i = 0; i < TreeOfLifeLayout.NODES.length; i++)
             {
                 float lit = nodeLight(t, i);
                 if (lit <= 0.0F)
                 {
                     continue;
                 }
-                Vector3f c = NODES[i];
+                Vector3f c = node(i);
                 boolean centre = i == TIFERET;
-                float radius = (centre ? 9.2F : 6.4F) * (0.9F + 0.1F * lit)
+                float radius = (centre ? 11.5F : 8.6F) * (0.9F + 0.1F * lit)
                         * (1.0F + 0.045F * Mth.sin(t * 0.07F + i * 1.7F));
                 float alpha = base * lit;
                 poseStack.pushPose();
                 poseStack.translate(c.x, c.y, c.z);
                 Matrix4f nodePose = poseStack.last().pose();
                 RibbonRenderer.drawPolyRing(nodePose, consumer, axisX, axisY, 24,
-                        radius, 0.85F, 1.0F, 0.42F, 0.08F, alpha * 0.85F);
+                        radius, 0.95F, 1.0F, 0.42F, 0.08F, alpha * 0.85F);
                 RibbonRenderer.drawPolyRing(nodePose, consumer, axisX, axisY, 24,
-                        radius * 0.72F, 0.38F, 1.0F, 0.88F, 0.50F, alpha);
+                        radius * 0.72F, 0.42F, 1.0F, 0.88F, 0.50F, alpha);
                 if (centre)
                 {
                     drawCrucifiedUnitOne(nodePose, consumer, t, alpha);
-                }
-                else
-                {
-                    drawMassProductionEva(nodePose, consumer, t, i, alpha);
                 }
                 poseStack.popPose();
             }
             poseStack.popPose();
         }
 
-        /** White Mass-Production Eva silhouette: winged, headless-faced, hovering. */
-        private static void drawMassProductionEva(Matrix4f pose, VertexConsumer consumer,
-                                                  float t, int index, float alpha)
-        {
-            float bob = Mth.sin(t * 0.05F + index * 1.3F) * 0.7F;
-            float flap = Mth.sin(t * 0.075F + index * 0.9F) * 1.5F;
-            float wr = 0.94F;
-            float wg = 0.94F;
-            float wb = 0.88F;
-            Vector3f hip = new Vector3f(0.0F, bob - 2.8F, 0.0F);
-            Vector3f neck = new Vector3f(0.0F, bob + 2.6F, 0.0F);
-            // Torso and head knob.
-            RibbonRenderer.drawStarRibbon(pose, consumer, hip, neck, 1.15F, 0.85F, wr, wg, wb, alpha * 0.9F);
-            RibbonRenderer.drawStarRibbon(pose, consumer, neck,
-                    new Vector3f(0.0F, bob + 3.9F, 0.0F), 0.62F, 0.5F, wr, wg, wb, alpha * 0.9F);
-            // Dangling legs.
-            RibbonRenderer.drawStarRibbon(pose, consumer, new Vector3f(-0.7F, bob - 2.8F, 0.0F),
-                    new Vector3f(-0.9F, bob - 6.4F, 0.0F), 0.5F, 0.35F, wr, wg, wb, alpha * 0.8F);
-            RibbonRenderer.drawStarRibbon(pose, consumer, new Vector3f(0.7F, bob - 2.8F, 0.0F),
-                    new Vector3f(0.9F, bob - 6.4F, 0.0F), 0.5F, 0.35F, wr, wg, wb, alpha * 0.8F);
-            // The huge wings, slowly beating.
-            for (int side = -1; side <= 1; side += 2)
-            {
-                Vector3f shoulder = new Vector3f(side * 0.9F, bob + 2.0F, 0.0F);
-                RibbonRenderer.drawStarRibbon(pose, consumer, shoulder,
-                        new Vector3f(side * 10.5F, bob + 6.0F + flap, 0.0F),
-                        2.3F, 0.5F, wr, wg, wb, alpha * 0.85F);
-                RibbonRenderer.drawStarRibbon(pose, consumer, shoulder,
-                        new Vector3f(side * 8.0F, bob + 1.2F + flap * 0.6F, 0.0F),
-                        1.5F, 0.4F, wr, wg, wb, alpha * 0.7F);
-            }
-        }
-
         /** Unit-01 crucified at Tiferet, wings of light behind the cross. */
         private static void drawCrucifiedUnitOne(Matrix4f pose, VertexConsumer consumer,
                                                  float t, float alpha)
         {
+            float s = 1.6F;
             float pr = 0.46F;
             float pg = 0.20F;
             float pb = 0.72F;
@@ -634,32 +564,32 @@ public final class ClientFxManager
                 for (int f = 0; f < 3; f++)
                 {
                     float ang = (28.0F + f * 22.0F) * Mth.DEG_TO_RAD;
-                    float len = (22.0F - f * 4.5F) * shimmer;
-                    Vector3f tip = new Vector3f(side * Mth.cos(ang) * len, 2.0F + Mth.sin(ang) * len, 0.4F);
-                    RibbonRenderer.drawStarRibbon(pose, consumer, new Vector3f(0.0F, 2.0F, 0.4F), tip,
-                            2.6F - f * 0.6F, 0.4F, 1.0F, 0.78F, 0.32F, alpha * (0.55F - f * 0.12F));
+                    float len = (22.0F - f * 4.5F) * shimmer * s;
+                    Vector3f tip = new Vector3f(side * Mth.cos(ang) * len, 2.0F * s + Mth.sin(ang) * len, 0.4F);
+                    RibbonRenderer.drawStarRibbon(pose, consumer, new Vector3f(0.0F, 2.0F * s, 0.4F), tip,
+                            (2.6F - f * 0.6F) * s, 0.4F, 1.0F, 0.78F, 0.32F, alpha * (0.55F - f * 0.12F));
                 }
             }
             // The cross pose: purple torso, outstretched arms, horned head.
-            Vector3f hip = new Vector3f(0.0F, -4.6F, 0.0F);
-            Vector3f neck = new Vector3f(0.0F, 3.4F, 0.0F);
-            RibbonRenderer.drawStarRibbon(pose, consumer, hip, neck, 1.35F, 1.0F, pr, pg, pb, alpha);
+            Vector3f hip = new Vector3f(0.0F, -4.6F * s, 0.0F);
+            Vector3f neck = new Vector3f(0.0F, 3.4F * s, 0.0F);
+            RibbonRenderer.drawStarRibbon(pose, consumer, hip, neck, 1.35F * s, 1.0F * s, pr, pg, pb, alpha);
             RibbonRenderer.drawStarRibbon(pose, consumer,
-                    new Vector3f(-8.2F, 2.6F, 0.0F), new Vector3f(8.2F, 2.6F, 0.0F),
-                    0.95F, 0.95F, pr, pg, pb, alpha);
+                    new Vector3f(-8.2F * s, 2.6F * s, 0.0F), new Vector3f(8.2F * s, 2.6F * s, 0.0F),
+                    0.95F * s, 0.95F * s, pr, pg, pb, alpha);
             RibbonRenderer.drawStarRibbon(pose, consumer, neck,
-                    new Vector3f(0.0F, 4.9F, 0.0F), 0.68F, 0.55F, pr, pg, pb, alpha);
+                    new Vector3f(0.0F, 4.9F * s, 0.0F), 0.68F * s, 0.55F * s, pr, pg, pb, alpha);
             // The horn.
             RibbonRenderer.drawStarRibbon(pose, consumer,
-                    new Vector3f(0.0F, 4.9F, -0.3F), new Vector3f(0.0F, 6.6F, -0.9F),
-                    0.22F, 0.06F, 0.92F, 0.90F, 0.95F, alpha);
+                    new Vector3f(0.0F, 4.9F * s, -0.3F), new Vector3f(0.0F, 6.6F * s, -0.9F),
+                    0.22F * s, 0.06F, 0.92F, 0.90F, 0.95F, alpha);
             // Legs together, crucified.
             RibbonRenderer.drawStarRibbon(pose, consumer, hip,
-                    new Vector3f(0.0F, -9.6F, 0.0F), 0.9F, 0.5F, pr, pg, pb, alpha * 0.95F);
+                    new Vector3f(0.0F, -9.6F * s, 0.0F), 0.9F * s, 0.5F * s, pr, pg, pb, alpha * 0.95F);
             // Core glow.
             RibbonRenderer.drawStarRibbon(pose, consumer,
-                    new Vector3f(-0.9F, 0.8F, 0.5F), new Vector3f(0.9F, 0.8F, 0.5F),
-                    0.8F, 0.8F, 0.35F, 1.0F, 0.45F, alpha);
+                    new Vector3f(-0.9F * s, 0.8F * s, 0.5F), new Vector3f(0.9F * s, 0.8F * s, 0.5F),
+                    0.8F * s, 0.8F * s, 0.35F, 1.0F, 0.45F, alpha);
         }
     }
 

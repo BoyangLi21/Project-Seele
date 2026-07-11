@@ -951,11 +951,12 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         // the Unit's own eyes (the airframe hides itself from its pilot).
         float rad = (float) Math.toRadians(this.yBodyRot);
         double behind = 0.35D;
-        // In the quadruped stance the torso sits above the planted limbs;
-        // anchoring the pilot at the old 6.2 blocks put both first- and
-        // third-person cameras underneath the chest. Follow the horizontal
-        // head/upper torso instead.
-        double plugHeight = this.isPilotProne() ? 10.5D : this.isPilotCrouching() ? 17.7D : 25.0D;
+        // The eye must clear the shoulder pylons: at 25.0 it sat level with
+        // the chest rim and first person stared into the Unit's own back.
+        // SmOd's head tops out higher than the placeholder skeleton's, so the
+        // standing height is per-family.
+        double standing = this.getUnitVariant() == UNIT_00 ? 25.4D : 27.2D;
+        double plugHeight = this.isPilotProne() ? 10.5D : this.isPilotCrouching() ? 17.7D : standing;
         move.accept(passenger,
                 this.getX() + Math.sin(rad) * behind,
                 this.getY() + plugHeight,
