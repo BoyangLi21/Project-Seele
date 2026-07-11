@@ -39,11 +39,13 @@ public final class EvaHud
      */
     public static final IGuiOverlay INSERTION = (gui, guiGraphics, partialTick, width, height) ->
     {
-        float progress = ClientForgeEvents.insertionProgress(partialTick);
-        if (progress < 0.0F)
+        LocalPlayer player = Minecraft.getInstance().player;
+        if (player == null || !(player.getVehicle() instanceof EvaUnit01Entity eva)
+                || eva.getActivationTicks() <= 0)
         {
             return;
         }
+        float progress = eva.getActivationProgress(partialTick);
         float blackout = progress < 0.12F ? Mth.clamp(progress / 0.08F, 0.0F, 1.0F)
                 : Mth.clamp(1.0F - (progress - 0.12F) / 0.22F, 0.0F, 1.0F);
         guiGraphics.fill(0, 0, width, height, ((int) (blackout * 245.0F) << 24));

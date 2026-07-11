@@ -141,6 +141,31 @@
           ]
         },
         {
+          "name": "entry_plug",
+          "parent": "torso_upper",
+          "pivot": [0, 145, 8],
+          "cubes": [
+            {"origin": [-3, 126, 7], "size": [6, 34, 6], "uv": [120, 158]},
+            {"origin": [-4, 156, 6], "size": [8, 6, 8], "uv": [96, 152]}
+          ]
+        },
+        {
+          "name": "plug_hatch_l",
+          "parent": "torso_upper",
+          "pivot": [0, 145, 7],
+          "cubes": [
+            {"origin": [0, 128, 6], "size": [8, 32, 3], "uv": [208, 140]}
+          ]
+        },
+        {
+          "name": "plug_hatch_r",
+          "parent": "torso_upper",
+          "pivot": [0, 145, 7],
+          "cubes": [
+            {"origin": [-8, 128, 6], "size": [8, 32, 3], "uv": [208, 140]}
+          ]
+        },
+        {
           "name": "head",
           "parent": "torso_upper",
           "pivot": [0, 148, 0],

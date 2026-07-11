@@ -45,6 +45,8 @@ def scale_values(value, factor):
 def weapon_bones(bones):
     forearm = next(bone for bone in bones if bone["name"] == "Lowerarm")
     px, py, pz = forearm["pivot"]
+    upperbody = next(bone for bone in bones if bone["name"] == "Upperbody")
+    ux, uy, uz = upperbody["pivot"]
     return [
         {"name": "knife", "parent": "Lowerarm", "pivot": [px, py, pz], "cubes": [
             # SmOd's forearm points down its local -Y axis. Keeping the blade
@@ -72,6 +74,16 @@ def weapon_bones(bones):
             {"origin": [px + 7, py - 290, pz - 2.5], "size": [5, 68, 5], "uv": [448, 220],
              "rotation": [0, 0, 7], "pivot": [px, py - 222, pz]},
             {"origin": [px - 9, py - 6, pz - 9], "size": [18, 18, 18], "uv": [472, 220]},
+        ]},
+        {"name": "entry_plug", "parent": "Upperbody", "pivot": [ux, uy, uz + 12], "cubes": [
+            {"origin": [ux - 6, uy - 28, uz + 10], "size": [12, 58, 12], "uv": [400, 80]},
+            {"origin": [ux - 8, uy + 26, uz + 8], "size": [16, 10, 16], "uv": [472, 80]},
+        ]},
+        {"name": "plug_hatch_l", "parent": "Upperbody", "pivot": [ux, uy, uz + 10], "cubes": [
+            {"origin": [ux, uy - 28, uz + 8], "size": [16, 58, 5], "uv": [472, 80]},
+        ]},
+        {"name": "plug_hatch_r", "parent": "Upperbody", "pivot": [ux, uy, uz + 10], "cubes": [
+            {"origin": [ux - 16, uy - 28, uz + 8], "size": [16, 58, 5], "uv": [472, 80]},
         ]},
     ]
 
@@ -266,6 +278,20 @@ def install_smod_pose_overrides(output):
             "Lowerarm": {"rotation": {"0.0": [-40, 0, 0]}},
             "Leftarm": {"rotation": {"0.0": [-70, -18, 10], "0.6": [-71, -18, 10], "1.2": [-70, -18, 10]}},
             "Lowerarm2": {"rotation": {"0.0": [-22, -14, 0]}},
+        },
+    }
+    output["animation.eva_unit01.activation"] = {
+        "animation_length": 6.0,
+        "bones": {
+            "entry_plug": {"position": {"0.0": [0, 42, 0], "1.1": [0, 18, 0],
+                                         "2.0": [0, 0, 0], "6.0": [0, 0, 0]}},
+            "plug_hatch_l": {"rotation": {"0.0": [0, -62, 0], "1.5": [0, -62, 0],
+                                             "2.3": [0, 0, 0]}},
+            "plug_hatch_r": {"rotation": {"0.0": [0, 62, 0], "1.5": [0, 62, 0],
+                                             "2.3": [0, 0, 0]}},
+            "Head": {"rotation": {"0.0": [10, 0, 0], "3.4": [10, 0, 0], "5.2": [0, 0, 0]}},
+            "Leftarm": {"rotation": {"0.0": [-8, 0, 5]}},
+            "Rightarm": {"rotation": {"0.0": [-8, 0, -5]}},
         },
     }
     # Nailed to the Tree: arms straight out, head bowed, gentle sway.

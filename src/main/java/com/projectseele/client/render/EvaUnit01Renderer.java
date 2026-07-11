@@ -100,6 +100,10 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
         setWeaponVisibility(model, "knife", animatable.getWeapon() == EvaUnit01Entity.WEAPON_KNIFE);
         setWeaponVisibility(model, "cannon", animatable.getWeapon() == EvaUnit01Entity.WEAPON_CANNON);
         setWeaponVisibility(model, "lance", animatable.getWeapon() == EvaUnit01Entity.WEAPON_LANCE);
+        boolean activating = animatable.getActivationTicks() > 0;
+        setWeaponVisibility(model, "entry_plug", activating);
+        setWeaponVisibility(model, "plug_hatch_l", activating);
+        setWeaponVisibility(model, "plug_hatch_r", activating);
     }
 
     /** Apply the final shared pose only after GeckoLib has evaluated animations. */
@@ -118,7 +122,8 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
     /** Authoritative joint pose shared by first- and third-person rendering. */
     private static void applySharedArmPose(EvaUnit01Entity entity, GeoBone bone, float partialTick)
     {
-        if (entity.isPilotProne() || entity.isPilotCrouching() || entity.isCrucified())
+        if (entity.isPilotProne() || entity.isPilotCrouching() || entity.isCrucified()
+                || entity.getActivationTicks() > 0)
         {
             return;
         }

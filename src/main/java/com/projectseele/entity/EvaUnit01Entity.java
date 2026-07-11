@@ -130,6 +130,8 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             SynchedEntityData.defineId(EvaUnit01Entity.class, EntityDataSerializers.INT);
     private static final EntityDataAccessor<Integer> DATA_SMASH_SEQUENCE =
             SynchedEntityData.defineId(EvaUnit01Entity.class, EntityDataSerializers.INT);
+    private static final EntityDataAccessor<Integer> DATA_ACTIVATION_TICKS =
+            SynchedEntityData.defineId(EvaUnit01Entity.class, EntityDataSerializers.INT);
 
     private static final RawAnimation ANIM_IDLE = RawAnimation.begin().thenLoop("animation.eva_unit01.idle");
     private static final RawAnimation ANIM_WALK = RawAnimation.begin().thenLoop("animation.eva_unit01.walk");
@@ -150,6 +152,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     private static final RawAnimation ANIM_CANNON_FIRE = RawAnimation.begin().thenPlay("animation.eva_unit01.cannon_fire");
     private static final RawAnimation ANIM_LAND = RawAnimation.begin().thenPlay("animation.eva_unit01.land");
     private static final RawAnimation ANIM_STOMP = RawAnimation.begin().thenPlay("animation.eva_unit01.stomp");
+    private static final RawAnimation ANIM_ACTIVATION = RawAnimation.begin().thenPlay("animation.eva_unit01.activation");
 
     private final AnimatableInstanceCache geoCache = GeckoLibUtil.createInstanceCache(this);
 
@@ -163,7 +166,6 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     private boolean crouchingDimensions;
     private boolean proneDimensions;
     private boolean wasAirborne;
-    private int activationTicks;
     private int clientMeleeSequence;
     private int clientMeleeStartTick = -1000;
     private boolean clientMeleeLeft;
@@ -202,6 +204,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         this.entityData.define(DATA_MELEE_LEFT, false);
         this.entityData.define(DATA_MELEE_SEQUENCE, 0);
         this.entityData.define(DATA_SMASH_SEQUENCE, 0);
+        this.entityData.define(DATA_ACTIVATION_TICKS, 0);
     }
 
     @Override
@@ -294,6 +297,16 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         return this.entityData.get(DATA_CRUCIFIED);
     }
 
+    public int getActivationTicks()
+    {
+        return this.entityData.get(DATA_ACTIVATION_TICKS);
+    }
+
+    public float getActivationProgress(float partialTick)
+    {
+        return Mth.clamp((120.0F - this.getActivationTicks() + partialTick) / 120.0F, 0.0F, 1.0F);
+    }
+
     /** Nail to / release from the Tree. Gravity and pose follow the flag. */
     public void setCrucified(boolean crucified)
     {
@@ -377,7 +390,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     /** Left-click from the plug: alternating swings in front of the Unit. */
     public void meleeAttack(ServerPlayer pilot)
     {
-        if (this.activationTicks > 20 || this.meleeCooldown > 0 || this.getWeapon() == WEAPON_CANNON)
+        if (this.getActivationTicks() > 20 || this.meleeCooldown > 0 || this.getWeapon() == WEAPON_CANNON)
         {
             return;
         }
@@ -406,7 +419,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     /** Crouch + attack: a slow two-handed slam that flattens the area ahead. */
     public void smashAttack(ServerPlayer pilot)
     {
-        if (this.activationTicks > 20 || this.smashCooldown > 0 || this.getWeapon() == WEAPON_CANNON)
+        if (this.getActivationTicks() > 20 || this.smashCooldown > 0 || this.getWeapon() == WEAPON_CANNON)
         {
             return;
         }
@@ -434,7 +447,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     /** Heavy single-foot strike for targets beneath the Unit. */
     public void stompAttack(ServerPlayer pilot)
     {
-        if (this.activationTicks > 20 || this.stompCooldown > 0 || this.getWeapon() == WEAPON_CANNON)
+        if (this.getActivationTicks() > 20 || this.stompCooldown > 0 || this.getWeapon() == WEAPON_CANNON)
         {
             return;
         }
@@ -522,7 +535,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         this.chargingHeld = false;
         boolean full = this.getCannonCharge() >= SeeleConfig.CANNON_CHARGE_TICKS.get();
         this.entityData.set(DATA_CANNON_CHARGE, 0);
-        if (this.activationTicks > 20 || !full || this.getWeapon() != WEAPON_CANNON || this.getCannonCooldown() > 0)
+        if (this.getActivationTicks() > 20 || !full || this.getWeapon() != WEAPON_CANNON || this.getCannonCooldown() > 0)
         {
             return;
         }
@@ -717,9 +730,9 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         {
             this.jumpCooldown--;
         }
-        if (this.activationTicks > 0)
+        if (this.getActivationTicks() > 0)
         {
-            this.activationTicks--;
+            this.entityData.set(DATA_ACTIVATION_TICKS, this.getActivationTicks() - 1);
         }
         if (!this.onGround())
         {
@@ -844,7 +857,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             if (!this.level().isClientSide)
             {
                 player.startRiding(this);
-                this.activationTicks = 120;
+                this.entityData.set(DATA_ACTIVATION_TICKS, 120);
             }
             return InteractionResult.sidedSuccess(this.level().isClientSide);
         }
@@ -885,6 +898,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         super.removePassenger(passenger);
         this.chargingHeld = false;
         this.entityData.set(DATA_CANNON_CHARGE, 0);
+        this.entityData.set(DATA_ACTIVATION_TICKS, 0);
         this.clearPilotMotion();
     }
 
@@ -919,7 +933,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     @Override
     protected Vec3 getRiddenInput(Player player, Vec3 input)
     {
-        if (this.activationTicks > 20)
+        if (this.getActivationTicks() > 20)
         {
             return Vec3.ZERO;
         }
@@ -930,7 +944,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     @Override
     protected float getRiddenSpeed(Player player)
     {
-        if (this.activationTicks > 20)
+        if (this.getActivationTicks() > 20)
         {
             return 0.0F;
         }
@@ -1073,6 +1087,10 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     {
         controllers.add(new AnimationController<>(this, "base", 6, state ->
         {
+            if (this.getActivationTicks() > 0)
+            {
+                return state.setAndContinue(ANIM_ACTIVATION);
+            }
             // Stance changes resize the hitbox and can leave the Unit one
             // frame off the ground. Keep the requested pose authoritative so
             // PRONE never flashes back to an upright jump/fall animation.
