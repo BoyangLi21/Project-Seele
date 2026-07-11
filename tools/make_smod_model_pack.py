@@ -209,40 +209,55 @@ def install_smod_pose_overrides(output):
             "Leftarm": {"rotation": {"0.0": [-30, 0, 6], "0.6": [12, 0, 6], "1.2": [-30, 0, 6]}},
         },
     }
+    # Kneeling low brace ("prone"): knees folded under, torso only slightly
+    # leaned so the Unit can still aim and fire. Advancing rocks the knees.
     output["animation.eva_unit01.prone"] = {
         "loop": True,
-        "animation_length": 1.8,
+        "animation_length": 2.4,
         "bones": {
-            "bone7": {"position": {"0.0": [0, -52, -6], "0.9": [0, -50, -5], "1.8": [0, -52, -6]}},
-            "Lowerbody": {"rotation": {"0.0": [42, 0, 0]}},
-            "Upperbody": {"rotation": {"0.0": [34, 0, 0], "0.9": [36, 0, 0], "1.8": [34, 0, 0]}},
-            "Head": {"rotation": {"0.0": [-54, 0, 0]}},
-            "Rightarm": {"rotation": {"0.0": [-30, 0, -6]}},
-            "Lowerarm": {"rotation": {"0.0": [-20, 0, 0]}},
-            "Leftarm": {"rotation": {"0.0": [-30, 0, 6]}},
-            "Lowerarm2": {"rotation": {"0.0": [-20, 0, 0]}},
-            "Rightleg": {"rotation": {"0.0": [-82, 0, 8]}},
-            "bone16": {"rotation": {"0.0": [118, 0, 0]}},
-            "Leftleg": {"rotation": {"0.0": [-82, 0, -8]}},
-            "bone6": {"rotation": {"0.0": [118, 0, 0]}},
+            "bone7": {"position": {"0.0": [0, -58, 0]}},
+            "Lowerbody": {"rotation": {"0.0": [16, 0, 0]}},
+            "Upperbody": {"rotation": {"0.0": [12, 0, 0], "1.2": [14, 0, 0], "2.4": [12, 0, 0]}},
+            "Head": {"rotation": {"0.0": [-20, 0, 0]}},
+            "Rightarm": {"rotation": {"0.0": [-52, 0, -8]}},
+            "Lowerarm": {"rotation": {"0.0": [-26, 0, 0]}},
+            "Leftarm": {"rotation": {"0.0": [-52, 0, 8]}},
+            "Lowerarm2": {"rotation": {"0.0": [-26, 0, 0]}},
+            "Rightleg": {"rotation": {"0.0": [-28, 0, 6]}},
+            "bone16": {"rotation": {"0.0": [122, 0, 0]}},
+            "Leftleg": {"rotation": {"0.0": [-12, 0, -6]}},
+            "bone6": {"rotation": {"0.0": [114, 0, 0]}},
         },
     }
     output["animation.eva_unit01.crawl"] = {
         "loop": True,
+        "animation_length": 1.4,
+        "bones": {
+            "bone7": {"position": {"0.0": [0, -58, 0], "0.35": [0, -54, 2], "0.7": [0, -58, 0], "1.05": [0, -54, 2], "1.4": [0, -58, 0]}},
+            "Lowerbody": {"rotation": {"0.0": [18, 0, 0]}},
+            "Upperbody": {"rotation": {"0.0": [12, 5, 0], "0.7": [12, -5, 0], "1.4": [12, 5, 0]}},
+            "Head": {"rotation": {"0.0": [-18, 0, 0]}},
+            "Rightarm": {"rotation": {"0.0": [-36, 0, -8], "0.7": [-62, 0, -8], "1.4": [-36, 0, -8]}},
+            "Leftarm": {"rotation": {"0.0": [-62, 0, 8], "0.7": [-36, 0, 8], "1.4": [-62, 0, 8]}},
+            "Rightleg": {"rotation": {"0.0": [-36, 0, 6], "0.7": [-4, 0, 6], "1.4": [-36, 0, 6]}},
+            "bone16": {"rotation": {"0.0": [126, 0, 0], "0.7": [108, 0, 0], "1.4": [126, 0, 0]}},
+            "Leftleg": {"rotation": {"0.0": [-4, 0, -6], "0.7": [-36, 0, -6], "1.4": [-4, 0, -6]}},
+            "bone6": {"rotation": {"0.0": [108, 0, 0], "0.7": [126, 0, 0], "1.4": [108, 0, 0]}},
+        },
+    }
+    # Shouldered-rifle stance on SmOd's own skeleton: torso quartered away,
+    # right forearm level (the along-arm cannon points at the reticle), left
+    # arm crossed to the forestock, cheek to the scope.
+    output["animation.eva_unit01.aim"] = {
+        "loop": True,
         "animation_length": 1.2,
         "bones": {
-            "bone7": {"position": {"0.0": [0, -52, -6], "0.3": [0, -49, -4], "0.6": [0, -52, -6], "0.9": [0, -49, -4], "1.2": [0, -52, -6]}},
-            "Lowerbody": {"rotation": {"0.0": [42, 4, 0], "0.6": [42, -4, 0], "1.2": [42, 4, 0]}},
-            "Upperbody": {"rotation": {"0.0": [34, -3, 0], "0.6": [34, 3, 0], "1.2": [34, -3, 0]}},
-            "Head": {"rotation": {"0.0": [-52, 3, 0], "0.6": [-52, -3, 0], "1.2": [-52, 3, 0]}},
-            "Rightarm": {"rotation": {"0.0": [-24, 0, -7], "0.6": [-38, 0, -7], "1.2": [-24, 0, -7]}},
-            "Lowerarm": {"rotation": {"0.0": [-14, 0, 0], "0.6": [-24, 0, 0], "1.2": [-14, 0, 0]}},
-            "Leftarm": {"rotation": {"0.0": [-38, 0, 7], "0.6": [-24, 0, 7], "1.2": [-38, 0, 7]}},
-            "Lowerarm2": {"rotation": {"0.0": [-24, 0, 0], "0.6": [-14, 0, 0], "1.2": [-24, 0, 0]}},
-            "Rightleg": {"rotation": {"0.0": [-72, 0, 8], "0.6": [-90, 0, 8], "1.2": [-72, 0, 8]}},
-            "bone16": {"rotation": {"0.0": [106, 0, 0], "0.6": [124, 0, 0], "1.2": [106, 0, 0]}},
-            "Leftleg": {"rotation": {"0.0": [-90, 0, -8], "0.6": [-72, 0, -8], "1.2": [-90, 0, -8]}},
-            "bone6": {"rotation": {"0.0": [124, 0, 0], "0.6": [106, 0, 0], "1.2": [124, 0, 0]}},
+            "Upperbody": {"rotation": {"0.0": [4, -24, 0]}},
+            "Head": {"rotation": {"0.0": [-4, 17, 0]}},
+            "Rightarm": {"rotation": {"0.0": [-52, -16, -4], "0.6": [-53.5, -16, -4], "1.2": [-52, -16, -4]}},
+            "Lowerarm": {"rotation": {"0.0": [-40, 0, 0]}},
+            "Leftarm": {"rotation": {"0.0": [-74, -28, 12], "0.6": [-75, -28, 12], "1.2": [-74, -28, 12]}},
+            "Lowerarm2": {"rotation": {"0.0": [-24, -20, 0]}},
         },
     }
 

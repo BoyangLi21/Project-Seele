@@ -93,7 +93,16 @@ public final class ClientFxManager
 
     public static void addThirdImpact(ClientboundThirdImpactPacket packet)
     {
-        ACTIVE.add(new KabbalahTree(new Vec3(packet.x, packet.y, packet.z)));
+        // Face the tree toward whoever witnesses the ritual begin.
+        Vec3 origin = new Vec3(packet.x, packet.y, packet.z);
+        float faceYaw = 0.0F;
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft.player != null)
+        {
+            Vec3 toViewer = minecraft.player.position().subtract(origin);
+            faceYaw = (float) Mth.atan2(toViewer.x, toViewer.z);
+        }
+        ACTIVE.add(new KabbalahTree(origin, faceYaw));
     }
 
     public static void clear()
@@ -426,27 +435,59 @@ public final class ClientFxManager
         }
     }
 
-    /** Ten Sephirot and the canonical twenty-two connecting paths. */
+    /**
+     * The End-of-Evangelion Sephirothic tree: the canonical Golden Dawn
+     * layout (ten Sephirot in three pillars, twenty-two paths) hung INVERTED
+     * in the sky — Keter at the bottom above the ritual site, Malkuth at the
+     * apex — drawn as burning double-line geometry with ring-shaped Sephirot.
+     * It does not spin: it hangs, breathes, and lights up node by node from
+     * Keter upward. Tiferet carries the cruciform blaze at the centre.
+     */
     private static final class KabbalahTree extends WorldFx
     {
         private static final int LIFETIME = 20 * 180;
+        private static final float RISE_HEIGHT = 55.0F;
+        private static final int RISE_TICKS = 120;
+        /** Node reveal cadence: Keter first, then upward, one per interval. */
+        private static final int NODE_LIGHT_INTERVAL = 9;
+        private static final int NODE_LIGHT_TIME = 24;
+
+        // Canonical proportions (columns x = -1, 0, +1; rows per the Golden
+        // Dawn diagram), flipped so index 0 (Keter) sits lowest, in the plane
+        // z = 0 facing the viewer. Width and height chosen sky-scale.
+        private static final float COLUMN_X = 26.0F;
+        private static final float ROW_Y = 18.0F;
         private static final Vector3f[] NODES = {
-                new Vector3f(0, 82, 0),
-                new Vector3f(-22, 66, 0), new Vector3f(22, 66, 0),
-                new Vector3f(-25, 46, 0), new Vector3f(25, 46, 0),
-                new Vector3f(0, 55, 0),
-                new Vector3f(-20, 27, 0), new Vector3f(20, 27, 0),
-                new Vector3f(0, 15, 0), new Vector3f(0, 0, 0)
+                sephira(0.0F, 0.0F),    // 1 Keter (bottom of the inverted tree)
+                sephira(-1.0F, 1.0F),   // 2 Chokmah
+                sephira(1.0F, 1.0F),    // 3 Binah
+                sephira(-1.0F, 2.4F),   // 4 Chesed
+                sephira(1.0F, 2.4F),    // 5 Gevurah
+                sephira(0.0F, 3.2F),    // 6 Tiferet (centre, the crucified one)
+                sephira(-1.0F, 4.4F),   // 7 Netzach
+                sephira(1.0F, 4.4F),    // 8 Hod
+                sephira(0.0F, 5.2F),    // 9 Yesod
+                sephira(0.0F, 6.4F)     // 10 Malkuth (apex)
         };
+        /** The canonical 22 paths (verified against the traditional diagram). */
         private static final int[][] PATHS = {
                 {0,1},{0,2},{0,5},{1,2},{1,3},{1,5},{2,4},{2,5},
                 {3,4},{3,5},{3,6},{4,5},{4,7},{5,6},{5,7},{5,8},
                 {6,7},{6,8},{7,8},{6,9},{7,9},{8,9}
         };
+        private static final int TIFERET = 5;
 
-        KabbalahTree(Vec3 pos)
+        private final float faceYaw;
+
+        KabbalahTree(Vec3 pos, float faceYaw)
         {
             super(pos);
+            this.faceYaw = faceYaw;
+        }
+
+        private static Vector3f sephira(float column, float row)
+        {
+            return new Vector3f(column * COLUMN_X, row * ROW_Y, 0.0F);
         }
 
         @Override
@@ -455,37 +496,104 @@ public final class ClientFxManager
             return LIFETIME;
         }
 
+        /** 0..1 ignition of one Sephira: Keter first, climbing the tree. */
+        private static float nodeLight(float t, int index)
+        {
+            return Mth.clamp((t - 30.0F - index * NODE_LIGHT_INTERVAL) / NODE_LIGHT_TIME, 0.0F, 1.0F);
+        }
+
         @Override
         void render(PoseStack poseStack, VertexConsumer consumer, float partialTick)
         {
             float t = this.age + partialTick;
-            float reveal = easeOutCubic(Mth.clamp(t / 80.0F, 0.0F, 1.0F));
             float endFade = Mth.clamp((LIFETIME - t) / 80.0F, 0.0F, 1.0F);
-            float pulse = 0.72F + 0.20F * Mth.sin(t * 0.055F);
-            float alpha = reveal * endFade * pulse * fxIntensity();
-            poseStack.mulPose(com.mojang.math.Axis.YP.rotation(t * 0.0018F));
+            float breathe = 0.80F + 0.14F * Mth.sin(t * 0.045F);
+            float base = endFade * breathe * fxIntensity();
+            if (base <= 0.003F)
+            {
+                return;
+            }
+
+            float rise = RISE_HEIGHT * easeOutCubic(Mth.clamp(t / RISE_TICKS, 0.0F, 1.0F));
+            poseStack.pushPose();
+            poseStack.translate(0.0D, rise, 0.0D);
+            poseStack.mulPose(com.mojang.math.Axis.YP.rotation(this.faceYaw));
             Matrix4f pose = poseStack.last().pose();
 
+            // Paths: burning double lines, lit once both endpoints burn.
             for (int[] path : PATHS)
             {
-                Vector3f a = new Vector3f(NODES[path[0]]).mul(reveal);
-                Vector3f b = new Vector3f(NODES[path[1]]).mul(reveal);
-                RibbonRenderer.drawStarRibbon(pose, consumer, a, b,
-                        0.78F, 0.30F, 1.0F, 0.72F, 0.22F, alpha * 0.72F);
-                RibbonRenderer.drawStarRibbon(pose, consumer, a, b,
-                        0.24F, 0.12F, 1.0F, 0.98F, 0.82F, alpha);
+                float lit = Math.min(nodeLight(t, path[0]), nodeLight(t, path[1]));
+                if (lit <= 0.0F)
+                {
+                    continue;
+                }
+                Vector3f a = NODES[path[0]];
+                Vector3f b = NODES[path[1]];
+                Vector3f dir = new Vector3f(b).sub(a).normalize();
+                // In-plane normal (the tree stands in local XY).
+                Vector3f offset = new Vector3f(-dir.y, dir.x, 0.0F).mul(0.95F);
+                Vector3f mid = new Vector3f(a).lerp(b, 0.5F);
+                Vector3f grow = new Vector3f(b).sub(a).mul(0.5F * lit);
+                Vector3f from = new Vector3f(mid).sub(grow);
+                Vector3f to = new Vector3f(mid).add(grow);
+                float alpha = base * lit;
+                for (int s = -1; s <= 1; s += 2)
+                {
+                    Vector3f shift = new Vector3f(offset).mul(s);
+                    RibbonRenderer.drawStarRibbon(pose, consumer,
+                            new Vector3f(from).add(shift), new Vector3f(to).add(shift),
+                            0.55F, 0.55F, 1.0F, 0.46F, 0.10F, alpha * 0.62F);
+                    RibbonRenderer.drawStarRibbon(pose, consumer,
+                            new Vector3f(from).add(shift), new Vector3f(to).add(shift),
+                            0.22F, 0.22F, 1.0F, 0.90F, 0.55F, alpha);
+                }
             }
+
+            // Sephirot: double luminous rings with a soft core.
+            Vector3f axisX = new Vector3f(1.0F, 0.0F, 0.0F);
+            Vector3f axisY = new Vector3f(0.0F, 1.0F, 0.0F);
             for (int i = 0; i < NODES.length; i++)
             {
-                Vector3f c = new Vector3f(NODES[i]).mul(reveal);
-                float r = (i == 0 || i == 9 ? 5.2F : 4.0F) * (0.92F + 0.10F * Mth.sin(t * 0.08F + i));
-                RibbonRenderer.drawStarRibbon(pose, consumer,
-                        new Vector3f(c).add(-r, 0, 0), new Vector3f(c).add(r, 0, 0),
-                        r * 0.52F, r * 0.32F, 1.0F, 0.88F, 0.40F, alpha);
-                RibbonRenderer.drawStarRibbon(pose, consumer,
-                        new Vector3f(c).add(0, -r, 0), new Vector3f(c).add(0, r, 0),
-                        r * 0.52F, r * 0.32F, 1.0F, 0.96F, 0.72F, alpha);
+                float lit = nodeLight(t, i);
+                if (lit <= 0.0F)
+                {
+                    continue;
+                }
+                Vector3f c = NODES[i];
+                boolean major = i == 0 || i == TIFERET || i == 9;
+                float radius = (major ? 7.4F : 5.8F) * (0.9F + 0.1F * lit)
+                        * (1.0F + 0.045F * Mth.sin(t * 0.07F + i * 1.7F));
+                float alpha = base * lit;
+                poseStack.pushPose();
+                poseStack.translate(c.x, c.y, c.z);
+                Matrix4f nodePose = poseStack.last().pose();
+                RibbonRenderer.drawPolyRing(nodePose, consumer, axisX, axisY, 24,
+                        radius, 0.85F, 1.0F, 0.42F, 0.08F, alpha * 0.85F);
+                RibbonRenderer.drawPolyRing(nodePose, consumer, axisX, axisY, 24,
+                        radius * 0.72F, 0.38F, 1.0F, 0.88F, 0.50F, alpha);
+                // Soft inner glow.
+                RibbonRenderer.drawPolyRing(nodePose, consumer, axisX, axisY, 18,
+                        radius * 0.30F, radius * 0.26F, 1.0F, 0.72F, 0.30F, alpha * 0.35F);
+                poseStack.popPose();
             }
+
+            // Tiferet's cruciform blaze: the one nailed at the centre.
+            float crossLit = nodeLight(t, TIFERET);
+            if (crossLit > 0.0F)
+            {
+                Vector3f c = NODES[TIFERET];
+                float alpha = base * crossLit;
+                float armV = 15.0F * crossLit;
+                float armH = 9.5F * crossLit;
+                RibbonRenderer.drawStarRibbon(pose, consumer,
+                        new Vector3f(c).add(0, -armV * 0.55F, 0), new Vector3f(c).add(0, armV, 0),
+                        1.35F, 0.9F, 1.0F, 0.93F, 0.72F, alpha);
+                RibbonRenderer.drawStarRibbon(pose, consumer,
+                        new Vector3f(c).add(-armH, armV * 0.42F, 0), new Vector3f(c).add(armH, armV * 0.42F, 0),
+                        1.1F, 1.1F, 1.0F, 0.93F, 0.72F, alpha);
+            }
+            poseStack.popPose();
         }
     }
 
