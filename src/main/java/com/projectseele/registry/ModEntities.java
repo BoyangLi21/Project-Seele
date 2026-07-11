@@ -7,6 +7,7 @@ import com.projectseele.entity.SachielEntity;
 import com.projectseele.entity.MassProductionEvaEntity;
 import com.projectseele.entity.ShamshelEntity;
 import com.projectseele.entity.ZeruelEntity;
+import com.projectseele.entity.IsrafelEntity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MobCategory;
 import net.minecraftforge.registries.DeferredRegister;
@@ -65,4 +66,8 @@ public class ModEntities
     public static final RegistryObject<EntityType<ZeruelEntity>> ZERUEL = ENTITY_TYPES.register("zeruel",
             () -> EntityType.Builder.of(ZeruelEntity::new, MobCategory.MONSTER)
                     .sized(12.0F, 28.0F).fireImmune().clientTrackingRange(18).build("zeruel"));
+
+    public static final RegistryObject<EntityType<IsrafelEntity>> ISRAFEL = ENTITY_TYPES.register("israfel",
+            () -> EntityType.Builder.of(IsrafelEntity::new, MobCategory.MONSTER)
+                    .sized(9.0F, 24.0F).fireImmune().clientTrackingRange(16).build("israfel"));
 }

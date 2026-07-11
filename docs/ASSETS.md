@@ -34,7 +34,7 @@
 | 资产 | 来源 | 状态 |
 |---|---|---|
 | NERV HQ 1:1 世界存档（`run/saves/NERV_HQ_1to1_Poodcie`） | PMC 项目 `nerv-hq`，作者 Poodcie，官方镜像下载 | 仅本地测试。**如需随 mod 公开发布，必须先取得作者授权**（ROADMAP §9 行动清单） |
-| EVA-01/02、量产机、Sachiel 本机高精资源包（`run/resourcepacks/eva_real_model`，由两个 `make_smod_*_pack.py` 脚本生成） | SmOd `EVANGELION: END ADDON V1.0`（Planet Minecraft / Bedrock addon），作者 SmOd774YT，未列开放许可证 | **当前本机测试主模型来源**。仅本地测试，包内含 `_SOURCE.txt` 免责声明。**公开使用前必须取得作者许可**；生成脚本入库，模型产物永不入库 |
+| EVA-01/02、量产机、Sachiel、Israfel 本机高精资源包（`run/resourcepacks/eva_real_model`，由两个 `make_smod_*_pack.py` 脚本生成） | SmOd `EVANGELION: END ADDON V1.0`（Planet Minecraft / Bedrock addon），作者 SmOd774YT，未列开放许可证 | **当前本机测试主模型来源**。仅本地测试，包内含 `_SOURCE.txt` 免责声明。**公开使用前必须取得作者许可**；生成脚本入库，模型产物永不入库 |
 | Rei Chikita / EUD 本地参考文件 | 用户手动下载 | 已被 `.gitignore` 的 `/*.jar` 规则拦截，永不提交。Rei Chikita 只作为 SmOd 缺失时的本机 fallback/参考；EUD 1.1.0 清单标注 **CC BY-NC 4.0**，含驾驶服、LCL、三枪与 EVA 遗迹结构，但无可驾驶 EVA 模型；公开改用前仍联系作者确认署名方式 |
 
 `run/` 已 gitignore，上表资产不会进入版本库与发行物。

@@ -29,6 +29,8 @@ public class ClientEvents
                 context -> new ColossalHumanoidRenderer<>(context, ColossalHumanoidRenderer.Style.SHAMSHEL));
         event.registerEntityRenderer(ModEntities.ZERUEL.get(),
                 context -> new ColossalHumanoidRenderer<>(context, ColossalHumanoidRenderer.Style.ZERUEL));
+        event.registerEntityRenderer(ModEntities.ISRAFEL.get(), context -> new HybridAddonRenderer<>(context,
+                ColossalHumanoidRenderer.Style.SACHIEL, "israfel", 9.0F));
         event.registerEntityRenderer(ModEntities.MASS_PRODUCTION_EVA.get(), context -> new HybridAddonRenderer<>(context,
                 ColossalHumanoidRenderer.Style.MASS_PRODUCTION, "mass_production_eva", 10.0F));
     }

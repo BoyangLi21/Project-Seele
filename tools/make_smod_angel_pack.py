@@ -24,6 +24,11 @@ ASSETS = {
         "animation": "animations/entity_sachiel.animation.json",
         "texture": "textures/entity/pamobile/entity_sachiel.png",
     },
+    "israfel": {
+        "geo": "models/entity/entity_israfel.json",
+        "animation": "animations/entity_israfel.animation.json",
+        "texture": "textures/entity/pamobile/entity_israfel.png",
+    },
 }
 
 

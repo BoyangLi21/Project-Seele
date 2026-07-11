@@ -20,6 +20,7 @@ public class CommonEvents
         event.put(ModEntities.SACHIEL.get(), com.projectseele.entity.SachielEntity.createAttributes().build());
         event.put(ModEntities.SHAMSHEL.get(), com.projectseele.entity.ShamshelEntity.createAttributes().build());
         event.put(ModEntities.ZERUEL.get(), com.projectseele.entity.ZeruelEntity.createAttributes().build());
+        event.put(ModEntities.ISRAFEL.get(), com.projectseele.entity.IsrafelEntity.createAttributes().build());
         event.put(ModEntities.MASS_PRODUCTION_EVA.get(),
                 com.projectseele.entity.MassProductionEvaEntity.createAttributes().build());
     }
