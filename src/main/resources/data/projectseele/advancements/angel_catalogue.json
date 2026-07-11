@@ -11,7 +11,8 @@
   },
   "criteria": {
     "sachiel": {"trigger": "minecraft:player_killed_entity", "conditions": {"entity": {"type": "projectseele:sachiel"}}},
-    "shamshel": {"trigger": "minecraft:player_killed_entity", "conditions": {"entity": {"type": "projectseele:shamshel"}}}
+    "shamshel": {"trigger": "minecraft:player_killed_entity", "conditions": {"entity": {"type": "projectseele:shamshel"}}},
+    "zeruel": {"trigger": "minecraft:player_killed_entity", "conditions": {"entity": {"type": "projectseele:zeruel"}}}
   },
-  "requirements": [["sachiel"], ["shamshel"]]
+  "requirements": [["sachiel"], ["shamshel"], ["zeruel"]]
 }

@@ -21,7 +21,7 @@ import org.joml.Vector3f;
 /** Original direct-geometry renderer for Sachiel and SEELE's white production units. */
 public class ColossalHumanoidRenderer<T extends LivingEntity> extends EntityRenderer<T>
 {
-    public enum Style { SACHIEL, SHAMSHEL, MASS_PRODUCTION }
+    public enum Style { SACHIEL, SHAMSHEL, ZERUEL, MASS_PRODUCTION }
 
     private static final ResourceLocation TEXTURE =
             new ResourceLocation(ProjectSeele.MODID, "textures/entity/ramiel.png");
@@ -50,6 +50,10 @@ public class ColossalHumanoidRenderer<T extends LivingEntity> extends EntityRend
         else if (this.style == Style.SHAMSHEL)
         {
             renderShamshel(stack, consumer, entity.tickCount + partialTick);
+        }
+        else if (this.style == Style.ZERUEL)
+        {
+            renderZeruel(stack, consumer, entity.tickCount + partialTick);
         }
         else
         {
@@ -127,6 +131,27 @@ public class ColossalHumanoidRenderer<T extends LivingEntity> extends EntityRend
         segment(stack, c, v(-8.0F,8.5F,-5), v(-13.0F,7.0F + wave,-12), 0.26F, core);
         segment(stack, c, v(2.8F,10.5F,-1), v(8.0F,8.5F,-5), 0.38F, core);
         segment(stack, c, v(8.0F,8.5F,-5), v(13.0F,7.0F - wave,-12), 0.26F, core);
+    }
+
+    private static void renderZeruel(PoseStack stack, VertexConsumer c, float time)
+    {
+        float[] shell = {0.91F, 0.90F, 0.84F, 1.0F};
+        float[] black = {0.07F, 0.06F, 0.06F, 1.0F};
+        float[] core = {1.0F, 0.08F, 0.08F, 1.0F};
+        boxAt(stack, c, 0, 12.0F, 0, 5.4F, 7.0F, 3.0F, shell);
+        boxAt(stack, c, 0, 20.0F, 0, 4.1F, 4.2F, 2.7F, shell);
+        boxAt(stack, c, 0, 25.0F, 0, 3.0F, 2.7F, 2.4F, black);
+        boxAt(stack, c, -1.15F, 25.2F, -2.45F, 0.45F, 0.28F, 0.20F, core);
+        boxAt(stack, c, 1.15F, 25.2F, -2.45F, 0.45F, 0.28F, 0.20F, core);
+        boxAt(stack, c, 0, 17.5F, -3.05F, 1.8F, 1.8F, 0.30F, core);
+        float sweep = Mth.sin(time * 0.09F) * 1.2F;
+        // Layered flat arm ribbons, long enough to read as city-cutting blades.
+        segment(stack, c, v(-4.0F,21.0F,0), v(-11.0F,18.0F + sweep,-1), 1.6F, shell);
+        segment(stack, c, v(-11.0F,18.0F + sweep,-1), v(-23.0F,14.0F - sweep,-3), 1.15F, shell);
+        segment(stack, c, v(4.0F,21.0F,0), v(11.0F,18.0F - sweep,-1), 1.6F, shell);
+        segment(stack, c, v(11.0F,18.0F - sweep,-1), v(23.0F,14.0F + sweep,-3), 1.15F, shell);
+        segment(stack, c, v(-2.2F,8.0F,0), v(-2.8F,1.0F,0), 1.6F, black);
+        segment(stack, c, v(2.2F,8.0F,0), v(2.8F,1.0F,0), 1.6F, black);
     }
 
     private static Vector3f v(float x, float y, float z) { return new Vector3f(x,y,z); }

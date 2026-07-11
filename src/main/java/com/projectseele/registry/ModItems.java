@@ -36,6 +36,8 @@ public class ModItems
             () -> new ForgeSpawnEggItem(ModEntities.SACHIEL, 0x202623, 0xEAF0E5, new Item.Properties()));
     public static final RegistryObject<Item> SHAMSHEL_SPAWN_EGG = ITEMS.register("shamshel_spawn_egg",
             () -> new ForgeSpawnEggItem(ModEntities.SHAMSHEL, 0x5B162A, 0xEF3C4A, new Item.Properties()));
+    public static final RegistryObject<Item> ZERUEL_SPAWN_EGG = ITEMS.register("zeruel_spawn_egg",
+            () -> new ForgeSpawnEggItem(ModEntities.ZERUEL, 0xE4E2D8, 0x181414, new Item.Properties()));
     public static final RegistryObject<Item> MASS_PRODUCTION_EVA_SPAWN_EGG = ITEMS.register("mass_production_eva_spawn_egg",
             () -> new ForgeSpawnEggItem(ModEntities.MASS_PRODUCTION_EVA, 0xE2DED2, 0xA51620, new Item.Properties()));
     public static final RegistryObject<Item> SEELE_SCENARIO = ITEMS.register("seele_scenario",

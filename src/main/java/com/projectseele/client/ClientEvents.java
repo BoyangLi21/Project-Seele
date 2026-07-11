@@ -26,6 +26,8 @@ public class ClientEvents
                 context -> new ColossalHumanoidRenderer<>(context, ColossalHumanoidRenderer.Style.SACHIEL));
         event.registerEntityRenderer(ModEntities.SHAMSHEL.get(),
                 context -> new ColossalHumanoidRenderer<>(context, ColossalHumanoidRenderer.Style.SHAMSHEL));
+        event.registerEntityRenderer(ModEntities.ZERUEL.get(),
+                context -> new ColossalHumanoidRenderer<>(context, ColossalHumanoidRenderer.Style.ZERUEL));
         event.registerEntityRenderer(ModEntities.MASS_PRODUCTION_EVA.get(),
                 context -> new ColossalHumanoidRenderer<>(context, ColossalHumanoidRenderer.Style.MASS_PRODUCTION));
     }
