@@ -452,22 +452,22 @@ public final class ClientFxManager
         private static final int NODE_LIGHT_INTERVAL = 9;
         private static final int NODE_LIGHT_TIME = 24;
 
-        // Canonical proportions (columns x = -1, 0, +1; rows per the Golden
-        // Dawn diagram), flipped so index 0 (Keter) sits lowest, in the plane
-        // z = 0 facing the viewer. Width and height chosen sky-scale.
+        // Canonical Golden Dawn proportions (columns x = -1, 0, +1), upright:
+        // Keter at the apex, Malkuth at the base, in the plane z = 0 facing
+        // the viewer. Width and height chosen sky-scale.
         private static final float COLUMN_X = 26.0F;
         private static final float ROW_Y = 18.0F;
         private static final Vector3f[] NODES = {
-                sephira(0.0F, 0.0F),    // 1 Keter (bottom of the inverted tree)
-                sephira(-1.0F, 1.0F),   // 2 Chokmah
-                sephira(1.0F, 1.0F),    // 3 Binah
-                sephira(-1.0F, 2.4F),   // 4 Chesed
-                sephira(1.0F, 2.4F),    // 5 Gevurah
-                sephira(0.0F, 3.2F),    // 6 Tiferet (centre, the crucified one)
-                sephira(-1.0F, 4.4F),   // 7 Netzach
-                sephira(1.0F, 4.4F),    // 8 Hod
-                sephira(0.0F, 5.2F),    // 9 Yesod
-                sephira(0.0F, 6.4F)     // 10 Malkuth (apex)
+                sephira(0.0F, 6.4F),    // 1 Keter (apex)
+                sephira(-1.0F, 5.4F),   // 2 Chokmah
+                sephira(1.0F, 5.4F),    // 3 Binah
+                sephira(-1.0F, 4.0F),   // 4 Chesed
+                sephira(1.0F, 4.0F),    // 5 Gevurah
+                sephira(0.0F, 3.2F),    // 6 Tiferet (centre: Unit-01 crucified)
+                sephira(-1.0F, 2.0F),   // 7 Netzach
+                sephira(1.0F, 2.0F),    // 8 Hod
+                sephira(0.0F, 1.2F),    // 9 Yesod
+                sephira(0.0F, 0.0F)     // 10 Malkuth (base)
         };
         /** The canonical 22 paths (verified against the traditional diagram). */
         private static final int[][] PATHS = {
@@ -550,7 +550,9 @@ public final class ClientFxManager
                 }
             }
 
-            // Sephirot: double luminous rings with a soft core.
+            // Sephirot: luminous rings; every outer node carries a white
+            // Mass-Production Eva hovering with its wings spread, and Tiferet
+            // carries the crucified Unit-01 with wings of light (EoE staging).
             Vector3f axisX = new Vector3f(1.0F, 0.0F, 0.0F);
             Vector3f axisY = new Vector3f(0.0F, 1.0F, 0.0F);
             for (int i = 0; i < NODES.length; i++)
@@ -561,8 +563,8 @@ public final class ClientFxManager
                     continue;
                 }
                 Vector3f c = NODES[i];
-                boolean major = i == 0 || i == TIFERET || i == 9;
-                float radius = (major ? 7.4F : 5.8F) * (0.9F + 0.1F * lit)
+                boolean centre = i == TIFERET;
+                float radius = (centre ? 9.2F : 6.4F) * (0.9F + 0.1F * lit)
                         * (1.0F + 0.045F * Mth.sin(t * 0.07F + i * 1.7F));
                 float alpha = base * lit;
                 poseStack.pushPose();
@@ -572,28 +574,92 @@ public final class ClientFxManager
                         radius, 0.85F, 1.0F, 0.42F, 0.08F, alpha * 0.85F);
                 RibbonRenderer.drawPolyRing(nodePose, consumer, axisX, axisY, 24,
                         radius * 0.72F, 0.38F, 1.0F, 0.88F, 0.50F, alpha);
-                // Soft inner glow.
-                RibbonRenderer.drawPolyRing(nodePose, consumer, axisX, axisY, 18,
-                        radius * 0.30F, radius * 0.26F, 1.0F, 0.72F, 0.30F, alpha * 0.35F);
+                if (centre)
+                {
+                    drawCrucifiedUnitOne(nodePose, consumer, t, alpha);
+                }
+                else
+                {
+                    drawMassProductionEva(nodePose, consumer, t, i, alpha);
+                }
                 poseStack.popPose();
             }
-
-            // Tiferet's cruciform blaze: the one nailed at the centre.
-            float crossLit = nodeLight(t, TIFERET);
-            if (crossLit > 0.0F)
-            {
-                Vector3f c = NODES[TIFERET];
-                float alpha = base * crossLit;
-                float armV = 15.0F * crossLit;
-                float armH = 9.5F * crossLit;
-                RibbonRenderer.drawStarRibbon(pose, consumer,
-                        new Vector3f(c).add(0, -armV * 0.55F, 0), new Vector3f(c).add(0, armV, 0),
-                        1.35F, 0.9F, 1.0F, 0.93F, 0.72F, alpha);
-                RibbonRenderer.drawStarRibbon(pose, consumer,
-                        new Vector3f(c).add(-armH, armV * 0.42F, 0), new Vector3f(c).add(armH, armV * 0.42F, 0),
-                        1.1F, 1.1F, 1.0F, 0.93F, 0.72F, alpha);
-            }
             poseStack.popPose();
+        }
+
+        /** White Mass-Production Eva silhouette: winged, headless-faced, hovering. */
+        private static void drawMassProductionEva(Matrix4f pose, VertexConsumer consumer,
+                                                  float t, int index, float alpha)
+        {
+            float bob = Mth.sin(t * 0.05F + index * 1.3F) * 0.7F;
+            float flap = Mth.sin(t * 0.075F + index * 0.9F) * 1.5F;
+            float wr = 0.94F;
+            float wg = 0.94F;
+            float wb = 0.88F;
+            Vector3f hip = new Vector3f(0.0F, bob - 2.8F, 0.0F);
+            Vector3f neck = new Vector3f(0.0F, bob + 2.6F, 0.0F);
+            // Torso and head knob.
+            RibbonRenderer.drawStarRibbon(pose, consumer, hip, neck, 1.15F, 0.85F, wr, wg, wb, alpha * 0.9F);
+            RibbonRenderer.drawStarRibbon(pose, consumer, neck,
+                    new Vector3f(0.0F, bob + 3.9F, 0.0F), 0.62F, 0.5F, wr, wg, wb, alpha * 0.9F);
+            // Dangling legs.
+            RibbonRenderer.drawStarRibbon(pose, consumer, new Vector3f(-0.7F, bob - 2.8F, 0.0F),
+                    new Vector3f(-0.9F, bob - 6.4F, 0.0F), 0.5F, 0.35F, wr, wg, wb, alpha * 0.8F);
+            RibbonRenderer.drawStarRibbon(pose, consumer, new Vector3f(0.7F, bob - 2.8F, 0.0F),
+                    new Vector3f(0.9F, bob - 6.4F, 0.0F), 0.5F, 0.35F, wr, wg, wb, alpha * 0.8F);
+            // The huge wings, slowly beating.
+            for (int side = -1; side <= 1; side += 2)
+            {
+                Vector3f shoulder = new Vector3f(side * 0.9F, bob + 2.0F, 0.0F);
+                RibbonRenderer.drawStarRibbon(pose, consumer, shoulder,
+                        new Vector3f(side * 10.5F, bob + 6.0F + flap, 0.0F),
+                        2.3F, 0.5F, wr, wg, wb, alpha * 0.85F);
+                RibbonRenderer.drawStarRibbon(pose, consumer, shoulder,
+                        new Vector3f(side * 8.0F, bob + 1.2F + flap * 0.6F, 0.0F),
+                        1.5F, 0.4F, wr, wg, wb, alpha * 0.7F);
+            }
+        }
+
+        /** Unit-01 crucified at Tiferet, wings of light behind the cross. */
+        private static void drawCrucifiedUnitOne(Matrix4f pose, VertexConsumer consumer,
+                                                 float t, float alpha)
+        {
+            float pr = 0.46F;
+            float pg = 0.20F;
+            float pb = 0.72F;
+            // Wings of light first, so the body draws over them.
+            float shimmer = 0.9F + 0.1F * Mth.sin(t * 0.06F);
+            for (int side = -1; side <= 1; side += 2)
+            {
+                for (int f = 0; f < 3; f++)
+                {
+                    float ang = (28.0F + f * 22.0F) * Mth.DEG_TO_RAD;
+                    float len = (22.0F - f * 4.5F) * shimmer;
+                    Vector3f tip = new Vector3f(side * Mth.cos(ang) * len, 2.0F + Mth.sin(ang) * len, 0.4F);
+                    RibbonRenderer.drawStarRibbon(pose, consumer, new Vector3f(0.0F, 2.0F, 0.4F), tip,
+                            2.6F - f * 0.6F, 0.4F, 1.0F, 0.78F, 0.32F, alpha * (0.55F - f * 0.12F));
+                }
+            }
+            // The cross pose: purple torso, outstretched arms, horned head.
+            Vector3f hip = new Vector3f(0.0F, -4.6F, 0.0F);
+            Vector3f neck = new Vector3f(0.0F, 3.4F, 0.0F);
+            RibbonRenderer.drawStarRibbon(pose, consumer, hip, neck, 1.35F, 1.0F, pr, pg, pb, alpha);
+            RibbonRenderer.drawStarRibbon(pose, consumer,
+                    new Vector3f(-8.2F, 2.6F, 0.0F), new Vector3f(8.2F, 2.6F, 0.0F),
+                    0.95F, 0.95F, pr, pg, pb, alpha);
+            RibbonRenderer.drawStarRibbon(pose, consumer, neck,
+                    new Vector3f(0.0F, 4.9F, 0.0F), 0.68F, 0.55F, pr, pg, pb, alpha);
+            // The horn.
+            RibbonRenderer.drawStarRibbon(pose, consumer,
+                    new Vector3f(0.0F, 4.9F, -0.3F), new Vector3f(0.0F, 6.6F, -0.9F),
+                    0.22F, 0.06F, 0.92F, 0.90F, 0.95F, alpha);
+            // Legs together, crucified.
+            RibbonRenderer.drawStarRibbon(pose, consumer, hip,
+                    new Vector3f(0.0F, -9.6F, 0.0F), 0.9F, 0.5F, pr, pg, pb, alpha * 0.95F);
+            // Core glow.
+            RibbonRenderer.drawStarRibbon(pose, consumer,
+                    new Vector3f(-0.9F, 0.8F, 0.5F), new Vector3f(0.9F, 0.8F, 0.5F),
+                    0.8F, 0.8F, 0.35F, 1.0F, 0.45F, alpha);
         }
     }
 

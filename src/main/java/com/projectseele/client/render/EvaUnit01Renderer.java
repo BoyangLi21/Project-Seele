@@ -1,5 +1,6 @@
 package com.projectseele.client.render;
 
+import java.util.Set;
 import java.util.function.Consumer;
 
 import com.mojang.blaze3d.vertex.PoseStack;
@@ -23,18 +24,21 @@ import software.bernie.geckolib.renderer.GeoEntityRenderer;
  * only procedural layer left is the additive vertical aim-follow while the
  * cannon is out, because pilot view pitch is live input, not a stance.
  *
- * First person: the world model hides entirely; ClientForgeEvents renders
- * the dedicated camera-space cockpit rig instead.
+ * First person is the Unit's own body: the world model keeps rendering with
+ * only the head bones hidden (the camera sits inside them), so the arms,
+ * weapons and stances the pilot sees are EXACTLY the third-person ones —
+ * same bones, same animations, same texture.
  */
 public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
 {
+    /** Bone subtrees hidden from the pilot camera (their own head). */
+    private static final Set<String> HEAD_BONES = Set.of("head", "Head", "Neck", "horn");
+
     private boolean pilotView;
-    private final EvaCockpitArmsRenderer cockpitArmsRenderer;
 
     public EvaUnit01Renderer(EntityRendererProvider.Context context)
     {
         super(context, new EvaUnit01GeoModel());
-        this.cockpitArmsRenderer = new EvaCockpitArmsRenderer(context);
         this.shadowRadius = 3.6F;
         this.withScale(2.5F);
     }
@@ -50,13 +54,6 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
         super.render(entity, entityYaw, partialTick, poseStack, bufferSource, packedLight);
     }
 
-    /** Renders the dedicated camera-space cockpit rig (first person only). */
-    public void renderPilotArms(EvaUnit01Entity entity, float partialTick, PoseStack poseStack,
-                                MultiBufferSource bufferSource, int packedLight)
-    {
-        this.cockpitArmsRenderer.renderCockpit(entity, partialTick, poseStack, bufferSource, packedLight);
-    }
-
     @Override
     public void preRender(PoseStack poseStack, EvaUnit01Entity animatable, BakedGeoModel model,
                           @Nullable MultiBufferSource bufferSource, @Nullable VertexConsumer buffer,
@@ -68,9 +65,21 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
         boolean firstPerson = this.pilotView;
         forEachBone(model, bone ->
         {
-            bone.setHidden(firstPerson);
+            bone.setHidden(false);
             bone.setChildrenHidden(false);
         });
+        if (firstPerson)
+        {
+            // Hide only the pilot's own head; the rest of the body IS the
+            // first-person view.
+            forEachBone(model, bone ->
+            {
+                if (HEAD_BONES.contains(bone.getName()))
+                {
+                    hideSubtree(bone);
+                }
+            });
+        }
         if (!firstPerson && animatable.getWeapon() == EvaUnit01Entity.WEAPON_CANNON)
         {
             // Additive vertical aim-follow on top of the aim animation.
@@ -94,6 +103,15 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
     {
         model.getBone(name).ifPresent(bone ->
                 bone.setHidden(bone.isHidden() || !active));
+    }
+
+    private static void hideSubtree(GeoBone bone)
+    {
+        bone.setHidden(true);
+        for (GeoBone child : bone.getChildBones())
+        {
+            hideSubtree(child);
+        }
     }
 
     private static void forEachBone(BakedGeoModel model, Consumer<GeoBone> action)

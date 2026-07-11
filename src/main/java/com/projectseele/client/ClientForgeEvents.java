@@ -1,7 +1,6 @@
 package com.projectseele.client;
 
 import com.projectseele.ProjectSeele;
-import com.projectseele.client.render.EvaUnit01Renderer;
 import com.projectseele.entity.EvaUnit01Entity;
 import com.projectseele.network.SeeleNetwork;
 import com.projectseele.network.ServerboundEvaControlPacket;
@@ -11,7 +10,6 @@ import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.Mth;
-import net.minecraft.world.InteractionHand;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.ComputeFovModifierEvent;
 import net.minecraftforge.client.event.InputEvent;
@@ -31,7 +29,6 @@ public final class ClientForgeEvents
     private static boolean crouchHeld;
     private static boolean sprintHeld;
     private static boolean jumpHeld;
-    private static boolean pilotArmsLogged;
     /** Entry-plug insertion cinematic: counts down after boarding. */
     private static final int INSERTION_LENGTH = 120;
     private static int insertionTicks;
@@ -272,26 +269,13 @@ public final class ClientForgeEvents
     @SubscribeEvent
     public static void onRenderHand(RenderHandEvent event)
     {
+        // In the plug the pilot's view is the Unit's own body (the world
+        // model renders in first person with just the head hidden), so the
+        // vanilla player hand must never draw.
         Minecraft minecraft = Minecraft.getInstance();
-        EvaUnit01Entity eva = ridden(minecraft.player);
-        if (eva == null || !minecraft.options.getCameraType().isFirstPerson())
+        if (ridden(minecraft.player) != null && minecraft.options.getCameraType().isFirstPerson())
         {
-            return;
-        }
-        event.setCanceled(true);
-        if (event.getHand() != InteractionHand.MAIN_HAND)
-        {
-            return;
-        }
-        if (minecraft.getEntityRenderDispatcher().getRenderer(eva) instanceof EvaUnit01Renderer renderer)
-        {
-            renderer.renderPilotArms(eva, event.getPartialTick(), event.getPoseStack(),
-                    event.getMultiBufferSource(), event.getPackedLight());
-            if (!pilotArmsLogged)
-            {
-                pilotArmsLogged = true;
-                ProjectSeele.LOGGER.info("EVA real-bone cockpit arms renderer active");
-            }
+            event.setCanceled(true);
         }
     }
 
