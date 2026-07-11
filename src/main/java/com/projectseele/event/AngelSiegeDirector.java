@@ -18,6 +18,7 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraftforge.event.TickEvent;
+import net.minecraftforge.event.level.LevelEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 
@@ -74,6 +75,15 @@ public final class AngelSiegeDirector
                 complete(siege);
                 iterator.remove();
             }
+        }
+    }
+
+    @SubscribeEvent
+    public static void onLevelUnload(LevelEvent.Unload event)
+    {
+        if (event.getLevel() instanceof ServerLevel level)
+        {
+            ACTIVE.removeIf(siege -> siege.level == level);
         }
     }
 

@@ -1,11 +1,8 @@
 package com.projectseele.item;
 
 import com.projectseele.entity.EvaUnit01Entity;
-import com.projectseele.entity.MassProductionEvaEntity;
+import com.projectseele.event.ThirdImpactDirector;
 import com.projectseele.fx.TreeOfLifeLayout;
-import com.projectseele.network.ClientboundThirdImpactPacket;
-import com.projectseele.network.SeeleNetwork;
-import com.projectseele.registry.ModEntities;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -23,7 +20,6 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.Vec3;
-import net.minecraftforge.network.PacketDistributor;
 
 /**
  * Creative story tool. Aimed at an EVA Unit, it hoists that Unit into the
@@ -105,33 +101,7 @@ public class SeeleScenarioItem extends Item
             unit.yHeadRot = formationYaw;
         }
 
-        for (int i = 0; i < TreeOfLifeLayout.NODES.length; i++)
-        {
-            if (i == TreeOfLifeLayout.TIFERET)
-            {
-                continue; // the centre belongs to Unit-01
-            }
-            MassProductionEvaEntity mass = ModEntities.MASS_PRODUCTION_EVA.get().create(server);
-            if (mass == null)
-            {
-                continue;
-            }
-            Vec3 node = TreeOfLifeLayout.worldNode(origin, yaw, i);
-            mass.moveTo(node.x, node.y - mass.getBbHeight() * 0.5D, node.z,
-                    formationYaw, 0.0F);
-            mass.yRotO = formationYaw;
-            mass.yBodyRot = formationYaw;
-            mass.yBodyRotO = formationYaw;
-            mass.yHeadRot = formationYaw;
-            mass.yHeadRotO = formationYaw;
-            mass.setNoGravity(true);
-            mass.setNoAi(true);
-            mass.setPersistenceRequired();
-            server.addFreshEntity(mass);
-        }
-
-        SeeleNetwork.CHANNEL.send(PacketDistributor.ALL.noArg(),
-                new ClientboundThirdImpactPacket(origin.x, origin.y, origin.z, yaw, hasUnit));
+        ThirdImpactDirector.start(server, origin, yaw, hasUnit);
         serverPlayer.getCooldowns().addCooldown(this, 20 * 30);
         serverPlayer.displayClientMessage(Component.translatable("message.projectseele.scenario_started"), false);
         return InteractionResultHolder.success(stack);
