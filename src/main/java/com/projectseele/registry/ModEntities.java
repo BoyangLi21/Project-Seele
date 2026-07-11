@@ -3,6 +3,9 @@ package com.projectseele.registry;
 import com.projectseele.ProjectSeele;
 import com.projectseele.entity.EvaUnit01Entity;
 import com.projectseele.entity.RamielEntity;
+import com.projectseele.entity.SachielEntity;
+import com.projectseele.entity.MassProductionEvaEntity;
+import com.projectseele.entity.ShamshelEntity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MobCategory;
 import net.minecraftforge.registries.DeferredRegister;
@@ -41,4 +44,18 @@ public class ModEntities
                     .fireImmune()
                     .clientTrackingRange(12)
                     .build("eva_unit02"));
+
+    public static final RegistryObject<EntityType<SachielEntity>> SACHIEL = ENTITY_TYPES.register("sachiel",
+            () -> EntityType.Builder.of(SachielEntity::new, MobCategory.MONSTER)
+                    .sized(9.0F, 24.0F).fireImmune().clientTrackingRange(14).build("sachiel"));
+
+    public static final RegistryObject<EntityType<MassProductionEvaEntity>> MASS_PRODUCTION_EVA =
+            ENTITY_TYPES.register("mass_production_eva",
+                    () -> EntityType.Builder.of(MassProductionEvaEntity::new, MobCategory.MONSTER)
+                            .sized(10.0F, 26.0F).fireImmune().clientTrackingRange(16)
+                            .build("mass_production_eva"));
+
+    public static final RegistryObject<EntityType<ShamshelEntity>> SHAMSHEL = ENTITY_TYPES.register("shamshel",
+            () -> EntityType.Builder.of(ShamshelEntity::new, MobCategory.MONSTER)
+                    .sized(10.0F, 20.0F).fireImmune().clientTrackingRange(14).build("shamshel"));
 }

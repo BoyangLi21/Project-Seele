@@ -1,0 +1,17 @@
+{
+  "parent": "projectseele:first_victory",
+  "display": {
+    "icon": {"item": "projectseele:core_fragment"},
+    "title": {"translate": "advancements.projectseele.angel_catalogue.title"},
+    "description": {"translate": "advancements.projectseele.angel_catalogue.description"},
+    "frame": "challenge",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "criteria": {
+    "sachiel": {"trigger": "minecraft:player_killed_entity", "conditions": {"entity": {"type": "projectseele:sachiel"}}},
+    "shamshel": {"trigger": "minecraft:player_killed_entity", "conditions": {"entity": {"type": "projectseele:shamshel"}}}
+  },
+  "requirements": [["sachiel"], ["shamshel"]]
+}

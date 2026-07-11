@@ -17,5 +17,9 @@ public class CommonEvents
         event.put(ModEntities.EVA_UNIT01.get(), EvaUnit01Entity.createAttributes().build());
         event.put(ModEntities.EVA_UNIT00.get(), EvaUnit01Entity.createAttributes().build());
         event.put(ModEntities.EVA_UNIT02.get(), EvaUnit01Entity.createAttributes().build());
+        event.put(ModEntities.SACHIEL.get(), com.projectseele.entity.SachielEntity.createAttributes().build());
+        event.put(ModEntities.SHAMSHEL.get(), com.projectseele.entity.ShamshelEntity.createAttributes().build());
+        event.put(ModEntities.MASS_PRODUCTION_EVA.get(),
+                com.projectseele.entity.MassProductionEvaEntity.createAttributes().build());
     }
 }

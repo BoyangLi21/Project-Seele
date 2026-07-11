@@ -48,6 +48,11 @@ public final class SeeleNetwork
                 .decoder(ClientboundNukeFxPacket::new)
                 .consumerMainThread(ClientboundNukeFxPacket::handle)
                 .add();
+        CHANNEL.messageBuilder(ClientboundThirdImpactPacket.class, id++, NetworkDirection.PLAY_TO_CLIENT)
+                .encoder(ClientboundThirdImpactPacket::encode)
+                .decoder(ClientboundThirdImpactPacket::new)
+                .consumerMainThread(ClientboundThirdImpactPacket::handle)
+                .add();
         CHANNEL.messageBuilder(ServerboundEvaControlPacket.class, id++, NetworkDirection.PLAY_TO_SERVER)
                 .encoder(ServerboundEvaControlPacket::encode)
                 .decoder(ServerboundEvaControlPacket::new)

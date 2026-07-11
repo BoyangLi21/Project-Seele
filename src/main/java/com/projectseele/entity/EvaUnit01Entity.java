@@ -121,6 +121,8 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             SynchedEntityData.defineId(EvaUnit01Entity.class, EntityDataSerializers.BOOLEAN);
     private static final EntityDataAccessor<Integer> DATA_MELEE_SEQUENCE =
             SynchedEntityData.defineId(EvaUnit01Entity.class, EntityDataSerializers.INT);
+    private static final EntityDataAccessor<Integer> DATA_SMASH_SEQUENCE =
+            SynchedEntityData.defineId(EvaUnit01Entity.class, EntityDataSerializers.INT);
 
     private static final RawAnimation ANIM_IDLE = RawAnimation.begin().thenLoop("animation.eva_unit01.idle");
     private static final RawAnimation ANIM_WALK = RawAnimation.begin().thenLoop("animation.eva_unit01.walk");
@@ -157,6 +159,8 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     private int clientMeleeSequence;
     private int clientMeleeStartTick = -1000;
     private boolean clientMeleeLeft;
+    private int clientSmashSequence;
+    private int clientSmashStartTick = -1000;
 
     public EvaUnit01Entity(EntityType<? extends EvaUnit01Entity> type, Level level)
     {
@@ -188,6 +192,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         this.entityData.define(DATA_PRONE, false);
         this.entityData.define(DATA_MELEE_LEFT, false);
         this.entityData.define(DATA_MELEE_SEQUENCE, 0);
+        this.entityData.define(DATA_SMASH_SEQUENCE, 0);
     }
 
     @Override
@@ -292,6 +297,12 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         return this.clientMeleeLeft;
     }
 
+    public float getCockpitSmashAnim(float partialTick)
+    {
+        float elapsed = this.tickCount - this.clientSmashStartTick + partialTick;
+        return elapsed >= 0.0F && elapsed < 18.0F ? elapsed / 18.0F : 0.0F;
+    }
+
     // ----- pilot commands (validated by the packet handler) -----
 
     public void cycleWeapon(ServerPlayer pilot)
@@ -369,6 +380,8 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             return;
         }
         this.smashCooldown = SMASH_COOLDOWN_TICKS;
+        this.entityData.set(DATA_SMASH_SEQUENCE,
+                (this.entityData.get(DATA_SMASH_SEQUENCE) + 1) & Integer.MAX_VALUE);
         this.triggerAnim("strike", "smash");
 
         boolean knife = this.getWeapon() == WEAPON_KNIFE;
@@ -713,7 +726,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         }
         if (this.getControllingPassenger() == null)
         {
-            this.setPilotMovementState(false, false);
+            this.clearPilotMotion();
         }
     }
 
@@ -816,7 +829,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         super.removePassenger(passenger);
         this.chargingHeld = false;
         this.entityData.set(DATA_CANNON_CHARGE, 0);
-        this.setPilotMovementState(false, false);
+        this.clearPilotMotion();
     }
 
     private void setPilotMovementState(boolean crouching, boolean sprinting)
@@ -824,6 +837,14 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         this.entityData.set(DATA_CROUCHING, crouching);
         this.entityData.set(DATA_SPRINTING, sprinting);
         this.entityData.set(DATA_PRONE, false);
+        this.updatePoseDimensions();
+    }
+
+    /** Stop input-driven motion without making a prone Unit pop upright. */
+    private void clearPilotMotion()
+    {
+        this.entityData.set(DATA_CROUCHING, false);
+        this.entityData.set(DATA_SPRINTING, false);
         this.updatePoseDimensions();
     }
 
@@ -906,6 +927,15 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
                 this.clientMeleeSequence = sequence;
                 this.clientMeleeLeft = this.entityData.get(DATA_MELEE_LEFT);
                 this.clientMeleeStartTick = this.tickCount;
+            }
+        }
+        if (DATA_SMASH_SEQUENCE.equals(key))
+        {
+            int sequence = this.entityData.get(DATA_SMASH_SEQUENCE);
+            if (sequence != this.clientSmashSequence)
+            {
+                this.clientSmashSequence = sequence;
+                this.clientSmashStartTick = this.tickCount;
             }
         }
     }

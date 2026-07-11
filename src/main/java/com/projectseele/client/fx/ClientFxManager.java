@@ -11,6 +11,7 @@ import com.projectseele.client.render.RibbonRenderer;
 import com.projectseele.network.ClientboundAtFieldRipplePacket;
 import com.projectseele.network.ClientboundCannonBeamPacket;
 import com.projectseele.network.ClientboundCrossExplosionPacket;
+import com.projectseele.network.ClientboundThirdImpactPacket;
 import com.projectseele.registry.ModSounds;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.MultiBufferSource;
@@ -88,6 +89,11 @@ public final class ClientFxManager
                     packet.angelCross ? SoundSource.HOSTILE : SoundSource.PLAYERS,
                     5.0F, packet.angelCross ? 0.72F : 0.58F, false);
         }
+    }
+
+    public static void addThirdImpact(ClientboundThirdImpactPacket packet)
+    {
+        ACTIVE.add(new KabbalahTree(new Vec3(packet.x, packet.y, packet.z)));
     }
 
     public static void clear()
@@ -180,7 +186,7 @@ public final class ClientFxManager
         {
             super(pos);
             // Angel crosses are skyline-scale, not ordinary particle bursts.
-            this.scale = scale * 10.0F;
+            this.scale = scale * 5.0F;
         }
 
         @Override
@@ -417,6 +423,69 @@ public final class ClientFxManager
                     0.65F * flash, 0.40F * flash, 0.55F, 0.80F, 1.0F, alpha * 0.5F);
             RibbonRenderer.drawStarRibbon(pose, consumer, start, this.end,
                     0.28F * flash, 0.16F * flash, 1.0F, 0.99F, 0.95F, alpha * 0.95F);
+        }
+    }
+
+    /** Ten Sephirot and the canonical twenty-two connecting paths. */
+    private static final class KabbalahTree extends WorldFx
+    {
+        private static final int LIFETIME = 20 * 180;
+        private static final Vector3f[] NODES = {
+                new Vector3f(0, 82, 0),
+                new Vector3f(-22, 66, 0), new Vector3f(22, 66, 0),
+                new Vector3f(-25, 46, 0), new Vector3f(25, 46, 0),
+                new Vector3f(0, 55, 0),
+                new Vector3f(-20, 27, 0), new Vector3f(20, 27, 0),
+                new Vector3f(0, 15, 0), new Vector3f(0, 0, 0)
+        };
+        private static final int[][] PATHS = {
+                {0,1},{0,2},{0,5},{1,2},{1,3},{1,5},{2,4},{2,5},
+                {3,4},{3,5},{3,6},{4,5},{4,7},{5,6},{5,7},{5,8},
+                {6,7},{6,8},{7,8},{6,9},{7,9},{8,9}
+        };
+
+        KabbalahTree(Vec3 pos)
+        {
+            super(pos);
+        }
+
+        @Override
+        int lifetime()
+        {
+            return LIFETIME;
+        }
+
+        @Override
+        void render(PoseStack poseStack, VertexConsumer consumer, float partialTick)
+        {
+            float t = this.age + partialTick;
+            float reveal = easeOutCubic(Mth.clamp(t / 80.0F, 0.0F, 1.0F));
+            float endFade = Mth.clamp((LIFETIME - t) / 80.0F, 0.0F, 1.0F);
+            float pulse = 0.72F + 0.20F * Mth.sin(t * 0.055F);
+            float alpha = reveal * endFade * pulse * fxIntensity();
+            poseStack.mulPose(com.mojang.math.Axis.YP.rotation(t * 0.0018F));
+            Matrix4f pose = poseStack.last().pose();
+
+            for (int[] path : PATHS)
+            {
+                Vector3f a = new Vector3f(NODES[path[0]]).mul(reveal);
+                Vector3f b = new Vector3f(NODES[path[1]]).mul(reveal);
+                RibbonRenderer.drawStarRibbon(pose, consumer, a, b,
+                        0.78F, 0.30F, 1.0F, 0.72F, 0.22F, alpha * 0.72F);
+                RibbonRenderer.drawStarRibbon(pose, consumer, a, b,
+                        0.24F, 0.12F, 1.0F, 0.98F, 0.82F, alpha);
+            }
+            for (int i = 0; i < NODES.length; i++)
+            {
+                Vector3f c = new Vector3f(NODES[i]).mul(reveal);
+                float r = (i == 0 || i == 9 ? 5.2F : 4.0F) * (0.92F + 0.10F * Mth.sin(t * 0.08F + i));
+                RibbonRenderer.drawStarRibbon(pose, consumer,
+                        new Vector3f(c).add(-r, 0, 0), new Vector3f(c).add(r, 0, 0),
+                        r * 0.52F, r * 0.32F, 1.0F, 0.88F, 0.40F, alpha);
+                RibbonRenderer.drawStarRibbon(pose, consumer,
+                        new Vector3f(c).add(0, -r, 0), new Vector3f(c).add(0, r, 0),
+                        r * 0.52F, r * 0.32F, 1.0F, 0.96F, 0.72F, alpha);
+            }
         }
     }
 
