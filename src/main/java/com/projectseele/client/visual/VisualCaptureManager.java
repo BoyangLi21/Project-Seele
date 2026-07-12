@@ -10,6 +10,7 @@ import java.util.Map;
 import com.projectseele.ProjectSeele;
 import com.projectseele.client.render.EvaUnit01Renderer;
 import com.projectseele.client.render.LocalTriangleMeshLayer;
+import com.projectseele.client.render.LocalVisualAssetFingerprint;
 import com.projectseele.entity.EvaUnit01Entity;
 import com.projectseele.entity.MassProductionEvaEntity;
 import com.projectseele.fx.TreeOfLifeLayout;
@@ -18,7 +19,6 @@ import net.minecraft.client.CloudStatus;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.Screenshot;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
@@ -50,25 +50,11 @@ public final class VisualCaptureManager
             "front", "side", "back", "front_close", "side_close",
             "side_opposite_close", "face_close"
     };
-    private static final ResourceLocation MASS_MESH = new ResourceLocation(
-            ProjectSeele.MODID, "mesh/mass_production_eva.mesh.json");
     private static Session session;
     private static ImpactSession impactSession;
     private static int shutdownTicks = -1;
 
     private VisualCaptureManager() {}
-
-    private static boolean isExpectedBodyMesh(String unitName, String tag)
-    {
-        String contract = switch (unitName)
-        {
-            case "unit00" -> "triangle-mesh-3692-p17-[0-9a-f]{8}";
-            case "unit02" -> "triangle-mesh-3952-p17-[0-9a-f]{8}";
-            case "mass" -> "triangle-mesh-4901-p15-[0-9a-f]{8}";
-            default -> "triangle-mesh-4226-p17-[0-9a-f]{8}";
-        };
-        return tag.matches(contract);
-    }
 
     private static boolean isExpectedCannonMesh(String tag)
     {
@@ -182,6 +168,8 @@ public final class VisualCaptureManager
         private final CameraType originalCameraType;
         private final boolean originalHideGui;
         private final CloudStatus originalCloudStatus;
+        private final LocalVisualAssetFingerprint.Fingerprint unitFingerprint;
+        private final LocalVisualAssetFingerprint.Fingerprint massFingerprint;
         private final String unitMeshTag;
         private final String massMeshTag;
         private ArmorStand camera;
@@ -198,9 +186,11 @@ public final class VisualCaptureManager
             this.originalCameraType = minecraft.options.getCameraType();
             this.originalHideGui = minecraft.options.hideGui;
             this.originalCloudStatus = minecraft.options.cloudStatus().get();
-            this.unitMeshTag = LocalTriangleMeshLayer.captureTag(
-                    EvaUnit01Renderer.meshResourceForVariant(EvaUnit01Entity.UNIT_01));
-            this.massMeshTag = LocalTriangleMeshLayer.captureTag(MASS_MESH);
+            this.unitFingerprint = EvaUnit01Renderer.visualFingerprintForVariant(
+                    EvaUnit01Entity.UNIT_01);
+            this.massFingerprint = LocalVisualAssetFingerprint.inspect("mass_production_eva");
+            this.unitMeshTag = this.unitFingerprint.compactTag();
+            this.massMeshTag = this.massFingerprint.compactTag();
             ProjectSeele.LOGGER.info(
                     "Impact visual capture batch {} uses unit01={} mass={}",
                     CAPTURE_BATCH, this.unitMeshTag, this.massMeshTag);
@@ -210,6 +200,18 @@ public final class VisualCaptureManager
         {
             if (minecraft.level == null || minecraft.player == null)
             {
+                return false;
+            }
+            if (LocalVisualAssetFingerprint.isStrictMode()
+                    && (!this.unitFingerprint.valid() || !this.massFingerprint.valid()))
+            {
+                ProjectSeele.LOGGER.error(
+                        "Strict Impact capture refused: unit01={} mass={}",
+                        this.unitFingerprint.description(), this.massFingerprint.description());
+                if (Boolean.getBoolean("projectseele.visualCapture"))
+                {
+                    shutdownTicks = 20;
+                }
                 return false;
             }
             if (!this.positioned)
@@ -267,8 +269,7 @@ public final class VisualCaptureManager
                     massCount, facingCount, ritualCount, crucified != null,
                     this.unitMeshTag, this.massMeshTag);
             if (massCount != 9 || facingCount != 9 || ritualCount != 9 || crucified == null
-                    || !isExpectedBodyMesh("unit01", this.unitMeshTag)
-                    || !isExpectedBodyMesh("mass", this.massMeshTag))
+                    || !this.unitFingerprint.valid() || !this.massFingerprint.valid())
             {
                 ProjectSeele.LOGGER.error(
                         "VISUAL IMPACT INVALID: expected 9 front-facing ritual Mass Production EVAs, a crucified Unit-01, and both local triangle meshes");
@@ -374,6 +375,7 @@ public final class VisualCaptureManager
         private final float originalPitch;
         private final String bodyModelTag;
         private final String modelTag;
+        private final LocalVisualAssetFingerprint.Fingerprint bodyFingerprint;
         private final String unitName;
         private final String[] views;
         private final boolean massSubject;
@@ -406,14 +408,16 @@ public final class VisualCaptureManager
                 case EvaUnit01Entity.UNIT_02 -> "unit02";
                 default -> "unit01";
             };
-            this.bodyModelTag = LocalTriangleMeshLayer.captureTag(this.massSubject
-                    ? MASS_MESH : EvaUnit01Renderer.meshResourceForVariant(variant));
+            this.bodyFingerprint = this.massSubject
+                    ? LocalVisualAssetFingerprint.inspect("mass_production_eva")
+                    : EvaUnit01Renderer.visualFingerprintForVariant(variant);
+            this.bodyModelTag = this.bodyFingerprint.compactTag();
             String weaponTag = !this.massSubject && this.poseName.contains("cannon")
                     ? LocalTriangleMeshLayer.captureTag(
                             EvaUnit01Renderer.positronMeshResource()) : null;
             this.modelTag = weaponTag == null ? this.bodyModelTag
                     : this.bodyModelTag + "__positron-" + weaponTag;
-            if (!isExpectedBodyMesh(this.unitName, this.bodyModelTag)
+            if (!this.bodyFingerprint.valid()
                     || weaponTag != null && !isExpectedCannonMesh(weaponTag))
             {
                 ProjectSeele.LOGGER.error(
@@ -436,6 +440,18 @@ public final class VisualCaptureManager
         {
             if (minecraft.level == null || minecraft.player == null)
             {
+                return false;
+            }
+            if (LocalVisualAssetFingerprint.isStrictMode() && !this.bodyFingerprint.valid())
+            {
+                ProjectSeele.LOGGER.error("Strict Visual capture refused: {}",
+                        this.bodyFingerprint.description());
+                minecraft.player.displayClientMessage(Component.literal(
+                        "Visual capture refused: local high-detail resources are invalid"), false);
+                if (Boolean.getBoolean("projectseele.visualCapture"))
+                {
+                    shutdownTicks = 20;
+                }
                 return false;
             }
             Entity entity = minecraft.level.getEntity(this.entityId);

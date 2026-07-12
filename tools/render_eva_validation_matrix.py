@@ -99,9 +99,12 @@ def main() -> int:
         stem = f"eva_{unit}"
         for pose, sample_time in UNIT_POSES:
             output = batch / unit / "third_person" / pose
+            attachment_bones = (("lance",) if "lance" in pose else
+                                ("entry_plug", "plug_hatch_l", "plug_hatch_r")
+                                if pose == "activation" else ())
             run_render(args.assets, stem, pose, sample_time, output,
                        with_cannon=pose == "aim",
-                       geo_cube_bones=("lance",) if "lance" in pose else ())
+                       geo_cube_bones=attachment_bones)
             metrics = read_metrics(output)
             minimum_y = float(metrics["overall_min_y"])
             if pose != "crucified" and minimum_y < -1.0:

@@ -257,11 +257,14 @@ def load_geo_cube_mesh(geo_path, requested_bones):
         pivot = [float(value) for value in bone.get("pivot", (0, 0, 0))]
         values = []
         for cube in bone.get("cubes", []):
-            if cube.get("rotation"):
-                raise ValueError(f"rotated cube preview is unsupported: {name}")
             origin = [float(value) for value in cube["origin"]]
             size = [float(value) for value in cube["size"]]
             uv = cube.get("uv", (0, 0))
+            cube_rotation = cube.get("rotation", (0, 0, 0))
+            cube_pivot = [float(value) for value in cube.get("pivot", pivot)]
+            rotate = rotation(cube_rotation)
+            cube_matrix = multiply(translation(cube_pivot), multiply(
+                rotate, translation(tuple(-value for value in cube_pivot))))
             for face, corners in face_indices.items():
                 if isinstance(uv, dict):
                     face_uv = uv.get(face, {}).get("uv", (0, 0))
@@ -269,11 +272,12 @@ def load_geo_cube_mesh(geo_path, requested_bones):
                     face_uv = uv
                 u = (float(face_uv[0]) + 0.5) / texture_width
                 v = (float(face_uv[1]) + 0.5) / texture_height
-                normal = normals[face]
+                normal = transform(rotate, normals[face])
                 points = []
                 for corner in corners:
                     absolute = [origin[axis] + size[axis] * corner[axis]
                                 for axis in range(3)]
+                    absolute = transform(cube_matrix, absolute)
                     points.append([absolute[axis] - pivot[axis] for axis in range(3)])
                 for index in (0, 1, 2, 0, 2, 3):
                     values.extend((*points[index], u, v, *normal))
@@ -370,7 +374,8 @@ def hidden_bones(parents, roots):
     return hidden
 
 
-def first_person_camera(stance, view, eye_height=None, forward_offset=None):
+def first_person_camera(stance, view, eye_height=None, forward_offset=None,
+                        right_offset=None):
     """Return camera position and orthonormal axes in model-pixel space.
 
     Tiger's animated hands move toward +Z, matching the real rider's positive
@@ -384,7 +389,8 @@ def first_person_camera(stance, view, eye_height=None, forward_offset=None):
                          else float(forward_offset))
     pitch_degrees = FIRST_PERSON_PITCH[view]
     pitch = math.radians(pitch_degrees)
-    camera = (0.0,
+    effective_right = 0.0 if right_offset is None else float(right_offset)
+    camera = (effective_right * MODEL_PIXELS_PER_BLOCK,
               effective_eye_height * MODEL_PIXELS_PER_BLOCK,
               effective_forward * MODEL_PIXELS_PER_BLOCK)
     right = (-1.0, 0.0, 0.0)
@@ -442,11 +448,11 @@ def viewport_intersection(polygon, aspect):
 
 def collect_first_person_scene(mesh, texture_path, matrices, pivots, parents,
                                stance, view, fov, aspect, near_blocks,
-                               eye_height=None, forward_offset=None,
+                               eye_height=None, forward_offset=None, right_offset=None,
                                extra_hidden=(), attachments=()):
     (camera, right, up, forward, pitch, effective_eye_height,
      effective_forward) = first_person_camera(
-        stance, view, eye_height, forward_offset)
+        stance, view, eye_height, forward_offset, right_offset)
     near = near_blocks * MODEL_PIXELS_PER_BLOCK
     tangent = math.tan(math.radians(fov) / 2.0)
     hidden = hidden_bones(parents, FIRST_PERSON_HIDDEN_ROOTS)
@@ -751,6 +757,8 @@ def parse_args():
                         help="preview-only rider eye height override in blocks")
     parser.add_argument("--camera-forward", type=float,
                         help="preview-only rider forward socket override in blocks")
+    parser.add_argument("--camera-right", type=float,
+                        help="preview-only rider socket offset toward model right in blocks")
     parser.add_argument("--hide-bone", action="append", default=[],
                         help=("preview-only exact mesh bone to omit from first-person output; "
                               "may be repeated"))
@@ -781,7 +789,8 @@ def main():
         raise SystemExit("--first-person-aspect must be positive")
     if args.first_person_near <= 0.0:
         raise SystemExit("--first-person-near must be positive")
-    if ((args.camera_eye_height is not None or args.camera_forward is not None)
+    if ((args.camera_eye_height is not None or args.camera_forward is not None
+            or args.camera_right is not None)
             and not args.first_person_stance):
         raise SystemExit("camera overrides require --first-person-stance")
     if args.hide_bone and not args.first_person_stance:
@@ -847,19 +856,22 @@ def main():
                 mesh, args.texture, matrices, pivots, parents,
                 args.first_person_stance, view, args.first_person_fov,
                 args.first_person_aspect, args.first_person_near,
-                args.camera_eye_height, args.camera_forward,
+                args.camera_eye_height, args.camera_forward, args.camera_right,
                 args.hide_bone, attachments)
             scenes[view] = scene
             perspective_metrics[view] = diagnostic
         paths = []
         output_slug = f"{slug}_first_person_{args.first_person_stance}"
-        if args.camera_eye_height is not None or args.camera_forward is not None:
+        if (args.camera_eye_height is not None or args.camera_forward is not None
+                or args.camera_right is not None):
             socket = FIRST_PERSON_SOCKETS[args.first_person_stance]
             eye = (socket["eye_height"] if args.camera_eye_height is None
                    else args.camera_eye_height)
             forward = (socket["forward"] if args.camera_forward is None
                        else args.camera_forward)
             camera_tag = f"eye{eye:.2f}_forward{forward:.2f}".replace(".", "p")
+            if args.camera_right is not None:
+                camera_tag += f"_right{args.camera_right:.2f}".replace(".", "p")
             output_slug += f"_{camera_tag}"
         if args.hide_bone:
             hidden_tag = "_".join(re.sub(r"[^a-zA-Z0-9_-]+", "_", name)

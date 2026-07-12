@@ -3,6 +3,7 @@ package com.projectseele;
 import com.projectseele.alarm.AngelAlarmSystem;
 import com.projectseele.entity.Angel;
 import com.projectseele.entity.RamielEntity;
+import com.projectseele.event.ThirdImpactDirector;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Mob;
 import net.minecraftforge.event.TickEvent;
@@ -63,6 +64,25 @@ public class GameEvents
         if (event.getEntity() instanceof ServerPlayer player)
         {
             AngelAlarmSystem.syncTo(player);
+            ThirdImpactDirector.syncTo(player);
+        }
+    }
+
+    @SubscribeEvent
+    public static void onPlayerChangedDimension(PlayerEvent.PlayerChangedDimensionEvent event)
+    {
+        if (event.getEntity() instanceof ServerPlayer player)
+        {
+            ThirdImpactDirector.syncTo(player);
+        }
+    }
+
+    @SubscribeEvent
+    public static void onPlayerRespawn(PlayerEvent.PlayerRespawnEvent event)
+    {
+        if (event.getEntity() instanceof ServerPlayer player)
+        {
+            ThirdImpactDirector.syncTo(player);
         }
     }
 

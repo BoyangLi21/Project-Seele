@@ -73,11 +73,13 @@ Unit must not orbit, mirror, or independently rotate either arm. A run is
 invalid if a camera misses the Unit, a fixture occludes it, or an expected
 weapon is absent.
 
-Every filename includes the render source observed by the client, for example
-`triangle-mesh-4226-p17-<crc>`. Part count plus content CRC distinguishes the
-old 15-part cache from the reviewed 17-part mesh; cannon poses append their own
-`positron-triangle-mesh-14391-p1-<crc>` tag. `mesh-missing` invalidates the
-batch. All poses from one client run share the same
+Every filename now includes the complete render source observed by the client,
+for example `eva_unit01-triangle-mesh-4226-p17-<crc>-g<hash>-a<hash>-t<hash>-s<hash>`.
+The suffixes identify geometry, animation, texture and source pack; all four
+resources must exist and come from that same pack. Part count plus content CRC
+distinguishes the old 15-part cache from the reviewed 17-part mesh; cannon poses
+append their own `positron-triangle-mesh-14391-p1-<crc>` tag. Missing, mixed or
+wrong-contract resources invalidate the batch. All poses from one client run share the same
 timestamped batch directory. Evidence must cite both the batch directory and
 the tagged filename; this prevents screenshots from separate models or runs
 from being mistaken for one sequence. If the source tag changes between poses,
@@ -96,8 +98,10 @@ the complete Mass Production wing half, rejects every old body/head/cannon
 fallback cube and checks Unit-00's shield contract. Each Tiger EVA body has exactly the
 same 17 semantic mesh parts, including `foot_l` under `shin_l` and `foot_r`
 under `shin_r`; attachment-only Gecko bones are additional to that count. A
-failed preflight stops the launcher; high-detail Geo is fail-closed and can no
-longer reveal the old cube body or extra horn during a mesh failure.
+failed preflight stops the launcher. Visual Lab and the normal desktop test
+also enable runtime strict mode: a stale/mixed ResourceManager pack is logged
+with full SHA-256 evidence and the renderer refuses the obsolete fallback
+instead of revealing an old cube body or extra horn.
 
 ## Unit-01 acceptance gate
 
@@ -190,10 +194,14 @@ marked pending until a new `impact_front.png` exists.
 texture, Gecko skeleton and animation JSON used at runtime. It also converts
 selected Gecko cube attachments (`--geo-cube-bone`) so shields, Longinus,
 replica lances and insertion hardware cannot pass while invisible or below
-ground. It samples a real
+ground. Rotated Blockbench cubes are included, so the faceted entry plug and
+its end caps are no longer silently omitted. It samples a real
 animation time through the parent hierarchy, writes front/side/back contact
 sheets, overlays joint links and emits per-bone ground/contact metrics. Preview
 overrides make candidate angles reviewable without changing the animation file.
+`--camera-forward`, `--camera-eye-height` and `--camera-right` provide a
+three-axis first-person socket scan; a candidate is adopted only after reading
+the PNG, not merely because a polygon counter says both arms exist.
 
 The same tool now has a perspective first-person gate. For example, run these
 three commands against the active local pack (replace `<base>` with

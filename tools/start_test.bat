@@ -175,6 +175,8 @@ if /i "%~1"=="visual" (
         exit /b 2
     )
 ) else (
-    call gradlew.bat runClient
+    rem Local desktop testing is fail-closed: never display the obsolete
+    rem fallback body when the active ResourceManager sees a stale/mixed pack.
+    call gradlew.bat runClient -PstrictHighDetail=true
 )
 pause

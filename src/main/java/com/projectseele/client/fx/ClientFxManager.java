@@ -16,6 +16,7 @@ import com.projectseele.network.ClientboundThirdImpactPacket;
 import com.projectseele.registry.ModSounds;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.LightTexture;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
@@ -41,6 +42,7 @@ import org.joml.Vector3f;
 public final class ClientFxManager
 {
     private static final List<WorldFx> ACTIVE = new ArrayList<>();
+    private static ClientLevel activeLevel;
     // Lightning's additive pass vanished entirely in actual framebuffer
     // captures on the current NVIDIA/Forge stack. The Tree needs a stable
     // position-colour quad pass; other transient energy FX keep lightning.
@@ -101,9 +103,17 @@ public final class ClientFxManager
 
     public static void addThirdImpact(ClientboundThirdImpactPacket packet)
     {
+        ensureActiveLevel();
         // The server dictates the facing so the light geometry lands exactly
         // on the Mass-Production Evas it parked on the Sephirot.
-        ACTIVE.add(new KabbalahTree(new Vec3(packet.x, packet.y, packet.z), packet.yaw, packet.hasUnit));
+        Vec3 position = new Vec3(packet.x, packet.y, packet.z);
+        // Login, respawn and dimension-change synchronization can all resend
+        // one running event. Replace that Tree instead of stacking duplicate
+        // geometry and labels at the same origin.
+        ACTIVE.removeIf(fx -> fx instanceof KabbalahTree tree
+                && tree.pos.distanceToSqr(position) < 1.0E-4D);
+        ACTIVE.add(new KabbalahTree(position, packet.yaw, packet.hasUnit,
+                packet.initialTreeAge));
         if (Boolean.getBoolean("projectseele.visualCapture")
                 && "impact".equals(System.getProperty("projectseele.visualCaptureUnit")))
         {
@@ -115,6 +125,7 @@ public final class ClientFxManager
     public static void clear()
     {
         ACTIVE.clear();
+        activeLevel = null;
     }
 
     @SubscribeEvent
@@ -126,9 +137,10 @@ public final class ClientFxManager
         }
         if (Minecraft.getInstance().level == null)
         {
-            ACTIVE.clear();
+            clear();
             return;
         }
+        ensureActiveLevel();
         Iterator<WorldFx> it = ACTIVE.iterator();
         while (it.hasNext())
         {
@@ -137,6 +149,20 @@ public final class ClientFxManager
             {
                 it.remove();
             }
+        }
+    }
+
+    private static void ensureActiveLevel()
+    {
+        ClientLevel level = Minecraft.getInstance().level;
+        if (activeLevel == null)
+        {
+            activeLevel = level;
+        }
+        else if (activeLevel != level)
+        {
+            ACTIVE.clear();
+            activeLevel = level;
         }
     }
 
@@ -509,11 +535,12 @@ public final class ClientFxManager
         private final float faceYaw;
         private final boolean hasUnit;
 
-        KabbalahTree(Vec3 pos, float faceYaw, boolean hasUnit)
+        KabbalahTree(Vec3 pos, float faceYaw, boolean hasUnit, int initialAge)
         {
             super(pos);
             this.faceYaw = faceYaw;
             this.hasUnit = hasUnit;
+            this.age = Mth.clamp(initialAge, 0, LIFETIME - 1);
         }
 
         private static Vector3f node(int index)

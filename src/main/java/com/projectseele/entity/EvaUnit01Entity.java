@@ -129,6 +129,10 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     private static final double LAUNCH_TARGET_ABOVE_BED = 32.0D;
     private static final double SILO_ENTRY_MIN_HEIGHT = 18.0D;
     private static final double SILO_ENTRY_MAX_HEIGHT = 27.5D;
+    private static final double SILO_ENTRY_MIN_REAR_DOT = 0.62D;
+    private static final double SILO_ENTRY_MIN_DISTANCE = 4.0D;
+    private static final double SILO_ENTRY_MAX_DISTANCE = 11.0D;
+    private static final int NO_LAUNCH_CARRIER = Integer.MIN_VALUE;
 
     private static final EntityDataAccessor<Integer> DATA_WEAPON =
             SynchedEntityData.defineId(EvaUnit01Entity.class, EntityDataSerializers.INT);
@@ -217,6 +221,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     private int clientSmashStartTick = -1000;
     @Nullable
     private BlockPos launchBedPos;
+    private int launchCarrierY = NO_LAUNCH_CARRIER;
 
     public EvaUnit01Entity(EntityType<? extends EvaUnit01Entity> type, Level level)
     {
@@ -281,6 +286,10 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             tag.putInt("SeeleLaunchTicks", this.getLaunchTicks());
             tag.putInt("SeeleActivationTicks", this.getActivationTicks());
             tag.putLong("SeeleLaunchBed", this.launchBedPos.asLong());
+            if (this.launchCarrierY != NO_LAUNCH_CARRIER)
+            {
+                tag.putInt("SeeleLaunchCarrierY", this.launchCarrierY);
+            }
         }
     }
 
@@ -297,6 +306,9 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             this.entityData.set(DATA_LAUNCH_PHASE, phase);
             this.entityData.set(DATA_LAUNCH_TICKS, Math.max(0, tag.getInt("SeeleLaunchTicks")));
             this.entityData.set(DATA_ACTIVATION_TICKS, Math.max(0, tag.getInt("SeeleActivationTicks")));
+            this.launchCarrierY = tag.contains("SeeleLaunchCarrierY")
+                    ? tag.getInt("SeeleLaunchCarrierY")
+                    : Mth.floor(this.getY()) - 1;
             this.setNoGravity(phase == LAUNCH_ASCENT || crucified);
         }
         else
@@ -307,6 +319,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             this.entityData.set(DATA_LAUNCH_PHASE, LAUNCH_IDLE);
             this.entityData.set(DATA_LAUNCH_TICKS, 0);
             this.launchBedPos = null;
+            this.launchCarrierY = NO_LAUNCH_CARRIER;
             if (crucified)
             {
                 this.setNoGravity(true);
@@ -403,6 +416,12 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     public int getLaunchTicks()
     {
         return this.entityData.get(DATA_LAUNCH_TICKS);
+    }
+
+    /** Current mag-lev carrier layer, or {@link Integer#MIN_VALUE} while parked. */
+    public int getLaunchCarrierY()
+    {
+        return this.launchCarrierY;
     }
 
     /** The armed carrier bed remains known while the EVA is rising above scan range. */
@@ -1013,6 +1032,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         this.launchBedPos = bed.immutable();
         this.entityData.set(DATA_LAUNCH_PHASE, LAUNCH_LOCKED);
         this.entityData.set(DATA_LAUNCH_TICKS, this.getActivationTicks());
+        this.launchCarrierY = bed.getY();
         this.setDeltaMovement(Vec3.ZERO);
         this.fallDistance = 0.0F;
         ProjectSeele.LOGGER.info("NERV launch locked: eva={} bed={} targetY={}",
@@ -1081,9 +1101,13 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             double targetY = this.launchBedPos.getY() + LAUNCH_TARGET_ABOVE_BED;
             double remainingHeight = targetY - this.getY();
             int remainingTicks = this.getLaunchTicks() - 1;
+            this.updateMovingCarrier();
             if (remainingHeight <= 0.2D || remainingTicks <= 0)
             {
+                this.clearMovingCarrierBelowSurface();
                 this.setSurfaceCarrier(true);
+                this.launchCarrierY = this.launchBedPos.getY()
+                        + (int) LAUNCH_TARGET_ABOVE_BED - 1;
                 this.setPos(this.launchBedPos.getX() + 0.5D, targetY, this.launchBedPos.getZ() + 0.5D);
                 this.setDeltaMovement(0.0D, 0.12D, 0.0D);
                 this.setNoGravity(false);
@@ -1126,6 +1150,78 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         }
     }
 
+    /** Move the visible 11x11 mag-lev carrier directly below the EVA's feet. */
+    private void updateMovingCarrier()
+    {
+        if (this.launchBedPos == null || !(this.level() instanceof ServerLevel))
+        {
+            return;
+        }
+        int bedY = this.launchBedPos.getY();
+        int deckY = bedY + (int) LAUNCH_TARGET_ABOVE_BED - 1;
+        int desiredY = Mth.clamp(Mth.floor(this.getY()) - 1, bedY, deckY);
+        if (desiredY == this.launchCarrierY)
+        {
+            return;
+        }
+        if (this.launchCarrierY > bedY && this.launchCarrierY < deckY)
+        {
+            this.setMovingCarrierLayer(this.launchCarrierY, false);
+        }
+        if (desiredY > bedY && desiredY < deckY)
+        {
+            this.setMovingCarrierLayer(desiredY, true);
+        }
+        this.launchCarrierY = desiredY;
+        int travelled = desiredY - bedY;
+        if (travelled == 1 || travelled == 16 || desiredY == deckY - 1)
+        {
+            ProjectSeele.LOGGER.info("NERV carrier progress: eva={} carrierY={} travelled={}/31",
+                    this.getStringUUID(), desiredY, travelled);
+        }
+    }
+
+    private void clearMovingCarrierBelowSurface()
+    {
+        if (this.launchBedPos == null)
+        {
+            return;
+        }
+        int bedY = this.launchBedPos.getY();
+        int deckY = bedY + (int) LAUNCH_TARGET_ABOVE_BED - 1;
+        if (this.launchCarrierY > bedY && this.launchCarrierY < deckY)
+        {
+            this.setMovingCarrierLayer(this.launchCarrierY, false);
+        }
+    }
+
+    private void setMovingCarrierLayer(int y, boolean present)
+    {
+        if (this.launchBedPos == null || !(this.level() instanceof ServerLevel serverLevel))
+        {
+            return;
+        }
+        for (int x = -5; x <= 5; x++)
+        {
+            for (int z = -5; z <= 5; z++)
+            {
+                BlockPos block = new BlockPos(this.launchBedPos.getX() + x, y,
+                        this.launchBedPos.getZ() + z);
+                boolean rim = Math.abs(x) == 5 || Math.abs(z) == 5;
+                if (present)
+                {
+                    serverLevel.setBlock(block, rim ? Blocks.IRON_BLOCK.defaultBlockState()
+                            : Blocks.LIGHT_GRAY_CONCRETE.defaultBlockState(), 3);
+                }
+                else if (serverLevel.getBlockState(block).is(Blocks.IRON_BLOCK)
+                        || serverLevel.getBlockState(block).is(Blocks.LIGHT_GRAY_CONCRETE))
+                {
+                    serverLevel.setBlock(block, Blocks.AIR.defaultBlockState(), 3);
+                }
+            }
+        }
+    }
+
     /** Opens/closes the split surface carrier without touching unrelated player blocks. */
     private void setSurfaceCarrier(boolean closed)
     {
@@ -1157,13 +1253,31 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
 
     private void resetLaunchSequence()
     {
+        if (this.getLaunchPhase() == LAUNCH_ASCENT)
+        {
+            this.clearMovingCarrierBelowSurface();
+            this.setSurfaceCarrier(true);
+        }
         this.entityData.set(DATA_LAUNCH_PHASE, LAUNCH_IDLE);
         this.entityData.set(DATA_LAUNCH_TICKS, 0);
         this.launchBedPos = null;
+        this.launchCarrierY = NO_LAUNCH_CARRIER;
         if (!this.isCrucified())
         {
             this.setNoGravity(false);
         }
+    }
+
+    @Override
+    public void die(DamageSource source)
+    {
+        // /kill or lethal combat during ascent must not strand a carrier
+        // layer inside the shaft or leave the surface aperture open.
+        if (this.isLaunchSequenceActive())
+        {
+            this.resetLaunchSequence();
+        }
+        super.die(source);
     }
 
     /**
@@ -1235,6 +1349,22 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             {
                 double relativeHeight = player.getY() - this.getY();
                 if (relativeHeight < SILO_ENTRY_MIN_HEIGHT || relativeHeight > SILO_ENTRY_MAX_HEIGHT)
+                {
+                    if (!this.level().isClientSide)
+                    {
+                        player.displayClientMessage(
+                                Component.translatable("message.projectseele.use_entry_gantry"), true);
+                    }
+                    return InteractionResult.sidedSuccess(this.level().isClientSide);
+                }
+                Vec3 horizontal = new Vec3(player.getX() - this.getX(), 0.0D,
+                        player.getZ() - this.getZ());
+                double distance = horizontal.length();
+                Vec3 rear = this.getForward().multiply(-1.0D, 0.0D, -1.0D).normalize();
+                double rearDot = distance > 1.0E-4D
+                        ? horizontal.scale(1.0D / distance).dot(rear) : -1.0D;
+                if (distance < SILO_ENTRY_MIN_DISTANCE || distance > SILO_ENTRY_MAX_DISTANCE
+                        || rearDot < SILO_ENTRY_MIN_REAR_DOT)
                 {
                     if (!this.level().isClientSide)
                     {

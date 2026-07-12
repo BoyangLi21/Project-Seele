@@ -41,6 +41,7 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
     private static final Set<String> PRONE_CAMERA_MESH_COVER = Set.of(
             "torso_lower", "torso_upper");
     private boolean pilotView;
+    private boolean strictFailureReported;
 
     public EvaUnit01Renderer(EntityRendererProvider.Context context)
     {
@@ -58,6 +59,18 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
     public void render(EvaUnit01Entity entity, float entityYaw, float partialTick, PoseStack poseStack,
                        MultiBufferSource bufferSource, int packedLight)
     {
+        LocalVisualAssetFingerprint.Fingerprint fingerprint =
+                visualFingerprintForVariant(entity.getUnitVariant());
+        if (LocalVisualAssetFingerprint.isStrictMode() && !fingerprint.valid())
+        {
+            if (!this.strictFailureReported)
+            {
+                this.strictFailureReported = true;
+                ProjectSeele.LOGGER.error(
+                        "Strict high-detail EVA render refused: {}", fingerprint.description());
+            }
+            return;
+        }
         Minecraft minecraft = Minecraft.getInstance();
         this.pilotView = minecraft.options.getCameraType().isFirstPerson()
                 && minecraft.getCameraEntity() != null
@@ -142,6 +155,16 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
     public static ResourceLocation positronMeshResource()
     {
         return POSITRON_MESH;
+    }
+
+    public static LocalVisualAssetFingerprint.Fingerprint visualFingerprintForVariant(int variant)
+    {
+        return LocalVisualAssetFingerprint.inspect(switch (variant)
+        {
+            case EvaUnit01Entity.UNIT_00 -> "eva_unit00";
+            case EvaUnit01Entity.UNIT_02 -> "eva_unit02";
+            default -> "eva_unit01";
+        });
     }
 
     private boolean shouldRenderBodyMesh(EvaUnit01Entity entity, GeoBone bone)

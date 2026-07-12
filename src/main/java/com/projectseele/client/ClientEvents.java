@@ -3,6 +3,7 @@ package com.projectseele.client;
 import com.projectseele.ProjectSeele;
 import com.projectseele.client.render.EvaUnit01Renderer;
 import com.projectseele.client.render.LocalTriangleMeshLayer;
+import com.projectseele.client.render.LocalVisualAssetFingerprint;
 import com.projectseele.client.render.RamielRenderer;
 import com.projectseele.client.render.ColossalHumanoidRenderer;
 import com.projectseele.client.render.HybridAddonRenderer;
@@ -61,6 +62,9 @@ public class ClientEvents
     public static void onRegisterReloadListeners(RegisterClientReloadListenersEvent event)
     {
         event.registerReloadListener((ResourceManagerReloadListener) resourceManager ->
-                LocalTriangleMeshLayer.clearCache());
+        {
+            LocalTriangleMeshLayer.clearCache();
+            LocalVisualAssetFingerprint.clearCache();
+        });
     }
 }

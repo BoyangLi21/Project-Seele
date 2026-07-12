@@ -119,6 +119,9 @@ minecraft {
             if (project.hasProperty('visualCapture')) {
                 property 'projectseele.visualCapture', 'true'
             }
+            if (project.hasProperty('strictHighDetail')) {
+                property 'projectseele.strictHighDetail', 'true'
+            }
             if (project.hasProperty('visualCapturePose')) {
                 property 'projectseele.visualCapturePose', project.property('visualCapturePose')
             }

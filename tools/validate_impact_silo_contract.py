@@ -68,6 +68,10 @@ def validate_tree(gate: Gate) -> None:
     layout = read("src/main/java/com/projectseele/fx/TreeOfLifeLayout.java")
     client_fx = read("src/main/java/com/projectseele/client/fx/ClientFxManager.java")
     director = read("src/main/java/com/projectseele/event/ThirdImpactDirector.java")
+    saved_data = read("src/main/java/com/projectseele/event/ThirdImpactSavedData.java")
+    packet = read("src/main/java/com/projectseele/network/ClientboundThirdImpactPacket.java")
+    network = read("src/main/java/com/projectseele/network/SeeleNetwork.java")
+    game_events = read("src/main/java/com/projectseele/GameEvents.java")
     entity = read("src/main/java/com/projectseele/entity/EvaUnit01Entity.java")
     animation_doc = json.loads(read(
         "src/main/resources/assets/projectseele/animations/eva_unit01.animation.json"))
@@ -235,6 +239,24 @@ def validate_tree(gate: Gate) -> None:
         and "unitAtTiferet" in director,
         "story and preview paths emit structural tableau evidence",
     )
+    persistence = all(token in saved_data for token in (
+        "extends SavedData", "projectseele_third_impact", "DATA_VERSION = 1",
+        "OriginX", "OriginY", "OriginZ", "Vessels", "Map<Integer, UUID>",
+    )) and all(token in director for token in (
+        "ensureRestored(level)", "reconcileRestoredImpact", "formationChunksLoaded",
+        "persist(impact)", "removePersisted(impact)", "if (!impact.persistent)",
+    ))
+    gate.require("impact.saved_timeline", persistence,
+                 "versioned per-dimension timeline restores node-indexed vessels")
+    resync = all(token in packet for token in (
+        "initialTreeAge", "buf.readVarInt()", "buf.writeVarInt(this.initialTreeAge)",
+    )) and 'PROTOCOL_VERSION = "2"' in network \
+        and all(token in game_events for token in (
+            "PlayerLoggedInEvent", "PlayerChangedDimensionEvent", "PlayerRespawnEvent",
+            "ThirdImpactDirector.syncTo(player)",
+        )) and "PacketDistributor.DIMENSION" in director
+    gate.require("impact.client_resync", resync,
+                 "protocol-v2 login/dimension/respawn sync resumes the current Tree age")
 
 
 def number(source: str, name: str) -> float:
@@ -278,10 +300,18 @@ def validate_silo(gate: Gate) -> None:
     ladder = (
         "for (int y = -26; y <= -7; y++)" in builder
         and "LadderBlock.FACING, Direction.NORTH" in builder
-        and "bed.offset(0, 4, 13)" in command
-        and "bed.offset(0, 23, 13)" in command
+        and "for (int y = 4; y <= 23; y++)" in command
+        and "ladderContinuous" in command
     )
-    gate.require("silo.gantry_access", ladder, "continuous ladder endpoints are runtime-audited")
+    gate.require("silo.gantry_access", ladder, "all 20 ladder blocks are runtime-audited")
+
+    rear_entry = all(token in entity for token in (
+        "SILO_ENTRY_MIN_REAR_DOT", "SILO_ENTRY_MIN_DISTANCE", "SILO_ENTRY_MAX_DISTANCE",
+        "this.getForward().multiply(-1.0D, 0.0D, -1.0D).normalize()",
+        "rearDot < SILO_ENTRY_MIN_REAR_DOT",
+    ))
+    gate.require("silo.rear_entry_gate", rear_entry,
+                 "high entry requires the rear-side distance and facing cone")
 
     target = number(entity, "LAUNCH_TARGET_ABOVE_BED")
     ascent_ticks = number(entity, "LAUNCH_ASCENT_TICKS")
@@ -299,6 +329,13 @@ def validate_silo(gate: Gate) -> None:
         launch_contract,
         f"targetAboveBed={target:g} ascentTicks={ascent_ticks:g} carrier opens/closes",
     )
+    moving_carrier = all(token in entity for token in (
+        "SeeleLaunchCarrierY", "updateMovingCarrier()", "setMovingCarrierLayer",
+        "for (int x = -5; x <= 5; x++)", "for (int z = -5; z <= 5; z++)",
+        "NERV carrier progress", "this.setSurfaceCarrier(true)",
+    ))
+    gate.require("silo.moving_carrier", moving_carrier,
+                 "persisted 11x11 carrier follows the EVA and closes on abort")
     log_contract = all(token in entity for token in (
         "NERV launch locked", "NERV launch ascent", "NERV launch surface clear"
     )) and "NERV silo audit" in command
@@ -314,7 +351,8 @@ def validate_silo(gate: Gate) -> None:
     )
     gate.require(
         "silo.documentation",
-        "/seele silo audit" in doc and "clearShafts=3" in doc,
+        "/seele silo audit" in doc and "clearShafts=3" in doc
+        and "11×11" in doc and "背部扇区" in doc,
         "manual test names the structural gate and expected result",
     )
 

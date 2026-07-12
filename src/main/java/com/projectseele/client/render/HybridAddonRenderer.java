@@ -25,12 +25,15 @@ public class HybridAddonRenderer<T extends LivingEntity & GeoEntity> extends Ent
     private final ResourceLocation texture;
     private final ResourceLocation animation;
     private final ResourceLocation mesh;
+    private final String assetName;
+    private boolean strictFailureReported;
 
     public HybridAddonRenderer(EntityRendererProvider.Context context,
                                ColossalHumanoidRenderer.Style fallbackStyle,
                                String assetName, float scale)
     {
         super(context);
+        this.assetName = assetName;
         this.geometry = new ResourceLocation(ProjectSeele.MODID, "geo/" + assetName + ".geo.json");
         this.texture = new ResourceLocation(ProjectSeele.MODID, "textures/entity/" + assetName + ".png");
         this.animation = new ResourceLocation(ProjectSeele.MODID, "animations/" + assetName + ".animation.json");
@@ -55,6 +58,23 @@ public class HybridAddonRenderer<T extends LivingEntity & GeoEntity> extends Ent
     public void render(T entity, float yaw, float partialTick, PoseStack poseStack,
                        MultiBufferSource buffers, int packedLight)
     {
+        if (LocalVisualAssetFingerprint.isStrictMode()
+                && "mass_production_eva".equals(this.assetName))
+        {
+            LocalVisualAssetFingerprint.Fingerprint fingerprint =
+                    LocalVisualAssetFingerprint.inspect(this.assetName);
+            if (!fingerprint.valid())
+            {
+                if (!this.strictFailureReported)
+                {
+                    this.strictFailureReported = true;
+                    ProjectSeele.LOGGER.error(
+                            "Strict high-detail hybrid render refused: {}",
+                            fingerprint.description());
+                }
+                return;
+            }
+        }
         int effectiveLight = entity instanceof MassProductionEvaEntity mass
                 && mass.isRitualFormation() ? LightTexture.FULL_BRIGHT : packedLight;
         if (hasDetailedResources())
@@ -93,6 +113,11 @@ public class HybridAddonRenderer<T extends LivingEntity & GeoEntity> extends Ent
     public ResourceLocation getTextureLocation(T entity)
     {
         return hasDetailedResources() ? this.texture : this.fallback.getTextureLocation(entity);
+    }
+
+    public LocalVisualAssetFingerprint.Fingerprint visualFingerprint()
+    {
+        return LocalVisualAssetFingerprint.inspect(this.assetName);
     }
 
     private static final class MeshBackedRenderer<T extends LivingEntity & GeoEntity>

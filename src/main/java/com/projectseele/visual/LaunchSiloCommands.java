@@ -136,9 +136,11 @@ public final class LaunchSiloCommands
         };
         BlockPos armedBed = unit.getLaunchBedPosition();
         BlockPos bed = armedBed != null ? armedBed : unit.findLaunchBed();
+        String carrier = unit.getLaunchCarrierY() == Integer.MIN_VALUE
+                ? "parked" : Integer.toString(unit.getLaunchCarrierY());
         source.sendSuccess(() -> Component.literal(String.format(Locale.ROOT,
-                "Silo %s | ticks %d | y %.2f | bed %s", phase, unit.getLaunchTicks(),
-                unit.getY(), bed == null ? "none" : bed.toShortString())), false);
+                "Silo %s | ticks %d | y %.2f | carrier %s | bed %s", phase, unit.getLaunchTicks(),
+                unit.getY(), carrier, bed == null ? "none" : bed.toShortString())), false);
         return 1;
     }
 
@@ -191,11 +193,17 @@ public final class LaunchSiloCommands
             // Bed is origin-30. The catwalk floor is origin-8 (bed+22),
             // with the player standing at bed+23 and the lift spanning +4..23.
             boolean gantryFloor = !level.getBlockState(bed.offset(0, 22, 6)).isAir();
-            boolean ladderBottom = level.getBlockState(bed.offset(0, 4, 13))
-                    .is(net.minecraft.world.level.block.Blocks.LADDER);
-            boolean ladderTop = level.getBlockState(bed.offset(0, 23, 13))
-                    .is(net.minecraft.world.level.block.Blocks.LADDER);
-            if (gantryFloor && ladderBottom && ladderTop)
+            boolean ladderContinuous = true;
+            for (int y = 4; y <= 23; y++)
+            {
+                if (!level.getBlockState(bed.offset(0, y, 13))
+                        .is(net.minecraft.world.level.block.Blocks.LADDER))
+                {
+                    ladderContinuous = false;
+                    break;
+                }
+            }
+            if (gantryFloor && ladderContinuous)
             {
                 validHighGantries++;
             }

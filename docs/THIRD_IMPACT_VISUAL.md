@@ -21,7 +21,8 @@ acceptance: every model or renderer change must still pass the views below.
 - Inverted layout: Keter is the low point and Malkuth the high point.
 - Node field: 68 blocks wide by 140.8 blocks high (before rings and heading),
   reduced from 84 by 179.2.
-- Pure-red double paths and concentric Sephira rings.
+- Pure-red double paths, concentric Sephira rings and text, without black
+  label boxes or text shadows.
 - Ten numbered Latin transliterations, ten Hebrew names, 22 Hebrew path
   letters, and a compact `SYSTEMA SEPHIROTHICVM X DIVINORVM NOMINVM / OTZ
   CHIIM` heading.
@@ -53,6 +54,11 @@ acceptance: every model or renderer change must still pass the views below.
    - the tree is clipped out of a normal-FOV front capture.
 5. Use the scenario item on Unit-01 a second time to verify clean release and
    slow-falling recovery.
+6. During the normal story timeline, save and leave after the tree appears,
+   then re-enter the world. The nine indexed vessels must be reconciled at the
+   same Sephirot, and the tree must resume at its saved visual age rather than
+   restart or duplicate. Repeat once after respawn and once after a dimension
+   round trip.
 
 ## Current automated evidence
 
@@ -68,7 +74,7 @@ ritual states, a crucified Unit-01, and both local triangle meshes before
 writing three separately settled views:
 `impact_front.png`, `impact_oblique.png`, and `impact_tiferet_close.png`. The
 first proves the full glyph fits; the oblique view exposes depth/mirroring;
-the close view makes the Unit-01 cross silhouette and label backing reviewable.
+the close view makes the Unit-01 cross silhouette and label legibility reviewable.
 
 Both the normal story timeline and `/seele visual impact` also emit a
 server-side `Third Impact tableau audit` line. Its structural gate requires
@@ -82,12 +88,21 @@ horizontal cross silhouette, while the side view confirms both arms remain in
 one plane rather than folding behind the torso. This passes the animation pose
 offline; the complete in-game tableau remains separately blocked below.
 
+The formal timeline is now stored per dimension in versioned `SavedData`.
+It records the event origin/yaw/tick and each `nodeIndex -> vessel UUID`, waits
+for the ten formation chunks before reconciliation, and replaces only missing
+vessels. Protocol v2 carries `initialTreeAge`; login, respawn and dimension
+change each resend only the current dimension's tree, while the client removes
+an older tree at the same origin. `/seele visual impact` remains deliberately
+non-persistent. These are compiled/state contracts until the save/reload pass
+above is performed in game.
+
 The latest real image is
 `run/screenshots/projectseele_visual/20260713-012435/impact_front.png` and is a
 visual `FAIL`: the complete red graph renders and occupies about 72% of the
 frame, but its lines obscure the EVA silhouettes and the labels are not
 readable at the captured resolution. The subsequent narrower/back-shifted
-graph, larger backed labels and full-bright bodies have compiled but remain
+graph, larger pure-red labels and full-bright bodies have compiled but remain
 `BLOCKED` pending a new screenshot. Log-only facts (`massCount=9`,
 `massFacingFront=9`, `crucifiedUnit01=true`) do not override that decision.
 
@@ -123,7 +138,7 @@ python tools/render_tree_of_life_preview.py --layout candidate --strict
 
 The candidate has now been adopted in Java. `ClientFxManager` owns the ten
 `LABEL_X_OFFSETS`, 22 `PATH_LABEL_OFFSETS`, outward/alternating bilingual node
-labels, leader lines, enlarged scales and `0xA0000000` backing for every label.
+labels, leader lines, enlarged scales and a pure-red/no-shadow text contract.
 `VisualCaptureManager` uses the adopted 38-block top margin. The JSON report
 records these parsed values under `adopted_java_layout`; it is no longer a list
 of unapplied suggestions. The `current` and `candidate` PNGs must be
