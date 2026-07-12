@@ -40,6 +40,12 @@ if errorlevel 1 (
     exit /b 1
 )
 if exist "eud-1.1.0-forge-1.20.1.jar" (
+    python tools\make_eud_eva00_pack.py
+    if errorlevel 1 (
+        echo EUD Unit-00 model generation failed.
+        pause
+        exit /b 1
+    )
     python tools\make_eud_weapon_pack.py
     if errorlevel 1 (
         echo EUD Longinus model generation failed.
