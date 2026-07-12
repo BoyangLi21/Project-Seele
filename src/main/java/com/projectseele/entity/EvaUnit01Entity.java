@@ -76,7 +76,8 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     public static final int VISUAL_WALK_CONTACT = 2;
     public static final int VISUAL_KNIFE_WINDUP = 3;
     public static final int VISUAL_KNIFE_CONTACT = 4;
-    public static final int VISUAL_CANNON = 5;
+    public static final int VISUAL_KNIFE_RECOVERY = 5;
+    public static final int VISUAL_CANNON = 6;
 
     private static final float MELEE_FIST_DAMAGE = 20.0F;
     private static final float MELEE_KNIFE_DAMAGE = 60.0F;
@@ -166,6 +167,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     private static final RawAnimation ANIM_VISUAL_WALK = RawAnimation.begin().thenLoop("animation.eva_unit01.visual_walk_contact");
     private static final RawAnimation ANIM_VISUAL_KNIFE_WINDUP = RawAnimation.begin().thenLoop("animation.eva_unit01.visual_knife_windup");
     private static final RawAnimation ANIM_VISUAL_KNIFE_CONTACT = RawAnimation.begin().thenLoop("animation.eva_unit01.visual_knife_contact");
+    private static final RawAnimation ANIM_VISUAL_KNIFE_RECOVERY = RawAnimation.begin().thenLoop("animation.eva_unit01.visual_knife_recovery");
     private static final RawAnimation ANIM_VISUAL_CANNON = RawAnimation.begin().thenLoop("animation.eva_unit01.visual_cannon");
 
     private final AnimatableInstanceCache geoCache = GeckoLibUtil.createInstanceCache(this);
@@ -334,7 +336,8 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     {
         int safePose = Mth.clamp(pose, VISUAL_NORMAL, VISUAL_CANNON);
         this.entityData.set(DATA_VISUAL_POSE, safePose);
-        if (safePose == VISUAL_KNIFE_WINDUP || safePose == VISUAL_KNIFE_CONTACT)
+        if (safePose == VISUAL_KNIFE_WINDUP || safePose == VISUAL_KNIFE_CONTACT
+                || safePose == VISUAL_KNIFE_RECOVERY)
         {
             this.entityData.set(DATA_WEAPON, WEAPON_KNIFE);
         }
@@ -1103,10 +1106,14 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         {
             return;
         }
-        // The pilot rides at head height: in first person the plug view IS
-        // the Unit's own eyes (the airframe hides itself from its pilot).
+        // The pilot rides at head height: first person is the Unit's own eyes.
+        // The normal world body remains rendered; only the enclosing head
+        // shell is clipped by the renderer.
         float rad = (float) Math.toRadians(this.yBodyRot);
-        double behind = 0.35D;
+        // SmOd's face projects about 2.2 blocks in front of the root at
+        // Project SEELE scale. Put the pilot at that face socket instead of
+        // behind the skull, where the camera looked through a headless body.
+        double forward = 2.25D;
         // The eye must clear the shoulder pylons: at 25.0 it sat level with
         // the chest rim and first person stared into the Unit's own back.
         // SmOd's head tops out higher than the placeholder skeleton's, so the
@@ -1114,9 +1121,9 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         double standing = this.getUnitVariant() == UNIT_00 ? 25.4D : 27.2D;
         double plugHeight = this.isPilotProne() ? 10.5D : this.isPilotCrouching() ? 17.7D : standing;
         move.accept(passenger,
-                this.getX() + Math.sin(rad) * behind,
+                this.getX() - Math.sin(rad) * forward,
                 this.getY() + plugHeight,
-                this.getZ() - Math.cos(rad) * behind);
+                this.getZ() + Math.cos(rad) * forward);
     }
 
     @Override
@@ -1179,6 +1186,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
                 case VISUAL_WALK_CONTACT -> { return state.setAndContinue(ANIM_VISUAL_WALK); }
                 case VISUAL_KNIFE_WINDUP -> { return state.setAndContinue(ANIM_VISUAL_KNIFE_WINDUP); }
                 case VISUAL_KNIFE_CONTACT -> { return state.setAndContinue(ANIM_VISUAL_KNIFE_CONTACT); }
+                case VISUAL_KNIFE_RECOVERY -> { return state.setAndContinue(ANIM_VISUAL_KNIFE_RECOVERY); }
                 case VISUAL_CANNON -> { return state.setAndContinue(ANIM_VISUAL_CANNON); }
                 default -> { }
             }

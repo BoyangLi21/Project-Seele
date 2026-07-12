@@ -30,7 +30,7 @@ import net.minecraftforge.network.PacketDistributor;
 public final class VisualLabCommands
 {
     private static final String[] POSES = {
-            "normal", "idle", "walk_contact", "knife_windup", "knife_contact", "cannon"
+            "normal", "idle", "walk_contact", "knife_windup", "knife_contact", "knife_recovery", "cannon"
     };
     private static final SuggestionProvider<CommandSourceStack> POSE_SUGGESTIONS =
             (context, builder) -> SharedSuggestionProvider.suggest(POSES, builder);
@@ -62,7 +62,10 @@ public final class VisualLabCommands
     {
         ServerPlayer player = source.getPlayerOrException();
         ServerLevel level = player.serverLevel();
-        BlockPos centre = player.blockPosition().below();
+        // This command is for the dedicated Visual Lab world. A fixed isolated
+        // origin keeps captures independent from the player's previous
+        // position, old high-altitude lab platforms, terrain and cloud height.
+        BlockPos centre = new BlockPos(4096, 64, 4096);
         level.setDayTime(6000L);
         level.setWeatherParameters(6000, 0, false, false);
 
@@ -155,10 +158,17 @@ public final class VisualLabCommands
             case "walk_contact" -> EvaUnit01Entity.VISUAL_WALK_CONTACT;
             case "knife_windup" -> EvaUnit01Entity.VISUAL_KNIFE_WINDUP;
             case "knife_contact" -> EvaUnit01Entity.VISUAL_KNIFE_CONTACT;
+            case "knife_recovery" -> EvaUnit01Entity.VISUAL_KNIFE_RECOVERY;
             case "cannon" -> EvaUnit01Entity.VISUAL_CANNON;
             default -> throw new IllegalArgumentException("Unknown visual pose: " + name);
         };
         unit.setVisualPose(visualPose);
+        unit.setYRot(0.0F);
+        unit.setYBodyRot(0.0F);
+        unit.setYHeadRot(0.0F);
+        unit.setXRot(0.0F);
+        unit.yRotO = 0.0F;
+        unit.xRotO = 0.0F;
         source.sendSuccess(() -> Component.literal("Visual pose: " + name), false);
         return 1;
     }
@@ -171,6 +181,9 @@ public final class VisualLabCommands
         {
             player.startRiding(unit, true);
         }
+        player.setYRot(0.0F);
+        player.setYHeadRot(0.0F);
+        player.setXRot(0.0F);
         SeeleNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
                 new ClientboundVisualCapturePacket(unit.getId(), unit.getVisualPose()));
         source.sendSuccess(() -> Component.literal("Visual capture queued for Unit-01"), false);

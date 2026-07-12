@@ -9,22 +9,19 @@
     "head": "Head",
     "left_upper_arm": "Leftarm",
     "left_forearm": "Lowerarm2",
-    "left_hand": null,
+    "left_hand": "LeftHand",
     "right_upper_arm": "Rightarm",
     "right_forearm": "Lowerarm",
-    "right_hand": null,
+    "right_hand": "RightHand",
     "left_upper_leg": "Leftleg",
     "left_lower_leg": "bone6",
     "right_upper_leg": "Rightleg",
     "right_lower_leg": "bone16",
-    "weapon_socket_right": "Lowerarm",
-    "camera_socket": null
+    "weapon_socket_right": "weapon_socket_r",
+    "camera_socket": "camera_socket"
   },
   "missing_for_production": [
     "editable bbmodel or Blender source",
-    "separate left and right hand bones",
-    "dedicated weapon socket",
-    "dedicated camera socket",
     "author redistribution approval"
   ]
 }

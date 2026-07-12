@@ -7,8 +7,9 @@ pack are Git-ignored and must not be redistributed.
 This folder does not contain a `.bbmodel`: that is an explicit production
 blocker, not an omission to hide. Before release, obtain the author's written
 permission and an editable source (or replace the model with an original,
-properly sourced asset), then update `bone-contract.json` with real hand,
-weapon, and camera sockets.
+properly sourced asset). The local conversion adds provisional hand, weapon,
+and camera sockets so animation and camera code can use a stable contract;
+they remain prototype geometry until reviewed in an editable source tool.
 
 Local regeneration:
 

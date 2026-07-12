@@ -44,36 +44,46 @@ def scale_values(value, factor):
 
 def weapon_bones(bones):
     forearm = next(bone for bone in bones if bone["name"] == "Lowerarm")
+    left_forearm = next(bone for bone in bones if bone["name"] == "Lowerarm2")
     px, py, pz = forearm["pivot"]
+    lx, ly, lz = left_forearm["pivot"]
+    hand_y = py - 42
+    left_hand_y = ly - 42
+    socket_y = hand_y - 14
     upperbody = next(bone for bone in bones if bone["name"] == "Upperbody")
     ux, uy, uz = upperbody["pivot"]
     return [
-        {"name": "knife", "parent": "Lowerarm", "pivot": [px, py, pz], "cubes": [
-            # SmOd's forearm points down its local -Y axis. Keeping the blade
-            # on that axis makes it point forward after the arm aims, instead
-            # of rotating into a vertical white slab.
-            {"origin": [px - 3, py - 70, pz - 2], "size": [6, 26, 4], "uv": [400, 0]},
-            {"origin": [px - 2.5, py - 86, pz - 1.5], "size": [5, 16, 3], "uv": [400, 0]},
-            {"origin": [px - 1.5, py - 96, pz - 1], "size": [3, 10, 2], "uv": [400, 0]},
-            {"origin": [px - 3.5, py - 86, pz + 1.5], "size": [1, 42, 1], "uv": [472, 80]},
-            {"origin": [px - 5, py - 46, pz - 5], "size": [10, 12, 10], "uv": [472, 80]},
+        {"name": "RightHand", "parent": "Lowerarm", "pivot": [px, hand_y, pz], "cubes": [
+            {"origin": [px - 7, hand_y - 14, pz - 7], "size": [14, 14, 14], "uv": [120, 180]},
         ]},
-        {"name": "cannon", "parent": "Lowerarm", "pivot": [px, py, pz], "cubes": [
-            {"origin": [px - 8, py - 64, pz - 8], "size": [16, 54, 16], "uv": [400, 80]},
-            {"origin": [px - 6, py - 102, pz - 6], "size": [12, 38, 12], "uv": [400, 80]},
-            {"origin": [px - 4, py - 128, pz - 4], "size": [8, 26, 8], "uv": [400, 80]},
-            {"origin": [px - 7, py - 134, pz - 7], "size": [14, 7, 14], "uv": [472, 80]},
-            {"origin": [px - 12, py - 55, pz - 3], "size": [6, 24, 6], "uv": [472, 80]},
+        {"name": "LeftHand", "parent": "Lowerarm2", "pivot": [lx, left_hand_y, lz], "cubes": [
+            {"origin": [lx - 7, left_hand_y - 14, lz - 7], "size": [14, 14, 14], "uv": [168, 180]},
         ]},
-        {"name": "lance", "parent": "Lowerarm", "pivot": [px, py, pz], "cubes": [
-            {"origin": [px - 3, py - 75, pz - 3], "size": [6, 75, 6], "uv": [400, 220]},
-            {"origin": [px - 3, py - 150, pz - 3], "size": [6, 75, 6], "uv": [400, 220]},
-            {"origin": [px - 3, py - 225, pz - 3], "size": [6, 75, 6], "uv": [400, 220]},
-            {"origin": [px - 12, py - 290, pz - 2.5], "size": [5, 68, 5], "uv": [424, 220],
-             "rotation": [0, 0, -7], "pivot": [px, py - 222, pz]},
-            {"origin": [px + 7, py - 290, pz - 2.5], "size": [5, 68, 5], "uv": [448, 220],
-             "rotation": [0, 0, 7], "pivot": [px, py - 222, pz]},
-            {"origin": [px - 9, py - 6, pz - 9], "size": [18, 18, 18], "uv": [472, 220]},
+        {"name": "weapon_socket_r", "parent": "RightHand", "pivot": [px, socket_y, pz]},
+        {"name": "camera_socket", "parent": "Head", "pivot": [0, 183, 14]},
+        {"name": "knife", "parent": "weapon_socket_r", "pivot": [px, socket_y, pz], "cubes": [
+            {"origin": [px - 3, socket_y - 30, pz - 2], "size": [6, 26, 4], "uv": [400, 0]},
+            {"origin": [px - 2.5, socket_y - 46, pz - 1.5], "size": [5, 16, 3], "uv": [400, 0]},
+            {"origin": [px - 1.5, socket_y - 56, pz - 1], "size": [3, 10, 2], "uv": [400, 0]},
+            {"origin": [px - 3.5, socket_y - 46, pz + 1.5], "size": [1, 42, 1], "uv": [472, 80]},
+            {"origin": [px - 5, socket_y - 4, pz - 5], "size": [10, 12, 10], "uv": [472, 80]},
+        ]},
+        {"name": "cannon", "parent": "weapon_socket_r", "pivot": [px, socket_y, pz], "cubes": [
+            {"origin": [px - 8, socket_y - 54, pz - 8], "size": [16, 54, 16], "uv": [400, 80]},
+            {"origin": [px - 6, socket_y - 92, pz - 6], "size": [12, 38, 12], "uv": [400, 80]},
+            {"origin": [px - 4, socket_y - 118, pz - 4], "size": [8, 26, 8], "uv": [400, 80]},
+            {"origin": [px - 7, socket_y - 124, pz - 7], "size": [14, 7, 14], "uv": [472, 80]},
+            {"origin": [px - 12, socket_y - 45, pz - 3], "size": [6, 24, 6], "uv": [472, 80]},
+        ]},
+        {"name": "lance", "parent": "weapon_socket_r", "pivot": [px, socket_y, pz], "cubes": [
+            {"origin": [px - 3, socket_y - 75, pz - 3], "size": [6, 75, 6], "uv": [400, 220]},
+            {"origin": [px - 3, socket_y - 150, pz - 3], "size": [6, 75, 6], "uv": [400, 220]},
+            {"origin": [px - 3, socket_y - 225, pz - 3], "size": [6, 75, 6], "uv": [400, 220]},
+            {"origin": [px - 12, socket_y - 290, pz - 2.5], "size": [5, 68, 5], "uv": [424, 220],
+             "rotation": [0, 0, -7], "pivot": [px, socket_y - 222, pz]},
+            {"origin": [px + 7, socket_y - 290, pz - 2.5], "size": [5, 68, 5], "uv": [448, 220],
+             "rotation": [0, 0, 7], "pivot": [px, socket_y - 222, pz]},
+            {"origin": [px - 9, socket_y - 6, pz - 9], "size": [18, 18, 18], "uv": [472, 220]},
         ]},
         {"name": "entry_plug", "parent": "Upperbody", "pivot": [ux, uy, uz + 12], "cubes": [
             {"origin": [ux - 6, uy - 28, uz + 10], "size": [12, 58, 12], "uv": [400, 80]},
@@ -221,9 +231,12 @@ def build_animations(source, unit):
     output["animation.eva_unit01.run"] = retime_animation(scale_position_channels(
         source_animations[f"animation.entity_eva{unit}.move"]), 0.58)
     output["animation.eva_unit01.visual_idle"] = static_pose(output["animation.eva_unit01.idle"], 0.0)
-    output["animation.eva_unit01.visual_walk_contact"] = static_pose(output["animation.eva_unit01.walk"], 0.5)
+    # SmOd's stride extrema/contact is at loop start. Sampling 0.5 seconds
+    # catches the passing pose where both legs overlap in profile.
+    output["animation.eva_unit01.visual_walk_contact"] = static_pose(output["animation.eva_unit01.walk"], 0.0)
     output["animation.eva_unit01.visual_knife_windup"] = static_pose(output["animation.eva_unit01.knife"], 0.12)
     output["animation.eva_unit01.visual_knife_contact"] = static_pose(output["animation.eva_unit01.knife"], 0.28)
+    output["animation.eva_unit01.visual_knife_recovery"] = static_pose(output["animation.eva_unit01.knife"], 0.50)
     output["animation.eva_unit01.visual_cannon"] = static_pose(output["animation.eva_unit01.aim"], 0.0)
     return {"format_version": "1.8.0", "animations": output}
 

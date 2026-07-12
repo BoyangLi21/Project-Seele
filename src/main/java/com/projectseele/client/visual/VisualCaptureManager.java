@@ -24,9 +24,13 @@ import net.minecraftforge.fml.common.Mod;
 public final class VisualCaptureManager
 {
     private static final String[] VIEWS = {
-            "front", "side", "back", "first_person_clean", "first_person_cockpit"
+            "front", "side", "back", "front_close", "side_close", "side_opposite_close",
+            "first_person_clean", "first_person_cockpit",
+            "first_person_yaw_left", "first_person_yaw_right",
+            "first_person_pitch_up", "first_person_pitch_down"
     };
     private static Session session;
+    private static int shutdownTicks = -1;
 
     private VisualCaptureManager() {}
 
@@ -45,7 +49,7 @@ public final class VisualCaptureManager
         minecraft.player.displayClientMessage(Component.literal("Visual capture started"), false);
     }
 
-    /** Keep hand rendering active while the clean capture hides GUI layers. */
+    /** Suppress GUI overlays while leaving the world-space EVA body visible. */
     public static boolean isSuppressingGui()
     {
         return session != null && session.isCleanFirstPerson();
@@ -54,11 +58,21 @@ public final class VisualCaptureManager
     @SubscribeEvent
     public static void onClientTick(TickEvent.ClientTickEvent event)
     {
-        if (event.phase != TickEvent.Phase.END || session == null)
+        if (event.phase != TickEvent.Phase.END)
         {
             return;
         }
         Minecraft minecraft = Minecraft.getInstance();
+        if (shutdownTicks >= 0 && shutdownTicks-- == 0)
+        {
+            ProjectSeele.LOGGER.info("Visual Lab screenshots complete; closing unattended client");
+            minecraft.stop();
+            return;
+        }
+        if (session == null)
+        {
+            return;
+        }
         if (minecraft.isPaused())
         {
             return;
@@ -83,6 +97,7 @@ public final class VisualCaptureManager
         private int view;
         private int settleTicks;
         private boolean positioned;
+        private float referenceYaw = Float.NaN;
 
         Session(int entityId, int pose, Minecraft minecraft)
         {
@@ -107,10 +122,18 @@ public final class VisualCaptureManager
                 minecraft.player.displayClientMessage(Component.literal("Visual capture failed: Unit-01 missing"), false);
                 return false;
             }
+            if (Float.isNaN(this.referenceYaw))
+            {
+                this.referenceYaw = unit.getYRot();
+            }
             if (this.view >= VIEWS.length)
             {
                 minecraft.player.displayClientMessage(Component.literal(
                         "Visual capture complete: screenshots/projectseele_visual"), false);
+                if (isLastAutomatedPose(this.poseName))
+                {
+                    shutdownTicks = 20;
+                }
                 return false;
             }
             if (!this.positioned)
@@ -141,7 +164,7 @@ public final class VisualCaptureManager
                 // F1/hideGui also disables RenderHandEvent. Leave it false
                 // and cancel GUI overlays separately for a clean arm frame.
                 minecraft.options.hideGui = false;
-                if (name.endsWith("clean"))
+                if (!name.endsWith("cockpit"))
                 {
                     minecraft.gui.getChat().clearMessages(false);
                 }
@@ -163,12 +186,18 @@ public final class VisualCaptureManager
             float yaw = unit.getYRot() * Mth.DEG_TO_RAD;
             Vec3 forward = new Vec3(-Mth.sin(yaw), 0.0D, Mth.cos(yaw));
             Vec3 right = new Vec3(-forward.z, 0.0D, forward.x);
-            double distance = Math.max(48.0D, unit.getBbHeight() * 1.8D);
+            boolean close = name.endsWith("close");
+            double distance = close
+                    ? Math.max(30.0D, unit.getBbHeight() * 1.12D)
+                    : Math.max(48.0D, unit.getBbHeight() * 1.8D);
             Vec3 cameraPos = switch (name)
             {
                 // Offset the profile camera slightly along the forward axis
                 // so lab rulers/door fixtures cannot occlude the subject.
-                case "side" -> centre.add(right.scale(distance)).add(forward.scale(12.0D));
+                case "side", "side_close" -> centre.add(right.scale(distance))
+                        .add(forward.scale(close ? 8.0D : 12.0D));
+                case "side_opposite_close" -> centre.subtract(right.scale(distance))
+                        .add(forward.scale(8.0D));
                 case "back" -> centre.subtract(forward.scale(distance));
                 default -> centre.add(forward.scale(distance));
             };
@@ -192,9 +221,28 @@ public final class VisualCaptureManager
             {
                 return;
             }
-            minecraft.player.setYRot(unit.getYRot());
-            minecraft.player.setYHeadRot(unit.getYRot());
-            minecraft.player.setXRot(12.0F);
+            String name = VIEWS[this.view];
+            float yaw = this.referenceYaw;
+            float pitch = 12.0F;
+            if (name.endsWith("yaw_left"))
+            {
+                yaw -= 90.0F;
+            }
+            else if (name.endsWith("yaw_right"))
+            {
+                yaw += 90.0F;
+            }
+            else if (name.endsWith("pitch_up"))
+            {
+                pitch = -35.0F;
+            }
+            else if (name.endsWith("pitch_down"))
+            {
+                pitch = 70.0F;
+            }
+            minecraft.player.setYRot(yaw);
+            minecraft.player.setYHeadRot(yaw);
+            minecraft.player.setXRot(pitch);
         }
 
         private void capture(Minecraft minecraft)
@@ -228,7 +276,9 @@ public final class VisualCaptureManager
 
         boolean isCleanFirstPerson()
         {
-            return this.view < VIEWS.length && VIEWS[this.view].equals("first_person_clean");
+            return this.view < VIEWS.length
+                    && VIEWS[this.view].startsWith("first_person")
+                    && !VIEWS[this.view].endsWith("cockpit");
         }
 
         private static void lookAt(Entity camera, Vec3 position, Vec3 target)
@@ -248,9 +298,25 @@ public final class VisualCaptureManager
                 case EvaUnit01Entity.VISUAL_WALK_CONTACT -> "walk_contact";
                 case EvaUnit01Entity.VISUAL_KNIFE_WINDUP -> "knife_windup";
                 case EvaUnit01Entity.VISUAL_KNIFE_CONTACT -> "knife_contact";
+                case EvaUnit01Entity.VISUAL_KNIFE_RECOVERY -> "knife_recovery";
                 case EvaUnit01Entity.VISUAL_CANNON -> "cannon";
                 default -> "normal";
             };
+        }
+
+        private static boolean isLastAutomatedPose(String pose)
+        {
+            if (!Boolean.getBoolean("projectseele.visualCapture"))
+            {
+                return false;
+            }
+            String requested = System.getProperty("projectseele.visualCapturePose", "all");
+            if (requested.equals("all"))
+            {
+                return pose.equals("cannon");
+            }
+            String[] poses = requested.split(",");
+            return poses.length > 0 && pose.equals(poses[poses.length - 1].trim());
         }
     }
 }

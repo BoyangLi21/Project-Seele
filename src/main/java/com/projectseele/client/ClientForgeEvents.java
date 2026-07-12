@@ -1,7 +1,6 @@
 package com.projectseele.client;
 
 import com.projectseele.ProjectSeele;
-import com.projectseele.client.render.EvaUnit01Renderer;
 import com.projectseele.client.visual.VisualCaptureManager;
 import com.projectseele.entity.EvaUnit01Entity;
 import com.projectseele.network.SeeleNetwork;
@@ -12,7 +11,6 @@ import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.Mth;
-import net.minecraft.world.InteractionHand;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.ComputeFovModifierEvent;
 import net.minecraftforge.client.event.InputEvent;
@@ -280,15 +278,6 @@ public final class ClientForgeEvents
             return;
         }
         event.setCanceled(true);
-        if (event.getHand() != InteractionHand.MAIN_HAND)
-        {
-            return;
-        }
-        if (minecraft.getEntityRenderDispatcher().getRenderer(eva) instanceof EvaUnit01Renderer renderer)
-        {
-            renderer.renderPilotArms(eva, event.getPartialTick(), event.getPoseStack(),
-                    event.getMultiBufferSource(), event.getPackedLight());
-        }
     }
 
     @SubscribeEvent
