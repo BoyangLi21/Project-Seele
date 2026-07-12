@@ -11,6 +11,12 @@ properly sourced asset). The local conversion adds provisional hand, weapon,
 and camera sockets so animation and camera code can use a stable contract;
 they remain prototype geometry until reviewed in an editable source tool.
 
+The generator currently restores SmOd's unscaled head proportions and adds an
+original, removable `Unit01FaceMask` prototype for the yellow eyes, tapered
+jaw, and green cheek accents. The local Longinus bone uses EUD 1.1.0's 40-part
+CC BY-NC 4.0 model/texture when that ignored jar is present. Neither external
+asset is included in the repository or cleared for Project SEELE publication.
+
 Local regeneration:
 
 ```text

@@ -14,6 +14,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 SOURCE = Path(sys.argv[1]) if len(sys.argv) > 1 else REPO / "evaaddon1-0.zip"
+EUD_SOURCE = REPO / "eud-1.1.0-forge-1.20.1.jar"
 OUT = REPO / "run/resourcepacks/eva_real_model"
 SCALE = 6.0
 CANVAS = 512
@@ -42,7 +43,51 @@ def scale_values(value, factor):
     return value
 
 
-def weapon_bones(bones):
+def convert_eud_lance(model, px, socket_y, pz):
+    """Convert EUD's local Java item model into cubes on our hand socket."""
+    cubes = []
+    for element in model.get("elements", []):
+        start = element["from"]
+        end = element["to"]
+        cube = {
+            "origin": [px + (start[0] - 8.0) * SCALE,
+                       socket_y - (end[1] + 16.0) * SCALE,
+                       pz + (start[2] - 8.0) * SCALE],
+            "size": [(end[0] - start[0]) * SCALE,
+                     (end[1] - start[1]) * SCALE,
+                     (end[2] - start[2]) * SCALE],
+        }
+        faces = {}
+        for name, face in element.get("faces", {}).items():
+            uv = face.get("uv")
+            if isinstance(uv, list) and len(uv) == 4:
+                faces[name] = {
+                    "uv": [384 + uv[0] * 8, 384 + uv[1] * 8],
+                    "uv_size": [(uv[2] - uv[0]) * 8, (uv[3] - uv[1]) * 8],
+                }
+        if faces:
+            cube["uv"] = faces
+        rotation = element.get("rotation", {})
+        angle = rotation.get("angle", 0)
+        if angle:
+            axis = rotation.get("axis")
+            java_pivot = rotation.get("origin", [8, -16, 8])
+            converted = [0, 0, 0]
+            if axis == "x":
+                converted[0] = -angle
+            elif axis == "y":
+                converted[1] = angle
+            elif axis == "z":
+                converted[2] = -angle
+            cube["rotation"] = converted
+            cube["pivot"] = [px + (java_pivot[0] - 8.0) * SCALE,
+                             socket_y - (java_pivot[1] + 16.0) * SCALE,
+                             pz + (java_pivot[2] - 8.0) * SCALE]
+        cubes.append(cube)
+    return cubes
+
+
+def weapon_bones(bones, eud_lance=None):
     forearm = next(bone for bone in bones if bone["name"] == "Lowerarm")
     left_forearm = next(bone for bone in bones if bone["name"] == "Lowerarm2")
     px, py, pz = forearm["pivot"]
@@ -50,6 +95,7 @@ def weapon_bones(bones):
     hand_y = py - 42
     left_hand_y = ly - 42
     socket_y = hand_y - 14
+    lance_cubes = convert_eud_lance(eud_lance, px, socket_y, pz) if eud_lance else None
     upperbody = next(bone for bone in bones if bone["name"] == "Upperbody")
     ux, uy, uz = upperbody["pivot"]
     return [
@@ -75,7 +121,7 @@ def weapon_bones(bones):
             {"origin": [px - 7, socket_y - 124, pz - 7], "size": [14, 7, 14], "uv": [472, 80]},
             {"origin": [px - 12, socket_y - 45, pz - 3], "size": [6, 24, 6], "uv": [472, 80]},
         ]},
-        {"name": "lance", "parent": "weapon_socket_r", "pivot": [px, socket_y, pz], "cubes": [
+        {"name": "lance", "parent": "weapon_socket_r", "pivot": [px, socket_y, pz], "cubes": lance_cubes or [
             {"origin": [px - 3, socket_y - 75, pz - 3], "size": [6, 75, 6], "uv": [400, 220]},
             {"origin": [px - 3, socket_y - 150, pz - 3], "size": [6, 75, 6], "uv": [400, 220]},
             {"origin": [px - 3, socket_y - 225, pz - 3], "size": [6, 75, 6], "uv": [400, 220]},
@@ -98,24 +144,39 @@ def weapon_bones(bones):
     ]
 
 
-def enlarge_head_details(bones):
-    """Make SmOd's very small face readable at Project SEELE's camera scale."""
-    head = next(bone for bone in bones if bone["name"] == "Head")
-    px, py, pz = head["pivot"]
-    sx, sy, sz = 1.28, 1.15, 1.28
-    for cube in head.get("cubes", []):
-        ox, oy, oz = cube["origin"]
-        wx, wy, wz = cube["size"]
-        cube["origin"] = [px + (ox - px) * sx, py + (oy - py) * sy, pz + (oz - pz) * sz]
-        cube["size"] = [wx * sx, wy * sy, wz * sz]
-        if "pivot" in cube:
-            qx, qy, qz = cube["pivot"]
-            cube["pivot"] = [px + (qx - px) * sx, py + (qy - py) * sy, pz + (qz - pz) * sz]
-        if isinstance(cube.get("inflate"), (int, float)):
-            cube["inflate"] *= 1.18
+def solid_uv(x, y):
+    return {name: {"uv": [x, y], "uv_size": [2, 2]}
+            for name in ("north", "east", "south", "west", "up", "down")}
 
 
-def scale_geometry(data):
+def add_unit01_face(bones):
+    """Overlay an original Unit-01 mask on SmOd's overly square base head."""
+    bones.append({
+        "name": "Unit01FaceMask",
+        "parent": "Head",
+        "pivot": [0, 174, -15],
+        "cubes": [
+            {"origin": [-5, 175, -18], "size": [10, 9, 5], "uv": solid_uv(480, 130)},
+            {"origin": [-8, 169, -19], "size": [16, 6, 4], "uv": solid_uv(480, 178)},
+            {"origin": [-7, 171.5, -20], "size": [5, 1.8, 1.5], "uv": solid_uv(480, 162),
+             "rotation": [0, 0, -7], "pivot": [-2, 172, -20]},
+            {"origin": [2, 171.5, -20], "size": [5, 1.8, 1.5], "uv": solid_uv(480, 162),
+             "rotation": [0, 0, 7], "pivot": [2, 172, -20]},
+            {"origin": [-9, 162, -18.5], "size": [6, 8, 4], "uv": solid_uv(480, 130),
+             "rotation": [0, 0, -10], "pivot": [-3, 169, -17]},
+            {"origin": [3, 162, -18.5], "size": [6, 8, 4], "uv": solid_uv(480, 130),
+             "rotation": [0, 0, 10], "pivot": [3, 169, -17]},
+            {"origin": [-8, 164, -19.5], "size": [2, 5, 1.5], "uv": solid_uv(480, 146)},
+            {"origin": [6, 164, -19.5], "size": [2, 5, 1.5], "uv": solid_uv(480, 146)},
+            {"origin": [-5, 157, -18], "size": [10, 7, 5], "uv": solid_uv(480, 130)},
+            {"origin": [-3.5, 151, -17.5], "size": [7, 7, 4.5], "uv": solid_uv(480, 130)},
+            {"origin": [-3, 149, -17], "size": [6, 3, 4], "uv": solid_uv(480, 178)},
+            {"origin": [-1.5, 158, -19.2], "size": [3, 3, 1.5], "uv": solid_uv(480, 146)},
+        ],
+    })
+
+
+def scale_geometry(data, eud_lance=None, unit=1):
     geometry = data["minecraft:geometry"][0]
     description = geometry["description"]
     description["texture_width"] = CANVAS
@@ -138,8 +199,9 @@ def scale_geometry(data):
                         face["uv"] = scale_values(face["uv"], SCALE)
                     if "uv_size" in face:
                         face["uv_size"] = scale_values(face["uv_size"], SCALE)
-    enlarge_head_details(geometry["bones"])
-    geometry["bones"].extend(weapon_bones(geometry["bones"]))
+    if unit == 1:
+        add_unit01_face(geometry["bones"])
+    geometry["bones"].extend(weapon_bones(geometry["bones"], eud_lance))
     data["format_version"] = "1.12.0"
     return data
 
@@ -237,6 +299,9 @@ def build_animations(source, unit):
     output["animation.eva_unit01.visual_knife_windup"] = static_pose(output["animation.eva_unit01.knife"], 0.12)
     output["animation.eva_unit01.visual_knife_contact"] = static_pose(output["animation.eva_unit01.knife"], 0.28)
     output["animation.eva_unit01.visual_knife_recovery"] = static_pose(output["animation.eva_unit01.knife"], 0.50)
+    output["animation.eva_unit01.visual_lance_windup"] = static_pose(output["animation.eva_unit01.lance_thrust"], 0.20)
+    output["animation.eva_unit01.visual_lance_contact"] = static_pose(output["animation.eva_unit01.lance_thrust"], 0.42)
+    output["animation.eva_unit01.visual_lance_recovery"] = static_pose(output["animation.eva_unit01.lance_thrust"], 0.70)
     output["animation.eva_unit01.visual_cannon"] = static_pose(output["animation.eva_unit01.aim"], 0.0)
     return {"format_version": "1.8.0", "animations": output}
 
@@ -332,6 +397,31 @@ def install_smod_pose_overrides(output):
             "Lowerarm2": {"rotation": {"0.0": [-36, 14, 0]}},
         },
     }
+    # Two-handed Longinus thrust. Both hands stay on the same shaft line:
+    # compact pull-back, full-body forward contact, then controlled recovery.
+    output["animation.eva_unit01.lance_thrust"] = {
+        "animation_length": 0.72,
+        "bones": {
+            "Upperbody": {"rotation": {
+                "0.0": [0, 0, 0], "0.20": [-2, 14, 0],
+                "0.42": [4, -10, 0], "0.72": [0, 0, 0]}},
+            "Rightarm": {"rotation": {
+                "0.0": [-34, -4, -6], "0.20": [-28, -10, -12],
+                "0.42": [-66, -2, -5], "0.72": [-10, 0, -5]}},
+            "Lowerarm": {"rotation": {
+                "0.0": [-48, 0, 0], "0.20": [-62, 0, 0],
+                "0.42": [-26, 0, 0], "0.72": [-6, 0, 0]}},
+            "Leftarm": {"rotation": {
+                "0.0": [-42, 18, 8], "0.20": [-38, 24, 10],
+                "0.42": [-61, 18, 8], "0.72": [-10, 0, 5]}},
+            "Lowerarm2": {"rotation": {
+                "0.0": [-46, 14, 0], "0.20": [-56, 16, 0],
+                "0.42": [-31, 14, 0], "0.72": [-5, 0, 0]}},
+            "Lowerbody": {"rotation": {
+                "0.0": [0, 0, 0], "0.20": [0, -6, 0],
+                "0.42": [5, 5, 0], "0.72": [0, 0, 0]}},
+        },
+    }
     # Progressive-knife strike. Keep the torso readable and let the arm
     # chain create the attack arc; the previous pose twisted the whole body
     # while both arms crossed over the face.
@@ -386,7 +476,11 @@ def install_smod_pose_overrides(output):
     }
 
 
-def render_texture(source_path, target_path):
+def render_texture(source_path, target_path, lance_path=None):
+    lance_draw = ""
+    if lance_path is not None:
+        lance_draw = (f"$lance=[System.Drawing.Image]::FromFile('{lance_path}');"
+                      "$g.DrawImage($lance,384,384,128,128);$lance.Dispose();")
     script = (
         "Add-Type -AssemblyName System.Drawing;"
         f"$src=[System.Drawing.Image]::FromFile('{source_path}');"
@@ -399,8 +493,14 @@ def render_texture(source_path, target_path):
         "$metal=New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(255,66,72,86));"
         "$dark=New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(255,30,34,43));"
         "$red=New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(255,196,14,28));"
+        "$purple=New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(255,88,26,148));"
+        "$green=New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(255,75,220,38));"
+        "$gold=New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(255,225,171,31));"
         "$g.FillRectangle($steel,400,0,42,72);$g.FillRectangle($metal,400,80,72,128);"
-        "$g.FillRectangle($dark,472,80,32,40);$g.FillRectangle($red,400,220,104,148);$g.Dispose();"
+        "$g.FillRectangle($dark,472,80,32,40);$g.FillRectangle($red,400,220,104,148);"
+        "$g.FillRectangle($purple,480,130,16,16);$g.FillRectangle($green,480,146,16,16);"
+        "$g.FillRectangle($gold,480,162,16,16);$g.FillRectangle($dark,480,178,16,16);"
+        f"{lance_draw}$g.Dispose();"
         f"$bmp.Save('{target_path}',[System.Drawing.Imaging.ImageFormat]::Png);$bmp.Dispose();"
     )
     subprocess.run(["powershell", "-NoProfile", "-Command", script], check=True)
@@ -418,6 +518,16 @@ def main():
     for directory in (geo_dir, anim_dir, texture_dir, source_dir):
         directory.mkdir(parents=True, exist_ok=True)
 
+    eud_lance = None
+    lance_texture = None
+    if EUD_SOURCE.exists():
+        with zipfile.ZipFile(EUD_SOURCE) as eud:
+            eud_lance = json.loads(eud.read(
+                "assets/eud/models/custom/lanzadelonginusmodel.json"))
+            lance_texture = source_dir / "longinus.png"
+            lance_texture.write_bytes(eud.read(
+                "assets/eud/textures/block/texturelanzadelonginus.png"))
+
     with zipfile.ZipFile(SOURCE) as archive:
         for unit in (1, 2):
             geometry = json.loads(read_suffix(archive, f"models/entity/entity_eva{unit}.json"))
@@ -425,12 +535,12 @@ def main():
             texture = read_suffix(archive, f"textures/entity/pamobile/entity_eva{unit}.png")
             target = "01" if unit == 1 else "02"
             (geo_dir / f"eva_unit{target}.geo.json").write_text(
-                json.dumps(scale_geometry(geometry), ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+                json.dumps(scale_geometry(geometry, eud_lance, unit), ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
             (anim_dir / f"eva_unit{target}.animation.json").write_text(
                 json.dumps(build_animations(animations, unit), ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
             raw_texture = source_dir / f"eva{unit}.png"
             raw_texture.write_bytes(texture)
-            render_texture(raw_texture, texture_dir / f"eva_unit{target}.png")
+            render_texture(raw_texture, texture_dir / f"eva_unit{target}.png", lance_texture)
         shutil.rmtree(source_dir)
 
     (OUT / "pack.mcmeta").write_text(json.dumps({"pack": {
@@ -438,8 +548,9 @@ def main():
     }}, indent=2), encoding="utf-8")
     (OUT / "_SOURCE.txt").write_text(
         "EVANGELION: END ADDON V1.0 by SmOd774YT (Planet Minecraft).\n"
+        "Lance of Longinus geometry/texture from EUD 1.1.0 (CC BY-NC 4.0).\n"
         "LOCAL TESTING ONLY. Do not commit or redistribute this generated pack.\n"
-        "Obtain the author's explicit permission before public use.\n", encoding="utf-8")
+        "Obtain the authors' explicit permission before public use.\n", encoding="utf-8")
     print(f"local pack written -> {OUT}")
 
 

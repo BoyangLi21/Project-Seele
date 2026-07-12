@@ -24,7 +24,7 @@ import net.minecraftforge.fml.common.Mod;
 public final class VisualCaptureManager
 {
     private static final String[] VIEWS = {
-            "front", "side", "back", "front_close", "side_close", "side_opposite_close",
+            "front", "side", "back", "front_close", "side_close", "side_opposite_close", "face_close",
             "first_person_clean", "first_person_cockpit",
             "first_person_yaw_left", "first_person_yaw_right",
             "first_person_pitch_up", "first_person_pitch_down"
@@ -182,12 +182,16 @@ public final class VisualCaptureManager
                 this.camera.setInvisible(true);
                 this.camera.setNoGravity(true);
             }
-            Vec3 centre = unit.position().add(0.0D, unit.getBbHeight() * 0.52D, 0.0D);
+            boolean faceClose = name.equals("face_close");
+            boolean lowFace = unit.getVisualPose() == EvaUnit01Entity.VISUAL_CROUCH
+                    || unit.getVisualPose() == EvaUnit01Entity.VISUAL_PRONE;
+            Vec3 centre = unit.position().add(0.0D,
+                    unit.getBbHeight() * (faceClose ? (lowFace ? 0.60D : 0.84D) : 0.52D), 0.0D);
             float yaw = unit.getYRot() * Mth.DEG_TO_RAD;
             Vec3 forward = new Vec3(-Mth.sin(yaw), 0.0D, Mth.cos(yaw));
             Vec3 right = new Vec3(-forward.z, 0.0D, forward.x);
             boolean close = name.endsWith("close");
-            double distance = close
+            double distance = faceClose ? 10.0D : close
                     ? Math.max(30.0D, unit.getBbHeight() * 1.12D)
                     : Math.max(48.0D, unit.getBbHeight() * 1.8D);
             Vec3 cameraPos = switch (name)
@@ -299,6 +303,11 @@ public final class VisualCaptureManager
                 case EvaUnit01Entity.VISUAL_KNIFE_WINDUP -> "knife_windup";
                 case EvaUnit01Entity.VISUAL_KNIFE_CONTACT -> "knife_contact";
                 case EvaUnit01Entity.VISUAL_KNIFE_RECOVERY -> "knife_recovery";
+                case EvaUnit01Entity.VISUAL_CROUCH -> "crouch";
+                case EvaUnit01Entity.VISUAL_PRONE -> "prone";
+                case EvaUnit01Entity.VISUAL_LANCE_WINDUP -> "lance_windup";
+                case EvaUnit01Entity.VISUAL_LANCE_CONTACT -> "lance_contact";
+                case EvaUnit01Entity.VISUAL_LANCE_RECOVERY -> "lance_recovery";
                 case EvaUnit01Entity.VISUAL_CANNON -> "cannon";
                 default -> "normal";
             };

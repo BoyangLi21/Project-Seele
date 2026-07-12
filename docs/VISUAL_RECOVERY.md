@@ -28,9 +28,14 @@ Development commands:
 /seele visual spawn unit01
 /seele visual pose idle
 /seele visual pose walk_contact
+/seele visual pose crouch
+/seele visual pose prone
 /seele visual pose knife_windup
 /seele visual pose knife_contact
 /seele visual pose knife_recovery
+/seele visual pose lance_windup
+/seele visual pose lance_contact
+/seele visual pose lance_recovery
 /seele visual pose cannon
 /seele visual capture all
 ```
@@ -91,7 +96,10 @@ Local SmOd evaluation evidence (not redistributable):
 | Orientation stability | PASS | `unit01_first_person_yaw_left_idle.png` and `unit01_first_person_yaw_right_idle.png`: neither arm mirrors or orbits independently from the body. |
 | Knife key poses | PASS | `unit01_front_close_knife_windup.png`, `unit01_side_close_knife_contact.png`, and `unit01_side_close_knife_recovery.png` form distinct raise, forward contact and lowered recovery silhouettes; the blade remains parented to `weapon_socket_r`. |
 | Knife timing/weight | BLOCKED | Still images establish joint continuity but not perceived timing or impact weight; requires the same user clip. |
+| Crouch/prone camera | PASS | `unit01_first_person_clean_crouch.png` and `unit01_first_person_clean_prone.png` clear the chest shell; their `pitch_down` frames show the real shared arms/body instead of a detached viewmodel. |
 | Cannon connection | PASS | `unit01_side_close_cannon.png`, `unit01_side_opposite_close_cannon.png`, and `unit01_first_person_pitch_down_cannon.png`: the cannon begins at the right-hand socket and the left arm reaches the support area without tilting the torso sideways. |
+| Longinus thrust | PASS | `unit01_front_close_lance_windup.png`, `unit01_side_close_lance_contact.png`, and `unit01_front_close_lance_recovery.png`: both arms converge on one shaft line through pull-back, thrust, and lowered recovery. Local geometry is EUD-derived and remains non-publishable. |
+| Unit-01 face | PROTOTYPE | `unit01_face_close_idle.png`: removes distorted head scaling and supplies yellow eyes, a narrower purple jaw and green cheek accents. It is still generated block geometry, not a final editable model. |
 
 The Visual Lab now uses the fixed isolated origin `(4096, 64, 4096)`, captures
 both side close-ups, and automatically closes the unattended client after the

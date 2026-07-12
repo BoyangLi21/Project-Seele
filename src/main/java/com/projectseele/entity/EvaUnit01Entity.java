@@ -77,7 +77,12 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     public static final int VISUAL_KNIFE_WINDUP = 3;
     public static final int VISUAL_KNIFE_CONTACT = 4;
     public static final int VISUAL_KNIFE_RECOVERY = 5;
-    public static final int VISUAL_CANNON = 6;
+    public static final int VISUAL_CROUCH = 6;
+    public static final int VISUAL_PRONE = 7;
+    public static final int VISUAL_LANCE_WINDUP = 8;
+    public static final int VISUAL_LANCE_CONTACT = 9;
+    public static final int VISUAL_LANCE_RECOVERY = 10;
+    public static final int VISUAL_CANNON = 11;
 
     private static final float MELEE_FIST_DAMAGE = 20.0F;
     private static final float MELEE_KNIFE_DAMAGE = 60.0F;
@@ -158,6 +163,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     private static final RawAnimation ANIM_MELEE_LEFT = RawAnimation.begin().thenPlay("animation.eva_unit01.melee_left");
     private static final RawAnimation ANIM_KNIFE = RawAnimation.begin().thenPlay("animation.eva_unit01.knife");
     private static final RawAnimation ANIM_KNIFE_LEFT = RawAnimation.begin().thenPlay("animation.eva_unit01.knife_left");
+    private static final RawAnimation ANIM_LANCE_THRUST = RawAnimation.begin().thenPlay("animation.eva_unit01.lance_thrust");
     private static final RawAnimation ANIM_SMASH = RawAnimation.begin().thenPlay("animation.eva_unit01.smash");
     private static final RawAnimation ANIM_CANNON_FIRE = RawAnimation.begin().thenPlay("animation.eva_unit01.cannon_fire");
     private static final RawAnimation ANIM_LAND = RawAnimation.begin().thenPlay("animation.eva_unit01.land");
@@ -168,6 +174,9 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     private static final RawAnimation ANIM_VISUAL_KNIFE_WINDUP = RawAnimation.begin().thenLoop("animation.eva_unit01.visual_knife_windup");
     private static final RawAnimation ANIM_VISUAL_KNIFE_CONTACT = RawAnimation.begin().thenLoop("animation.eva_unit01.visual_knife_contact");
     private static final RawAnimation ANIM_VISUAL_KNIFE_RECOVERY = RawAnimation.begin().thenLoop("animation.eva_unit01.visual_knife_recovery");
+    private static final RawAnimation ANIM_VISUAL_LANCE_WINDUP = RawAnimation.begin().thenLoop("animation.eva_unit01.visual_lance_windup");
+    private static final RawAnimation ANIM_VISUAL_LANCE_CONTACT = RawAnimation.begin().thenLoop("animation.eva_unit01.visual_lance_contact");
+    private static final RawAnimation ANIM_VISUAL_LANCE_RECOVERY = RawAnimation.begin().thenLoop("animation.eva_unit01.visual_lance_recovery");
     private static final RawAnimation ANIM_VISUAL_CANNON = RawAnimation.begin().thenLoop("animation.eva_unit01.visual_cannon");
 
     private final AnimatableInstanceCache geoCache = GeckoLibUtil.createInstanceCache(this);
@@ -345,6 +354,11 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         {
             this.entityData.set(DATA_WEAPON, WEAPON_CANNON);
         }
+        else if (safePose == VISUAL_LANCE_WINDUP || safePose == VISUAL_LANCE_CONTACT
+                || safePose == VISUAL_LANCE_RECOVERY)
+        {
+            this.entityData.set(DATA_WEAPON, WEAPON_LANCE);
+        }
         else if (safePose != VISUAL_NORMAL)
         {
             this.entityData.set(DATA_WEAPON, WEAPON_FISTS);
@@ -465,14 +479,14 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             return;
         }
         this.meleeCooldown = MELEE_COOLDOWN_TICKS;
-        this.leftSwing = !this.leftSwing;
+        boolean lance = this.getWeapon() == WEAPON_LANCE;
+        this.leftSwing = lance ? false : !this.leftSwing;
         this.entityData.set(DATA_MELEE_LEFT, this.leftSwing);
         this.entityData.set(DATA_MELEE_SEQUENCE,
                 (this.entityData.get(DATA_MELEE_SEQUENCE) + 1) & Integer.MAX_VALUE);
         this.swing(this.leftSwing ? InteractionHand.OFF_HAND : InteractionHand.MAIN_HAND, true);
         boolean knife = this.getWeapon() == WEAPON_KNIFE;
-        boolean lance = this.getWeapon() == WEAPON_LANCE;
-        String animation = knife || lance
+        String animation = lance ? "lance_thrust" : knife
                 ? (this.leftSwing ? "knife_left" : "knife")
                 : (this.leftSwing ? "melee_left" : "melee");
         this.triggerAnim("strike", animation);
@@ -1113,13 +1127,19 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         // SmOd's face projects about 2.2 blocks in front of the root at
         // Project SEELE scale. Put the pilot at that face socket instead of
         // behind the skull, where the camera looked through a headless body.
-        double forward = 2.25D;
         // The eye must clear the shoulder pylons: at 25.0 it sat level with
         // the chest rim and first person stared into the Unit's own back.
         // SmOd's head tops out higher than the placeholder skeleton's, so the
         // standing height is per-family.
         double standing = this.getUnitVariant() == UNIT_00 ? 25.4D : 27.2D;
-        double plugHeight = this.isPilotProne() ? 10.5D : this.isPilotCrouching() ? 17.7D : standing;
+        boolean proneView = this.isPilotProne() || this.getVisualPose() == VISUAL_PRONE;
+        boolean crouchView = this.isPilotCrouching() || this.getVisualPose() == VISUAL_CROUCH;
+        // Bent stances move SmOd's head forward with the torso. Reusing the
+        // standing socket leaves the camera inside the chest; prone also
+        // keeps a high kneeling/all-fours head rather than dropping to the
+        // shortened collision-box height.
+        double forward = proneView ? 6.0D : crouchView ? 5.0D : 2.25D;
+        double plugHeight = proneView ? 16.6D : crouchView ? 17.7D : standing;
         move.accept(passenger,
                 this.getX() - Math.sin(rad) * forward,
                 this.getY() + plugHeight,
@@ -1187,6 +1207,11 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
                 case VISUAL_KNIFE_WINDUP -> { return state.setAndContinue(ANIM_VISUAL_KNIFE_WINDUP); }
                 case VISUAL_KNIFE_CONTACT -> { return state.setAndContinue(ANIM_VISUAL_KNIFE_CONTACT); }
                 case VISUAL_KNIFE_RECOVERY -> { return state.setAndContinue(ANIM_VISUAL_KNIFE_RECOVERY); }
+                case VISUAL_CROUCH -> { return state.setAndContinue(ANIM_CROUCH); }
+                case VISUAL_PRONE -> { return state.setAndContinue(ANIM_PRONE); }
+                case VISUAL_LANCE_WINDUP -> { return state.setAndContinue(ANIM_VISUAL_LANCE_WINDUP); }
+                case VISUAL_LANCE_CONTACT -> { return state.setAndContinue(ANIM_VISUAL_LANCE_CONTACT); }
+                case VISUAL_LANCE_RECOVERY -> { return state.setAndContinue(ANIM_VISUAL_LANCE_RECOVERY); }
                 case VISUAL_CANNON -> { return state.setAndContinue(ANIM_VISUAL_CANNON); }
                 default -> { }
             }
@@ -1229,6 +1254,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
                 .triggerableAnim("melee_left", ANIM_MELEE_LEFT)
                 .triggerableAnim("knife", ANIM_KNIFE)
                 .triggerableAnim("knife_left", ANIM_KNIFE_LEFT)
+                .triggerableAnim("lance_thrust", ANIM_LANCE_THRUST)
                 .triggerableAnim("smash", ANIM_SMASH)
                 .triggerableAnim("cannon_fire", ANIM_CANNON_FIRE)
                 .triggerableAnim("land", ANIM_LAND)

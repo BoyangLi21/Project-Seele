@@ -30,7 +30,9 @@ import net.minecraftforge.network.PacketDistributor;
 public final class VisualLabCommands
 {
     private static final String[] POSES = {
-            "normal", "idle", "walk_contact", "knife_windup", "knife_contact", "knife_recovery", "cannon"
+            "normal", "idle", "walk_contact", "crouch", "prone",
+            "knife_windup", "knife_contact", "knife_recovery",
+            "lance_windup", "lance_contact", "lance_recovery", "cannon"
     };
     private static final SuggestionProvider<CommandSourceStack> POSE_SUGGESTIONS =
             (context, builder) -> SharedSuggestionProvider.suggest(POSES, builder);
@@ -159,6 +161,11 @@ public final class VisualLabCommands
             case "knife_windup" -> EvaUnit01Entity.VISUAL_KNIFE_WINDUP;
             case "knife_contact" -> EvaUnit01Entity.VISUAL_KNIFE_CONTACT;
             case "knife_recovery" -> EvaUnit01Entity.VISUAL_KNIFE_RECOVERY;
+            case "crouch" -> EvaUnit01Entity.VISUAL_CROUCH;
+            case "prone" -> EvaUnit01Entity.VISUAL_PRONE;
+            case "lance_windup" -> EvaUnit01Entity.VISUAL_LANCE_WINDUP;
+            case "lance_contact" -> EvaUnit01Entity.VISUAL_LANCE_CONTACT;
+            case "lance_recovery" -> EvaUnit01Entity.VISUAL_LANCE_RECOVERY;
             case "cannon" -> EvaUnit01Entity.VISUAL_CANNON;
             default -> throw new IllegalArgumentException("Unknown visual pose: " + name);
         };
