@@ -1,5 +1,13 @@
 {
   "itemGroup.projectseele": "Project SEELE",
+  "message.projectseele.use_entry_gantry": "Board from the upper dorsal entry-plug gantry",
+  "message.projectseele.launch_locked": "Launch carrier locked — insertion and synchronization in progress",
+  "message.projectseele.launch_interlock": "Entry-plug ejection locked during the launch sequence",
+  "message.projectseele.launch_surface_clear": "Surface clear — pilot control restored",
+  "hud.projectseele.launch_standby": "LAUNCH CARRIER — FINAL INTERLOCK",
+  "hud.projectseele.launch_interlock": "MAG-LOCK / CATAPULT STANDBY",
+  "hud.projectseele.launch_ascent": "EMERGENCY SURFACE LAUNCH",
+  "hud.projectseele.launch_surface_clear": "SURFACE CLEAR — PILOT CONTROL RESTORING",
   "item.projectseele.sachiel_spawn_egg": "Sachiel Spawn Egg",
   "item.projectseele.s2_engine_fragment": "S² Engine Fragment",
   "item.projectseele.shamshel_spawn_egg": "Shamshel Spawn Egg",

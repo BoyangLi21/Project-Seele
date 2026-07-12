@@ -1,7 +1,12 @@
 package com.projectseele.entity;
 
 import com.projectseele.fx.CrossExplosionFX;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.syncher.EntityDataAccessor;
+import net.minecraft.network.syncher.EntityDataSerializers;
+import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.util.Mth;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.EntityType;
@@ -24,12 +29,25 @@ import software.bernie.geckolib.util.GeckoLibUtil;
 /** White SEELE mass-production unit. It revives until an EVA knife destroys its exposed core. */
 public class MassProductionEvaEntity extends Monster implements GeoEntity
 {
+    public static final int VISUAL_NORMAL = 0;
+    public static final int VISUAL_IDLE = 1;
+    public static final int VISUAL_MOVE = 2;
+    public static final int VISUAL_ATTACK = 3;
+    public static final int VISUAL_REVIVE = 4;
+    public static final int VISUAL_RITUAL = 5;
+
+    private static final EntityDataAccessor<Integer> DATA_VISUAL_POSE =
+            SynchedEntityData.defineId(MassProductionEvaEntity.class, EntityDataSerializers.INT);
+    private static final EntityDataAccessor<Integer> DATA_REVIVE_TICKS =
+            SynchedEntityData.defineId(MassProductionEvaEntity.class, EntityDataSerializers.INT);
     private static final RawAnimation ANIM_IDLE = RawAnimation.begin().thenLoop("animation.entity_mp.idle_1");
     private static final RawAnimation ANIM_WALK = RawAnimation.begin().thenLoop("animation.entity_mp.move");
     private static final RawAnimation ANIM_RITUAL = RawAnimation.begin().thenLoop("animation.entity_mp.ritual");
+    private static final RawAnimation ANIM_REVIVE = RawAnimation.begin().thenLoop("animation.entity_mp.revive");
+    private static final RawAnimation ANIM_VISUAL_ATTACK =
+            RawAnimation.begin().thenLoop("animation.entity_mp.visual_attack");
     private static final RawAnimation ANIM_ATTACK = RawAnimation.begin().thenPlay("animation.entity_mp.attack");
     private final AnimatableInstanceCache geoCache = GeckoLibUtil.createInstanceCache(this);
-    private int reviveTicks;
     private boolean coreBroken;
     private int attackCooldown;
 
@@ -53,6 +71,32 @@ public class MassProductionEvaEntity extends Monster implements GeoEntity
     }
 
     @Override
+    protected void defineSynchedData()
+    {
+        super.defineSynchedData();
+        this.entityData.define(DATA_VISUAL_POSE, VISUAL_NORMAL);
+        this.entityData.define(DATA_REVIVE_TICKS, 0);
+    }
+
+    @Override
+    public void addAdditionalSaveData(CompoundTag tag)
+    {
+        super.addAdditionalSaveData(tag);
+        tag.putInt("VisualPose", this.getVisualPose());
+        tag.putInt("ReviveTicks", this.getReviveTicks());
+        tag.putBoolean("CoreBroken", this.coreBroken);
+    }
+
+    @Override
+    public void readAdditionalSaveData(CompoundTag tag)
+    {
+        super.readAdditionalSaveData(tag);
+        this.setVisualPose(tag.getInt("VisualPose"));
+        this.setReviveTicks(tag.getInt("ReviveTicks"));
+        this.coreBroken = tag.getBoolean("CoreBroken");
+    }
+
+    @Override
     protected void registerGoals()
     {
         this.targetSelector.addGoal(1, new NearestAttackableTargetGoal<>(this, EvaUnit01Entity.class, true));
@@ -63,16 +107,22 @@ public class MassProductionEvaEntity extends Monster implements GeoEntity
     {
         super.tick();
         this.setNoGravity(true);
-        if (this.reviveTicks > 0)
+        int reviveTicks = this.getReviveTicks();
+        if (reviveTicks > 0)
         {
             this.setDeltaMovement(Vec3.ZERO);
-            if (--this.reviveTicks == 0)
+            if (!this.level().isClientSide && reviveTicks == 1)
             {
+                this.setReviveTicks(0);
                 this.setHealth(this.getMaxHealth());
                 if (this.level() instanceof ServerLevel server)
                 {
                     CrossExplosionFX.spawn(server, this.position(), 0.22F);
                 }
+            }
+            else if (!this.level().isClientSide)
+            {
+                this.setReviveTicks(reviveTicks - 1);
             }
             return;
         }
@@ -101,7 +151,7 @@ public class MassProductionEvaEntity extends Monster implements GeoEntity
     @Override
     public boolean hurt(DamageSource source, float amount)
     {
-        if (this.reviveTicks > 0)
+        if (this.isReviving())
         {
             return false;
         }
@@ -115,7 +165,7 @@ public class MassProductionEvaEntity extends Monster implements GeoEntity
         if (!this.coreBroken && amount >= this.getHealth())
         {
             this.setHealth(1.0F);
-            this.reviveTicks = 120;
+            this.setReviveTicks(120);
             return true;
         }
         return super.hurt(source, amount);
@@ -123,13 +173,48 @@ public class MassProductionEvaEntity extends Monster implements GeoEntity
 
     public boolean isReviving()
     {
-        return this.reviveTicks > 0;
+        return this.getReviveTicks() > 0;
+    }
+
+    public int getVisualPose()
+    {
+        return this.entityData.get(DATA_VISUAL_POSE);
+    }
+
+    /** Development/ritual pose replicated to every tracking client. */
+    public void setVisualPose(int pose)
+    {
+        this.entityData.set(DATA_VISUAL_POSE,
+                Mth.clamp(pose, VISUAL_NORMAL, VISUAL_RITUAL));
+    }
+
+    public static String visualPoseName(int pose)
+    {
+        return switch (pose)
+        {
+            case VISUAL_IDLE -> "idle";
+            case VISUAL_MOVE -> "move";
+            case VISUAL_ATTACK -> "attack";
+            case VISUAL_REVIVE -> "revive";
+            case VISUAL_RITUAL -> "ritual";
+            default -> "normal";
+        };
+    }
+
+    private int getReviveTicks()
+    {
+        return this.entityData.get(DATA_REVIVE_TICKS);
+    }
+
+    private void setReviveTicks(int ticks)
+    {
+        this.entityData.set(DATA_REVIVE_TICKS, Math.max(0, ticks));
     }
 
     /** Inert vessels parked on the Sephirot during the Third Impact tableau. */
     public boolean isRitualFormation()
     {
-        return this.isNoAi() && this.isNoGravity();
+        return this.getVisualPose() == VISUAL_RITUAL;
     }
 
     @Override
@@ -137,9 +222,24 @@ public class MassProductionEvaEntity extends Monster implements GeoEntity
     {
         controllers.add(new AnimationController<>(this, "base", 6, state ->
         {
-            if (this.isRitualFormation())
+            switch (this.getVisualPose())
             {
-                return state.setAndContinue(ANIM_RITUAL);
+                case VISUAL_IDLE:
+                    return state.setAndContinue(ANIM_IDLE);
+                case VISUAL_MOVE:
+                    return state.setAndContinue(ANIM_WALK);
+                case VISUAL_ATTACK:
+                    return state.setAndContinue(ANIM_VISUAL_ATTACK);
+                case VISUAL_REVIVE:
+                    return state.setAndContinue(ANIM_REVIVE);
+                case VISUAL_RITUAL:
+                    return state.setAndContinue(ANIM_RITUAL);
+                default:
+                    break;
+            }
+            if (this.isReviving())
+            {
+                return state.setAndContinue(ANIM_REVIVE);
             }
             return state.setAndContinue(state.isMoving() ? ANIM_WALK : ANIM_IDLE);
         }));

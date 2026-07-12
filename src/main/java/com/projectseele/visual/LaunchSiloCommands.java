@@ -1,0 +1,264 @@
+package com.projectseele.visual;
+
+import java.util.List;
+import java.util.Locale;
+
+import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.exceptions.CommandSyntaxException;
+import com.projectseele.ProjectSeele;
+import com.projectseele.entity.EvaUnit01Entity;
+import com.projectseele.item.NervConstructionKitItem;
+import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.commands.Commands;
+import net.minecraft.core.BlockPos;
+import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.phys.AABB;
+import net.minecraftforge.event.RegisterCommandsEvent;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod;
+
+/** Deterministic setup and boarding helpers for the NERV launch-silo prototype. */
+@Mod.EventBusSubscriber(modid = ProjectSeele.MODID, bus = Mod.EventBusSubscriber.Bus.FORGE)
+public final class LaunchSiloCommands
+{
+    private LaunchSiloCommands() {}
+
+    @SubscribeEvent
+    public static void register(RegisterCommandsEvent event)
+    {
+        CommandDispatcher<CommandSourceStack> dispatcher = event.getDispatcher();
+        dispatcher.register(Commands.literal("seele")
+                .requires(source -> source.hasPermission(2))
+                .then(Commands.literal("silo")
+                        .then(Commands.literal("setup")
+                                .executes(context -> setup(context.getSource())))
+                        .then(Commands.literal("board")
+                                .executes(context -> board(context.getSource())))
+                        .then(Commands.literal("status")
+                                .executes(context -> status(context.getSource())))
+                        .then(Commands.literal("audit")
+                                .executes(context -> audit(context.getSource())))));
+    }
+
+    private static int setup(CommandSourceStack source) throws CommandSyntaxException
+    {
+        ServerPlayer player = source.getPlayerOrException();
+        ServerLevel level = player.serverLevel();
+        if (player.isPassenger())
+        {
+            source.sendFailure(Component.literal("Dismount before constructing a launch complex."));
+            return 0;
+        }
+        int minSurface = level.getMinBuildHeight() + 36;
+        // Launched base rests two blocks above the surface; the 30-block
+        // hitbox therefore needs 32 blocks plus a small ceiling margin.
+        int maxSurface = level.getMaxBuildHeight() - 34;
+        if (maxSurface < minSurface)
+        {
+            source.sendFailure(Component.literal("This dimension is too shallow for the launch complex."));
+            return 0;
+        }
+        int surfaceY = Math.max(minSurface, Math.min(maxSurface, player.blockPosition().getY() - 1));
+        BlockPos origin = new BlockPos(player.blockPosition().getX(), surfaceY, player.blockPosition().getZ());
+        AABB buildArea = new AABB(origin).inflate(52.0D, 40.0D, 52.0D);
+        boolean existingComplex = !level.getEntitiesOfClass(EvaUnit01Entity.class, buildArea,
+                unit -> unit.isAlive() && unit.findLaunchBed() != null).isEmpty();
+        if (existingComplex)
+        {
+            source.sendFailure(Component.literal(
+                    "A launch complex already exists here; move at least 60 blocks before setup."));
+            return 0;
+        }
+        NervConstructionKitItem.buildComplex(level, origin);
+        SiloAudit setupAudit = inspectComplex(level, origin);
+        logAudit("setup", setupAudit);
+        if (!setupAudit.valid())
+        {
+            source.sendFailure(Component.literal(
+                    "Launch complex was built but failed its structural audit: "
+                            + setupAudit.summary()));
+            return 0;
+        }
+
+        // Unit-01 is the centre bay. Leave the tester on its high dorsal
+        // gantry, not at the launch bed thirty blocks below ground.
+        player.teleportTo(level, origin.getX() + 0.5D, origin.getY() - 7.0D,
+                origin.getZ() + 6.5D, 180.0F, 16.0F);
+        source.sendSuccess(() -> Component.literal(
+                "NERV launch complex ready. Use /seele silo board to start insertion."), false);
+        return 1;
+    }
+
+    private static int board(CommandSourceStack source) throws CommandSyntaxException
+    {
+        ServerPlayer player = source.getPlayerOrException();
+        if (player.isPassenger())
+        {
+            source.sendFailure(Component.literal("Already riding an entity; dismount before silo boarding."));
+            return 0;
+        }
+        EvaUnit01Entity unit = nearestCagedUnit(player);
+        BlockPos bed = unit.findLaunchBed();
+        if (bed == null)
+        {
+            throw new IllegalStateException("Nearest EVA is not on a NERV launch bed");
+        }
+
+        // Match the physical gantry built at bed +23. The ordinary mob
+        // interaction still performs all height/interlock validation.
+        player.teleportTo(player.serverLevel(), bed.getX() + 0.5D, bed.getY() + 23.0D,
+                bed.getZ() + 6.5D, 180.0F, 16.0F);
+        unit.mobInteract(player, InteractionHand.MAIN_HAND);
+        if (player.getVehicle() != unit)
+        {
+            source.sendFailure(Component.literal("Entry-plug boarding failed; check the gantry and launch bed."));
+            return 0;
+        }
+        source.sendSuccess(() -> Component.literal(
+                "Entry plug inserted. Catapult launches after the synchronization sequence."), false);
+        return 1;
+    }
+
+    private static int status(CommandSourceStack source) throws CommandSyntaxException
+    {
+        ServerPlayer player = source.getPlayerOrException();
+        EvaUnit01Entity unit = player.getVehicle() instanceof EvaUnit01Entity ridden
+                ? ridden : nearestCagedUnit(player);
+        String phase = switch (unit.getLaunchPhase())
+        {
+            case EvaUnit01Entity.LAUNCH_LOCKED -> "LOCKED";
+            case EvaUnit01Entity.LAUNCH_ASCENT -> "ASCENT";
+            case EvaUnit01Entity.LAUNCH_CLEAR -> "SURFACE_CLEAR";
+            default -> "IDLE";
+        };
+        BlockPos armedBed = unit.getLaunchBedPosition();
+        BlockPos bed = armedBed != null ? armedBed : unit.findLaunchBed();
+        source.sendSuccess(() -> Component.literal(String.format(Locale.ROOT,
+                "Silo %s | ticks %d | y %.2f | bed %s", phase, unit.getLaunchTicks(),
+                unit.getY(), bed == null ? "none" : bed.toShortString())), false);
+        return 1;
+    }
+
+    /** Read-only structural check for the three launch beds and high gantries. */
+    private static int audit(CommandSourceStack source) throws CommandSyntaxException
+    {
+        ServerPlayer player = source.getPlayerOrException();
+        SiloAudit audit = inspectComplex(player.serverLevel(), player.blockPosition());
+        logAudit("command", audit);
+        Component report = Component.literal(audit.summary());
+        if (audit.valid())
+        {
+            source.sendSuccess(() -> report, false);
+            return 1;
+        }
+        source.sendFailure(report);
+        return 0;
+    }
+
+    private static SiloAudit inspectComplex(ServerLevel level, BlockPos centre)
+    {
+        AABB area = new AABB(centre).inflate(80.0D, 64.0D, 80.0D);
+        List<EvaUnit01Entity> units = level.getEntitiesOfClass(EvaUnit01Entity.class, area,
+                unit -> unit.isAlive() && unit.findLaunchBed() != null);
+        boolean has00 = false;
+        boolean has01 = false;
+        boolean has02 = false;
+        int validBeds = 0;
+        int validHighGantries = 0;
+        int clearShafts = 0;
+        for (EvaUnit01Entity unit : units)
+        {
+            BlockPos bed = unit.findLaunchBed();
+            if (bed == null)
+            {
+                continue;
+            }
+            switch (unit.getUnitVariant())
+            {
+                case EvaUnit01Entity.UNIT_00 -> has00 = true;
+                case EvaUnit01Entity.UNIT_02 -> has02 = true;
+                default -> has01 = true;
+            }
+            if (level.getBlockState(bed).is(net.minecraft.world.level.block.Blocks.LODESTONE)
+                    && Math.abs(unit.getY() - bed.getY() - 1.0D) < 0.25D)
+            {
+                validBeds++;
+            }
+
+            // Bed is origin-30. The catwalk floor is origin-8 (bed+22),
+            // with the player standing at bed+23 and the lift spanning +4..23.
+            boolean gantryFloor = !level.getBlockState(bed.offset(0, 22, 6)).isAir();
+            boolean ladderBottom = level.getBlockState(bed.offset(0, 4, 13))
+                    .is(net.minecraft.world.level.block.Blocks.LADDER);
+            boolean ladderTop = level.getBlockState(bed.offset(0, 23, 13))
+                    .is(net.minecraft.world.level.block.Blocks.LADDER);
+            if (gantryFloor && ladderBottom && ladderTop)
+            {
+                validHighGantries++;
+            }
+
+            boolean clear = true;
+            // The Unit is 8.5 blocks wide. Audit an 11x11 carrier envelope,
+            // not just the centreline, for the full rise to the surface deck.
+            for (int y = 1; y <= 31 && clear; y++)
+            {
+                for (int x = -5; x <= 5 && clear; x++)
+                {
+                    for (int z = -5; z <= 5; z++)
+                    {
+                        if (!level.getBlockState(bed.offset(x, y, z)).isAir())
+                        {
+                            clear = false;
+                            break;
+                        }
+                    }
+                }
+            }
+            if (clear)
+            {
+                clearShafts++;
+            }
+        }
+        boolean variants = has00 && has01 && has02;
+        boolean valid = units.size() == 3 && variants && validBeds == 3
+                && validHighGantries == 3 && clearShafts == 3;
+        return new SiloAudit(valid, units.size(), variants, validBeds,
+                validHighGantries, clearShafts);
+    }
+
+    private static void logAudit(String stage, SiloAudit audit)
+    {
+        if (audit.valid())
+        {
+            ProjectSeele.LOGGER.info("NERV silo audit [{}]: {}", stage, audit.summary());
+        }
+        else
+        {
+            ProjectSeele.LOGGER.error("NERV SILO INVALID [{}]: {}", stage, audit.summary());
+        }
+    }
+
+    private record SiloAudit(boolean valid, int units, boolean variants,
+                             int beds, int highGantries, int clearShafts)
+    {
+        String summary()
+        {
+            return String.format(Locale.ROOT,
+                    "valid=%s units=%d variants00/01/02=%s beds=%d highGantries=%d clearShafts=%d",
+                    this.valid, this.units, this.variants, this.beds,
+                    this.highGantries, this.clearShafts);
+        }
+    }
+
+    private static EvaUnit01Entity nearestCagedUnit(ServerPlayer player)
+    {
+        AABB area = player.getBoundingBox().inflate(160.0D, 96.0D, 160.0D);
+        return player.serverLevel().getEntitiesOfClass(EvaUnit01Entity.class, area,
+                        unit -> unit.isAlive() && unit.findLaunchBed() != null).stream()
+                .min((left, right) -> Double.compare(left.distanceToSqr(player), right.distanceToSqr(player)))
+                .orElseThrow(() -> new IllegalStateException("No EVA on a NERV launch bed within 160 blocks"));
+    }
+}

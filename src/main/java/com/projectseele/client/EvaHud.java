@@ -92,6 +92,13 @@ public final class EvaHud
         guiGraphics.fill(bx, by, bx + Math.round(barWidth * progress), by + 5, NERV_ORANGE);
         guiGraphics.drawCenteredString(gui.getFont(), String.format("SYSTEM  %03d%%", Math.round(progress * 100.0F)),
                 width / 2, by + 10, 0xFFE8D2B8);
+        if (eva.getLaunchPhase() == EvaUnit01Entity.LAUNCH_LOCKED)
+        {
+            guiGraphics.drawCenteredString(gui.getFont(),
+                    Component.translatable("hud.projectseele.launch_standby")
+                            .withStyle(ChatFormatting.RED, ChatFormatting.BOLD),
+                    width / 2, by + 24, 0xFFFF3030);
+        }
     };
 
     /** Full entry-plug cockpit: frame, synchro readout, status, warnings. */
@@ -152,6 +159,19 @@ public final class EvaHud
                 Component.literal(String.format("HDG %03d   PITCH %+03d", heading, Math.round(-player.getXRot())))
                         .withStyle(ChatFormatting.DARK_GRAY),
                 width / 2, m + 18, 0xFFB8A48D);
+
+        if (eva.isLaunchSequenceActive())
+        {
+            String launchKey = switch (eva.getLaunchPhase())
+            {
+                case EvaUnit01Entity.LAUNCH_LOCKED -> "hud.projectseele.launch_interlock";
+                case EvaUnit01Entity.LAUNCH_ASCENT -> "hud.projectseele.launch_ascent";
+                default -> "hud.projectseele.launch_surface_clear";
+            };
+            guiGraphics.drawCenteredString(gui.getFont(),
+                    Component.translatable(launchKey).withStyle(ChatFormatting.RED, ChatFormatting.BOLD),
+                    width / 2, m + 30, 0xFFFF3030);
+        }
 
         // Helmet sight and artificial horizon. It stays subtle until the
         // dedicated cannon scope takes over, giving the plug a stable frame

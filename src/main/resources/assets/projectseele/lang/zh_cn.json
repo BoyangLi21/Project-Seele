@@ -1,5 +1,13 @@
 {
   "itemGroup.projectseele": "Project SEELE",
+  "message.projectseele.use_entry_gantry": "\u8bf7\u4ece\u80cc\u90e8\u9ad8\u4f4d\u63d2\u5165\u6813\u6808\u6865\u767b\u4e58",
+  "message.projectseele.launch_locked": "\u53d1\u5c04\u8f7d\u53f0\u5df2\u9501\u5b9a\u2014\u2014\u63d2\u5165\u4e0e\u540c\u6b65\u8fdb\u884c\u4e2d",
+  "message.projectseele.launch_interlock": "\u53d1\u5c04\u5e8f\u5217\u4e2d\u7981\u6b62\u5f39\u51fa\u63d2\u5165\u6813",
+  "message.projectseele.launch_surface_clear": "\u5df2\u7a81\u7834\u5730\u8868\u2014\u2014\u9a7e\u9a76\u6743\u5df2\u6062\u590d",
+  "hud.projectseele.launch_standby": "\u53d1\u5c04\u8f7d\u53f0\u2014\u2014\u6700\u7ec8\u8054\u9501",
+  "hud.projectseele.launch_interlock": "\u7535\u78c1\u9501\u5b9a / \u5f39\u5c04\u5f85\u547d",
+  "hud.projectseele.launch_ascent": "\u7d27\u6025\u5730\u8868\u5f39\u5c04",
+  "hud.projectseele.launch_surface_clear": "\u5df2\u7a81\u7834\u5730\u8868\u2014\u2014\u9a7e\u9a76\u6743\u6062\u590d\u4e2d",
   "item.projectseele.sachiel_spawn_egg": "萨基尔刷怪蛋",
   "item.projectseele.s2_engine_fragment": "S²机关碎片",
   "item.projectseele.shamshel_spawn_egg": "夏姆榭尔刷怪蛋",

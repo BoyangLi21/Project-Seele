@@ -3,6 +3,7 @@ package com.projectseele.event;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.UUID;
 
 import com.projectseele.ProjectSeele;
 import com.projectseele.entity.MassProductionEvaEntity;
@@ -38,7 +39,25 @@ public final class ThirdImpactDirector
     {
         Impact impact = new Impact(level, origin, yaw, hasUnit);
         ACTIVE.add(impact);
+        ProjectSeele.LOGGER.info(
+                "Third Impact staged: dimension={} origin=({},{},{}) yaw={} unit01={}",
+                level.dimension().location(), origin.x, origin.y, origin.z, yaw, hasUnit);
         broadcast(impact, "message.projectseele.impact_ascent");
+    }
+
+    /** Development visual-lab entry: materialise the complete tableau now. */
+    public static void startVisualPreview(ServerLevel level, Vec3 origin, float yaw, boolean hasUnit)
+    {
+        ACTIVE.removeIf(existing -> existing.level == level
+                && existing.origin.distanceToSqr(origin) < 32.0D * 32.0D);
+        Impact impact = new Impact(level, origin, yaw, hasUnit);
+        impact.ticks = 300;
+        deployVessels(impact);
+        auditTableau(impact, "visual-preview");
+        ACTIVE.add(impact);
+        SeeleNetwork.CHANNEL.send(PacketDistributor.ALL.noArg(),
+                new ClientboundThirdImpactPacket(origin.x, origin.y, origin.z, yaw, hasUnit));
+        broadcast(impact, "message.projectseele.impact_tree");
     }
 
     @SubscribeEvent
@@ -60,6 +79,7 @@ public final class ThirdImpactDirector
             }
             else if (impact.ticks == 300)
             {
+                auditTableau(impact, "tree-manifest");
                 SeeleNetwork.CHANNEL.send(PacketDistributor.ALL.noArg(),
                         new ClientboundThirdImpactPacket(impact.origin.x, impact.origin.y,
                                 impact.origin.z, impact.yaw, impact.hasUnit));
@@ -97,7 +117,8 @@ public final class ThirdImpactDirector
 
     private static void deployVessels(Impact impact)
     {
-        float formationYaw = -(float) Math.toDegrees(impact.yaw);
+        float formationYaw = TreeOfLifeLayout.frontFacingYawDegrees(impact.yaw);
+        int deployed = 0;
         for (int i = 0; i < TreeOfLifeLayout.NODES.length; i++)
         {
             if (i == TreeOfLifeLayout.TIFERET)
@@ -111,16 +132,134 @@ public final class ThirdImpactDirector
             }
             Vec3 node = TreeOfLifeLayout.worldNode(impact.origin, impact.yaw, i);
             mass.moveTo(node.x, node.y - mass.getBbHeight() * 0.5D, node.z, formationYaw, 0.0F);
-            mass.yRotO = formationYaw;
-            mass.yBodyRot = formationYaw;
-            mass.yBodyRotO = formationYaw;
-            mass.yHeadRot = formationYaw;
-            mass.yHeadRotO = formationYaw;
+            faceFront(mass, formationYaw);
             mass.setNoGravity(true);
             mass.setNoAi(true);
+            mass.setVisualPose(MassProductionEvaEntity.VISUAL_RITUAL);
             mass.setPersistenceRequired();
-            impact.level.addFreshEntity(mass);
+            if (impact.level.addFreshEntity(mass))
+            {
+                impact.vesselIds.add(mass.getUUID());
+                deployed++;
+            }
         }
+        ProjectSeele.LOGGER.info(
+                "Third Impact formation deployed: vessels={} expected=9 frontYaw={}",
+                deployed, formationYaw);
+        if (deployed != TreeOfLifeLayout.NODES.length - 1)
+        {
+            ProjectSeele.LOGGER.error(
+                    "THIRD IMPACT FORMATION INVALID: deployed {} of 9 Mass Production EVAs",
+                    deployed);
+        }
+    }
+
+    /**
+     * Server-side structural gate for both the story timeline and Visual Lab.
+     * This deliberately checks state and placement only; it never claims that
+     * the resulting composition or animation has passed visual review.
+     */
+    private static void auditTableau(Impact impact, String stage)
+    {
+        AABB area = new AABB(impact.origin, impact.origin).inflate(230.0D);
+        List<MassProductionEvaEntity> vessels = impact.level.getEntitiesOfClass(
+                MassProductionEvaEntity.class, area,
+                mass -> mass.isAlive() && impact.vesselIds.contains(mass.getUUID()));
+        float expectedYaw = TreeOfLifeLayout.frontFacingYawDegrees(impact.yaw);
+        int facing = 0;
+        int ritual = 0;
+        boolean[] occupied = new boolean[TreeOfLifeLayout.NODES.length];
+        for (MassProductionEvaEntity mass : vessels)
+        {
+            if (mass.isRitualFormation())
+            {
+                ritual++;
+            }
+            boolean front = Math.abs(net.minecraft.util.Mth.wrapDegrees(
+                    mass.getYRot() - expectedYaw)) < 1.0F
+                    && Math.abs(net.minecraft.util.Mth.wrapDegrees(
+                            mass.yBodyRot - expectedYaw)) < 1.0F
+                    && Math.abs(net.minecraft.util.Mth.wrapDegrees(
+                            mass.yHeadRot - expectedYaw)) < 1.0F;
+            if (front)
+            {
+                facing++;
+            }
+            Vec3 centre = mass.position().add(0.0D, mass.getBbHeight() * 0.5D, 0.0D);
+            for (int node = 0; node < TreeOfLifeLayout.NODES.length; node++)
+            {
+                if (node == TreeOfLifeLayout.TIFERET)
+                {
+                    continue;
+                }
+                if (centre.distanceToSqr(TreeOfLifeLayout.worldNode(
+                        impact.origin, impact.yaw, node)) < 1.0D)
+                {
+                    occupied[node] = true;
+                    break;
+                }
+            }
+        }
+        int occupiedOuterNodes = 0;
+        for (int node = 0; node < occupied.length; node++)
+        {
+            if (node != TreeOfLifeLayout.TIFERET && occupied[node])
+            {
+                occupiedOuterNodes++;
+            }
+        }
+
+        Vec3 tiferet = TreeOfLifeLayout.worldNode(
+                impact.origin, impact.yaw, TreeOfLifeLayout.TIFERET);
+        boolean crucifiedUnit01 = !impact.hasUnit;
+        boolean unitAtTiferet = !impact.hasUnit;
+        boolean unitFacingFront = !impact.hasUnit;
+        boolean alignedCrucifiedUnit01 = !impact.hasUnit;
+        if (impact.hasUnit)
+        {
+            for (EvaUnit01Entity unit : impact.level.getEntitiesOfClass(
+                    EvaUnit01Entity.class, area,
+                    unit -> unit.isAlive()
+                            && unit.getUnitVariant() == EvaUnit01Entity.UNIT_01
+                            && unit.isCrucified()))
+            {
+                crucifiedUnit01 = true;
+                Vec3 centre = unit.position().add(0.0D, unit.getBbHeight() * 0.5D, 0.0D);
+                boolean atTiferet = centre.distanceToSqr(tiferet) < 1.0D;
+                boolean facingFront = Math.abs(net.minecraft.util.Mth.wrapDegrees(
+                        unit.getYRot() - expectedYaw)) < 1.0F;
+                unitAtTiferet |= atTiferet;
+                unitFacingFront |= facingFront;
+                alignedCrucifiedUnit01 |= atTiferet && facingFront;
+            }
+        }
+
+        boolean valid = vessels.size() == 9 && facing == 9 && ritual == 9
+                && occupiedOuterNodes == 9
+                && crucifiedUnit01 && alignedCrucifiedUnit01;
+        ProjectSeele.LOGGER.info(
+                "Third Impact tableau audit [{}]: valid={} vessels={} facingFront={} ritual={} occupiedOuterNodes={} crucifiedUnit01={} unitAtTiferet={} unitFacingFront={} alignedUnit01={}",
+                stage, valid, vessels.size(), facing, ritual, occupiedOuterNodes, crucifiedUnit01,
+                unitAtTiferet, unitFacingFront, alignedCrucifiedUnit01);
+        if (!valid)
+        {
+            ProjectSeele.LOGGER.error(
+                    "THIRD IMPACT TABLEAU INVALID [{}]: structural state failed; visual acceptance remains separate",
+                    stage);
+        }
+    }
+
+    /** Keep every ritual vessel on one readable front plane. */
+    private static void faceFront(net.minecraft.world.entity.LivingEntity entity, float yaw)
+    {
+        entity.setYRot(yaw);
+        entity.setXRot(0.0F);
+        entity.yRotO = yaw;
+        entity.xRotO = 0.0F;
+        entity.yBodyRot = yaw;
+        entity.yBodyRotO = yaw;
+        entity.yHeadRot = yaw;
+        entity.yHeadRotO = yaw;
     }
 
     private static void applyLclPhase(Impact impact)
@@ -142,8 +281,17 @@ public final class ThirdImpactDirector
             return;
         }
         AABB area = new AABB(impact.origin, impact.origin).inflate(240.0D);
+        Vec3 tiferet = TreeOfLifeLayout.worldNode(
+                impact.origin, impact.yaw, TreeOfLifeLayout.TIFERET);
+        float expectedYaw = TreeOfLifeLayout.frontFacingYawDegrees(impact.yaw);
         boolean accepted = impact.level.getEntitiesOfClass(EvaUnit01Entity.class, area,
-                EvaUnit01Entity::isCrucified).stream().findAny().isPresent();
+                unit -> unit.isAlive()
+                        && unit.getUnitVariant() == EvaUnit01Entity.UNIT_01
+                        && unit.isCrucified()
+                        && unit.position().add(0.0D, unit.getBbHeight() * 0.5D, 0.0D)
+                                .distanceToSqr(tiferet) < 1.0D
+                        && Math.abs(net.minecraft.util.Mth.wrapDegrees(
+                                unit.getYRot() - expectedYaw)) < 1.0F).stream().findAny().isPresent();
         if (accepted)
         {
             broadcast(impact, "message.projectseele.impact_accepted");
@@ -153,7 +301,8 @@ public final class ThirdImpactDirector
             // Releasing the crucified Unit before the final phase rejects the
             // scenario; the nine inert vessels fall apart with the tableau.
             for (MassProductionEvaEntity mass :
-                    impact.level.getEntitiesOfClass(MassProductionEvaEntity.class, area, e -> e.isNoAi()))
+                    impact.level.getEntitiesOfClass(MassProductionEvaEntity.class, area,
+                            entity -> impact.vesselIds.contains(entity.getUUID())))
             {
                 mass.discard();
             }
@@ -178,6 +327,7 @@ public final class ThirdImpactDirector
         final Vec3 origin;
         final float yaw;
         final boolean hasUnit;
+        final List<UUID> vesselIds = new ArrayList<>();
         int ticks;
 
         Impact(ServerLevel level, Vec3 origin, float yaw, boolean hasUnit)

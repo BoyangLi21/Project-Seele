@@ -21,9 +21,18 @@ public final class VisualLabAutomation
             "knife_windup", "knife_contact", "knife_recovery",
             "lance_windup", "lance_contact", "lance_recovery", "cannon"
     };
+    private static final String[] ALL_MASS_POSES = {
+            "idle", "move", "attack", "revive", "ritual"
+    };
     private static final String REQUESTED_POSE = System.getProperty("projectseele.visualCapturePose", "all");
+    private static final String CAPTURE_UNIT =
+            System.getProperty("projectseele.visualCaptureUnit", "unit01");
+    private static final boolean IMPACT_CAPTURE = CAPTURE_UNIT.equals("impact");
+    private static final boolean MASS_CAPTURE = CAPTURE_UNIT.equals("mass");
     private static final String[] POSES = REQUESTED_POSE.equals("all")
             ? ALL_POSES : REQUESTED_POSE.split(",");
+    private static final String[] MASS_POSES = REQUESTED_POSE.equals("all")
+            ? ALL_MASS_POSES : REQUESTED_POSE.split(",");
     private static UUID playerId;
     private static int ticks;
     private static int nextPose;
@@ -69,7 +78,40 @@ public final class VisualLabAutomation
         {
             if (ticks == 40)
             {
-                VisualLabCommands.setup(player.createCommandSourceStack());
+                VisualLabCommands.setup(player.createCommandSourceStack(),
+                        IMPACT_CAPTURE ? "unit01" : CAPTURE_UNIT);
+            }
+            if (IMPACT_CAPTURE)
+            {
+                if (ticks == 100)
+                {
+                    VisualLabCommands.impact(player.createCommandSourceStack());
+                    ProjectSeele.LOGGER.info(
+                            "Visual Lab queued Third Impact front capture");
+                    // The client-side capture session owns shutdown from here.
+                    playerId = null;
+                }
+                return;
+            }
+            if (MASS_CAPTURE)
+            {
+                if (ticks >= 100 && nextPose < MASS_POSES.length
+                        && ticks == 100 + nextPose * 140)
+                {
+                    String pose = MASS_POSES[nextPose++].trim();
+                    VisualLabCommands.poseMass(player.createCommandSourceStack(), pose);
+                    VisualLabCommands.captureMass(player.createCommandSourceStack());
+                    ProjectSeele.LOGGER.info(
+                            "Visual Lab queued Mass Production EVA pose {} ({}/{})",
+                            pose, nextPose, MASS_POSES.length);
+                }
+                if (ticks == 100 + MASS_POSES.length * 140)
+                {
+                    ProjectSeele.LOGGER.info(
+                            "Visual Lab Mass Production EVA matrix finished; screenshots are ready for review");
+                    playerId = null;
+                }
+                return;
             }
             if (ticks >= 100 && nextPose < POSES.length && ticks == 100 + nextPose * 140)
             {

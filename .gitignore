@@ -27,10 +27,15 @@ mcmodsrepo
 # Claude Code session data — never publish (local logs/settings)
 .claude/
 
+# Local agent instructions/session notes - never publish.
+/AGENTS.md
+/.Codex/
+
 # Third-party mod jars parked in the repo root for local model extraction
 # (Rei Chikita / EUD). All Rights Reserved — never commit or redistribute.
 /*.jar
 /*.zip
+/external-assets/
 __pycache__/
 
 # Files from Forge MDK

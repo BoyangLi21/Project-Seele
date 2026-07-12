@@ -1,5 +1,6 @@
 package com.projectseele.entity;
 
+import com.projectseele.ProjectSeele;
 import com.projectseele.config.SeeleConfig;
 import com.projectseele.combat.AtFieldRules;
 import com.projectseele.fx.AtFieldFX;
@@ -8,6 +9,7 @@ import com.projectseele.network.ClientboundNukeFxPacket;
 import com.projectseele.network.SeeleNetwork;
 import com.projectseele.registry.ModSounds;
 import com.projectseele.registry.ModEntities;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
@@ -84,6 +86,10 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     public static final int VISUAL_LANCE_RECOVERY = 10;
     public static final int VISUAL_CANNON = 11;
     public static final int VISUAL_PRONE_CANNON = 12;
+    public static final int LAUNCH_IDLE = 0;
+    public static final int LAUNCH_LOCKED = 1;
+    public static final int LAUNCH_ASCENT = 2;
+    public static final int LAUNCH_CLEAR = 3;
 
     private static final float MELEE_FIST_DAMAGE = 20.0F;
     private static final float MELEE_KNIFE_DAMAGE = 60.0F;
@@ -118,6 +124,11 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     private static final float SPRINT_SPEED = 0.62F;
     private static final double JUMP_VELOCITY = 1.05D;
     private static final int JUMP_COOLDOWN_TICKS = 10;
+    private static final int LAUNCH_ASCENT_TICKS = 34;
+    private static final int LAUNCH_CLEAR_TICKS = 18;
+    private static final double LAUNCH_TARGET_ABOVE_BED = 32.0D;
+    private static final double SILO_ENTRY_MIN_HEIGHT = 18.0D;
+    private static final double SILO_ENTRY_MAX_HEIGHT = 27.5D;
 
     private static final EntityDataAccessor<Integer> DATA_WEAPON =
             SynchedEntityData.defineId(EvaUnit01Entity.class, EntityDataSerializers.INT);
@@ -148,6 +159,10 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             SynchedEntityData.defineId(EvaUnit01Entity.class, EntityDataSerializers.INT);
     private static final EntityDataAccessor<Integer> DATA_VISUAL_POSE =
             SynchedEntityData.defineId(EvaUnit01Entity.class, EntityDataSerializers.INT);
+    private static final EntityDataAccessor<Integer> DATA_LAUNCH_PHASE =
+            SynchedEntityData.defineId(EvaUnit01Entity.class, EntityDataSerializers.INT);
+    private static final EntityDataAccessor<Integer> DATA_LAUNCH_TICKS =
+            SynchedEntityData.defineId(EvaUnit01Entity.class, EntityDataSerializers.INT);
 
     private static final RawAnimation ANIM_IDLE = RawAnimation.begin().thenLoop("animation.eva_unit01.idle");
     private static final RawAnimation ANIM_WALK = RawAnimation.begin().thenLoop("animation.eva_unit01.walk");
@@ -161,6 +176,8 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     private static final RawAnimation ANIM_CRAWL = RawAnimation.begin().thenLoop("animation.eva_unit01.crawl");
     private static final RawAnimation ANIM_AIM = RawAnimation.begin().thenLoop("animation.eva_unit01.aim");
     private static final RawAnimation ANIM_PRONE_AIM = RawAnimation.begin().thenLoop("animation.eva_unit01.prone_aim");
+    private static final RawAnimation ANIM_LANCE_READY = RawAnimation.begin().thenLoop("animation.eva_unit01.lance_ready");
+    private static final RawAnimation ANIM_SHIELD_BRACE = RawAnimation.begin().thenLoop("animation.eva_unit01.shield_brace");
     private static final RawAnimation ANIM_MELEE = RawAnimation.begin().thenPlay("animation.eva_unit01.melee");
     private static final RawAnimation ANIM_MELEE_LEFT = RawAnimation.begin().thenPlay("animation.eva_unit01.melee_left");
     private static final RawAnimation ANIM_KNIFE = RawAnimation.begin().thenPlay("animation.eva_unit01.knife");
@@ -198,8 +215,8 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     private boolean clientMeleeLeft;
     private int clientSmashSequence;
     private int clientSmashStartTick = -1000;
-    private boolean launchBedArmed;
-    private int launchTicks;
+    @Nullable
+    private BlockPos launchBedPos;
 
     public EvaUnit01Entity(EntityType<? extends EvaUnit01Entity> type, Level level)
     {
@@ -235,6 +252,8 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         this.entityData.define(DATA_SMASH_SEQUENCE, 0);
         this.entityData.define(DATA_ACTIVATION_TICKS, 0);
         this.entityData.define(DATA_VISUAL_POSE, VISUAL_NORMAL);
+        this.entityData.define(DATA_LAUNCH_PHASE, LAUNCH_IDLE);
+        this.entityData.define(DATA_LAUNCH_TICKS, 0);
     }
 
     @Override
@@ -249,6 +268,50 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         }
         this.entityData.set(DATA_AT_ENERGY, this.getAtFieldCapacity());
         return super.finalizeSpawn(level, difficulty, reason, spawnData, dataTag);
+    }
+
+    @Override
+    public void addAdditionalSaveData(CompoundTag tag)
+    {
+        super.addAdditionalSaveData(tag);
+        tag.putBoolean("SeeleCrucified", this.isCrucified());
+        if (this.isLaunchSequenceActive() && this.launchBedPos != null)
+        {
+            tag.putInt("SeeleLaunchPhase", this.getLaunchPhase());
+            tag.putInt("SeeleLaunchTicks", this.getLaunchTicks());
+            tag.putInt("SeeleActivationTicks", this.getActivationTicks());
+            tag.putLong("SeeleLaunchBed", this.launchBedPos.asLong());
+        }
+    }
+
+    @Override
+    public void readAdditionalSaveData(CompoundTag tag)
+    {
+        super.readAdditionalSaveData(tag);
+        boolean crucified = tag.getBoolean("SeeleCrucified");
+        this.entityData.set(DATA_CRUCIFIED, crucified);
+        int phase = tag.getInt("SeeleLaunchPhase");
+        if (phase >= LAUNCH_LOCKED && phase <= LAUNCH_CLEAR && tag.contains("SeeleLaunchBed"))
+        {
+            this.launchBedPos = BlockPos.of(tag.getLong("SeeleLaunchBed"));
+            this.entityData.set(DATA_LAUNCH_PHASE, phase);
+            this.entityData.set(DATA_LAUNCH_TICKS, Math.max(0, tag.getInt("SeeleLaunchTicks")));
+            this.entityData.set(DATA_ACTIVATION_TICKS, Math.max(0, tag.getInt("SeeleActivationTicks")));
+            this.setNoGravity(phase == LAUNCH_ASCENT || crucified);
+        }
+        else
+        {
+            // No launch tag is the normal case. Do not call reset here: that
+            // would erase a deliberate vanilla NoGravity flag on every EVA
+            // simply because the world was reloaded.
+            this.entityData.set(DATA_LAUNCH_PHASE, LAUNCH_IDLE);
+            this.entityData.set(DATA_LAUNCH_TICKS, 0);
+            this.launchBedPos = null;
+            if (crucified)
+            {
+                this.setNoGravity(true);
+            }
+        }
     }
 
     // ----- state accessors -----
@@ -332,6 +395,44 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         return this.entityData.get(DATA_ACTIVATION_TICKS);
     }
 
+    public int getLaunchPhase()
+    {
+        return this.entityData.get(DATA_LAUNCH_PHASE);
+    }
+
+    public int getLaunchTicks()
+    {
+        return this.entityData.get(DATA_LAUNCH_TICKS);
+    }
+
+    /** The armed carrier bed remains known while the EVA is rising above scan range. */
+    @Nullable
+    public BlockPos getLaunchBedPosition()
+    {
+        return this.launchBedPos;
+    }
+
+    public boolean isLaunchSequenceActive()
+    {
+        return this.getLaunchPhase() != LAUNCH_IDLE;
+    }
+
+    /** A NERV launch bed is identified by the lodestone directly under the carrier. */
+    @Nullable
+    public BlockPos findLaunchBed()
+    {
+        BlockPos base = BlockPos.containing(this.getX(), this.getY() - 0.2D, this.getZ());
+        for (int depth = 0; depth <= 2; depth++)
+        {
+            BlockPos candidate = base.below(depth);
+            if (this.level().getBlockState(candidate).is(Blocks.LODESTONE))
+            {
+                return candidate.immutable();
+            }
+        }
+        return null;
+    }
+
     public float getActivationProgress(float partialTick)
     {
         return Mth.clamp((120.0F - this.getActivationTicks() + partialTick) / 120.0F, 0.0F, 1.0F);
@@ -401,6 +502,12 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         if (crucified)
         {
             this.setDeltaMovement(Vec3.ZERO);
+            // The cross silhouette is authoritative: held weapons and Visual
+            // Lab poses must not layer an aim animation over the outstretched
+            // arms during the Third-Impact ritual.
+            this.entityData.set(DATA_WEAPON, WEAPON_FISTS);
+            this.entityData.set(DATA_VISUAL_POSE, VISUAL_NORMAL);
+            this.entityData.set(DATA_CANNON_CHARGE, 0);
             this.entityData.set(DATA_CROUCHING, false);
             this.entityData.set(DATA_PRONE, false);
             this.entityData.set(DATA_SPRINTING, false);
@@ -434,6 +541,10 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
 
     public void cycleWeapon(ServerPlayer pilot)
     {
+        if (this.isPilotControlLocked())
+        {
+            return;
+        }
         int next = (this.getWeapon() + 1) % 4;
         this.entityData.set(DATA_WEAPON, next);
         this.entityData.set(DATA_CANNON_CHARGE, 0);
@@ -451,6 +562,10 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
 
     public void toggleAtField(ServerPlayer pilot)
     {
+        if (this.isPilotControlLocked())
+        {
+            return;
+        }
         if (!this.isAtFieldOn() && this.getAtFieldEnergy() < AT_FIELD_MIN_TO_RAISE)
         {
             pilot.displayClientMessage(Component.translatable("msg.projectseele.at_field_low"), true);
@@ -470,13 +585,13 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
 
     public void setChargingHeld(boolean held)
     {
-        this.chargingHeld = held;
+        this.chargingHeld = held && !this.isPilotControlLocked();
     }
 
     /** Left-click from the plug: alternating swings in front of the Unit. */
     public void meleeAttack(ServerPlayer pilot)
     {
-        if (this.getActivationTicks() > 20 || this.meleeCooldown > 0 || this.getWeapon() == WEAPON_CANNON)
+        if (this.isPilotControlLocked() || this.meleeCooldown > 0 || this.getWeapon() == WEAPON_CANNON)
         {
             return;
         }
@@ -505,7 +620,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     /** Crouch + attack: a slow two-handed slam that flattens the area ahead. */
     public void smashAttack(ServerPlayer pilot)
     {
-        if (this.getActivationTicks() > 20 || this.smashCooldown > 0 || this.getWeapon() == WEAPON_CANNON)
+        if (this.isPilotControlLocked() || this.smashCooldown > 0 || this.getWeapon() == WEAPON_CANNON)
         {
             return;
         }
@@ -533,7 +648,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     /** Heavy single-foot strike for targets beneath the Unit. */
     public void stompAttack(ServerPlayer pilot)
     {
-        if (this.getActivationTicks() > 20 || this.stompCooldown > 0 || this.getWeapon() == WEAPON_CANNON)
+        if (this.isPilotControlLocked() || this.stompCooldown > 0 || this.getWeapon() == WEAPON_CANNON)
         {
             return;
         }
@@ -621,7 +736,8 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         this.chargingHeld = false;
         boolean full = this.getCannonCharge() >= SeeleConfig.CANNON_CHARGE_TICKS.get();
         this.entityData.set(DATA_CANNON_CHARGE, 0);
-        if (this.getActivationTicks() > 20 || !full || this.getWeapon() != WEAPON_CANNON || this.getCannonCooldown() > 0)
+        if (this.isPilotControlLocked() || !full || this.getWeapon() != WEAPON_CANNON
+                || this.getCannonCooldown() > 0)
         {
             return;
         }
@@ -634,7 +750,8 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
 
     public void setPilotCrouching(ServerPlayer pilot, boolean crouching)
     {
-        if (this.getControllingPassenger() != pilot || this.isPilotCrouching() == crouching)
+        if (this.getControllingPassenger() != pilot || this.isPilotControlLocked()
+                || this.isPilotCrouching() == crouching)
         {
             return;
         }
@@ -654,7 +771,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
 
     public void toggleProne(ServerPlayer pilot)
     {
-        if (this.getControllingPassenger() != pilot)
+        if (this.getControllingPassenger() != pilot || this.isPilotControlLocked())
         {
             return;
         }
@@ -672,7 +789,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
 
     public void setPilotSprinting(ServerPlayer pilot, boolean sprinting)
     {
-        if (this.getControllingPassenger() == pilot)
+        if (this.getControllingPassenger() == pilot && !this.isPilotControlLocked())
         {
             this.entityData.set(DATA_SPRINTING, sprinting && !this.isPilotCrouching() && !this.isPilotProne()
                     && this.getCannonCharge() <= 0);
@@ -681,8 +798,8 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
 
     public void pilotJump(ServerPlayer pilot)
     {
-        if (this.getControllingPassenger() != pilot || !this.onGround() || this.jumpCooldown > 0
-                || this.getCannonCharge() > 0)
+        if (this.getControllingPassenger() != pilot || this.isPilotControlLocked()
+                || !this.onGround() || this.jumpCooldown > 0 || this.getCannonCharge() > 0)
         {
             return;
         }
@@ -713,6 +830,11 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     {
         if (this.getControllingPassenger() == pilot)
         {
+            if (this.isLaunchSequenceActive())
+            {
+                pilot.displayClientMessage(Component.translatable("message.projectseele.launch_interlock"), true);
+                return;
+            }
             pilot.stopRiding();
             if (this.isCrucified())
             {
@@ -721,6 +843,11 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
                         net.minecraft.world.effect.MobEffects.SLOW_FALLING, 20 * 60, 0));
             }
         }
+    }
+
+    private boolean isPilotControlLocked()
+    {
+        return this.getActivationTicks() > 20 || this.isLaunchSequenceActive();
     }
 
     private boolean hasStandingRoom()
@@ -819,24 +946,12 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         if (this.getActivationTicks() > 0)
         {
             this.entityData.set(DATA_ACTIVATION_TICKS, this.getActivationTicks() - 1);
-            if (this.getActivationTicks() == 20 && this.launchBedArmed)
+            if (this.getActivationTicks() == 20 && this.getLaunchPhase() == LAUNCH_LOCKED)
             {
-                this.launchBedArmed = false;
-                this.launchTicks = 24;
-                this.playSound(SoundEvents.PISTON_EXTEND, 3.0F, 0.48F);
-                if (this.level() instanceof ServerLevel serverLevel)
-                {
-                    serverLevel.sendParticles(ParticleTypes.CLOUD, this.getX(), this.getY() + 0.4D, this.getZ(),
-                            46, 4.0D, 0.5D, 4.0D, 0.12D);
-                }
+                this.beginLaunchAscent();
             }
         }
-        if (this.launchTicks > 0)
-        {
-            this.launchTicks--;
-            this.fallDistance = 0.0F;
-            this.setDeltaMovement(0.0D, 1.32D, 0.0D);
-        }
+        this.tickLaunchSequence();
         if (!this.onGround())
         {
             this.wasAirborne = true;
@@ -890,6 +1005,164 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         if (this.getControllingPassenger() == null)
         {
             this.clearPilotMotion();
+        }
+    }
+
+    private void armLaunchBed(BlockPos bed)
+    {
+        this.launchBedPos = bed.immutable();
+        this.entityData.set(DATA_LAUNCH_PHASE, LAUNCH_LOCKED);
+        this.entityData.set(DATA_LAUNCH_TICKS, this.getActivationTicks());
+        this.setDeltaMovement(Vec3.ZERO);
+        this.fallDistance = 0.0F;
+        ProjectSeele.LOGGER.info("NERV launch locked: eva={} bed={} targetY={}",
+                this.getStringUUID(), bed.toShortString(), bed.getY() + LAUNCH_TARGET_ABOVE_BED);
+    }
+
+    private void beginLaunchAscent()
+    {
+        if (this.launchBedPos == null || !this.level().getBlockState(this.launchBedPos).is(Blocks.LODESTONE))
+        {
+            this.resetLaunchSequence();
+            return;
+        }
+        this.entityData.set(DATA_LAUNCH_PHASE, LAUNCH_ASCENT);
+        this.entityData.set(DATA_LAUNCH_TICKS, LAUNCH_ASCENT_TICKS);
+        this.setSurfaceCarrier(false);
+        this.setNoGravity(true);
+        this.setPos(this.launchBedPos.getX() + 0.5D, this.getY(), this.launchBedPos.getZ() + 0.5D);
+        this.setDeltaMovement(Vec3.ZERO);
+        ProjectSeele.LOGGER.info("NERV launch ascent: eva={} ticks={}",
+                this.getStringUUID(), LAUNCH_ASCENT_TICKS);
+        this.playSound(SoundEvents.PISTON_EXTEND, 3.0F, 0.48F);
+        if (this.level() instanceof ServerLevel serverLevel)
+        {
+            serverLevel.sendParticles(ParticleTypes.CLOUD, this.getX(), this.getY() + 0.4D, this.getZ(),
+                    72, 4.2D, 0.7D, 4.2D, 0.16D);
+            serverLevel.sendParticles(ParticleTypes.ELECTRIC_SPARK, this.getX(), this.getY() + 2.0D, this.getZ(),
+                    36, 4.0D, 2.5D, 4.0D, 0.08D);
+        }
+    }
+
+    private void tickLaunchSequence()
+    {
+        int phase = this.getLaunchPhase();
+        if (phase == LAUNCH_IDLE)
+        {
+            return;
+        }
+        if (phase == LAUNCH_LOCKED)
+        {
+            if (this.getControllingPassenger() == null)
+            {
+                this.resetLaunchSequence();
+                return;
+            }
+            // A save made on the exact transition tick can restore with the
+            // countdown already at or below 20. Resume instead of remaining
+            // permanently mag-locked at the bottom of the shaft.
+            if (this.getActivationTicks() <= 20)
+            {
+                this.beginLaunchAscent();
+                return;
+            }
+            this.entityData.set(DATA_LAUNCH_TICKS, this.getActivationTicks());
+            this.setDeltaMovement(Vec3.ZERO);
+            this.fallDistance = 0.0F;
+            return;
+        }
+        if (phase == LAUNCH_ASCENT)
+        {
+            if (this.launchBedPos == null)
+            {
+                this.resetLaunchSequence();
+                return;
+            }
+            double targetY = this.launchBedPos.getY() + LAUNCH_TARGET_ABOVE_BED;
+            double remainingHeight = targetY - this.getY();
+            int remainingTicks = this.getLaunchTicks() - 1;
+            if (remainingHeight <= 0.2D || remainingTicks <= 0)
+            {
+                this.setSurfaceCarrier(true);
+                this.setPos(this.launchBedPos.getX() + 0.5D, targetY, this.launchBedPos.getZ() + 0.5D);
+                this.setDeltaMovement(0.0D, 0.12D, 0.0D);
+                this.setNoGravity(false);
+                this.entityData.set(DATA_LAUNCH_PHASE, LAUNCH_CLEAR);
+                this.entityData.set(DATA_LAUNCH_TICKS, LAUNCH_CLEAR_TICKS);
+                ProjectSeele.LOGGER.info("NERV launch surface clear: eva={} y={}",
+                        this.getStringUUID(), targetY);
+                if (this.getControllingPassenger() instanceof ServerPlayer pilot)
+                {
+                    pilot.displayClientMessage(Component.translatable(
+                            "message.projectseele.launch_surface_clear"), true);
+                }
+                this.playSound(SoundEvents.PISTON_CONTRACT, 2.8F, 0.72F);
+                if (this.level() instanceof ServerLevel serverLevel)
+                {
+                    serverLevel.sendParticles(ParticleTypes.CLOUD, this.getX(), this.getY(), this.getZ(),
+                            54, 5.0D, 0.4D, 5.0D, 0.09D);
+                }
+                return;
+            }
+            double guideX = this.launchBedPos.getX() + 0.5D - this.getX();
+            double guideZ = this.launchBedPos.getZ() + 0.5D - this.getZ();
+            double lift = Mth.clamp(remainingHeight * 0.18D, 0.58D, 1.46D);
+            this.setDeltaMovement(Mth.clamp(guideX * 0.22D, -0.18D, 0.18D), lift,
+                    Mth.clamp(guideZ * 0.22D, -0.18D, 0.18D));
+            this.entityData.set(DATA_LAUNCH_TICKS, remainingTicks);
+            this.fallDistance = 0.0F;
+            this.hasImpulse = true;
+            return;
+        }
+        int remainingTicks = this.getLaunchTicks() - 1;
+        if (remainingTicks <= 0)
+        {
+            this.resetLaunchSequence();
+        }
+        else
+        {
+            this.entityData.set(DATA_LAUNCH_TICKS, remainingTicks);
+            this.fallDistance = 0.0F;
+        }
+    }
+
+    /** Opens/closes the split surface carrier without touching unrelated player blocks. */
+    private void setSurfaceCarrier(boolean closed)
+    {
+        if (this.launchBedPos == null || !(this.level() instanceof ServerLevel serverLevel))
+        {
+            return;
+        }
+        int deckY = this.launchBedPos.getY() + (int) LAUNCH_TARGET_ABOVE_BED - 1;
+        for (int x = -5; x <= 5; x++)
+        {
+            for (int z = -5; z <= 5; z++)
+            {
+                BlockPos deck = new BlockPos(this.launchBedPos.getX() + x, deckY,
+                        this.launchBedPos.getZ() + z);
+                if (closed)
+                {
+                    serverLevel.setBlock(deck, (Math.abs(x) == 5 || Math.abs(z) == 5)
+                            ? Blocks.IRON_BLOCK.defaultBlockState()
+                            : Blocks.LIGHT_GRAY_CONCRETE.defaultBlockState(), 3);
+                }
+                else if (serverLevel.getBlockState(deck).is(Blocks.IRON_BLOCK)
+                        || serverLevel.getBlockState(deck).is(Blocks.LIGHT_GRAY_CONCRETE))
+                {
+                    serverLevel.setBlock(deck, Blocks.AIR.defaultBlockState(), 3);
+                }
+            }
+        }
+    }
+
+    private void resetLaunchSequence()
+    {
+        this.entityData.set(DATA_LAUNCH_PHASE, LAUNCH_IDLE);
+        this.entityData.set(DATA_LAUNCH_TICKS, 0);
+        this.launchBedPos = null;
+        if (!this.isCrucified())
+        {
+            this.setNoGravity(false);
         }
     }
 
@@ -957,11 +1230,32 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     {
         if (!this.isVehicle() && !player.isSecondaryUseActive())
         {
+            BlockPos launchBed = this.findLaunchBed();
+            if (launchBed != null)
+            {
+                double relativeHeight = player.getY() - this.getY();
+                if (relativeHeight < SILO_ENTRY_MIN_HEIGHT || relativeHeight > SILO_ENTRY_MAX_HEIGHT)
+                {
+                    if (!this.level().isClientSide)
+                    {
+                        player.displayClientMessage(
+                                Component.translatable("message.projectseele.use_entry_gantry"), true);
+                    }
+                    return InteractionResult.sidedSuccess(this.level().isClientSide);
+                }
+            }
             if (!this.level().isClientSide)
             {
-                player.startRiding(this);
+                if (!player.startRiding(this, true))
+                {
+                    return InteractionResult.FAIL;
+                }
                 this.entityData.set(DATA_ACTIVATION_TICKS, 120);
-                this.launchBedArmed = this.level().getBlockState(this.blockPosition().below()).is(Blocks.LODESTONE);
+                if (launchBed != null)
+                {
+                    this.armLaunchBed(launchBed);
+                    player.displayClientMessage(Component.translatable("message.projectseele.launch_locked"), true);
+                }
             }
             return InteractionResult.sidedSuccess(this.level().isClientSide);
         }
@@ -1003,7 +1297,10 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         this.chargingHeld = false;
         this.entityData.set(DATA_CANNON_CHARGE, 0);
         this.entityData.set(DATA_ACTIVATION_TICKS, 0);
-        this.launchBedArmed = false;
+        if (this.getLaunchPhase() == LAUNCH_LOCKED)
+        {
+            this.resetLaunchSequence();
+        }
         this.clearPilotMotion();
     }
 
@@ -1038,7 +1335,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     @Override
     protected Vec3 getRiddenInput(Player player, Vec3 input)
     {
-        if (this.getActivationTicks() > 20 || this.launchTicks > 0)
+        if (this.getActivationTicks() > 20 || this.isLaunchSequenceActive())
         {
             return Vec3.ZERO;
         }
@@ -1049,7 +1346,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     @Override
     protected float getRiddenSpeed(Player player)
     {
-        if (this.getActivationTicks() > 20 || this.launchTicks > 0)
+        if (this.getActivationTicks() > 20 || this.isLaunchSequenceActive())
         {
             return 0.0F;
         }
@@ -1126,26 +1423,31 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         // The normal world body remains rendered; only the enclosing head
         // shell is clipped by the renderer.
         float rad = (float) Math.toRadians(this.yBodyRot);
-        // SmOd's face projects about 2.2 blocks in front of the root at
-        // Project SEELE scale. Put the pilot at that face socket instead of
-        // behind the skull, where the camera looked through a headless body.
-        // The eye must clear the shoulder pylons: at 25.0 it sat level with
-        // the chest rim and first person stared into the Unit's own back.
-        // SmOd's head tops out higher than the placeholder skeleton's, so the
-        // standing height is per-family.
-        double standing = this.getUnitVariant() == UNIT_00 ? 25.4D : 27.2D;
+        // All three reviewed Tiger bodies share the same 192-pixel height and
+        // semantic rig contract. Keep one eye-socket calculation so Unit-00
+        // and Unit-02 cannot fall back to the former SmOd seat coordinates.
         boolean proneView = this.isPilotProne() || this.getVisualPose() == VISUAL_PRONE
                 || this.getVisualPose() == VISUAL_PRONE_CANNON;
         boolean crouchView = this.isPilotCrouching() || this.getVisualPose() == VISUAL_CROUCH;
-        // Bent stances move SmOd's head forward with the torso. Reusing the
-        // standing socket leaves the camera inside the chest; prone also
-        // keeps a high kneeling/all-fours head rather than dropping to the
-        // shortened collision-box height.
-        double forward = proneView ? 6.0D : crouchView ? 5.0D : 2.25D;
-        double plugHeight = proneView ? 16.6D : crouchView ? 17.7D : standing;
+        // Express the socket as desired eye position because the passenger
+        // camera adds its own eye height after positionRider. Offline
+        // perspective projection found 15.75/4.0 as the clear crouch socket:
+        // both real forearms enter opposite lower corners without torso
+        // clipping. The adopted all-fours pose puts both palms ahead of the
+        // head; 10.2 blocks is the nearest reviewed prone socket that keeps
+        // the complete forearm/hand chains on opposite lower sides.
+        double targetEyeHeight = proneView ? 10.8D : crouchView ? 15.75D : 24.8D;
+        // The prone cannon brace pulls both elbows and the receiver back
+        // toward the shoulders.  Keeping the crawl socket at 10.2 blocks in
+        // that pose puts the camera almost inside both fists.  The reviewed
+        // 3.5-block socket preserves the same real arm chains while leaving
+        // the cannon and both hands readable on opposite sides.
+        boolean proneCannon = proneView && this.getWeapon() == WEAPON_CANNON;
+        double forward = proneCannon ? 3.5D : proneView ? 10.2D : crouchView ? 4.0D : 5.0D;
+        double seatHeight = targetEyeHeight - passenger.getEyeHeight();
         move.accept(passenger,
                 this.getX() - Math.sin(rad) * forward,
-                this.getY() + plugHeight,
+                this.getY() + seatHeight,
                 this.getZ() + Math.cos(rad) * forward);
     }
 
@@ -1203,6 +1505,10 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     {
         controllers.add(new AnimationController<>(this, "base", 6, state ->
         {
+            if (this.isCrucified())
+            {
+                return state.setAndContinue(ANIM_CRUCIFIED);
+            }
             switch (this.getVisualPose())
             {
                 case VISUAL_IDLE -> { return state.setAndContinue(ANIM_VISUAL_IDLE); }
@@ -1246,10 +1552,24 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         }));
         controllers.add(new AnimationController<>(this, "arms", 8, state ->
         {
+            if (this.isCrucified())
+            {
+                return PlayState.STOP;
+            }
+            if (this.isShieldBraced())
+            {
+                return state.setAndContinue(ANIM_SHIELD_BRACE);
+            }
             if (this.getWeapon() == WEAPON_CANNON
                     && (this.isPilotProne() || this.getVisualPose() == VISUAL_PRONE_CANNON))
             {
                 return state.setAndContinue(ANIM_PRONE_AIM);
+            }
+            if (this.getWeapon() == WEAPON_LANCE
+                    && !this.isPilotCrouching() && !this.isPilotProne()
+                    && this.getVisualPose() == VISUAL_NORMAL)
+            {
+                return state.setAndContinue(ANIM_LANCE_READY);
             }
             if (this.getWeapon() == WEAPON_CANNON
                     && !this.isPilotCrouching() && !this.isPilotProne()
@@ -1259,7 +1579,8 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             }
             return PlayState.STOP;
         }));
-        controllers.add(new AnimationController<>(this, "strike", 3, state -> PlayState.STOP)
+        controllers.add(new AnimationController<>(this, "strike", 3, state ->
+                this.isCrucified() ? PlayState.STOP : PlayState.CONTINUE)
                 .triggerableAnim("melee", ANIM_MELEE)
                 .triggerableAnim("melee_left", ANIM_MELEE_LEFT)
                 .triggerableAnim("knife", ANIM_KNIFE)
@@ -1268,7 +1589,8 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
                 .triggerableAnim("smash", ANIM_SMASH)
                 .triggerableAnim("cannon_fire", ANIM_CANNON_FIRE)
                 .triggerableAnim("land", ANIM_LAND)
-                .triggerableAnim("stomp", ANIM_STOMP));
+                .triggerableAnim("stomp", ANIM_STOMP)
+                .receiveTriggeredAnimations());
     }
 
     @Override

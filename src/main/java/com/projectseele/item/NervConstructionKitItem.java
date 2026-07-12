@@ -3,13 +3,16 @@ package com.projectseele.item;
 import com.projectseele.entity.EvaUnit01Entity;
 import com.projectseele.registry.ModEntities;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.LadderBlock;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.AABB;
 
 /** Builds an original three-bay NERV underground sortie complex. */
 public class NervConstructionKitItem extends Item
@@ -27,6 +30,39 @@ public class NervConstructionKitItem extends Item
             return InteractionResult.SUCCESS;
         }
         BlockPos origin = context.getClickedPos().above();
+        if (origin.getY() - 31 < level.getMinBuildHeight()
+                || origin.getY() + 33 >= level.getMaxBuildHeight())
+        {
+            if (context.getPlayer() != null)
+            {
+                context.getPlayer().displayClientMessage(Component.literal(
+                        "Not enough vertical space for the NERV launch complex."), true);
+            }
+            return InteractionResult.FAIL;
+        }
+        AABB buildArea = new AABB(origin).inflate(52.0D, 40.0D, 52.0D);
+        boolean existingComplex = !level.getEntitiesOfClass(EvaUnit01Entity.class, buildArea,
+                unit -> unit.isAlive() && unit.findLaunchBed() != null).isEmpty();
+        if (existingComplex)
+        {
+            if (context.getPlayer() != null)
+            {
+                context.getPlayer().displayClientMessage(Component.literal(
+                        "A NERV launch complex already occupies this area."), true);
+            }
+            return InteractionResult.FAIL;
+        }
+        buildComplex(level, origin);
+        if (context.getPlayer() != null)
+        {
+            context.getPlayer().displayClientMessage(Component.translatable("message.projectseele.nerv_built"), false);
+        }
+        return InteractionResult.CONSUME;
+    }
+
+    /** Shared builder used by the creative item and the deterministic silo command. */
+    public static void buildComplex(ServerLevel level, BlockPos origin)
+    {
         BlockState floor = Blocks.SMOOTH_STONE.defaultBlockState();
         BlockState armor = Blocks.GRAY_CONCRETE.defaultBlockState();
         BlockState nerv = Blocks.BLACK_CONCRETE.defaultBlockState();
@@ -65,6 +101,11 @@ public class NervConstructionKitItem extends Item
                 }
             }
         }
+        // Build the lift columns after the transverse gallery so its shell
+        // cannot overwrite the ladder openings.
+        buildEntryGantry(level, unit00Bay, Blocks.ORANGE_CONCRETE.defaultBlockState());
+        buildEntryGantry(level, unit01Bay, Blocks.PURPLE_CONCRETE.defaultBlockState());
+        buildEntryGantry(level, unit02Bay, Blocks.RED_CONCRETE.defaultBlockState());
 
         buildCommandBunker(level, origin.offset(0, 1, 27), armor, nerv, glass);
         for (int[] tower : new int[][] {{-38,-24},{-38,28},{38,-24},{38,28}})
@@ -74,11 +115,6 @@ public class NervConstructionKitItem extends Item
         deployUnit(level, unit00Bay, ModEntities.EVA_UNIT00.get().create(level));
         deployUnit(level, unit01Bay, ModEntities.EVA_UNIT01.get().create(level));
         deployUnit(level, unit02Bay, ModEntities.EVA_UNIT02.get().create(level));
-        if (context.getPlayer() != null)
-        {
-            context.getPlayer().displayClientMessage(Component.translatable("message.projectseele.nerv_built"), false);
-        }
-        return InteractionResult.CONSUME;
     }
 
     private static void buildLaunchShaft(ServerLevel level, BlockPos centre, BlockState accent)
@@ -137,13 +173,68 @@ public class NervConstructionKitItem extends Item
         }
     }
 
+    /**
+     * Dorsal entry-plug access. The lift starts in the transverse gallery and
+     * ends beside the Unit's upper back, so a pilot cannot board a caged EVA
+     * from ground level. The catwalk stays outside the 8.5-block carrier
+     * envelope and therefore cannot snag the frame during launch.
+     */
+    private static void buildEntryGantry(ServerLevel level, BlockPos centre, BlockState accent)
+    {
+        int gantryY = -8;
+        BlockState frame = Blocks.IRON_BLOCK.defaultBlockState();
+        BlockState dark = Blocks.BLACK_CONCRETE.defaultBlockState();
+        BlockState light = Blocks.SEA_LANTERN.defaultBlockState();
+        BlockState ladder = Blocks.LADDER.defaultBlockState().setValue(LadderBlock.FACING, Direction.NORTH);
+
+        // Vertical service lift from the existing low access gallery.
+        for (int y = -26; y <= -7; y++)
+        {
+            level.setBlock(centre.offset(0, y, 14), frame, 3);
+            level.setBlock(centre.offset(0, y, 13), ladder, 3);
+            if (y % 4 == 0)
+            {
+                level.setBlock(centre.offset(1, y, 14), light, 3);
+            }
+        }
+
+        // Enclosed high catwalk. Its inner lip at z=6 is within interaction
+        // reach of the body but remains clear of the launch hitbox.
+        for (int z = 6; z <= 14; z++)
+        {
+            for (int x = -3; x <= 3; x++)
+            {
+                level.setBlock(centre.offset(x, gantryY, z), x == 0 && z % 3 == 0 ? accent : dark, 3);
+                if (Math.abs(x) == 3)
+                {
+                    level.setBlock(centre.offset(x, gantryY + 1, z), Blocks.IRON_BARS.defaultBlockState(), 3);
+                    level.setBlock(centre.offset(x, gantryY + 3, z), frame, 3);
+                }
+            }
+            level.setBlock(centre.offset(0, gantryY + 4, z), z % 3 == 0 ? light : frame, 3);
+        }
+
+        // Cut a personnel doorway through the shaft shell at upper-back height.
+        for (int x = -2; x <= 2; x++)
+        {
+            for (int y = gantryY + 1; y <= gantryY + 3; y++)
+            {
+                level.setBlock(centre.offset(x, y, 7), Blocks.AIR.defaultBlockState(), 3);
+            }
+        }
+        level.setBlock(centre.offset(-3, gantryY + 2, 7), accent, 3);
+        level.setBlock(centre.offset(3, gantryY + 2, 7), accent, 3);
+    }
+
     private static void deployUnit(ServerLevel level, BlockPos bay, EvaUnit01Entity unit)
     {
         if (unit == null)
         {
             return;
         }
-        unit.moveTo(bay.getX() + 0.5D, bay.getY() - 29.0D, bay.getZ() + 0.5D, 0.0F, 0.0F);
+        // Face away from the +Z service gallery, placing the gantry at the
+        // dorsal/rear side of every Unit rather than in front of its face.
+        unit.moveTo(bay.getX() + 0.5D, bay.getY() - 29.0D, bay.getZ() + 0.5D, 180.0F, 0.0F);
         unit.setPersistenceRequired();
         level.addFreshEntity(unit);
     }

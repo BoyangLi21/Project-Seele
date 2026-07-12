@@ -1,27 +1,32 @@
 {
   "schema_version": 1,
-  "model_family": "smod_external_local_prototype",
+  "model_family": "tigerar1_obj_external_local_prototype",
   "status": "not_production_approved",
   "bones": {
-    "root": "bone7",
-    "pelvis": "Lowerbody",
-    "upper_body": "Upperbody",
-    "head": "Head",
-    "left_upper_arm": "Leftarm",
-    "left_forearm": "Lowerarm2",
-    "left_hand": "LeftHand",
-    "right_upper_arm": "Rightarm",
-    "right_forearm": "Lowerarm",
-    "right_hand": "RightHand",
-    "left_upper_leg": "Leftleg",
-    "left_lower_leg": "bone6",
-    "right_upper_leg": "Rightleg",
-    "right_lower_leg": "bone16",
-    "weapon_socket_right": "weapon_socket_r",
-    "camera_socket": "camera_socket"
+    "root": "root",
+    "pelvis": "torso_lower",
+    "upper_body": "torso_upper",
+    "head": "head",
+    "left_pylon": "pylon_l",
+    "right_pylon": "pylon_r",
+    "left_upper_arm": "arm_l",
+    "left_forearm": "forearm_l",
+    "left_hand": "hand_l",
+    "right_upper_arm": "arm_r",
+    "right_forearm": "forearm_r",
+    "right_hand": "hand_r",
+    "left_upper_leg": "leg_l",
+    "left_lower_leg": "shin_l",
+    "left_foot": "foot_l",
+    "right_upper_leg": "leg_r",
+    "right_lower_leg": "shin_r",
+    "right_foot": "foot_r",
+    "weapon_socket_right": "hand_r",
+    "camera_socket": "entity passenger socket"
   },
   "missing_for_production": [
-    "editable bbmodel or Blender source",
-    "author redistribution approval"
+    "weighted skinning or overlapping joint liners",
+    "camera socket authored in an editable source",
+    "release licence and attribution review"
   ]
 }

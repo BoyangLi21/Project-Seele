@@ -3,30 +3,36 @@ package com.projectseele.fx;
 import net.minecraft.world.phys.Vec3;
 
 /**
- * The canonical Golden Dawn Tree of Life, upright (Keter apex, Malkuth
- * base), shared by the server (which parks the nine Mass-Production Evas on
- * the outer Sephirot) and the client sky effect (rings, paths, and the
- * crucified Unit-01 at Tiferet) so entities and light sit on the same spots.
+ * The Golden Dawn Tree of Life in the inverted orientation used by the
+ * Third-Impact tableau. The server (which parks the nine Mass-Production Evas
+ * on the outer Sephirot) and the client light effect share this layout so the
+ * vessels, path letters and crucified Unit-01 occupy the same diagram.
  */
 public final class TreeOfLifeLayout
 {
-    // Compact enough to read as one symbol while still framing 26-block EVAs.
-    public static final float COLUMN_X = 42.0F;
-    public static final float ROW_Y = 28.0F;
+    // The old 84 x 179 block diagram overwhelmed the entities and often ran
+    // outside the player's view. This 68 x 141 block field still clears the
+    // 26-block production units while reading as one complete glyph.
+    public static final float COLUMN_X = 34.0F;
+    public static final float ROW_Y = 22.0F;
     public static final int TIFERET = 5;
 
-    /** Local plane coordinates (x across, y up), index 0..9 = Keter..Malkuth. */
+    /**
+     * Local plane coordinates (x across, y up), index 0..9 = Keter..Malkuth.
+     * Keter is deliberately lowest: EoE manifests an inverted Tree around
+     * Unit-01, rather than the ordinary upright instructional diagram.
+     */
     public static final float[][] NODES = {
-            {0.0F, 6.4F},   // 1 Keter (apex)
-            {-1.0F, 5.4F},  // 2 Chokmah
-            {1.0F, 5.4F},   // 3 Binah
-            {-1.0F, 4.0F},  // 4 Chesed
-            {1.0F, 4.0F},   // 5 Gevurah
+            {0.0F, 0.0F},   // 1 Keter (inverted nadir)
+            {-1.0F, 1.0F},  // 2 Chokmah
+            {1.0F, 1.0F},   // 3 Binah
+            {-1.0F, 2.4F},  // 4 Chesed
+            {1.0F, 2.4F},   // 5 Gevurah
             {0.0F, 3.2F},   // 6 Tiferet (centre: Unit-01)
-            {-1.0F, 2.0F},  // 7 Netzach
-            {1.0F, 2.0F},   // 8 Hod
-            {0.0F, 1.2F},   // 9 Yesod
-            {0.0F, 0.0F}    // 10 Malkuth (base)
+            {-1.0F, 4.4F},  // 7 Netzach
+            {1.0F, 4.4F},   // 8 Hod
+            {0.0F, 5.2F},   // 9 Yesod
+            {0.0F, 6.4F}    // 10 Malkuth (inverted crown)
     };
 
     /** The canonical 22 paths (verified against the traditional diagram). */
@@ -57,5 +63,11 @@ public final class TreeOfLifeLayout
         double cos = Math.cos(yawRad);
         // The tree plane's local +X maps into the horizontal plane rotated by yaw.
         return new Vec3(origin.x + x * cos, origin.y + y, origin.z - x * sin);
+    }
+
+    /** Minecraft yaw which presents an EVA's front on the tree's front side. */
+    public static float frontFacingYawDegrees(float yawRad)
+    {
+        return -(float) Math.toDegrees(yawRad);
     }
 }

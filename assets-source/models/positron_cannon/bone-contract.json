@@ -1,0 +1,10 @@
+{
+  "weapon_root": "cannon",
+  "neutral_socket_barrel_axis": "-Y",
+  "neutral_socket_up_axis": "-Z",
+  "aimed_world_forward_axis": "-Z",
+  "aimed_world_up_axis": "+Y",
+  "provisional_grip_origin": [0, 0, 0],
+  "target_length_pixels": 128,
+  "ground_supports_included": false
+}

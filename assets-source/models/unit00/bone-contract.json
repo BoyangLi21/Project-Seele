@@ -1,0 +1,22 @@
+{
+  "root": "root",
+  "head": "head",
+  "lower_torso": "torso_lower",
+  "upper_torso": "torso_upper",
+  "left_upper_arm": "arm_l",
+  "left_forearm": "forearm_l",
+  "left_hand": "hand_l",
+  "right_upper_arm": "arm_r",
+  "right_forearm": "forearm_r",
+  "right_hand": "hand_r",
+  "left_thigh": "leg_l",
+  "left_shin": "shin_l",
+  "left_foot": "foot_l",
+  "right_thigh": "leg_r",
+  "right_shin": "shin_r",
+  "right_foot": "foot_r",
+  "left_pylon": "pylon_l",
+  "right_pylon": "pylon_r",
+  "shield_attachment": "shield",
+  "weapon_attachment": "hand_r"
+}

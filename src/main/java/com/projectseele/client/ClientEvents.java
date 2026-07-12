@@ -2,6 +2,7 @@ package com.projectseele.client;
 
 import com.projectseele.ProjectSeele;
 import com.projectseele.client.render.EvaUnit01Renderer;
+import com.projectseele.client.render.LocalTriangleMeshLayer;
 import com.projectseele.client.render.RamielRenderer;
 import com.projectseele.client.render.ColossalHumanoidRenderer;
 import com.projectseele.client.render.HybridAddonRenderer;
@@ -10,6 +11,8 @@ import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.EntityRenderersEvent;
 import net.minecraftforge.client.event.RegisterGuiOverlaysEvent;
 import net.minecraftforge.client.event.RegisterKeyMappingsEvent;
+import net.minecraftforge.client.event.RegisterClientReloadListenersEvent;
+import net.minecraft.server.packs.resources.ResourceManagerReloadListener;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 
@@ -52,5 +55,12 @@ public class ClientEvents
         event.register(Keybinds.EXIT_EVA);
         event.register(Keybinds.STOMP);
         event.register(Keybinds.TOGGLE_PRONE);
+    }
+
+    @SubscribeEvent
+    public static void onRegisterReloadListeners(RegisterClientReloadListenersEvent event)
+    {
+        event.registerReloadListener((ResourceManagerReloadListener) resourceManager ->
+                LocalTriangleMeshLayer.clearCache());
     }
 }

@@ -14,9 +14,12 @@ import com.projectseele.network.ClientboundCrossExplosionPacket;
 import com.projectseele.fx.TreeOfLifeLayout;
 import com.projectseele.network.ClientboundThirdImpactPacket;
 import com.projectseele.registry.ModSounds;
+import net.minecraft.client.gui.Font;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.LightTexture;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
+import net.minecraft.locale.Language;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.util.Mth;
@@ -38,6 +41,10 @@ import org.joml.Vector3f;
 public final class ClientFxManager
 {
     private static final List<WorldFx> ACTIVE = new ArrayList<>();
+    // Lightning's additive pass vanished entirely in actual framebuffer
+    // captures on the current NVIDIA/Forge stack. The Tree needs a stable
+    // position-colour quad pass; other transient energy FX keep lightning.
+    private static final RenderType TREE_GEOMETRY = RenderType.debugQuads();
 
     private ClientFxManager() {}
 
@@ -97,6 +104,12 @@ public final class ClientFxManager
         // The server dictates the facing so the light geometry lands exactly
         // on the Mass-Production Evas it parked on the Sephirot.
         ACTIVE.add(new KabbalahTree(new Vec3(packet.x, packet.y, packet.z), packet.yaw, packet.hasUnit));
+        if (Boolean.getBoolean("projectseele.visualCapture")
+                && "impact".equals(System.getProperty("projectseele.visualCaptureUnit")))
+        {
+            com.projectseele.client.visual.VisualCaptureManager.startImpact(
+                    new Vec3(packet.x, packet.y, packet.z), packet.yaw);
+        }
     }
 
     public static void clear()
@@ -143,10 +156,29 @@ public final class ClientFxManager
         {
             poseStack.pushPose();
             poseStack.translate(fx.pos.x - cam.x, fx.pos.y - cam.y, fx.pos.z - cam.z);
-            fx.render(poseStack, consumer, event.getPartialTick());
+            VertexConsumer target = fx instanceof KabbalahTree
+                    ? buffer.getBuffer(TREE_GEOMETRY) : consumer;
+            fx.render(poseStack, target, event.getPartialTick());
             poseStack.popPose();
         }
         buffer.endBatch(RenderType.lightning());
+        buffer.endBatch(TREE_GEOMETRY);
+
+        // World-space lettering uses the same pose as the luminous geometry,
+        // but a font render type. Keep it in a second pass so batching the
+        // lightning ribbons cannot swallow or reorder the glyph quads.
+        for (WorldFx fx : ACTIVE)
+        {
+            if (!(fx instanceof KabbalahTree tree))
+            {
+                continue;
+            }
+            poseStack.pushPose();
+            poseStack.translate(fx.pos.x - cam.x, fx.pos.y - cam.y, fx.pos.z - cam.z);
+            tree.renderLabels(poseStack, buffer, event.getPartialTick());
+            poseStack.popPose();
+        }
+        buffer.endBatch();
     }
 
     private static float fxIntensity()
@@ -431,19 +463,48 @@ public final class ClientFxManager
 
     /**
      * The End-of-Evangelion Sephirothic tree, sharing TreeOfLifeLayout with
-     * the server: upright Golden Dawn diagram (Keter apex, Malkuth base),
-     * ring-shaped Sephirot joined by burning double lines, igniting down the
-     * emanation order. The outer rings frame the real Mass-Production Eva
-     * entities the server parked there; Tiferet carries the crucified
+     * the server: an inverted Golden Dawn diagram, ring-shaped Sephirot joined
+     * by burning double lines and the 22 path letters. The outer rings frame
+     * the real Mass-Production Eva entities; Tiferet carries the crucified
      * Unit-01 with wings of light.
      */
     private static final class KabbalahTree extends WorldFx
     {
         private static final int LIFETIME = 20 * 180;
-        /** Node reveal cadence: Keter first, then down the tree. */
+        /** Node reveal cadence: Keter first, rising through the inverted tree. */
         private static final int NODE_LIGHT_INTERVAL = 9;
         private static final int NODE_LIGHT_TIME = 24;
         private static final int TIFERET = TreeOfLifeLayout.TIFERET;
+        private static final String[] SEPHIRA_NAMES = {
+                "KETER", "CHOKMAH", "BINAH", "CHESED", "GEVURAH",
+                "TIFERET", "NETZACH", "HOD", "YESOD", "MALKUTH"
+        };
+        private static final String[] SEPHIRA_HEBREW = {
+                "\u05DB\u05EA\u05E8", "\u05D7\u05DB\u05DE\u05D4", "\u05D1\u05D9\u05E0\u05D4",
+                "\u05D7\u05E1\u05D3", "\u05D2\u05D1\u05D5\u05E8\u05D4", "\u05EA\u05E4\u05D0\u05E8\u05EA",
+                "\u05E0\u05E6\u05D7", "\u05D4\u05D5\u05D3", "\u05D9\u05E1\u05D5\u05D3", "\u05DE\u05DC\u05DB\u05D5\u05EA"
+        };
+        // PATHS is arranged for geometry/label spacing rather than alphabetic
+        // order.  Keep each letter beside its canonical Golden Dawn edge.
+        private static final String[] PATH_LETTERS = {
+                "\u05D0", "\u05D1", "\u05D2", "\u05D3", "\u05D5", "\u05D4", "\u05D7", "\u05D6",
+                "\u05D8", "\u05D9", "\u05DB", "\u05DC", "\u05DE", "\u05E0", "\u05E2", "\u05E1",
+                "\u05E4", "\u05E6", "\u05E8", "\u05E7", "\u05E9", "\u05EA"
+        };
+        /** Move names outside the ritual bodies; centre-column labels alternate sides. */
+        private static final float[] LABEL_X_OFFSETS = {
+                -28.0F, -28.0F, 28.0F, -28.0F, 28.0F,
+                55.0F, -28.0F, 28.0F, -55.0F, 32.0F
+        };
+        /** Collision-searched offsets from each path midpoint, in local tree space. */
+        private static final float[][] PATH_LABEL_OFFSETS = {
+                {-2.173F,-3.358F},{2.173F,-3.358F},{-4.0F,0.0F},{0.0F,-4.0F},
+                {-4.0F,0.0F},{3.273F,-2.299F},{-4.0F,0.0F},{3.273F,2.299F},
+                {0.0F,-4.0F},{-1.713F,-5.391F},{-4.0F,0.0F},{1.839F,3.552F},
+                {-4.0F,4.0F},{-0.706F,5.613F},{3.866F,8.066F},{4.0F,0.0F},
+                {-8.0F,4.0F},{1.839F,-3.552F},{-1.839F,-3.552F},
+                {3.165F,-2.446F},{-3.165F,-2.446F},{8.0F,0.0F}
+        };
 
         private final float faceYaw;
         private final boolean hasUnit;
@@ -466,7 +527,7 @@ public final class ClientFxManager
             return LIFETIME;
         }
 
-        /** 0..1 ignition of one Sephira: Keter first, down the emanations. */
+        /** 0..1 ignition of one Sephira: Keter first through the inversion. */
         private static float nodeLight(float t, int index)
         {
             return Mth.clamp((t - 10.0F - index * NODE_LIGHT_INTERVAL) / NODE_LIGHT_TIME, 0.0F, 1.0F);
@@ -486,6 +547,10 @@ public final class ClientFxManager
 
             poseStack.pushPose();
             poseStack.mulPose(com.mojang.math.Axis.YP.rotation(this.faceYaw));
+            // Keep the diagram as a luminous backplate. The ritual bodies sit
+            // at local Z=0; a small negative offset stops the opaque stable
+            // colour pass from painting over their silhouettes.
+            poseStack.translate(0.0D, 0.0D, -8.0D);
             Matrix4f pose = poseStack.last().pose();
 
             // Paths: burning double lines, lit once both endpoints burn.
@@ -511,10 +576,10 @@ public final class ClientFxManager
                     Vector3f shift = new Vector3f(offset).mul(s);
                     RibbonRenderer.drawStarRibbon(pose, consumer,
                             new Vector3f(from).add(shift), new Vector3f(to).add(shift),
-                            0.78F, 0.78F, 1.0F, 0.0F, 0.0F, alpha * 0.58F);
+                            0.70F, 0.70F, 1.0F, 0.0F, 0.0F, alpha * 0.72F);
                     RibbonRenderer.drawStarRibbon(pose, consumer,
                             new Vector3f(from).add(shift), new Vector3f(to).add(shift),
-                            0.28F, 0.28F, 1.0F, 0.0F, 0.0F, alpha);
+                            0.24F, 0.24F, 1.0F, 0.0F, 0.0F, alpha);
                 }
             }
 
@@ -532,22 +597,122 @@ public final class ClientFxManager
                 }
                 Vector3f c = node(i);
                 boolean centre = i == TIFERET;
-                float radius = (centre ? 18.0F : 14.0F) * (0.9F + 0.1F * lit)
+                float radius = (centre ? 16.5F : 13.5F) * (0.9F + 0.1F * lit)
                         * (1.0F + 0.045F * Mth.sin(t * 0.07F + i * 1.7F));
                 float alpha = base * lit;
                 poseStack.pushPose();
                 poseStack.translate(c.x, c.y, c.z);
                 Matrix4f nodePose = poseStack.last().pose();
                 RibbonRenderer.drawPolyRing(nodePose, consumer, axisX, axisY, 32,
-                        radius, 1.4F, 1.0F, 0.0F, 0.0F, alpha * 0.85F);
+                        radius, 1.10F, 1.0F, 0.0F, 0.0F, alpha);
                 RibbonRenderer.drawPolyRing(nodePose, consumer, axisX, axisY, 32,
-                        radius * 0.72F, 0.55F, 1.0F, 0.0F, 0.0F, alpha);
+                        radius * 0.72F, 0.40F, 1.0F, 0.0F, 0.0F, alpha);
                 if (centre)
                 {
                     drawTiferetGlory(nodePose, consumer, t, alpha, this.hasUnit);
                 }
                 poseStack.popPose();
+
+                // Short leaders make the displaced bilingual node labels
+                // unambiguous without drawing text over an EVA silhouette.
+                float labelOffset = LABEL_X_OFFSETS[i];
+                float sign = Math.signum(labelOffset);
+                float lineStart = radius + 0.8F;
+                float lineEnd = Math.abs(labelOffset) - 3.0F;
+                if (lineEnd > lineStart)
+                {
+                    RibbonRenderer.drawStarRibbon(pose, consumer,
+                            new Vector3f(c.x + sign * lineStart, c.y, c.z + 0.2F),
+                            new Vector3f(c.x + sign * lineEnd, c.y, c.z + 0.2F),
+                            0.18F, 0.18F, 1.0F, 0.0F, 0.0F, alpha * 0.9F);
+                }
             }
+            poseStack.popPose();
+        }
+
+        /** Full-bright red labels: ten Sephirot, ten Hebrew names and all 22 path letters. */
+        void renderLabels(PoseStack poseStack, MultiBufferSource.BufferSource buffer, float partialTick)
+        {
+            float t = this.age + partialTick;
+            float endFade = Mth.clamp((LIFETIME - t) / 80.0F, 0.0F, 1.0F);
+            float base = endFade * fxIntensity();
+            if (base <= 0.003F)
+            {
+                return;
+            }
+
+            poseStack.pushPose();
+            poseStack.mulPose(com.mojang.math.Axis.YP.rotation(this.faceYaw));
+
+            // The Kircher-style heading immediately distinguishes the ritual
+            // glyph from ten anonymous circles.
+            float top = TreeOfLifeLayout.localY(9);
+            float titleLit = nodeLight(t, 9);
+            drawLabel(poseStack, buffer, "SYSTEMA SEPHIROTHICVM",
+                    new Vector3f(0.0F, top + 38.0F, 0.8F), 1.02F, base * titleLit);
+            drawLabel(poseStack, buffer, "X DIVINORVM NOMINVM",
+                    new Vector3f(0.0F, top + 31.0F, 0.8F), 0.87F, base * titleLit);
+            drawLabel(poseStack, buffer, "OTZ CHIIM",
+                    new Vector3f(0.0F, top + 24.5F, 0.8F), 0.78F, base * titleLit);
+            drawLabel(poseStack, buffer, displayHebrew("\u05E2\u05E5 \u05D7\u05D9\u05D9\u05DD"),
+                    new Vector3f(0.0F, top + 18.0F, 0.8F), 0.86F, base * titleLit);
+
+            for (int i = 0; i < TreeOfLifeLayout.NODES.length; i++)
+            {
+                float lit = nodeLight(t, i);
+                if (lit <= 0.0F)
+                {
+                    continue;
+                }
+                Vector3f c = node(i);
+                float alpha = base * lit;
+                float labelX = c.x + LABEL_X_OFFSETS[i];
+                drawLabel(poseStack, buffer, (i + 1) + "  " + SEPHIRA_NAMES[i],
+                        new Vector3f(labelX, c.y + 2.8F, 0.9F), 0.84F, alpha);
+                drawLabel(poseStack, buffer, displayHebrew(SEPHIRA_HEBREW[i]),
+                        new Vector3f(labelX, c.y - 3.0F, 0.9F), 1.05F, alpha);
+            }
+
+            for (int i = 0; i < TreeOfLifeLayout.PATHS.length; i++)
+            {
+                int[] path = TreeOfLifeLayout.PATHS[i];
+                float lit = Math.min(nodeLight(t, path[0]), nodeLight(t, path[1]));
+                if (lit <= 0.0F)
+                {
+                    continue;
+                }
+                Vector3f a = node(path[0]);
+                Vector3f b = node(path[1]);
+                Vector3f letterPos = new Vector3f(a).lerp(b, 0.5F)
+                        .add(PATH_LABEL_OFFSETS[i][0], PATH_LABEL_OFFSETS[i][1], 1.0F);
+                drawLabel(poseStack, buffer, PATH_LETTERS[i], letterPos, 1.05F, base * lit);
+            }
+            poseStack.popPose();
+        }
+
+        /** Vanilla only applies bidi shaping when the selected UI language is RTL. */
+        private static String displayHebrew(String logical)
+        {
+            return Language.getInstance().isDefaultRightToLeft()
+                    ? logical : new StringBuilder(logical).reverse().toString();
+        }
+
+        private static void drawLabel(PoseStack poseStack, MultiBufferSource.BufferSource buffer,
+                                      String text, Vector3f position, float scale, float alpha)
+        {
+            if (alpha <= 0.01F)
+            {
+                return;
+            }
+            Font font = Minecraft.getInstance().font;
+            int colour = Mth.clamp((int) (alpha * 255.0F), 0, 255) << 24 | 0x00FF0000;
+            poseStack.pushPose();
+            poseStack.translate(position.x, position.y, position.z);
+            poseStack.scale(scale, -scale, scale);
+            font.drawInBatch(text, -font.width(text) * 0.5F, -4.0F, colour, false,
+                    poseStack.last().pose(), buffer, Font.DisplayMode.SEE_THROUGH,
+                    0x00000000,
+                    LightTexture.FULL_BRIGHT);
             poseStack.popPose();
         }
 

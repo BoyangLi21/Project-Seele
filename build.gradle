@@ -122,6 +122,9 @@ minecraft {
             if (project.hasProperty('visualCapturePose')) {
                 property 'projectseele.visualCapturePose', project.property('visualCapturePose')
             }
+            if (project.hasProperty('visualCaptureUnit')) {
+                property 'projectseele.visualCaptureUnit', project.property('visualCaptureUnit')
+            }
         }
 
         server {

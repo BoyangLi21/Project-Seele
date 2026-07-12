@@ -10,8 +10,9 @@ from PIL import Image
 REPO = Path(__file__).resolve().parent.parent
 SOURCE = REPO / "eud-1.1.0-forge-1.20.1.jar"
 OUT = REPO / "run/resourcepacks/eva_real_model/assets/projectseele"
-ENTITY_TEXTURE_OFFSET = 448
+ENTITY_TEXTURE_OFFSET = (448, 448)
 ENTITY_SCALE = 6.0
+BLOCK_TEXTURE_UV_SCALE = 4.0
 
 
 def read_unique(archive, suffix):
@@ -21,8 +22,10 @@ def read_unique(archive, suffix):
     return archive.read(matches[0])
 
 
-def entity_cubes(model, pivot, scale=ENTITY_SCALE, texture_offset=ENTITY_TEXTURE_OFFSET):
+def entity_cubes(model, pivot, scale=ENTITY_SCALE, texture_offset=ENTITY_TEXTURE_OFFSET,
+                 texture_uv_scale=BLOCK_TEXTURE_UV_SCALE):
     px, py, pz = pivot
+    texture_x, texture_y = texture_offset
     cubes = []
     for element in model["elements"]:
         start = element["from"]
@@ -43,11 +46,57 @@ def entity_cubes(model, pivot, scale=ENTITY_SCALE, texture_offset=ENTITY_TEXTURE
         for name, face in element.get("faces", {}).items():
             u1, v1, u2, v2 = face["uv"]
             faces[name] = {
-                "uv": [texture_offset + u1, texture_offset + v1],
-                "uv_size": [u2 - u1, v2 - v1],
+                "uv": [texture_x + u1 * texture_uv_scale,
+                       texture_y + v1 * texture_uv_scale],
+                "uv_size": [(u2 - u1) * texture_uv_scale,
+                            (v2 - v1) * texture_uv_scale],
             }
         cubes.append({"origin": origin, "size": size, "uv": faces})
     return cubes
+
+
+def remap_mesh_u(mesh_path, old_width, new_width):
+    mesh = json.loads(mesh_path.read_text(encoding="utf-8"))
+    stride = mesh.get("stride")
+    if stride != 8:
+        raise RuntimeError(f"unsupported mesh stride in {mesh_path}")
+    factor = old_width / new_width
+    for part in mesh.get("parts", {}).values():
+        values = part.get("vertices", [])
+        for index in range(3, len(values), stride):
+            values[index] = round(values[index] * factor, 8)
+    mesh_path.write_text(json.dumps(mesh, separators=(",", ":")), encoding="utf-8")
+
+
+def install_texture(atlas, source, mesh_path):
+    """Place the used lance pixels without resizing or overwriting EVA art."""
+    used = source.getchannel("A").getbbox()
+    if used is None:
+        raise RuntimeError("EUD lance texture is fully transparent")
+    if used[0] != 0 or used[1] != 0:
+        raise RuntimeError(f"unsupported non-zero EUD texture origin {used}")
+    tile = source.crop(used)
+    width, height = tile.size
+    alpha = atlas.getchannel("A")
+    # Search backwards so the attachment stays away from the source model's
+    # conventional upper-left UV area. Eight-pixel alignment keeps authored
+    # cube UVs integral while making the scan inexpensive and deterministic.
+    for step in (8, 1):
+        for y in range(atlas.height - height, -1, -step):
+            for x in range(atlas.width - width, -1, -step):
+                if alpha.crop((x, y, x + width, y + height)).getbbox() is None:
+                    atlas.paste(tile, (x, y), tile)
+                    return atlas, (x, y)
+    # Some authored atlases are fully opaque. Add a narrow attachment column
+    # and renormalise only the local triangle mesh U values; Gecko cube UVs
+    # are pixel coordinates and remain valid when the declared width changes.
+    old_width = atlas.width
+    new_width = old_width + 64
+    expanded = Image.new("RGBA", (new_width, atlas.height), (0, 0, 0, 0))
+    expanded.paste(atlas, (0, 0))
+    expanded.paste(tile, (old_width, 0), tile)
+    remap_mesh_u(mesh_path, old_width, new_width)
+    return expanded, (old_width, 0)
 
 
 with zipfile.ZipFile(SOURCE) as archive:
@@ -67,57 +116,58 @@ texture_path.write_bytes(texture)
 
 # The SmOd/EUD Unit models all expose the same grafted `lance` bone. Replace
 # its placeholder red fork with EUD's actual 40-element model and place the
-# source texture in the unused lower-right corner of each 512px atlas.
+# source texture in a verified transparent region of each existing atlas.
 source_texture = Image.open(io.BytesIO(texture)).convert("RGBA")
 for unit in ("00", "01", "02"):
     geo_path = OUT / f"geo/eva_unit{unit}.geo.json"
     eva_texture_path = OUT / f"textures/entity/eva_unit{unit}.png"
-    if not geo_path.exists() or not eva_texture_path.exists():
+    mesh_path = OUT / f"mesh/eva_unit{unit}.mesh.json"
+    if not geo_path.exists() or not eva_texture_path.exists() or not mesh_path.exists():
         continue
+    atlas = Image.open(eva_texture_path).convert("RGBA")
+    atlas, texture_offset = install_texture(atlas, source_texture, mesh_path)
     geometry = json.loads(geo_path.read_text(encoding="utf-8"))
     description = geometry["minecraft:geometry"][0]["description"]
-    description["texture_width"] = 512
-    description["texture_height"] = 512
+    description["texture_width"] = atlas.width
+    description["texture_height"] = atlas.height
     bones = geometry["minecraft:geometry"][0]["bones"]
     lance = next((bone for bone in bones if bone["name"] == "lance"), None)
     if lance is None:
         continue
-    lance["cubes"] = entity_cubes(model, lance["pivot"])
+    lance["cubes"] = entity_cubes(model, lance["pivot"],
+                                  texture_offset=texture_offset)
     geo_path.write_text(json.dumps(geometry, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    atlas = Image.open(eva_texture_path).convert("RGBA")
-    if atlas.width < 512 or atlas.height < 512:
-        enlarged = Image.new("RGBA", (512, 512), (0, 0, 0, 0))
-        enlarged.paste(atlas, (0, 0))
-        atlas = enlarged
-    atlas.paste(source_texture, (ENTITY_TEXTURE_OFFSET, ENTITY_TEXTURE_OFFSET), source_texture)
     atlas.save(eva_texture_path)
 
 # Mass-production EVAs carry a replica spear. Their unscaled SmOd rig is
 # rendered at 10x, so a 1.2x EUD model reaches the correct world length.
 mp_geo_path = OUT / "geo/mass_production_eva.geo.json"
 mp_texture_path = OUT / "textures/entity/mass_production_eva.png"
-if mp_geo_path.exists() and mp_texture_path.exists():
+mp_mesh_path = OUT / "mesh/mass_production_eva.mesh.json"
+if mp_geo_path.exists() and mp_texture_path.exists() and mp_mesh_path.exists():
     geometry = json.loads(mp_geo_path.read_text(encoding="utf-8"))
     geo = geometry["minecraft:geometry"][0]
-    geo["description"]["texture_width"] = 512
-    geo["description"]["texture_height"] = 512
+    atlas = Image.open(mp_texture_path).convert("RGBA")
+    atlas, texture_offset = install_texture(atlas, source_texture, mp_mesh_path)
+    geo["description"]["texture_width"] = atlas.width
+    geo["description"]["texture_height"] = atlas.height
     geo["description"]["visible_bounds_width"] = 6.0
     geo["description"]["visible_bounds_height"] = 6.0
     bones = geo["bones"]
     bones[:] = [bone for bone in bones if bone["name"] != "replica_lance"]
-    forearm = next(bone for bone in bones if bone["name"] == "Lowerarm")
+    forearm = next((bone for bone in bones
+                    if bone["name"] in ("forearm_r", "Lowerarm")), None)
+    if forearm is None:
+        raise RuntimeError("Mass Production EVA rig has no right forearm weapon socket")
     bones.append({
         "name": "replica_lance",
-        "parent": "Lowerarm",
+        "parent": forearm["name"],
         "pivot": forearm["pivot"],
-        "cubes": entity_cubes(model, forearm["pivot"], scale=1.2),
+        "cubes": entity_cubes(model, forearm["pivot"], scale=1.2,
+                              texture_offset=texture_offset),
     })
     mp_geo_path.write_text(json.dumps(geometry, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    atlas = Image.open(mp_texture_path).convert("RGBA")
-    enlarged = Image.new("RGBA", (512, 512), (0, 0, 0, 0))
-    enlarged.paste(atlas, (0, 0))
-    enlarged.paste(source_texture, (ENTITY_TEXTURE_OFFSET, ENTITY_TEXTURE_OFFSET), source_texture)
-    enlarged.save(mp_texture_path)
+    atlas.save(mp_texture_path)
 
 note = REPO / "run/resourcepacks/eva_real_model/_SOURCE.txt"
 text = note.read_text(encoding="utf-8") if note.exists() else ""

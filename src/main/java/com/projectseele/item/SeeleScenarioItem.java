@@ -22,7 +22,7 @@ import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.Vec3;
 
 /**
- * Creative story tool. Aimed at an EVA Unit, it hoists that Unit into the
+ * Creative story tool. Aimed at EVA Unit-01, it hoists that Unit into the
  * sky and nails it to Tiferet — arms out, gravity off, pilot and all — then
  * manifests the blood-red Tree of Life around it with one Mass-Production
  * Eva hovering on each outer Sephira. Used again on a crucified Unit, it
@@ -73,7 +73,7 @@ public class SeeleScenarioItem extends Item
             yaw = (float) Mth.atan2(toViewer.x, toViewer.z);
             Vec3 tiferet = TreeOfLifeLayout.worldNode(origin, yaw, TreeOfLifeLayout.TIFERET);
             aimedUnit.teleportTo(tiferet.x, tiferet.y - aimedUnit.getBbHeight() * 0.5D, tiferet.z);
-            aimedUnit.setYRot(-(float) Math.toDegrees(yaw));
+            faceFront(aimedUnit, TreeOfLifeLayout.frontFacingYawDegrees(yaw));
             aimedUnit.setCrucified(true);
         }
         else
@@ -91,14 +91,11 @@ public class SeeleScenarioItem extends Item
 
         // Every staged EVA presents the same front to the Tree's audience;
         // do not let nearby Units face sideways while the nine vessels align.
-        float formationYaw = -(float) Math.toDegrees(yaw);
+        float formationYaw = TreeOfLifeLayout.frontFacingYawDegrees(yaw);
         AABB formationArea = new AABB(origin, origin).inflate(320.0D);
         for (EvaUnit01Entity unit : server.getEntitiesOfClass(EvaUnit01Entity.class, formationArea))
         {
-            unit.setYRot(formationYaw);
-            unit.yRotO = formationYaw;
-            unit.yBodyRot = formationYaw;
-            unit.yHeadRot = formationYaw;
+            faceFront(unit, formationYaw);
         }
 
         ThirdImpactDirector.start(server, origin, yaw, hasUnit);
@@ -107,19 +104,34 @@ public class SeeleScenarioItem extends Item
         return InteractionResultHolder.success(stack);
     }
 
+    private static void faceFront(EvaUnit01Entity unit, float yaw)
+    {
+        unit.setYRot(yaw);
+        unit.setXRot(0.0F);
+        unit.yRotO = yaw;
+        unit.xRotO = 0.0F;
+        unit.yBodyRot = yaw;
+        unit.yBodyRotO = yaw;
+        unit.yHeadRot = yaw;
+        unit.yHeadRotO = yaw;
+    }
+
     private static EvaUnit01Entity findAimedUnit(ServerLevel server, ServerPlayer player)
     {
         Vec3 from = player.getEyePosition();
         Vec3 to = from.add(player.getLookAngle().scale(AIM_RANGE));
         EntityHitResult hit = ProjectileUtil.getEntityHitResult(server, player, from, to,
                 new AABB(from, to).inflate(2.0D),
-                e -> e instanceof EvaUnit01Entity && e.isAlive());
+                e -> e instanceof EvaUnit01Entity unit
+                        && unit.getUnitVariant() == EvaUnit01Entity.UNIT_01
+                        && unit.isAlive());
         if (hit != null && hit.getEntity() instanceof EvaUnit01Entity unit)
         {
             return unit;
         }
         // Also accept the Unit the player is currently piloting.
-        if (player.getVehicle() instanceof EvaUnit01Entity ridden)
+        if (player.getVehicle() instanceof EvaUnit01Entity ridden
+                && ridden.getUnitVariant() == EvaUnit01Entity.UNIT_01)
         {
             return ridden;
         }
