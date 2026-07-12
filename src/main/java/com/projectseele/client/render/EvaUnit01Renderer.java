@@ -138,10 +138,15 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
                     bone.setRotY(0.0F);
                     bone.setRotZ(0.0F);
                 }
-                case "arm_r", "Rightarm" -> setRotation(bone, -0.91F + pitch, -0.12F, -0.07F);
-                case "forearm_r", "Lowerarm" -> setRotation(bone, -0.70F, 0.0F, 0.0F);
-                case "arm_l", "Leftarm" -> setRotation(bone, -1.22F + pitch * 0.82F, 0.10F, -0.22F);
-                case "forearm_l", "Lowerarm2" -> setRotation(bone, -0.45F, 0.12F, 0.0F);
+                // SmOd's authored punch reaches the forward contact plane at
+                // about -100 degrees. Values around -50/-70 remain behind
+                // the eye/shoulder plane even though they look plausible on
+                // paper, which caused both the backwards third-person arms
+                // and the empty pilot view.
+                case "arm_r", "Rightarm" -> setRotation(bone, -1.72F + pitch, -0.08F, -0.05F);
+                case "forearm_r", "Lowerarm" -> setRotation(bone, -0.12F, 0.0F, 0.0F);
+                case "arm_l", "Leftarm" -> setRotation(bone, -1.62F + pitch * 0.82F, 0.08F, -0.18F);
+                case "forearm_l", "Lowerarm2" -> setRotation(bone, -0.18F, 0.10F, 0.0F);
                 default -> { }
             }
             return;
@@ -157,27 +162,27 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
             // share these exact joints; there is no detached cockpit prop.
             switch (name)
             {
-                case "arm_r", "Rightarm" -> setRotation(bone, -0.96F, -0.10F, -0.08F);
-                case "forearm_r", "Lowerarm" -> setRotation(bone, -0.44F, 0.0F, 0.0F);
-                case "arm_l", "Leftarm" -> setRotation(bone, -0.92F, 0.24F, 0.15F);
-                case "forearm_l", "Lowerarm2" -> setRotation(bone, -0.58F, 0.16F, 0.0F);
+                case "arm_r", "Rightarm" -> setRotation(bone, -1.68F, -0.08F, -0.06F);
+                case "forearm_r", "Lowerarm" -> setRotation(bone, -0.18F, 0.0F, 0.0F);
+                case "arm_l", "Leftarm" -> setRotation(bone, -1.54F, 0.16F, -0.16F);
+                case "forearm_l", "Lowerarm2" -> setRotation(bone, -0.24F, 0.12F, 0.0F);
                 default -> { }
             }
             return;
         }
         boolean moving = entity.getDeltaMovement().horizontalDistanceSqr() > 0.001D;
-        float phase = moving ? Mth.sin((entity.tickCount + partialTick) * 0.42F) * 0.20F : 0.0F;
+        float phase = moving ? Mth.sin((entity.tickCount + partialTick) * 0.42F) * 0.12F : 0.0F;
         // A forward ready-guard keeps the real shoulder-to-hand chain within
         // the EVA's eye line. It reads naturally in third person and means
         // first person does not need a second pair of floating arms.
-        float rightBase = entity.getWeapon() == EvaUnit01Entity.WEAPON_KNIFE ? -1.34F : -1.18F;
+        float rightBase = entity.getWeapon() == EvaUnit01Entity.WEAPON_KNIFE ? -1.75F : -1.67F;
         switch (name)
         {
-            case "arm_r", "Rightarm" -> setRotation(bone, rightBase + phase, -0.08F, -0.10F);
+            case "arm_r", "Rightarm" -> setRotation(bone, rightBase + phase, -0.05F, -0.07F);
             case "forearm_r", "Lowerarm" -> setRotation(bone,
-                    entity.getWeapon() == EvaUnit01Entity.WEAPON_KNIFE ? -0.46F : -0.32F, 0.0F, 0.0F);
-            case "arm_l", "Leftarm" -> setRotation(bone, -1.18F - phase, 0.08F, 0.10F);
-            case "forearm_l", "Lowerarm2" -> setRotation(bone, -0.32F, 0.0F, 0.0F);
+                    entity.getWeapon() == EvaUnit01Entity.WEAPON_KNIFE ? -0.18F : -0.10F, 0.0F, 0.0F);
+            case "arm_l", "Leftarm" -> setRotation(bone, -1.67F - phase, 0.05F, 0.07F);
+            case "forearm_l", "Lowerarm2" -> setRotation(bone, -0.10F, 0.0F, 0.0F);
             default -> { }
         }
     }
