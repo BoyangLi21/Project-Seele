@@ -174,6 +174,40 @@ def retime_animation(animation, factor):
     return result
 
 
+def sample_channel(channel, time):
+    if not isinstance(channel, dict):
+        return copy.deepcopy(channel)
+    keyed = []
+    for key, value in channel.items():
+        try:
+            keyed.append((float(key), value))
+        except (TypeError, ValueError):
+            pass
+    if not keyed:
+        return copy.deepcopy(channel)
+    keyed.sort(key=lambda item: item[0])
+    before = max((item for item in keyed if item[0] <= time), default=keyed[0], key=lambda item: item[0])
+    after = min((item for item in keyed if item[0] >= time), default=keyed[-1], key=lambda item: item[0])
+    left = before[1].get("post", before[1].get("pre")) if isinstance(before[1], dict) else before[1]
+    right = after[1].get("pre", after[1].get("post")) if isinstance(after[1], dict) else after[1]
+    if before[0] == after[0] or not isinstance(left, list) or not isinstance(right, list):
+        return copy.deepcopy(left)
+    factor = (time - before[0]) / (after[0] - before[0])
+    return [a + (b - a) * factor if isinstance(a, (int, float)) and isinstance(b, (int, float)) else a
+            for a, b in zip(left, right)]
+
+
+def static_pose(animation, time):
+    bones = {}
+    for bone, channels in animation.get("bones", {}).items():
+        sampled = {}
+        for name, channel in channels.items():
+            sampled[name] = {"0.0": sample_channel(channel, time)}
+        if sampled:
+            bones[bone] = sampled
+    return {"loop": True, "animation_length": 1.0, "bones": bones}
+
+
 def build_animations(source, unit):
     built_in = json.loads((REPO / "src/main/resources/assets/projectseele/animations/eva_unit01.animation.json")
                           .read_text(encoding="utf-8"))["animations"]
@@ -186,6 +220,11 @@ def build_animations(source, unit):
         source_animations[f"animation.entity_eva{unit}.move"])
     output["animation.eva_unit01.run"] = retime_animation(scale_position_channels(
         source_animations[f"animation.entity_eva{unit}.move"]), 0.58)
+    output["animation.eva_unit01.visual_idle"] = static_pose(output["animation.eva_unit01.idle"], 0.0)
+    output["animation.eva_unit01.visual_walk_contact"] = static_pose(output["animation.eva_unit01.walk"], 0.5)
+    output["animation.eva_unit01.visual_knife_windup"] = static_pose(output["animation.eva_unit01.knife"], 0.12)
+    output["animation.eva_unit01.visual_knife_contact"] = static_pose(output["animation.eva_unit01.knife"], 0.28)
+    output["animation.eva_unit01.visual_cannon"] = static_pose(output["animation.eva_unit01.aim"], 0.0)
     return {"format_version": "1.8.0", "animations": output}
 
 
@@ -274,10 +313,33 @@ def install_smod_pose_overrides(output):
         "loop": True,
         "animation_length": 1.2,
         "bones": {
-            "Rightarm": {"rotation": {"0.0": [-52, -8, -4], "0.6": [-53.5, -8, -4], "1.2": [-52, -8, -4]}},
-            "Lowerarm": {"rotation": {"0.0": [-40, 0, 0]}},
-            "Leftarm": {"rotation": {"0.0": [-70, -18, 10], "0.6": [-71, -18, 10], "1.2": [-70, -18, 10]}},
-            "Lowerarm2": {"rotation": {"0.0": [-22, -14, 0]}},
+            "Rightarm": {"rotation": {"0.0": [-52, -3, -4], "0.6": [-53.5, -3, -4], "1.2": [-52, -3, -4]}},
+            "Lowerarm": {"rotation": {"0.0": [-38, 0, 0]}},
+            "Leftarm": {"rotation": {"0.0": [-54, 18, 8], "0.6": [-55, 18, 8], "1.2": [-54, 18, 8]}},
+            "Lowerarm2": {"rotation": {"0.0": [-36, 14, 0]}},
+        },
+    }
+    # Progressive-knife strike. Keep the torso readable and let the arm
+    # chain create the attack arc; the previous pose twisted the whole body
+    # while both arms crossed over the face.
+    output["animation.eva_unit01.knife"] = {
+        "animation_length": 0.52,
+        "bones": {
+            "Upperbody": {"rotation": {
+                "0.0": [0, 0, 0], "0.12": [-3, 15, 0],
+                "0.28": [4, -12, 0], "0.52": [0, 0, 0]}},
+            "Rightarm": {"rotation": {
+                "0.0": [-8, 0, -4], "0.12": [-90, -10, -28],
+                "0.28": [-58, 0, -6], "0.52": [-8, 0, -4]}},
+            "Lowerarm": {"rotation": {
+                "0.0": [0, 0, 0], "0.12": [-20, 0, 0],
+                "0.28": [-34, 0, 0], "0.52": [0, 0, 0]}},
+            "Leftarm": {"rotation": {
+                "0.0": [-10, 0, 4], "0.12": [-12, 0, 4],
+                "0.28": [-36, 0, 12], "0.52": [-10, 0, 4]}},
+            "Lowerarm2": {"rotation": {
+                "0.0": [0, 0, 0], "0.12": [0, 0, 0],
+                "0.28": [-30, 0, 0], "0.52": [0, 0, 0]}},
         },
     }
     output["animation.eva_unit01.activation"] = {

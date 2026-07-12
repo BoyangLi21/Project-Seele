@@ -114,6 +114,14 @@ minecraft {
             if (project.hasProperty('quickPlayWorld')) {
                 args '--quickPlaySingleplayer', project.property('quickPlayWorld')
             }
+            // Development-only visual regression: build the fixed lab and
+            // capture all approved Unit-01 keyframes without keyboard input.
+            if (project.hasProperty('visualCapture')) {
+                property 'projectseele.visualCapture', 'true'
+            }
+            if (project.hasProperty('visualCapturePose')) {
+                property 'projectseele.visualCapturePose', project.property('visualCapturePose')
+            }
         }
 
         server {

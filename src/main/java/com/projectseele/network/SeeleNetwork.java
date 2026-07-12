@@ -53,6 +53,11 @@ public final class SeeleNetwork
                 .decoder(ClientboundThirdImpactPacket::new)
                 .consumerMainThread(ClientboundThirdImpactPacket::handle)
                 .add();
+        CHANNEL.messageBuilder(ClientboundVisualCapturePacket.class, id++, NetworkDirection.PLAY_TO_CLIENT)
+                .encoder(ClientboundVisualCapturePacket::encode)
+                .decoder(ClientboundVisualCapturePacket::new)
+                .consumerMainThread(ClientboundVisualCapturePacket::handle)
+                .add();
         CHANNEL.messageBuilder(ServerboundEvaControlPacket.class, id++, NetworkDirection.PLAY_TO_SERVER)
                 .encoder(ServerboundEvaControlPacket::encode)
                 .decoder(ServerboundEvaControlPacket::new)

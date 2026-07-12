@@ -1,6 +1,8 @@
 package com.projectseele.client;
 
 import com.projectseele.ProjectSeele;
+import com.projectseele.client.render.EvaUnit01Renderer;
+import com.projectseele.client.visual.VisualCaptureManager;
 import com.projectseele.entity.EvaUnit01Entity;
 import com.projectseele.network.SeeleNetwork;
 import com.projectseele.network.ServerboundEvaControlPacket;
@@ -10,10 +12,12 @@ import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.Mth;
+import net.minecraft.world.InteractionHand;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.ComputeFovModifierEvent;
 import net.minecraftforge.client.event.InputEvent;
 import net.minecraftforge.client.event.RenderHandEvent;
+import net.minecraftforge.client.event.RenderGuiOverlayEvent;
 import net.minecraftforge.client.event.RenderPlayerEvent;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
@@ -269,11 +273,28 @@ public final class ClientForgeEvents
     @SubscribeEvent
     public static void onRenderHand(RenderHandEvent event)
     {
-        // In the plug the pilot's view is the Unit's own body (the world
-        // model renders in first person with just the head hidden), so the
-        // vanilla player hand must never draw.
         Minecraft minecraft = Minecraft.getInstance();
-        if (ridden(minecraft.player) != null && minecraft.options.getCameraType().isFirstPerson())
+        EvaUnit01Entity eva = ridden(minecraft.player);
+        if (eva == null || !minecraft.options.getCameraType().isFirstPerson())
+        {
+            return;
+        }
+        event.setCanceled(true);
+        if (event.getHand() != InteractionHand.MAIN_HAND)
+        {
+            return;
+        }
+        if (minecraft.getEntityRenderDispatcher().getRenderer(eva) instanceof EvaUnit01Renderer renderer)
+        {
+            renderer.renderPilotArms(eva, event.getPartialTick(), event.getPoseStack(),
+                    event.getMultiBufferSource(), event.getPackedLight());
+        }
+    }
+
+    @SubscribeEvent
+    public static void onRenderGuiOverlay(RenderGuiOverlayEvent.Pre event)
+    {
+        if (VisualCaptureManager.isSuppressingGui())
         {
             event.setCanceled(true);
         }

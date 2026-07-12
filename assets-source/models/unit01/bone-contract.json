@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "model_family": "smod_external_local_prototype",
+  "status": "not_production_approved",
+  "bones": {
+    "root": "bone7",
+    "pelvis": "Lowerbody",
+    "upper_body": "Upperbody",
+    "head": "Head",
+    "left_upper_arm": "Leftarm",
+    "left_forearm": "Lowerarm2",
+    "left_hand": null,
+    "right_upper_arm": "Rightarm",
+    "right_forearm": "Lowerarm",
+    "right_hand": null,
+    "left_upper_leg": "Leftleg",
+    "left_lower_leg": "bone6",
+    "right_upper_leg": "Rightleg",
+    "right_lower_leg": "bone16",
+    "weapon_socket_right": "Lowerarm",
+    "camera_socket": null
+  },
+  "missing_for_production": [
+    "editable bbmodel or Blender source",
+    "separate left and right hand bones",
+    "dedicated weapon socket",
+    "dedicated camera socket",
+    "author redistribution approval"
+  ]
+}

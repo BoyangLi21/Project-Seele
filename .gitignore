@@ -22,6 +22,7 @@ eclipse
 run
 run-data
 mcmodsrepo
+/visual-run.*.log
 
 # Claude Code session data — never publish (local logs/settings)
 .claude/

@@ -1,6 +1,5 @@
 package com.projectseele.client.render;
 
-import java.util.Set;
 import java.util.function.Consumer;
 
 import com.mojang.blaze3d.vertex.PoseStack;
@@ -10,7 +9,6 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
-import net.minecraft.util.Mth;
 import org.jetbrains.annotations.Nullable;
 import software.bernie.geckolib.cache.object.BakedGeoModel;
 import software.bernie.geckolib.cache.object.GeoBone;
@@ -19,29 +17,15 @@ import software.bernie.geckolib.renderer.GeoEntityRenderer;
 /**
  * GeckoLib-driven EVA renderer.
  *
- * Stances come from each model family's animation set. A final shared arm
- * constraint runs after GeckoLib evaluation for live pilot aim and guard.
- * First person renders those exact same arm/weapon bones while clipping the
- * head, torso and legs that would otherwise occlude the camera.
+ * GeckoLib is the sole authority for body and arm poses. This renderer only
+ * selects visible weapon bones and clips camera-obstructing body cubes from
+ * the pilot view; it must never overwrite authored joint rotations.
  */
 public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
 {
-    /** Bone subtrees hidden from the pilot camera (their own head). */
-    private static final Set<String> HEAD_BONES = Set.of("head", "Head", "Neck", "horn");
-    /**
-     * Bones whose OWN cubes hide in first person (children keep rendering,
-     * so the arms survive): the chest plate and shoulder pylons sit right at
-     * eye height and otherwise wall off the pilot's forward view.
-     */
-    private static final Set<String> TORSO_COVER_BONES = Set.of(
-            "torso_upper", "pylon_l", "pylon_r",
-            "Upperbody", "Armor2");
-    private static final Set<String> LOWER_COVER_BONES = Set.of(
-            "pelvis", "torso_lower", "Lowerbody", "Armor");
-    private static final Set<String> LEG_ROOT_BONES = Set.of(
-            "leg_l", "leg_r", "Leftleg", "Rightleg");
-
     private boolean pilotView;
+    private boolean pilotArmPass;
+    private double pilotArmSeparation;
 
     public EvaUnit01Renderer(EntityRendererProvider.Context context)
     {
@@ -61,6 +45,69 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
         super.render(entity, entityYaw, partialTick, poseStack, bufferSource, packedLight);
     }
 
+    /**
+     * Draw the real animated arm subtrees as a camera-space viewmodel. This
+     * reuses the exact GeckoLib pose evaluated for the third-person model;
+     * the only first-person-specific values are projection scale/placement.
+     */
+    public void renderPilotArms(EvaUnit01Entity entity, float partialTick, PoseStack poseStack,
+                                MultiBufferSource bufferSource, int packedLight)
+    {
+        float oldWidth = this.scaleWidth;
+        float oldHeight = this.scaleHeight;
+        boolean oldPilotView = this.pilotView;
+        this.pilotArmPass = true;
+        this.pilotView = true;
+        this.pilotArmSeparation = switch (entity.getWeapon())
+        {
+            case EvaUnit01Entity.WEAPON_CANNON -> 0.60D;
+            case EvaUnit01Entity.WEAPON_KNIFE -> 1.15D;
+            default -> 1.55D;
+        };
+        this.scaleWidth = 0.38F;
+        this.scaleHeight = 0.38F;
+        poseStack.pushPose();
+        poseStack.translate(0.0D, -4.95D, -2.15D);
+        try
+        {
+            super.render(entity, 0.0F, partialTick, poseStack, bufferSource, packedLight);
+        }
+        finally
+        {
+            poseStack.popPose();
+            this.scaleWidth = oldWidth;
+            this.scaleHeight = oldHeight;
+            this.pilotView = oldPilotView;
+            this.pilotArmPass = false;
+        }
+    }
+
+    @Override
+    public void renderRecursively(PoseStack poseStack, EvaUnit01Entity animatable, GeoBone bone,
+                                  RenderType renderType, MultiBufferSource bufferSource,
+                                  VertexConsumer buffer, boolean isReRender, float partialTick,
+                                  int packedLight, int packedOverlay, float red, float green,
+                                  float blue, float alpha)
+    {
+        if (this.pilotArmPass && isIndividualArmRoot(bone))
+        {
+            poseStack.pushPose();
+            // GeoEntityRenderer turns the model 180 degrees before this
+            // recursion, so camera-space left/right is the inverse of the
+            // source model's X sign.
+            poseStack.translate(isRightArm(bone) ? this.pilotArmSeparation
+                    : -this.pilotArmSeparation, 0.0D, 0.0D);
+            super.renderRecursively(poseStack, animatable, bone, renderType, bufferSource,
+                    buffer, isReRender, partialTick, packedLight, packedOverlay,
+                    red, green, blue, alpha);
+            poseStack.popPose();
+            return;
+        }
+        super.renderRecursively(poseStack, animatable, bone, renderType, bufferSource,
+                buffer, isReRender, partialTick, packedLight, packedOverlay,
+                red, green, blue, alpha);
+    }
+
     @Override
     public void preRender(PoseStack poseStack, EvaUnit01Entity animatable, BakedGeoModel model,
                           @Nullable MultiBufferSource bufferSource, @Nullable VertexConsumer buffer,
@@ -69,33 +116,11 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
     {
         super.preRender(poseStack, animatable, model, bufferSource, buffer, isReRender,
                 partialTick, packedLight, packedOverlay, red, green, blue, alpha);
-        boolean firstPerson = this.pilotView;
         forEachBone(model, bone ->
         {
-            bone.setHidden(false);
+            bone.setHidden(this.pilotView && (!this.pilotArmPass || !isArmBone(bone)));
             bone.setChildrenHidden(false);
         });
-        if (firstPerson)
-        {
-            // Hide the pilot's own head and the chest/shoulder armor at eye
-            // level; only the shared animated arms and weapons remain.
-            forEachBone(model, bone ->
-            {
-                if (HEAD_BONES.contains(bone.getName()))
-                {
-                    hideSubtree(bone);
-                }
-                else if (TORSO_COVER_BONES.contains(bone.getName())
-                        || LOWER_COVER_BONES.contains(bone.getName()))
-                {
-                    bone.setHidden(true);
-                }
-                else if (LEG_ROOT_BONES.contains(bone.getName()))
-                {
-                    hideSubtree(bone);
-                }
-            });
-        }
         // Weapon visibility applies on top in every view.
         setWeaponVisibility(model, "knife", animatable.getWeapon() == EvaUnit01Entity.WEAPON_KNIFE);
         setWeaponVisibility(model, "cannon", animatable.getWeapon() == EvaUnit01Entity.WEAPON_CANNON);
@@ -106,107 +131,37 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
         setWeaponVisibility(model, "plug_hatch_r", activating);
     }
 
-    /** Apply the final shared pose only after GeckoLib has evaluated animations. */
-    @Override
-    public void renderRecursively(PoseStack poseStack, EvaUnit01Entity entity, GeoBone bone,
-                                  RenderType renderType, MultiBufferSource bufferSource,
-                                  VertexConsumer buffer, boolean isReRender, float partialTick,
-                                  int packedLight, int packedOverlay, float red, float green,
-                                  float blue, float alpha)
-    {
-        applySharedArmPose(entity, bone, partialTick);
-        super.renderRecursively(poseStack, entity, bone, renderType, bufferSource, buffer,
-                isReRender, partialTick, packedLight, packedOverlay, red, green, blue, alpha);
-    }
-
-    /** Authoritative joint pose shared by first- and third-person rendering. */
-    private static void applySharedArmPose(EvaUnit01Entity entity, GeoBone bone, float partialTick)
-    {
-        if (entity.isPilotProne() || entity.isPilotCrouching() || entity.isCrucified()
-                || entity.getActivationTicks() > 0)
-        {
-            return;
-        }
-        String name = bone.getName();
-        if (entity.getWeapon() == EvaUnit01Entity.WEAPON_CANNON)
-        {
-            float pitch = -Mth.clamp(entity.getXRot(), -42.0F, 42.0F) * Mth.DEG_TO_RAD * 0.55F;
-            switch (name)
-            {
-                case "torso_upper", "Upperbody" ->
-                {
-                    bone.setRotY(0.0F);
-                    bone.setRotZ(0.0F);
-                }
-                // SmOd's authored punch reaches the forward contact plane at
-                // about -100 degrees. Values around -50/-70 remain behind
-                // the eye/shoulder plane even though they look plausible on
-                // paper, which caused both the backwards third-person arms
-                // and the empty pilot view.
-                case "arm_r", "Rightarm" -> setRotation(bone, -1.72F + pitch, -0.08F, -0.05F);
-                case "forearm_r", "Lowerarm" -> setRotation(bone, -0.12F, 0.0F, 0.0F);
-                case "arm_l", "Leftarm" -> setRotation(bone, -1.62F + pitch * 0.82F, 0.08F, -0.18F);
-                case "forearm_l", "Lowerarm2" -> setRotation(bone, -0.18F, 0.10F, 0.0F);
-                default -> { }
-            }
-            return;
-        }
-        if (entity.getCockpitAttackAnim(partialTick) > 0.0F
-                || entity.getCockpitSmashAnim(partialTick) > 0.0F)
-        {
-            return;
-        }
-        if (entity.getWeapon() == EvaUnit01Entity.WEAPON_LANCE)
-        {
-            // Longinus is held low in both hands. Pilot and external views
-            // share these exact joints; there is no detached cockpit prop.
-            switch (name)
-            {
-                case "arm_r", "Rightarm" -> setRotation(bone, -1.68F, -0.08F, -0.06F);
-                case "forearm_r", "Lowerarm" -> setRotation(bone, -0.18F, 0.0F, 0.0F);
-                case "arm_l", "Leftarm" -> setRotation(bone, -1.54F, 0.16F, -0.16F);
-                case "forearm_l", "Lowerarm2" -> setRotation(bone, -0.24F, 0.12F, 0.0F);
-                default -> { }
-            }
-            return;
-        }
-        boolean moving = entity.getDeltaMovement().horizontalDistanceSqr() > 0.001D;
-        float phase = moving ? Mth.sin((entity.tickCount + partialTick) * 0.42F) * 0.12F : 0.0F;
-        // A forward ready-guard keeps the real shoulder-to-hand chain within
-        // the EVA's eye line. It reads naturally in third person and means
-        // first person does not need a second pair of floating arms.
-        float rightBase = entity.getWeapon() == EvaUnit01Entity.WEAPON_KNIFE ? -1.75F : -1.67F;
-        switch (name)
-        {
-            case "arm_r", "Rightarm" -> setRotation(bone, rightBase + phase, -0.05F, -0.07F);
-            case "forearm_r", "Lowerarm" -> setRotation(bone,
-                    entity.getWeapon() == EvaUnit01Entity.WEAPON_KNIFE ? -0.18F : -0.10F, 0.0F, 0.0F);
-            case "arm_l", "Leftarm" -> setRotation(bone, -1.67F - phase, 0.05F, 0.07F);
-            case "forearm_l", "Lowerarm2" -> setRotation(bone, -0.10F, 0.0F, 0.0F);
-            default -> { }
-        }
-    }
-
-    private static void setRotation(GeoBone bone, float x, float y, float z)
-    {
-        bone.setRotX(x);
-        bone.setRotY(y);
-        bone.setRotZ(z);
-    }
-
     private static void setWeaponVisibility(BakedGeoModel model, String name, boolean active)
     {
         model.getBone(name).ifPresent(bone ->
                 bone.setHidden(bone.isHidden() || !active));
     }
 
-    private static void hideSubtree(GeoBone bone)
+    private static boolean isArmBone(GeoBone bone)
     {
-        bone.setHidden(true);
-        for (GeoBone child : bone.getChildBones())
+        for (GeoBone cursor = bone; cursor != null; cursor = cursor.getParent())
         {
-            hideSubtree(child);
+            String name = cursor.getName();
+            if (name.equals("Arms") || name.equals("arm_l") || name.equals("arm_r")
+                    || name.equals("Leftarm") || name.equals("Rightarm"))
+            {
+                return true;
+            }
         }
+        return false;
+    }
+
+    private static boolean isIndividualArmRoot(GeoBone bone)
+    {
+        String name = bone.getName();
+        return name.equals("arm_l") || name.equals("arm_r")
+                || name.equals("Leftarm") || name.equals("Rightarm");
+    }
+
+    private static boolean isRightArm(GeoBone bone)
+    {
+        String name = bone.getName();
+        return name.equals("arm_r") || name.equals("Rightarm");
     }
 
     private static void forEachBone(BakedGeoModel model, Consumer<GeoBone> action)
