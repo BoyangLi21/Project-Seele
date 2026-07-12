@@ -73,6 +73,7 @@ def validate_tree(gate: Gate) -> None:
     network = read("src/main/java/com/projectseele/network/SeeleNetwork.java")
     game_events = read("src/main/java/com/projectseele/GameEvents.java")
     entity = read("src/main/java/com/projectseele/entity/EvaUnit01Entity.java")
+    mass_entity = read("src/main/java/com/projectseele/entity/MassProductionEvaEntity.java")
     animation_doc = json.loads(read(
         "src/main/resources/assets/projectseele/animations/eva_unit01.animation.json"))
 
@@ -240,23 +241,33 @@ def validate_tree(gate: Gate) -> None:
         "story and preview paths emit structural tableau evidence",
     )
     persistence = all(token in saved_data for token in (
-        "extends SavedData", "projectseele_third_impact", "DATA_VERSION = 1",
+        "extends SavedData", "projectseele_third_impact", "DATA_VERSION = 2",
         "OriginX", "OriginY", "OriginZ", "Vessels", "Map<Integer, UUID>",
+        "Outcome", "OUTCOME_ACCEPTED", "OUTCOME_REJECTED",
     )) and all(token in director for token in (
         "ensureRestored(level)", "reconcileRestoredImpact", "formationChunksLoaded",
         "persist(impact)", "removePersisted(impact)", "if (!impact.persistent)",
+        "chunkSettleTicks", "discardOwnedVessels", "ensureVesselForNode",
+        "ForgeChunkManager.forceChunk", "acquireFormationTickets",
+        "releaseFormationTickets",
+    )) and all(token in mass_entity for token in (
+        "SeeleImpactId", "SeeleImpactNode", "assignRitualOwner",
+        "isRitualOwnedBy", "hasRitualOwner",
     ))
     gate.require("impact.saved_timeline", persistence,
                  "versioned per-dimension timeline restores node-indexed vessels")
     resync = all(token in packet for token in (
+        "eventId", "buf.readUUID()", "buf.writeUUID(this.eventId)",
         "initialTreeAge", "buf.readVarInt()", "buf.writeVarInt(this.initialTreeAge)",
-    )) and 'PROTOCOL_VERSION = "2"' in network \
+    )) and 'PROTOCOL_VERSION = "3"' in network \
         and all(token in game_events for token in (
             "PlayerLoggedInEvent", "PlayerChangedDimensionEvent", "PlayerRespawnEvent",
             "ThirdImpactDirector.syncTo(player)",
-        )) and "PacketDistributor.DIMENSION" in director
+        )) and "PacketDistributor.DIMENSION" in director \
+        and "tree.eventId.equals(packet.eventId)" in client_fx \
+        and "Math.max(tree.age" in client_fx
     gate.require("impact.client_resync", resync,
-                 "protocol-v2 login/dimension/respawn sync resumes the current Tree age")
+                 "protocol-v3 event-id sync resumes Tree age without replacement")
 
 
 def number(source: str, name: str) -> float:
@@ -272,6 +283,7 @@ def validate_silo(gate: Gate) -> None:
     command = read("src/main/java/com/projectseele/visual/LaunchSiloCommands.java")
     builder = read("src/main/java/com/projectseele/item/NervConstructionKitItem.java")
     entity = read("src/main/java/com/projectseele/entity/EvaUnit01Entity.java")
+    game_events = read("src/main/java/com/projectseele/GameEvents.java")
     doc = read("docs/LAUNCH_SILO_TEST.md")
 
     commands = all(f'Commands.literal("{name}")' in command
@@ -312,6 +324,12 @@ def validate_silo(gate: Gate) -> None:
     ))
     gate.require("silo.rear_entry_gate", rear_entry,
                  "high entry requires the rear-side distance and facing cone")
+    bed_envelope = all(token in entity for token in (
+        "for (int x = -5; x <= 5; x++)", "for (int z = -5; z <= 5; z++)",
+        "launchBedClaimedByAnother", "launch_bed_occupied",
+    ))
+    gate.require("silo.bed_envelope_lock", bed_envelope,
+                 "shifted EVA remains caged and one active EVA owns each lodestone")
 
     target = number(entity, "LAUNCH_TARGET_ABOVE_BED")
     ascent_ticks = number(entity, "LAUNCH_ASCENT_TICKS")
@@ -333,9 +351,18 @@ def validate_silo(gate: Gate) -> None:
         "SeeleLaunchCarrierY", "updateMovingCarrier()", "setMovingCarrierLayer",
         "for (int x = -5; x <= 5; x++)", "for (int z = -5; z <= 5; z++)",
         "NERV carrier progress", "this.setSurfaceCarrier(true)",
+        "recoverMovingCarrier", "serverLevel.setBlock(block, desired, 2)",
+        "hasMovingCarrierSignature", "exact 11x11 carrier signature",
     ))
     gate.require("silo.moving_carrier", moving_carrier,
                  "persisted 11x11 carrier follows the EVA and closes on abort")
+    travel_interlock = all(token in game_events for token in (
+        "EntityTravelToDimensionEvent", "eva.isLaunchSequenceActive()",
+        "event.setCanceled(true)",
+    )) and "protected void removePassenger" in entity \
+        and "if (this.isLaunchSequenceActive())" in entity
+    gate.require("silo.travel_interlock", travel_interlock,
+                 "forced dismount safely rolls back; dimension travel cannot bypass launch lock")
     log_contract = all(token in entity for token in (
         "NERV launch locked", "NERV launch ascent", "NERV launch surface clear"
     )) and "NERV silo audit" in command

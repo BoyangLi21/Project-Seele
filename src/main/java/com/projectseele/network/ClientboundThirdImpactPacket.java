@@ -1,5 +1,6 @@
 package com.projectseele.network;
 
+import java.util.UUID;
 import java.util.function.Supplier;
 
 import net.minecraft.network.FriendlyByteBuf;
@@ -13,6 +14,7 @@ import net.minecraftforge.network.NetworkEvent;
  */
 public class ClientboundThirdImpactPacket
 {
+    public final UUID eventId;
     public final double x;
     public final double y;
     public final double z;
@@ -22,14 +24,10 @@ public class ClientboundThirdImpactPacket
     /** Age of the client Tree effect when restoring an already-running event. */
     public final int initialTreeAge;
 
-    public ClientboundThirdImpactPacket(double x, double y, double z, float yaw, boolean hasUnit)
-    {
-        this(x, y, z, yaw, hasUnit, 0);
-    }
-
-    public ClientboundThirdImpactPacket(double x, double y, double z, float yaw,
+    public ClientboundThirdImpactPacket(UUID eventId, double x, double y, double z, float yaw,
                                         boolean hasUnit, int initialTreeAge)
     {
+        this.eventId = eventId;
         this.x = x;
         this.y = y;
         this.z = z;
@@ -40,12 +38,13 @@ public class ClientboundThirdImpactPacket
 
     public ClientboundThirdImpactPacket(FriendlyByteBuf buf)
     {
-        this(buf.readDouble(), buf.readDouble(), buf.readDouble(), buf.readFloat(),
+        this(buf.readUUID(), buf.readDouble(), buf.readDouble(), buf.readDouble(), buf.readFloat(),
                 buf.readBoolean(), buf.readVarInt());
     }
 
     public void encode(FriendlyByteBuf buf)
     {
+        buf.writeUUID(this.eventId);
         buf.writeDouble(this.x);
         buf.writeDouble(this.y);
         buf.writeDouble(this.z);

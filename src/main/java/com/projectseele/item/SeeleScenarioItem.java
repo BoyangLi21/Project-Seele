@@ -60,6 +60,13 @@ public class SeeleScenarioItem extends Item
             return InteractionResultHolder.success(stack);
         }
 
+        if (!ThirdImpactDirector.canStart(server))
+        {
+            serverPlayer.displayClientMessage(
+                    Component.translatable("message.projectseele.scenario_already_active"), false);
+            return InteractionResultHolder.fail(stack);
+        }
+
         Vec3 origin;
         float yaw;
         boolean hasUnit = aimedUnit != null;

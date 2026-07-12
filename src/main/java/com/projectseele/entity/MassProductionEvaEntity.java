@@ -1,5 +1,7 @@
 package com.projectseele.entity;
 
+import java.util.UUID;
+
 import com.projectseele.fx.CrossExplosionFX;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.syncher.EntityDataAccessor;
@@ -25,6 +27,7 @@ import software.bernie.geckolib.core.animation.AnimationController;
 import software.bernie.geckolib.core.animation.RawAnimation;
 import software.bernie.geckolib.core.object.PlayState;
 import software.bernie.geckolib.util.GeckoLibUtil;
+import org.jetbrains.annotations.Nullable;
 
 /** White SEELE mass-production unit. It revives until an EVA knife destroys its exposed core. */
 public class MassProductionEvaEntity extends Monster implements GeoEntity
@@ -50,6 +53,10 @@ public class MassProductionEvaEntity extends Monster implements GeoEntity
     private final AnimatableInstanceCache geoCache = GeckoLibUtil.createInstanceCache(this);
     private boolean coreBroken;
     private int attackCooldown;
+    @Nullable
+    private UUID ritualImpactId;
+    private int ritualNode = -1;
+    private boolean ritualPreview;
 
     public MassProductionEvaEntity(EntityType<? extends MassProductionEvaEntity> type, Level level)
     {
@@ -85,6 +92,12 @@ public class MassProductionEvaEntity extends Monster implements GeoEntity
         tag.putInt("VisualPose", this.getVisualPose());
         tag.putInt("ReviveTicks", this.getReviveTicks());
         tag.putBoolean("CoreBroken", this.coreBroken);
+        if (this.ritualImpactId != null)
+        {
+            tag.putUUID("SeeleImpactId", this.ritualImpactId);
+            tag.putInt("SeeleImpactNode", this.ritualNode);
+            tag.putBoolean("SeeleImpactPreview", this.ritualPreview);
+        }
     }
 
     @Override
@@ -94,6 +107,12 @@ public class MassProductionEvaEntity extends Monster implements GeoEntity
         this.setVisualPose(tag.getInt("VisualPose"));
         this.setReviveTicks(tag.getInt("ReviveTicks"));
         this.coreBroken = tag.getBoolean("CoreBroken");
+        this.ritualImpactId = tag.hasUUID("SeeleImpactId")
+                ? tag.getUUID("SeeleImpactId") : null;
+        this.ritualNode = this.ritualImpactId == null ? -1
+                : Mth.clamp(tag.getInt("SeeleImpactNode"), 0, 9);
+        this.ritualPreview = this.ritualImpactId != null
+                && tag.getBoolean("SeeleImpactPreview");
     }
 
     @Override
@@ -215,6 +234,34 @@ public class MassProductionEvaEntity extends Monster implements GeoEntity
     public boolean isRitualFormation()
     {
         return this.getVisualPose() == VISUAL_RITUAL;
+    }
+
+    /** Persistent ownership makes Third-Impact recovery adopt instead of clone vessels. */
+    public void assignRitualOwner(UUID impactId, int node, boolean preview)
+    {
+        this.ritualImpactId = impactId;
+        this.ritualNode = Mth.clamp(node, 0, 9);
+        this.ritualPreview = preview;
+    }
+
+    public boolean isRitualOwnedBy(UUID impactId, int node)
+    {
+        return impactId.equals(this.ritualImpactId) && this.ritualNode == node;
+    }
+
+    public boolean isRitualOwnedBy(UUID impactId)
+    {
+        return impactId.equals(this.ritualImpactId);
+    }
+
+    public boolean isRitualPreview()
+    {
+        return this.ritualPreview;
+    }
+
+    public boolean hasRitualOwner()
+    {
+        return this.ritualImpactId != null;
     }
 
     @Override

@@ -3,6 +3,7 @@ package com.projectseele.client.fx;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.UUID;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
@@ -107,13 +108,20 @@ public final class ClientFxManager
         // The server dictates the facing so the light geometry lands exactly
         // on the Mass-Production Evas it parked on the Sephirot.
         Vec3 position = new Vec3(packet.x, packet.y, packet.z);
-        // Login, respawn and dimension-change synchronization can all resend
-        // one running event. Replace that Tree instead of stacking duplicate
-        // geometry and labels at the same origin.
-        ACTIVE.removeIf(fx -> fx instanceof KabbalahTree tree
-                && tree.pos.distanceToSqr(position) < 1.0E-4D);
-        ACTIVE.add(new KabbalahTree(position, packet.yaw, packet.hasUnit,
-                packet.initialTreeAge));
+        // Resync the same server event in place. Replacing the Tree restarted
+        // its reveal animation, while origin-only deduplication merged two
+        // otherwise valid events staged at the same coordinates.
+        for (WorldFx fx : ACTIVE)
+        {
+            if (fx instanceof KabbalahTree tree && tree.eventId.equals(packet.eventId))
+            {
+                tree.age = Math.max(tree.age,
+                        Mth.clamp(packet.initialTreeAge, 0, KabbalahTree.LIFETIME - 1));
+                return;
+            }
+        }
+        ACTIVE.add(new KabbalahTree(packet.eventId, position, packet.yaw,
+                packet.hasUnit, packet.initialTreeAge));
         if (Boolean.getBoolean("projectseele.visualCapture")
                 && "impact".equals(System.getProperty("projectseele.visualCaptureUnit")))
         {
@@ -532,12 +540,14 @@ public final class ClientFxManager
                 {3.165F,-2.446F},{-3.165F,-2.446F},{8.0F,0.0F}
         };
 
+        private final UUID eventId;
         private final float faceYaw;
         private final boolean hasUnit;
 
-        KabbalahTree(Vec3 pos, float faceYaw, boolean hasUnit, int initialAge)
+        KabbalahTree(UUID eventId, Vec3 pos, float faceYaw, boolean hasUnit, int initialAge)
         {
             super(pos);
+            this.eventId = eventId;
             this.faceYaw = faceYaw;
             this.hasUnit = hasUnit;
             this.age = Mth.clamp(initialAge, 0, LIFETIME - 1);

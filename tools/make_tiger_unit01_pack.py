@@ -209,6 +209,8 @@ def build_skeleton(scale, minimum_y):
     geometry["description"]["texture_width"] = ATLAS_WIDTH
     geometry["description"]["texture_height"] = ATLAS_HEIGHT
     ensure_foot_bones(geometry)
+    old_pivots = {bone["name"]: copy.deepcopy(bone.get("pivot", [0, 0, 0]))
+                  for bone in geometry["bones"]}
     for bone in geometry["bones"]:
         if bone["name"] in SOURCE_PIVOTS:
             source_pivot = SOURCE_PIVOTS[bone["name"]]
@@ -226,6 +228,24 @@ def build_skeleton(scale, minimum_y):
                 if "uv" in cube:
                     cube["uv"] = shift_uv(cube["uv"], 512)
     pivots = {bone["name"]: bone.get("pivot", [0, 0, 0]) for bone in geometry["bones"]}
+    # The Tiger torso pivot is about 27px above the legacy cube rig. Preserve
+    # authored local offsets for the entry plug and both hatch leaves instead
+    # of leaving them behind at the obsolete absolute coordinates.
+    standard_names = set(SOURCE_PIVOTS)
+    for bone in geometry["bones"]:
+        parent = bone.get("parent")
+        if (bone["name"] in standard_names
+                or bone["name"] in {"knife", "cannon", "lance"}
+                or parent not in standard_names):
+            continue
+        delta = [pivots[parent][axis] - old_pivots[parent][axis] for axis in range(3)]
+        bone["pivot"] = [bone.get("pivot", [0, 0, 0])[axis] + delta[axis]
+                         for axis in range(3)]
+        for cube in bone.get("cubes", []):
+            cube["origin"] = [cube["origin"][axis] + delta[axis] for axis in range(3)]
+            if "pivot" in cube:
+                cube["pivot"] = [cube["pivot"][axis] + delta[axis] for axis in range(3)]
+        pivots[bone["name"]] = bone["pivot"]
     # Keep temporary weapon/socket geometry attached to the new right hand.
     for name in ("knife", "cannon", "lance"):
         bone = next(item for item in geometry["bones"] if item["name"] == name)

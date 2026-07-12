@@ -222,6 +222,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     @Nullable
     private BlockPos launchBedPos;
     private int launchCarrierY = NO_LAUNCH_CARRIER;
+    private boolean launchRecoveryPending;
 
     public EvaUnit01Entity(EntityType<? extends EvaUnit01Entity> type, Level level)
     {
@@ -309,6 +310,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             this.launchCarrierY = tag.contains("SeeleLaunchCarrierY")
                     ? tag.getInt("SeeleLaunchCarrierY")
                     : Mth.floor(this.getY()) - 1;
+            this.launchRecoveryPending = phase == LAUNCH_ASCENT;
             this.setNoGravity(phase == LAUNCH_ASCENT || crucified);
         }
         else
@@ -320,6 +322,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             this.entityData.set(DATA_LAUNCH_TICKS, 0);
             this.launchBedPos = null;
             this.launchCarrierY = NO_LAUNCH_CARRIER;
+            this.launchRecoveryPending = false;
             if (crucified)
             {
                 this.setNoGravity(true);
@@ -441,15 +444,42 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     public BlockPos findLaunchBed()
     {
         BlockPos base = BlockPos.containing(this.getX(), this.getY() - 0.2D, this.getZ());
+        BlockPos nearest = null;
+        double nearestDistance = Double.MAX_VALUE;
         for (int depth = 0; depth <= 2; depth++)
         {
-            BlockPos candidate = base.below(depth);
-            if (this.level().getBlockState(candidate).is(Blocks.LODESTONE))
+            for (int x = -5; x <= 5; x++)
             {
-                return candidate.immutable();
+                for (int z = -5; z <= 5; z++)
+                {
+                    BlockPos candidate = base.offset(x, -depth, z);
+                    if (!this.level().getBlockState(candidate).is(Blocks.LODESTONE))
+                    {
+                        continue;
+                    }
+                    double distance = this.distanceToSqr(candidate.getX() + 0.5D,
+                            this.getY(), candidate.getZ() + 0.5D);
+                    if (distance < nearestDistance)
+                    {
+                        nearest = candidate.immutable();
+                        nearestDistance = distance;
+                    }
+                }
             }
         }
-        return null;
+        return nearest;
+    }
+
+    private boolean launchBedClaimedByAnother(BlockPos bed)
+    {
+        if (!(this.level() instanceof ServerLevel serverLevel))
+        {
+            return false;
+        }
+        AABB area = new AABB(bed).inflate(16.0D, 64.0D, 16.0D);
+        return !serverLevel.getEntitiesOfClass(EvaUnit01Entity.class, area,
+                unit -> unit != this && unit.isAlive() && unit.isLaunchSequenceActive()
+                        && bed.equals(unit.getLaunchBedPosition())).isEmpty();
     }
 
     public float getActivationProgress(float partialTick)
@@ -1033,6 +1063,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         this.entityData.set(DATA_LAUNCH_PHASE, LAUNCH_LOCKED);
         this.entityData.set(DATA_LAUNCH_TICKS, this.getActivationTicks());
         this.launchCarrierY = bed.getY();
+        this.launchRecoveryPending = false;
         this.setDeltaMovement(Vec3.ZERO);
         this.fallDistance = 0.0F;
         ProjectSeele.LOGGER.info("NERV launch locked: eva={} bed={} targetY={}",
@@ -1098,6 +1129,10 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
                 this.resetLaunchSequence();
                 return;
             }
+            if (this.launchRecoveryPending && !this.recoverMovingCarrier())
+            {
+                return;
+            }
             double targetY = this.launchBedPos.getY() + LAUNCH_TARGET_ABOVE_BED;
             double remainingHeight = targetY - this.getY();
             int remainingTicks = this.getLaunchTicks() - 1;
@@ -1105,10 +1140,17 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             if (remainingHeight <= 0.2D || remainingTicks <= 0)
             {
                 this.clearMovingCarrierBelowSurface();
-                this.setSurfaceCarrier(true);
                 this.launchCarrierY = this.launchBedPos.getY()
                         + (int) LAUNCH_TARGET_ABOVE_BED - 1;
                 this.setPos(this.launchBedPos.getX() + 0.5D, targetY, this.launchBedPos.getZ() + 0.5D);
+                for (Entity passenger : this.getPassengers())
+                {
+                    this.positionRider(passenger, Entity::setPos);
+                }
+                // Close only after the complete EVA/passenger assembly has
+                // cleared the deck plane; otherwise a timeout could build
+                // 121 solid blocks through a still-rising body.
+                this.setSurfaceCarrier(true);
                 this.setDeltaMovement(0.0D, 0.12D, 0.0D);
                 this.setNoGravity(false);
                 this.entityData.set(DATA_LAUNCH_PHASE, LAUNCH_CLEAR);
@@ -1195,6 +1237,63 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         }
     }
 
+    private boolean recoverMovingCarrier()
+    {
+        this.launchRecoveryPending = false;
+        if (this.launchBedPos == null
+                || !this.level().getBlockState(this.launchBedPos).is(Blocks.LODESTONE))
+        {
+            this.resetLaunchSequence();
+            return false;
+        }
+        int bedY = this.launchBedPos.getY();
+        int deckY = bedY + (int) LAUNCH_TARGET_ABOVE_BED - 1;
+        int inferredY = Mth.clamp(Mth.floor(this.getY()) - 1, bedY, deckY);
+        int savedY = this.launchCarrierY;
+        // Entity and chunk saves are not atomic, so either the stored layer or
+        // the layer immediately around the restored feet may survive. Only an
+        // exact 11x11 carrier signature is eligible for removal; never sweep
+        // an entire shaft merely because player blocks share its materials.
+        for (int candidateY : new int[] {
+                savedY, savedY - 1, savedY + 1,
+                inferredY, inferredY - 1, inferredY + 1})
+        {
+            if (candidateY > bedY && candidateY < deckY
+                    && this.hasMovingCarrierSignature(candidateY))
+            {
+                this.setMovingCarrierLayer(candidateY, false);
+            }
+        }
+        this.launchCarrierY = NO_LAUNCH_CARRIER;
+        this.updateMovingCarrier();
+        ProjectSeele.LOGGER.info("NERV carrier recovered: eva={} bed={} carrierY={}",
+                this.getStringUUID(), this.launchBedPos.toShortString(), this.launchCarrierY);
+        return true;
+    }
+
+    private boolean hasMovingCarrierSignature(int y)
+    {
+        if (this.launchBedPos == null || !(this.level() instanceof ServerLevel serverLevel))
+        {
+            return false;
+        }
+        for (int x = -5; x <= 5; x++)
+        {
+            for (int z = -5; z <= 5; z++)
+            {
+                BlockPos block = new BlockPos(this.launchBedPos.getX() + x, y,
+                        this.launchBedPos.getZ() + z);
+                boolean rim = Math.abs(x) == 5 || Math.abs(z) == 5;
+                if (rim ? !serverLevel.getBlockState(block).is(Blocks.IRON_BLOCK)
+                        : !serverLevel.getBlockState(block).is(Blocks.LIGHT_GRAY_CONCRETE))
+                {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
     private void setMovingCarrierLayer(int y, boolean present)
     {
         if (this.launchBedPos == null || !(this.level() instanceof ServerLevel serverLevel))
@@ -1210,13 +1309,17 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
                 boolean rim = Math.abs(x) == 5 || Math.abs(z) == 5;
                 if (present)
                 {
-                    serverLevel.setBlock(block, rim ? Blocks.IRON_BLOCK.defaultBlockState()
-                            : Blocks.LIGHT_GRAY_CONCRETE.defaultBlockState(), 3);
+                    var desired = rim ? Blocks.IRON_BLOCK.defaultBlockState()
+                            : Blocks.LIGHT_GRAY_CONCRETE.defaultBlockState();
+                    if (!serverLevel.getBlockState(block).equals(desired))
+                    {
+                        serverLevel.setBlock(block, desired, 2);
+                    }
                 }
                 else if (serverLevel.getBlockState(block).is(Blocks.IRON_BLOCK)
                         || serverLevel.getBlockState(block).is(Blocks.LIGHT_GRAY_CONCRETE))
                 {
-                    serverLevel.setBlock(block, Blocks.AIR.defaultBlockState(), 3);
+                    serverLevel.setBlock(block, Blocks.AIR.defaultBlockState(), 2);
                 }
             }
         }
@@ -1238,14 +1341,18 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
                         this.launchBedPos.getZ() + z);
                 if (closed)
                 {
-                    serverLevel.setBlock(deck, (Math.abs(x) == 5 || Math.abs(z) == 5)
+                    var desired = (Math.abs(x) == 5 || Math.abs(z) == 5)
                             ? Blocks.IRON_BLOCK.defaultBlockState()
-                            : Blocks.LIGHT_GRAY_CONCRETE.defaultBlockState(), 3);
+                            : Blocks.LIGHT_GRAY_CONCRETE.defaultBlockState();
+                    if (!serverLevel.getBlockState(deck).equals(desired))
+                    {
+                        serverLevel.setBlock(deck, desired, 2);
+                    }
                 }
                 else if (serverLevel.getBlockState(deck).is(Blocks.IRON_BLOCK)
                         || serverLevel.getBlockState(deck).is(Blocks.LIGHT_GRAY_CONCRETE))
                 {
-                    serverLevel.setBlock(deck, Blocks.AIR.defaultBlockState(), 3);
+                    serverLevel.setBlock(deck, Blocks.AIR.defaultBlockState(), 2);
                 }
             }
         }
@@ -1256,12 +1363,22 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         if (this.getLaunchPhase() == LAUNCH_ASCENT)
         {
             this.clearMovingCarrierBelowSurface();
-            this.setSurfaceCarrier(true);
+            if (this.launchBedPos != null)
+            {
+                this.setPos(this.launchBedPos.getX() + 0.5D, this.launchBedPos.getY() + 1.0D,
+                        this.launchBedPos.getZ() + 0.5D);
+                for (Entity passenger : this.getPassengers())
+                {
+                    this.positionRider(passenger, Entity::setPos);
+                }
+                this.setSurfaceCarrier(true);
+            }
         }
         this.entityData.set(DATA_LAUNCH_PHASE, LAUNCH_IDLE);
         this.entityData.set(DATA_LAUNCH_TICKS, 0);
         this.launchBedPos = null;
         this.launchCarrierY = NO_LAUNCH_CARRIER;
+        this.launchRecoveryPending = false;
         if (!this.isCrucified())
         {
             this.setNoGravity(false);
@@ -1278,6 +1395,16 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             this.resetLaunchSequence();
         }
         super.die(source);
+    }
+
+    @Override
+    public void remove(RemovalReason reason)
+    {
+        if (reason == RemovalReason.DISCARDED && this.isLaunchSequenceActive())
+        {
+            this.resetLaunchSequence();
+        }
+        super.remove(reason);
     }
 
     /**
@@ -1344,9 +1471,27 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     {
         if (!this.isVehicle() && !player.isSecondaryUseActive())
         {
+            if (this.isLaunchSequenceActive())
+            {
+                if (!this.level().isClientSide)
+                {
+                    player.displayClientMessage(
+                            Component.translatable("message.projectseele.launch_interlock"), true);
+                }
+                return InteractionResult.sidedSuccess(this.level().isClientSide);
+            }
             BlockPos launchBed = this.findLaunchBed();
             if (launchBed != null)
             {
+                if (this.launchBedClaimedByAnother(launchBed))
+                {
+                    if (!this.level().isClientSide)
+                    {
+                        player.displayClientMessage(
+                                Component.translatable("message.projectseele.launch_bed_occupied"), true);
+                    }
+                    return InteractionResult.sidedSuccess(this.level().isClientSide);
+                }
                 double relativeHeight = player.getY() - this.getY();
                 if (relativeHeight < SILO_ENTRY_MIN_HEIGHT || relativeHeight > SILO_ENTRY_MAX_HEIGHT)
                 {
@@ -1427,7 +1572,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         this.chargingHeld = false;
         this.entityData.set(DATA_CANNON_CHARGE, 0);
         this.entityData.set(DATA_ACTIVATION_TICKS, 0);
-        if (this.getLaunchPhase() == LAUNCH_LOCKED)
+        if (this.isLaunchSequenceActive())
         {
             this.resetLaunchSequence();
         }

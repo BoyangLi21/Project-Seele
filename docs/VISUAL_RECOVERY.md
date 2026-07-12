@@ -65,6 +65,16 @@ because the active Tigerar1 model is a third-party CC BY-SA evaluation asset
 and the captures are local review evidence rather than distributable project
 art.
 
+After one asset/contract preflight, `tools/start_test.bat visual all` runs the
+Unit-01, Unit-00, Unit-02, Mass Production and complete Third-Impact capture
+targets in order. Each unattended client closes before the next starts, and
+the suite stops at the first failed Gradle/client run. After every client,
+`validate_visual_capture_run.py` also requires exactly one new batch, 156 PNGs
+for a piloted Unit, 35 for Mass Production or 3 for Impact, the correct filename
+prefix, the shutdown marker and no Visual-invalid log signature. A client that
+exits with code zero but produced incomplete evidence therefore fails closed.
+The desktop shim accepts the same `visual all` arguments.
+
 Each pose produces front, offset-profile, back, front and both-profile close-ups,
 clean/cockpit first-person,
 plus yaw-left, yaw-right, pitch-up, and pitch-down first-person images. The
@@ -176,12 +186,12 @@ to a visual pass.
 | First-person body connection | FAIL (old runtime), PASS (offline projection), BLOCKED (new runtime) | The rejected `20260713-002420` batch has an empty forward prone view. The adopted all-fours pose, `10.2` forward socket, pylon cover and prone-only exact torso-mesh filter now retain both real upper-arm/forearm/hand chains on opposite sides without an independent animation. A new tagged game batch must confirm near clipping. |
 | Crouch / one-knee support | PASS (offline), FAIL (last runtime), BLOCKED (new runtime) | `20260713-001545/...front_close_crouch.png` remains the rejected old pose. The replacement `external-assets/work/crouch-foot170-review/...sheet.png` reads as right-foot support plus grounded left knee and rear toe: right foot `Y=+0.2245`, left shin/knee armour `+0.9923`, rear toe `+0.6578`. Its 65-sample crouch-walk loop remains above ground at `+0.2245…+0.6867`. A new tagged game batch is still required. |
 | Prone / crawl base | PASS (offline), BLOCKED (runtime) | The canonical four-support pose has minimum `Y=+0.714px`; sampled crawl contacts remain above the bind ground (`+0.336px` minimum in the reviewed Unit-01 cycle) while arms and opposite legs alternate. Unit-00/02 use the same canonical JSON. Its game render and collision feel still need a new batch. |
-| Longinus two-hand thrust | PASS (offline current art), BLOCKED (runtime) | `external-assets/work/eva-offline-validation/20260713-053906/` renders the final EUD 40-cube spear together with all three Tiger bodies. Ready/windup/contact/recovery keep the hand pivots `16.74..17.91px` apart and the complete weapon/body bounds stay above ground. A tagged Minecraft sequence is still required. |
+| Longinus two-hand thrust | PASS (offline current art), BLOCKED (runtime) | `external-assets/work/eva-offline-validation/20260713-074159/` renders the final EUD 40-cube spear together with all three Tiger bodies and the corrected shared entry-plug offset. Ready/windup/contact/recovery keep the hand pivots `16.74..17.91px` apart and the complete weapon/body bounds stay above ground. A tagged Minecraft sequence is still required. |
 | Positron mesh axis/socket | PASS | `20260713-010636/...side_close_cannon.png` shows the 14,391-triangle cannon horizontal at the right-hand socket; it no longer stands vertically, floats above the head or wraps around a leg. |
 | Positron two-hand support | PASS (offline third-person), BLOCKED (runtime/first-person) | The current matrix renders the 14,391-triangle cannon through the same skeleton: standing hands are `11.04px` apart and prone hands `13.15px` apart; both third-person poses clear the floor. The forward first-person aim still hides one arm behind the receiver, so it is deliberately not promoted to runtime acceptance. |
 | Unit-00 body and shield | PASS (offline), BLOCKED (runtime) | The complete canonical action catalogue prevents old-axis action fallback. The new full-height shield is rendered from its real Gecko cubes and a dedicated two-arm brace overlays the one-knee pose; `20260713-053906/unit00/third_person/shield_brace/` clears the ground with hands `16.45px` apart. |
 | Unit-02 body | PASS (offline), BLOCKED (runtime) | The converter copies the complete canonical catalogue, strips obsolete horn cubes and passes the same walk/crouch/prone/cannon/Longinus ground matrix as Unit-01. The old game screenshot predates these fixes. |
-| Mass Production five-state matrix/ritual | PASS (offline), FAIL (old tableau), BLOCKED (runtime) | `20260713-053906` uses the actual `visual_attack` state, renders the replica lance for idle/move/attack, hides it for revive/ritual as the runtime does, and catches attachment penetration. The first pass exposed `-26px` idle/move spear penetration; the adopted ready pose now records `0px` idle and `-0.384px` moving contact. All five state sheets remain distinct. The older runtime tableau is still rejected pending a new tagged game capture. |
+| Mass Production five-state matrix/ritual | PASS (offline), FAIL (old tableau), BLOCKED (runtime) | `20260713-074159` uses the actual `visual_attack` state, renders the replica lance for idle/move/attack, hides it for revive/ritual as the runtime does, and catches attachment penetration. The first pass exposed `-26px` idle/move spear penetration; the adopted ready pose now records `0px` idle and `-0.384px` moving contact. All five state sheets remain distinct. The older runtime tableau is still rejected pending a new tagged game capture. |
 
 The rejected `012435` tableau was followed by narrower paths, an eight-block
 tree back-plane offset, larger pure-red labels without backdrop or shadow, full-bright ritual

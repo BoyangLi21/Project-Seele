@@ -88,12 +88,19 @@ horizontal cross silhouette, while the side view confirms both arms remain in
 one plane rather than folding behind the torso. This passes the animation pose
 offline; the complete in-game tableau remains separately blocked below.
 
-The formal timeline is now stored per dimension in versioned `SavedData`.
-It records the event origin/yaw/tick and each `nodeIndex -> vessel UUID`, waits
-for the ten formation chunks before reconciliation, and replaces only missing
-vessels. Protocol v2 carries `initialTreeAge`; login, respawn and dimension
-change each resend only the current dimension's tree, while the client removes
-an older tree at the same origin. `/seele visual impact` remains deliberately
+The formal timeline is now stored per dimension in schema-v2 `SavedData`.
+It records the event origin/yaw/tick, frozen RUNNING/ACCEPTED/REJECTED outcome
+and each `nodeIndex -> vessel UUID`. Every vessel also stores its event UUID
+and node, so recovery can adopt or de-duplicate entities after a non-atomic
+world save. The timeline waits for all formation chunks plus a 20-tick entity
+settle window before reconciliation or the final decision. A finite Forge
+chunk ticket is acquired for every distinct Tree node chunk at start/restore
+and released with the timeline, so an edge node cannot freeze the event at
+tick zero. Rejected outcomes keep ageing while their idempotent UUID cleanup
+retries instead of permanently occupying the dimension. Protocol v3 carries
+the event UUID and `initialTreeAge`; login, respawn and dimension change resend
+only the current dimension's tree, while the client advances the same tree in
+place instead of restarting or merging events by origin. `/seele visual impact` remains deliberately
 non-persistent. These are compiled/state contracts until the save/reload pass
 above is performed in game.
 

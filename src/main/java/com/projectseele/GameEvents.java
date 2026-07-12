@@ -2,6 +2,7 @@ package com.projectseele;
 
 import com.projectseele.alarm.AngelAlarmSystem;
 import com.projectseele.entity.Angel;
+import com.projectseele.entity.EvaUnit01Entity;
 import com.projectseele.entity.RamielEntity;
 import com.projectseele.event.ThirdImpactDirector;
 import net.minecraft.server.level.ServerPlayer;
@@ -11,6 +12,7 @@ import net.minecraftforge.event.entity.living.LivingChangeTargetEvent;
 import net.minecraftforge.event.entity.living.LivingDamageEvent;
 import net.minecraftforge.event.entity.living.LivingDeathEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
+import net.minecraftforge.event.entity.EntityTravelToDimensionEvent;
 import net.minecraftforge.event.server.ServerStoppedEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
@@ -83,6 +85,17 @@ public class GameEvents
         if (event.getEntity() instanceof ServerPlayer player)
         {
             ThirdImpactDirector.syncTo(player);
+        }
+    }
+
+    @SubscribeEvent
+    public static void onEntityTravelToDimension(EntityTravelToDimensionEvent event)
+    {
+        EvaUnit01Entity eva = event.getEntity() instanceof EvaUnit01Entity unit ? unit
+                : event.getEntity().getVehicle() instanceof EvaUnit01Entity ridden ? ridden : null;
+        if (eva != null && eva.isLaunchSequenceActive())
+        {
+            event.setCanceled(true);
         }
     }
 

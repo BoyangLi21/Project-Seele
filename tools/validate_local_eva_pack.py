@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import re
 from pathlib import Path
 import sys
 
@@ -36,7 +37,7 @@ STANDARD_EVA_FOOT_PARENTS = {
 }
 
 STANDARD_EVA_ATTACHMENT_CUBES = {
-    "entry_plug": 2,
+    "entry_plug": 5,
     "plug_hatch_l": 1,
     "plug_hatch_r": 1,
     "lance": 40,
@@ -188,6 +189,58 @@ ASSETS = {
 
 class ValidationError(RuntimeError):
     pass
+
+
+def validate_runtime_fingerprint_contract() -> str:
+    source = (REPO / "src/main/java/com/projectseele/client/render/"
+              "LocalVisualAssetFingerprint.java").read_text(encoding="utf-8")
+    actual = {
+        name: (int(triangles.replace("_", "")), int(parts))
+        for name, triangles, parts in re.findall(
+            r'"([a-z0-9_]+)"\s*,\s*new MeshContract\(([\d_]+),\s*(\d+)\)', source)
+    }
+    expected = {
+        spec["stem"]: (spec["expected_triangles"], spec["expected_parts"])
+        for name, spec in ASSETS.items()
+        if name != "cannon"
+    }
+    if actual != expected:
+        raise ValidationError(
+            f"runtime fingerprint contracts {actual!r} do not match preflight {expected!r}"
+        )
+    launcher = (REPO / "tools/start_test.bat").read_text(encoding="utf-8")
+    build = (REPO / "build.gradle").read_text(encoding="utf-8")
+    if "-PstrictHighDetail=true" not in launcher \
+            or "projectseele.strictHighDetail" not in build:
+        raise ValidationError("desktop runtime strict-high-detail gate is not wired")
+    return "runtime: full-resource strict fingerprints match the local mesh contract"
+
+
+def validate_shared_attachment_offsets(root: Path) -> str:
+    relative: dict[str, dict[str, tuple[float, float, float]]] = {}
+    for stem in ("eva_unit01", "eva_unit00", "eva_unit02"):
+        geo = read_json(root / "geo" / f"{stem}.geo.json")
+        bones = geo["minecraft:geometry"][0]["bones"]
+        by_name = {bone["name"]: bone for bone in bones}
+        torso = tuple(finite_number(value, f"{stem}.torso_upper")
+                      for value in by_name["torso_upper"]["pivot"])
+        relative[stem] = {}
+        for attachment in ("entry_plug", "plug_hatch_l", "plug_hatch_r"):
+            pivot = tuple(finite_number(value, f"{stem}.{attachment}")
+                          for value in by_name[attachment]["pivot"])
+            relative[stem][attachment] = tuple(
+                pivot[axis] - torso[axis] for axis in range(3)
+            )
+    baseline = relative["eva_unit01"]
+    for stem, attachments in relative.items():
+        for attachment, offset in attachments.items():
+            if any(abs(left - right) > 1.0e-4
+                   for left, right in zip(offset, baseline[attachment])):
+                raise ValidationError(
+                    f"{stem}: {attachment} offset from torso {offset!r} differs "
+                    f"from Unit-01 {baseline[attachment]!r}"
+                )
+    return "attachments: all three entry plugs preserve the shared torso offset"
 
 
 def read_json(path: Path) -> dict:
@@ -432,6 +485,9 @@ def main() -> int:
 
     try:
         results = [validate_asset(args.pack_assets, name) for name in args.require]
+        if {"unit01", "unit00", "unit02"}.issubset(args.require):
+            results.append(validate_shared_attachment_offsets(args.pack_assets))
+        results.append(validate_runtime_fingerprint_contract())
     except ValidationError as exc:
         print(f"LOCAL EVA PACK INVALID: {exc}", file=sys.stderr)
         return 1

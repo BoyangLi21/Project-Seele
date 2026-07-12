@@ -2,6 +2,7 @@ package com.projectseele.event;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -25,8 +26,10 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
+import net.minecraftforge.common.world.ForgeChunkManager;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.level.LevelEvent;
 import net.minecraftforge.event.server.ServerStoppedEvent;
@@ -44,29 +47,44 @@ public final class ThirdImpactDirector
     /** Client KabbalahTree lifetime begins when the Tree manifests. */
     private static final int TREE_EFFECT_TICKS = 20 * 180;
     private static final int PERSIST_UNTIL_TICK = TREE_MANIFEST_TICK + TREE_EFFECT_TICKS;
+    private static final int CHUNK_SETTLE_TICKS = 20;
     private static final List<Impact> ACTIVE = new ArrayList<>();
     private static final Set<ServerLevel> RESTORED_LEVELS =
             Collections.newSetFromMap(new IdentityHashMap<>());
 
     private ThirdImpactDirector() {}
 
-    public static void start(ServerLevel level, Vec3 origin, float yaw, boolean hasUnit)
+    public static boolean canStart(ServerLevel level)
     {
         ensureRestored(level);
+        return ACTIVE.stream().noneMatch(existing -> existing.level == level
+                && existing.persistent && existing.ticks < PERSIST_UNTIL_TICK);
+    }
+
+    public static boolean start(ServerLevel level, Vec3 origin, float yaw, boolean hasUnit)
+    {
+        if (!canStart(level))
+        {
+            ProjectSeele.LOGGER.warn(
+                    "Third Impact start refused: dimension {} already has an active timeline",
+                    level.dimension().location());
+            return false;
+        }
         Impact impact = new Impact(level, origin, yaw, hasUnit, true);
+        acquireFormationTickets(impact);
         ACTIVE.add(impact);
         persist(impact);
         ProjectSeele.LOGGER.info(
                 "Third Impact staged: dimension={} origin=({},{},{}) yaw={} unit01={}",
                 level.dimension().location(), origin.x, origin.y, origin.z, yaw, hasUnit);
         broadcast(impact, "message.projectseele.impact_ascent");
+        return true;
     }
 
     /** Development visual-lab entry: materialise the complete tableau now. */
     public static void startVisualPreview(ServerLevel level, Vec3 origin, float yaw, boolean hasUnit)
     {
-        ACTIVE.removeIf(existing -> !existing.persistent && existing.level == level
-                && existing.origin.distanceToSqr(origin) < 32.0D * 32.0D);
+        cleanupVisualPreview(level);
         Impact impact = new Impact(level, origin, yaw, hasUnit, false);
         impact.ticks = 300;
         deployVessels(impact);
@@ -95,19 +113,42 @@ public final class ThirdImpactDirector
         while (iterator.hasNext())
         {
             Impact impact = iterator.next();
-            if (impact.restoreDelay >= 0)
+            if (impact.persistent && impact.outcome == ThirdImpactSavedData.OUTCOME_RUNNING)
             {
-                if (impact.ticks < TIMELINE_FINISH_TICK && !formationChunksLoaded(impact))
+                if (!formationChunksLoaded(impact))
+                {
+                    impact.chunkSettleTicks = CHUNK_SETTLE_TICKS;
+                    continue;
+                }
+                if (impact.chunkSettleTicks-- > 0)
                 {
                     continue;
                 }
+            }
+            else if (impact.persistent
+                    && impact.outcome == ThirdImpactSavedData.OUTCOME_REJECTED)
+            {
+                // A rejected result is frozen and its clock must keep moving.
+                // Cleanup is retried while the event tickets bring chunks in,
+                // but an unavailable chunk cannot strand the timeline at 1200.
+                if (formationChunksLoaded(impact))
+                {
+                    discardOwnedVessels(impact);
+                }
+            }
+            if (impact.restoreDelay >= 0)
+            {
                 if (impact.restoreDelay-- > 0)
                 {
                     continue;
                 }
                 if (impact.ticks < TIMELINE_FINISH_TICK)
                 {
-                    reconcileRestoredImpact(impact);
+                    if (!reconcileRestoredImpact(impact))
+                    {
+                        impact.restoreDelay = CHUNK_SETTLE_TICKS;
+                        continue;
+                    }
                 }
                 impact.restoreDelay = -1;
                 if (impact.ticks >= TREE_MANIFEST_TICK
@@ -117,18 +158,21 @@ public final class ThirdImpactDirector
                 }
             }
             impact.ticks++;
-            if (impact.ticks == 100)
+            if (impact.outcome == ThirdImpactSavedData.OUTCOME_RUNNING
+                    && impact.ticks == 100)
             {
                 deployVessels(impact);
                 broadcast(impact, "message.projectseele.impact_formation");
             }
-            else if (impact.ticks == TREE_MANIFEST_TICK)
+            else if (impact.outcome == ThirdImpactSavedData.OUTCOME_RUNNING
+                    && impact.ticks == TREE_MANIFEST_TICK)
             {
                 auditTableau(impact, "tree-manifest");
                 sendTreeToDimension(impact);
                 broadcast(impact, "message.projectseele.impact_tree");
             }
-            else if (impact.ticks == 560)
+            else if (impact.outcome == ThirdImpactSavedData.OUTCOME_RUNNING
+                    && impact.ticks == 560)
             {
                 Vec3 centre = TreeOfLifeLayout.worldNode(impact.origin, impact.yaw, TreeOfLifeLayout.TIFERET);
                 SeeleNetwork.CHANNEL.send(PacketDistributor.DIMENSION.with(impact.level::dimension),
@@ -136,17 +180,29 @@ public final class ThirdImpactDirector
                 CrossExplosionFX.spawn(impact.level, centre, 1.6F);
                 broadcast(impact, "message.projectseele.impact_threshold");
             }
-            else if (impact.ticks == 760)
+            else if (impact.outcome == ThirdImpactSavedData.OUTCOME_RUNNING
+                    && impact.ticks == 760)
             {
                 applyLclPhase(impact);
                 broadcast(impact, "message.projectseele.impact_instrumentality");
             }
-            else if (impact.ticks == TIMELINE_FINISH_TICK)
+            else if (impact.outcome == ThirdImpactSavedData.OUTCOME_RUNNING
+                    && impact.ticks == TIMELINE_FINISH_TICK)
             {
                 finish(impact);
             }
             else if (impact.ticks >= PERSIST_UNTIL_TICK)
             {
+                if (!discardOwnedVessels(impact))
+                {
+                    // Do not lose the UUID cleanup ledger. The forced chunks
+                    // normally make this a one-tick path; retain the record if
+                    // a dimension is temporarily unable to honour the ticket.
+                    impact.ticks = PERSIST_UNTIL_TICK - 1;
+                    persist(impact);
+                    continue;
+                }
+                releaseFormationTickets(impact);
                 removePersisted(impact);
                 iterator.remove();
                 continue;
@@ -160,6 +216,21 @@ public final class ThirdImpactDirector
     {
         if (event.getLevel() instanceof ServerLevel level)
         {
+            for (Impact impact : List.copyOf(ACTIVE))
+            {
+                if (impact.level != level)
+                {
+                    continue;
+                }
+                if (!impact.persistent)
+                {
+                    discardOwnedVessels(impact);
+                }
+                else
+                {
+                    releaseFormationTickets(impact);
+                }
+            }
             ACTIVE.removeIf(impact -> impact.level == level);
             RESTORED_LEVELS.remove(level);
         }
@@ -182,7 +253,7 @@ public final class ThirdImpactDirector
             {
                 continue;
             }
-            MassProductionEvaEntity mass = createVessel(impact, i, formationYaw);
+            MassProductionEvaEntity mass = ensureVesselForNode(impact, i, formationYaw);
             if (mass != null)
             {
                 deployed++;
@@ -196,6 +267,7 @@ public final class ThirdImpactDirector
             ProjectSeele.LOGGER.error(
                     "THIRD IMPACT FORMATION INVALID: deployed {} of 9 Mass Production EVAs",
                     deployed);
+            impact.restoreDelay = CHUNK_SETTLE_TICKS;
         }
         persist(impact);
     }
@@ -227,8 +299,14 @@ public final class ThirdImpactDirector
         mass.setDeltaMovement(Vec3.ZERO);
         mass.setNoGravity(true);
         mass.setNoAi(true);
+        mass.setInvulnerable(true);
+        mass.setTarget(null);
         mass.setVisualPose(MassProductionEvaEntity.VISUAL_RITUAL);
-        mass.setPersistenceRequired();
+        mass.assignRitualOwner(impact.id, nodeIndex, !impact.persistent);
+        if (impact.persistent)
+        {
+            mass.setPersistenceRequired();
+        }
     }
 
     private static void ensureRestored(ServerLevel level)
@@ -244,7 +322,9 @@ public final class ThirdImpactDirector
                     && impact.id.equals(stored.id()));
             if (!alreadyActive)
             {
-                ACTIVE.add(new Impact(level, stored));
+                Impact restoredImpact = new Impact(level, stored);
+                acquireFormationTickets(restoredImpact);
+                ACTIVE.add(restoredImpact);
                 restored++;
             }
         }
@@ -268,12 +348,93 @@ public final class ThirdImpactDirector
         return true;
     }
 
-    private static void reconcileRestoredImpact(Impact impact)
+    /** Hold every node chunk for the finite event lifetime, including restore. */
+    private static void acquireFormationTickets(Impact impact)
+    {
+        if (!impact.persistent)
+        {
+            return;
+        }
+        for (int node = 0; node < TreeOfLifeLayout.NODES.length; node++)
+        {
+            ChunkPos chunk = new ChunkPos(BlockPos.containing(
+                    TreeOfLifeLayout.worldNode(impact.origin, impact.yaw, node)));
+            long packed = chunk.toLong();
+            if (impact.forcedChunks.add(packed))
+            {
+                ForgeChunkManager.forceChunk(impact.level, ProjectSeele.MODID, impact.id,
+                        chunk.x, chunk.z, true, true);
+            }
+        }
+    }
+
+    private static void releaseFormationTickets(Impact impact)
+    {
+        for (long packed : List.copyOf(impact.forcedChunks))
+        {
+            ChunkPos chunk = new ChunkPos(packed);
+            ForgeChunkManager.forceChunk(impact.level, ProjectSeele.MODID, impact.id,
+                    chunk.x, chunk.z, false, true);
+        }
+        impact.forcedChunks.clear();
+    }
+
+    private static void cleanupVisualPreview(ServerLevel level)
+    {
+        Iterator<Impact> iterator = ACTIVE.iterator();
+        while (iterator.hasNext())
+        {
+            Impact existing = iterator.next();
+            if (!existing.persistent && existing.level == level)
+            {
+                discardOwnedVessels(existing);
+                iterator.remove();
+            }
+        }
+        // One-time migration cleanup for preview vessels written before they
+        // had an event owner in NBT. This runs only inside the dev tableau.
+        for (net.minecraft.world.entity.Entity entity : level.getAllEntities())
+        {
+            if (entity instanceof MassProductionEvaEntity mass
+                    && (mass.isRitualPreview()
+                        || !mass.hasRitualOwner() && mass.isRitualFormation()))
+            {
+                mass.discard();
+            }
+        }
+    }
+
+    private static boolean discardOwnedVessels(Impact impact)
+    {
+        for (UUID vesselId : List.copyOf(impact.vesselIds.values()))
+        {
+            if (impact.level.getEntity(vesselId) instanceof MassProductionEvaEntity mass)
+            {
+                mass.discard();
+            }
+        }
+        AABB area = new AABB(impact.origin, impact.origin).inflate(230.0D);
+        for (MassProductionEvaEntity mass : impact.level.getEntitiesOfClass(
+                MassProductionEvaEntity.class, area,
+                entity -> entity.isRitualOwnedBy(impact.id)
+                        || impact.vesselIds.containsValue(entity.getUUID())))
+        {
+            mass.discard();
+        }
+        if (impact.persistent && !formationChunksLoaded(impact))
+        {
+            return false;
+        }
+        impact.vesselIds.clear();
+        return true;
+    }
+
+    private static boolean reconcileRestoredImpact(Impact impact)
     {
         if (impact.ticks < 100)
         {
             persist(impact);
-            return;
+            return true;
         }
         impact.vesselIds.remove(TreeOfLifeLayout.TIFERET);
         float formationYaw = TreeOfLifeLayout.frontFacingYawDegrees(impact.yaw);
@@ -285,17 +446,13 @@ public final class ThirdImpactDirector
             {
                 continue;
             }
-            UUID vesselId = impact.vesselIds.get(node);
-            net.minecraft.world.entity.Entity entity = vesselId == null
-                    ? null : impact.level.getEntity(vesselId);
-            if (entity instanceof MassProductionEvaEntity mass && mass.isAlive())
+            UUID previous = impact.vesselIds.get(node);
+            MassProductionEvaEntity mass = ensureVesselForNode(impact, node, formationYaw);
+            if (mass != null && mass.getUUID().equals(previous))
             {
-                configureVessel(impact, node, formationYaw, mass);
                 recovered++;
-                continue;
             }
-            impact.vesselIds.remove(node);
-            if (createVessel(impact, node, formationYaw) != null)
+            else if (mass != null)
             {
                 replaced++;
             }
@@ -309,7 +466,50 @@ public final class ThirdImpactDirector
             ProjectSeele.LOGGER.error(
                     "THIRD IMPACT RESTORE INVALID: event={} restored {} of 9 vessels",
                     impact.id, impact.vesselIds.size());
+            return false;
         }
+        return true;
+    }
+
+    @Nullable
+    private static MassProductionEvaEntity ensureVesselForNode(
+            Impact impact, int nodeIndex, float formationYaw)
+    {
+        UUID expectedId = impact.vesselIds.get(nodeIndex);
+        MassProductionEvaEntity selected = null;
+        if (expectedId != null && impact.level.getEntity(expectedId)
+                instanceof MassProductionEvaEntity expected && expected.isAlive())
+        {
+            selected = expected;
+        }
+
+        Vec3 expectedCentre = TreeOfLifeLayout.worldNode(impact.origin, impact.yaw, nodeIndex);
+        AABB nodeArea = new AABB(expectedCentre, expectedCentre).inflate(8.0D, 36.0D, 8.0D);
+        List<MassProductionEvaEntity> candidates = impact.level.getEntitiesOfClass(
+                MassProductionEvaEntity.class, nodeArea, mass -> mass.isAlive()
+                        && (mass.isRitualOwnedBy(impact.id, nodeIndex)
+                            || !mass.hasRitualOwner() && mass.isRitualFormation()
+                                && mass.position().add(0.0D, mass.getBbHeight() * 0.5D, 0.0D)
+                                        .distanceToSqr(expectedCentre) < 4.0D));
+        for (MassProductionEvaEntity candidate : candidates)
+        {
+            if (selected == null)
+            {
+                selected = candidate;
+            }
+            else if (candidate != selected)
+            {
+                candidate.discard();
+            }
+        }
+        if (selected == null)
+        {
+            impact.vesselIds.remove(nodeIndex);
+            return createVessel(impact, nodeIndex, formationYaw);
+        }
+        configureVessel(impact, nodeIndex, formationYaw, selected);
+        impact.vesselIds.put(nodeIndex, selected.getUUID());
+        return selected;
     }
 
     private static void persist(Impact impact)
@@ -320,7 +520,7 @@ public final class ThirdImpactDirector
         }
         ThirdImpactSavedData.get(impact.level).put(new ThirdImpactSavedData.StoredImpact(
                 impact.id, impact.origin, impact.yaw, impact.hasUnit, impact.ticks,
-                impact.vesselIds));
+                impact.outcome, impact.vesselIds));
     }
 
     private static void removePersisted(Impact impact)
@@ -333,7 +533,7 @@ public final class ThirdImpactDirector
 
     private static ClientboundThirdImpactPacket treePacket(Impact impact)
     {
-        return new ClientboundThirdImpactPacket(impact.origin.x, impact.origin.y,
+        return new ClientboundThirdImpactPacket(impact.id, impact.origin.x, impact.origin.y,
                 impact.origin.z, impact.yaw, impact.hasUnit,
                 Math.max(0, impact.ticks - TREE_MANIFEST_TICK));
     }
@@ -352,7 +552,7 @@ public final class ThirdImpactDirector
         for (Impact impact : ACTIVE)
         {
             if (impact.level == level && impact.ticks >= TREE_MANIFEST_TICK
-                    && impact.ticks < PERSIST_UNTIL_TICK)
+                    && impact.ticks < PERSIST_UNTIL_TICK && impact.restoreDelay < 0)
             {
                 SeeleNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
                         treePacket(impact));
@@ -481,8 +681,14 @@ public final class ThirdImpactDirector
 
     private static void finish(Impact impact)
     {
+        if (impact.outcome != ThirdImpactSavedData.OUTCOME_RUNNING)
+        {
+            return;
+        }
         if (!impact.hasUnit)
         {
+            impact.outcome = ThirdImpactSavedData.OUTCOME_ACCEPTED;
+            persist(impact);
             broadcast(impact, "message.projectseele.impact_complete");
             return;
         }
@@ -500,18 +706,19 @@ public final class ThirdImpactDirector
                                 unit.getYRot() - expectedYaw)) < 1.0F).stream().findAny().isPresent();
         if (accepted)
         {
+            impact.outcome = ThirdImpactSavedData.OUTCOME_ACCEPTED;
+            persist(impact);
             broadcast(impact, "message.projectseele.impact_accepted");
         }
         else
         {
             // Releasing the crucified Unit before the final phase rejects the
             // scenario; the nine inert vessels fall apart with the tableau.
-            for (MassProductionEvaEntity mass :
-                    impact.level.getEntitiesOfClass(MassProductionEvaEntity.class, area,
-                            entity -> impact.vesselIds.containsValue(entity.getUUID())))
-            {
-                mass.discard();
-            }
+            impact.outcome = ThirdImpactSavedData.OUTCOME_REJECTED;
+            // Persist the frozen decision before entity cleanup. A crash can
+            // then resume the idempotent ownership scan without re-deciding.
+            persist(impact);
+            discardOwnedVessels(impact);
             broadcast(impact, "message.projectseele.impact_rejected");
         }
     }
@@ -536,8 +743,11 @@ public final class ThirdImpactDirector
         final boolean hasUnit;
         final boolean persistent;
         final Map<Integer, UUID> vesselIds = new LinkedHashMap<>();
+        final Set<Long> forcedChunks = new HashSet<>();
         int ticks;
+        int outcome = ThirdImpactSavedData.OUTCOME_RUNNING;
         int restoreDelay = -1;
+        int chunkSettleTicks;
 
         Impact(ServerLevel level, Vec3 origin, float yaw, boolean hasUnit,
                boolean persistent)
@@ -559,8 +769,13 @@ public final class ThirdImpactDirector
             this.hasUnit = stored.hasUnit();
             this.persistent = true;
             this.ticks = stored.ticks();
+            this.outcome = stored.outcome();
             this.vesselIds.putAll(stored.vessels());
-            this.restoreDelay = stored.ticks() < TIMELINE_FINISH_TICK ? 20 : 0;
+            this.restoreDelay = stored.ticks() < TIMELINE_FINISH_TICK
+                    && stored.outcome() == ThirdImpactSavedData.OUTCOME_RUNNING
+                    ? CHUNK_SETTLE_TICKS : 0;
+            this.chunkSettleTicks = stored.outcome() == ThirdImpactSavedData.OUTCOME_REJECTED
+                    ? CHUNK_SETTLE_TICKS : 0;
         }
     }
 }

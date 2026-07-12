@@ -149,28 +149,78 @@ echo.
 echo Starting Project SEELE test client (first launch takes a minute)...
 if /i "%~1"=="visual" (
     echo Automated Visual Lab mode enabled.
-    if /i "%~2"=="impact" (
+    if /i "%~2"=="all" (
+        echo Capturing Unit-01, Unit-00, Unit-02, Mass Production and Third Impact.
+        echo Each client closes automatically before the next target starts.
+        for %%U in (unit01 unit00 unit02 mass impact) do (
+            echo.
+            echo === Visual suite target: %%U ===
+            python tools\validate_visual_capture_run.py begin %%U
+            if errorlevel 1 exit /b 1
+            call gradlew.bat runClient -PquickPlayWorld=SEELE_VISUAL_TEST_2 -PvisualCapture=true -PvisualCaptureUnit=%%U
+            if errorlevel 1 (
+                echo Visual suite stopped because %%U failed.
+                exit /b 1
+            )
+            python tools\validate_visual_capture_run.py verify %%U
+            if errorlevel 1 (
+                echo Visual suite stopped because %%U produced invalid evidence.
+                exit /b 1
+            )
+        )
+        echo Complete Visual Lab suite finished.
+    ) else if /i "%~2"=="impact" (
         echo Capturing the complete Third Impact front tableau.
+        python tools\validate_visual_capture_run.py begin impact
+        if errorlevel 1 exit /b 1
         call gradlew.bat runClient -PquickPlayWorld=SEELE_VISUAL_TEST_2 -PvisualCapture=true -PvisualCaptureUnit=impact
+        if errorlevel 1 exit /b 1
+        python tools\validate_visual_capture_run.py verify impact
+        if errorlevel 1 exit /b 1
     ) else if /i "%~2"=="unit00" (
         echo Capturing the complete Unit-00 pose suite.
+        python tools\validate_visual_capture_run.py begin unit00
+        if errorlevel 1 exit /b 1
         call gradlew.bat runClient -PquickPlayWorld=SEELE_VISUAL_TEST_2 -PvisualCapture=true -PvisualCaptureUnit=unit00
+        if errorlevel 1 exit /b 1
+        python tools\validate_visual_capture_run.py verify unit00
+        if errorlevel 1 exit /b 1
     ) else if /i "%~2"=="unit02" (
         echo Capturing the complete Unit-02 pose suite.
+        python tools\validate_visual_capture_run.py begin unit02
+        if errorlevel 1 exit /b 1
         call gradlew.bat runClient -PquickPlayWorld=SEELE_VISUAL_TEST_2 -PvisualCapture=true -PvisualCaptureUnit=unit02
+        if errorlevel 1 exit /b 1
+        python tools\validate_visual_capture_run.py verify unit02
+        if errorlevel 1 exit /b 1
     ) else if /i "%~2"=="mass" (
         echo Capturing Mass Production EVA idle, move, attack, revive, and ritual.
         echo Each state is recorded from seven fixed external views.
+        python tools\validate_visual_capture_run.py begin mass
+        if errorlevel 1 exit /b 1
         call gradlew.bat runClient -PquickPlayWorld=SEELE_VISUAL_TEST_2 -PvisualCapture=true -PvisualCaptureUnit=mass
+        if errorlevel 1 exit /b 1
+        python tools\validate_visual_capture_run.py verify mass
+        if errorlevel 1 exit /b 1
     ) else if "%~2"=="" (
         echo Capturing the complete Unit-01 pose suite.
+        python tools\validate_visual_capture_run.py begin unit01
+        if errorlevel 1 exit /b 1
         call gradlew.bat runClient -PquickPlayWorld=SEELE_VISUAL_TEST_2 -PvisualCapture=true -PvisualCaptureUnit=unit01
+        if errorlevel 1 exit /b 1
+        python tools\validate_visual_capture_run.py verify unit01
+        if errorlevel 1 exit /b 1
     ) else if /i "%~2"=="unit01" (
         echo Capturing the complete Unit-01 pose suite.
+        python tools\validate_visual_capture_run.py begin unit01
+        if errorlevel 1 exit /b 1
         call gradlew.bat runClient -PquickPlayWorld=SEELE_VISUAL_TEST_2 -PvisualCapture=true -PvisualCaptureUnit=unit01
+        if errorlevel 1 exit /b 1
+        python tools\validate_visual_capture_run.py verify unit01
+        if errorlevel 1 exit /b 1
     ) else (
         echo Unknown visual target "%~2".
-        echo Use: visual unit01, visual unit00, visual unit02, visual mass, or visual impact.
+        echo Use: visual all, unit01, unit00, unit02, mass, or impact.
         pause
         exit /b 2
     )
