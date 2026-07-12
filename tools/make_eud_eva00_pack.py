@@ -19,7 +19,6 @@ SOURCE = REPO / "eud-1.1.0-forge-1.20.1.jar"
 BASE_GEO = REPO / "src/main/resources/assets/projectseele/geo/eva_unit00.geo.json"
 BASE_TEXTURE = REPO / "src/main/resources/assets/projectseele/textures/entity/eva_unit00.png"
 OUT = REPO / "run/resourcepacks/eva_real_model/assets/projectseele"
-SCALE = 1.05
 
 COLOURS = {
     "yellow": (226, 169, 30, 255),
@@ -134,23 +133,50 @@ def main():
         if name != "minecraft:air":
             voxels[tuple(block["pos"])] = colour_for(name)
 
-    geometry = json.loads(BASE_GEO.read_text(encoding="utf-8"))
-    bones = geometry["minecraft:geometry"][0]["bones"]
-    head = next(bone for bone in bones if bone["name"] == "head")
-    horn = next(bone for bone in bones if bone["name"] == "horn")
+    smod_geo = OUT / "geo/eva_unit01.geo.json"
+    smod_texture = OUT / "textures/entity/eva_unit01.png"
+    smod_animation = OUT / "animations/eva_unit01.animation.json"
+    detailed_body = smod_geo.exists() and smod_texture.exists() and smod_animation.exists()
+    geometry_source = smod_geo if detailed_body else BASE_GEO
+    texture_source = smod_texture if detailed_body else BASE_TEXTURE
+    geometry = json.loads(geometry_source.read_text(encoding="utf-8"))
+    geo = geometry["minecraft:geometry"][0]
+    geo["description"]["identifier"] = "geometry.eva_unit00"
+    bones = geo["bones"]
+    head_name = "Head" if detailed_body else "head"
+    head = next(bone for bone in bones if bone["name"] == head_name)
+    horn = next((bone for bone in bones if bone["name"] == "horn"), None)
     head["cubes"] = []
-    horn["cubes"] = []
+    if horn is not None:
+        horn["cubes"] = []
+
+    scale = 1.5 if detailed_body else 1.05
+    base_y = 168.0 if detailed_body else 148.0
 
     # The structure's face looks along X. Rotate it into Gecko's Z-facing
     # convention: source Z becomes model X and source X becomes model Z.
     for x, y, z, dx, dy, dz, colour in greedy_boxes(voxels):
         origin = [
-            (z - 10.0) * SCALE,
-            148.0 + y * SCALE,
-            (x - 8.5) * SCALE,
+            (z - 10.0) * scale,
+            base_y + y * scale,
+            (x - 8.5) * scale,
         ]
-        size = [dz * SCALE, dy * SCALE, dx * SCALE]
+        size = [dz * scale, dy * scale, dx * scale]
         head["cubes"].append({"origin": origin, "size": size, "uv": face_uv(colour)})
+
+    if detailed_body:
+        # Unit-00's defining cover shield follows the left forearm and is
+        # presented by the custom crouch animation below.
+        bones[:] = [bone for bone in bones if bone["name"] != "shield"]
+        forearm = next(bone for bone in bones if bone["name"] == "Lowerarm2")
+        px, py, pz = forearm["pivot"]
+        bones.append({
+            "name": "shield", "parent": "Lowerarm2", "pivot": [px, py, pz],
+            "cubes": [
+                {"origin": [px - 18, py - 58, pz - 10], "size": [36, 72, 6], "uv": [400, 80]},
+                {"origin": [px - 13, py - 52, pz - 13], "size": [26, 58, 4], "uv": [400, 0]},
+            ],
+        })
 
     geo_path = OUT / "geo/eva_unit00.geo.json"
     texture_path = OUT / "textures/entity/eva_unit00.png"
@@ -158,17 +184,40 @@ def main():
     texture_path.parent.mkdir(parents=True, exist_ok=True)
     geo_path.write_text(json.dumps(geometry, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
-    texture = Image.open(BASE_TEXTURE).convert("RGBA")
+    texture = Image.open(texture_source).convert("RGBA")
+    if detailed_body:
+        # Repaint SmOd Unit-01 purple armour into Unit-00 amber while keeping
+        # authored shading, panel seams, white pylons and green highlights.
+        pixels = texture.load()
+        for y in range(texture.height):
+            for x in range(texture.width):
+                r, g, b, a = pixels[x, y]
+                if a > 0 and b > r * 1.18 and b > g * 1.18 and r > 24:
+                    value = max(r, g, b)
+                    pixels[x, y] = (value, int(value * 0.57), int(value * 0.10), a)
     for name, rgba in COLOURS.items():
         texture.putpixel(tuple(UV_PIXEL[name]), rgba)
     texture.save(texture_path)
+
+    if detailed_body:
+        animation = json.loads(smod_animation.read_text(encoding="utf-8"))
+        for key in ("animation.eva_unit01.crouch", "animation.eva_unit01.crouch_walk"):
+            pose = animation["animations"][key]["bones"]
+            pose["Leftarm"] = {"rotation": {"0.0": [-101, 0, -8]}}
+            pose["Lowerarm2"] = {"rotation": {"0.0": [-10, 0, 0]}}
+            pose["Rightarm"] = {"rotation": {"0.0": [-92, 0, 14]}}
+            pose["Lowerarm"] = {"rotation": {"0.0": [-18, 0, 0]}}
+        animation_path = OUT / "animations/eva_unit00.animation.json"
+        animation_path.parent.mkdir(parents=True, exist_ok=True)
+        animation_path.write_text(json.dumps(animation, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
     note = REPO / "run/resourcepacks/eva_real_model/_SOURCE.txt"
     existing = note.read_text(encoding="utf-8") if note.exists() else ""
     line = "EUD Unit-00 voxel head structure: local testing only; CC BY-NC 4.0 attribution required."
     if line not in existing:
         note.write_text(existing.rstrip() + "\n" + line + "\n", encoding="utf-8")
-    print(f"Installed local EUD Unit-00 head: {len(voxels)} voxels -> {len(head['cubes'])} cuboids")
+    body = "SmOd articulated body" if detailed_body else "Project SEELE fallback body"
+    print(f"Installed local EUD Unit-00 head: {len(voxels)} voxels -> {len(head['cubes'])} cuboids on {body}")
 
 
 if __name__ == "__main__":

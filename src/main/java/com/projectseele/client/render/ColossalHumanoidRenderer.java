@@ -59,7 +59,8 @@ public class ColossalHumanoidRenderer<T extends LivingEntity> extends EntityRend
         {
             MassProductionEvaEntity mass = entity instanceof MassProductionEvaEntity mp ? mp : null;
             renderMassProduction(stack, consumer, walk,
-                    mass != null && mass.isReviving(), mass != null && mass.isRitualFormation());
+                    mass != null && mass.isReviving(), mass != null && mass.isRitualFormation(),
+                    mass != null ? mass.getAttackAnim(partialTick) : 0.0F);
         }
         stack.popPose();
         super.render(entity, yaw, partialTick, stack, buffers, packedLight);
@@ -86,7 +87,7 @@ public class ColossalHumanoidRenderer<T extends LivingEntity> extends EntityRend
     }
 
     private static void renderMassProduction(PoseStack stack, VertexConsumer c, float walk,
-                                             boolean reviving, boolean ritual)
+                                             boolean reviving, boolean ritual, float attack)
     {
         float fade = reviving ? 0.42F : 1.0F;
         float[] white = {0.88F, 0.86F, 0.80F, fade};
@@ -108,8 +109,10 @@ public class ColossalHumanoidRenderer<T extends LivingEntity> extends EntityRend
         {
             segment(stack, c, v(-3.7F,19.2F,0), v(-5.1F,13.6F + walk,0), 1.25F, white);
             segment(stack, c, v(-5.1F,13.6F + walk,0), v(-4.6F,8.0F + walk,0), 0.92F, dark);
-            segment(stack, c, v(3.7F,19.2F,0), v(5.1F,13.6F - walk,0), 1.25F, white);
-            segment(stack, c, v(5.1F,13.6F - walk,0), v(4.6F,8.0F - walk,0), 0.92F, dark);
+            float thrust = Mth.sin(attack * Mth.PI);
+            segment(stack, c, v(3.7F,19.2F,0), v(5.1F,14.0F - walk,-5.0F * thrust), 1.25F, white);
+            segment(stack, c, v(5.1F,14.0F - walk,-5.0F * thrust),
+                    v(4.6F,9.0F - walk,-11.0F * thrust), 0.92F, dark);
         }
         segment(stack, c, v(-1.8F,10.5F,0), v(-2.3F,5.3F - walk,0), 1.30F, white);
         segment(stack, c, v(-2.3F,5.3F - walk,0), v(-2.0F,0.8F,0), 1.0F, dark);
@@ -121,8 +124,10 @@ public class ColossalHumanoidRenderer<T extends LivingEntity> extends EntityRend
         segment(stack, c, v(2.6F,18.0F,1.5F), v(15.0F,25.0F,5.0F), 0.72F, white);
         segment(stack, c, v(2.8F,16.0F,1.5F), v(13.0F,10.0F,6.0F), 0.64F, white);
         // Double-bladed replica spear.
-        segment(stack, c, v(4.6F,8.0F,0), v(5.8F,-1.0F,-1.0F), 0.32F, dark);
-        segment(stack, c, v(5.8F,-1.0F,-1.0F), v(5.0F,-5.0F,-1.3F), 0.52F, red);
+        float spearThrust = ritual ? 0.0F : Mth.sin(attack * Mth.PI) * 10.0F;
+        segment(stack, c, v(4.6F,8.0F,-spearThrust), v(5.8F,-1.0F,-1.0F - spearThrust), 0.32F, dark);
+        segment(stack, c, v(5.8F,-1.0F,-1.0F - spearThrust),
+                v(5.0F,-5.0F,-1.3F - spearThrust), 0.52F, red);
     }
 
     private static void renderShamshel(PoseStack stack, VertexConsumer c, float time)

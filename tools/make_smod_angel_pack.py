@@ -60,6 +60,19 @@ def main():
                         "Leftleg": {"rotation": {"0.0": [-2, 0, -2]}},
                     },
                 }
+                animation["animations"]["animation.entity_mp.attack"] = {
+                    "animation_length": 0.62,
+                    "bones": {
+                        "Rightarm": {"rotation": {"0.0": [18, 0, -14], "0.14": [-108, -8, 5],
+                                                    "0.38": [-92, -4, 3], "0.62": [0, 0, 0]}},
+                        "Lowerarm": {"rotation": {"0.0": [26, 0, 0], "0.14": [-8, 0, 0],
+                                                   "0.62": [0, 0, 0]}},
+                        "Leftarm": {"rotation": {"0.0": [-34, 0, 18], "0.14": [-62, 0, 24],
+                                                  "0.62": [0, 0, 0]}},
+                        "Upperbody": {"rotation": {"0.0": [0, -10, 0], "0.14": [0, 8, 0],
+                                                    "0.62": [0, 0, 0]}},
+                    },
+                }
             texture = read_unique(archive, source["texture"])
 
             geo_path = OUT / "geo" / f"{target}.geo.json"

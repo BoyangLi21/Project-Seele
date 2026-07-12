@@ -3,6 +3,7 @@ package com.projectseele.entity;
 import com.projectseele.fx.CrossExplosionFX;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
@@ -17,6 +18,7 @@ import software.bernie.geckolib.core.animatable.instance.AnimatableInstanceCache
 import software.bernie.geckolib.core.animation.AnimatableManager;
 import software.bernie.geckolib.core.animation.AnimationController;
 import software.bernie.geckolib.core.animation.RawAnimation;
+import software.bernie.geckolib.core.object.PlayState;
 import software.bernie.geckolib.util.GeckoLibUtil;
 
 /** White SEELE mass-production unit. It revives until an EVA knife destroys its exposed core. */
@@ -25,6 +27,7 @@ public class MassProductionEvaEntity extends Monster implements GeoEntity
     private static final RawAnimation ANIM_IDLE = RawAnimation.begin().thenLoop("animation.entity_mp.idle_1");
     private static final RawAnimation ANIM_WALK = RawAnimation.begin().thenLoop("animation.entity_mp.move");
     private static final RawAnimation ANIM_RITUAL = RawAnimation.begin().thenLoop("animation.entity_mp.ritual");
+    private static final RawAnimation ANIM_ATTACK = RawAnimation.begin().thenPlay("animation.entity_mp.attack");
     private final AnimatableInstanceCache geoCache = GeckoLibUtil.createInstanceCache(this);
     private int reviveTicks;
     private boolean coreBroken;
@@ -88,6 +91,8 @@ public class MassProductionEvaEntity extends Monster implements GeoEntity
         if (distance < 12.0D && --this.attackCooldown <= 0)
         {
             this.attackCooldown = 24;
+            this.swing(InteractionHand.MAIN_HAND, true);
+            this.triggerAnim("strike", "attack");
             target.hurt(this.damageSources().mobAttack(this), 34.0F);
             target.push(delta.x * 0.05D, 0.3D, delta.z * 0.05D);
         }
@@ -138,6 +143,8 @@ public class MassProductionEvaEntity extends Monster implements GeoEntity
             }
             return state.setAndContinue(state.isMoving() ? ANIM_WALK : ANIM_IDLE);
         }));
+        controllers.add(new AnimationController<>(this, "strike", 2, state -> PlayState.STOP)
+                .triggerableAnim("attack", ANIM_ATTACK));
     }
 
     @Override
