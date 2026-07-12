@@ -1778,6 +1778,37 @@
         }
       }
     },
+    "animation.eva_unit01.prone_aim": {
+      "loop": true,
+      "animation_length": 1.2,
+      "bones": {
+        "arm_r": {
+          "rotation": {
+            "0.0": [-66, -3, -5],
+            "0.6": [-67, -3, -5],
+            "1.2": [-66, -3, -5]
+          }
+        },
+        "forearm_r": {
+          "rotation": {
+            "0.0": [-24, 0, 0]
+          }
+        },
+        "arm_l": {
+          "rotation": {
+            "0.0": [-64, 22, 9],
+            "0.6": [-65, 22, 9],
+            "1.2": [-64, 22, 9]
+          }
+        },
+        "forearm_l": {
+          "rotation": {
+            "0.0": [-30, 16, 0]
+          }
+        }
+      }
+    },
+
     "animation.eva_unit01.stomp": {
       "loop": false,
       "animation_length": 0.72,

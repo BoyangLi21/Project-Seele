@@ -30,7 +30,7 @@ import net.minecraftforge.network.PacketDistributor;
 public final class VisualLabCommands
 {
     private static final String[] POSES = {
-            "normal", "idle", "walk_contact", "crouch", "prone",
+            "normal", "idle", "walk_contact", "crouch", "prone", "prone_cannon",
             "knife_windup", "knife_contact", "knife_recovery",
             "lance_windup", "lance_contact", "lance_recovery", "cannon"
     };
@@ -163,6 +163,7 @@ public final class VisualLabCommands
             case "knife_recovery" -> EvaUnit01Entity.VISUAL_KNIFE_RECOVERY;
             case "crouch" -> EvaUnit01Entity.VISUAL_CROUCH;
             case "prone" -> EvaUnit01Entity.VISUAL_PRONE;
+            case "prone_cannon" -> EvaUnit01Entity.VISUAL_PRONE_CANNON;
             case "lance_windup" -> EvaUnit01Entity.VISUAL_LANCE_WINDUP;
             case "lance_contact" -> EvaUnit01Entity.VISUAL_LANCE_CONTACT;
             case "lance_recovery" -> EvaUnit01Entity.VISUAL_LANCE_RECOVERY;

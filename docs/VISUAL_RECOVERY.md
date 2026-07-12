@@ -98,8 +98,9 @@ Local SmOd evaluation evidence (not redistributable):
 | Knife timing/weight | BLOCKED | Still images establish joint continuity but not perceived timing or impact weight; requires the same user clip. |
 | Crouch/prone camera | PASS | `unit01_first_person_clean_crouch.png` and `unit01_first_person_clean_prone.png` clear the chest shell; their `pitch_down` frames show the real shared arms/body instead of a detached viewmodel. |
 | Cannon connection | PASS | `unit01_side_close_cannon.png`, `unit01_side_opposite_close_cannon.png`, and `unit01_first_person_pitch_down_cannon.png`: the cannon begins at the right-hand socket and the left arm reaches the support area without tilting the torso sideways. |
+| Prone cannon brace | PENDING | Dedicated `prone_cannon` capture now verifies the low two-handed firing state separately from the weight-bearing crawl arms. |
 | Longinus thrust | PASS | `unit01_front_close_lance_windup.png`, `unit01_side_close_lance_contact.png`, and `unit01_front_close_lance_recovery.png`: both arms converge on one shaft line through pull-back, thrust, and lowered recovery. Local geometry is EUD-derived and remains non-publishable. |
-| Unit-01 face | PROTOTYPE | `unit01_face_close_idle.png`: removes distorted head scaling and supplies yellow eyes, a narrower purple jaw and green cheek accents. It is still generated block geometry, not a final editable model. |
+| Unit-01 face | SOURCE RESTORED | The rejected procedural mask has been removed. Local evaluation uses SmOd's original head and authored proportions unchanged; a production replacement still needs an editable, approved source model. |
 
 The Visual Lab now uses the fixed isolated origin `(4096, 64, 4096)`, captures
 both side close-ups, and automatically closes the unattended client after the

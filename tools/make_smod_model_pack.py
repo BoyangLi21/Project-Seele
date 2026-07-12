@@ -144,38 +144,6 @@ def weapon_bones(bones, eud_lance=None):
     ]
 
 
-def solid_uv(x, y):
-    return {name: {"uv": [x, y], "uv_size": [2, 2]}
-            for name in ("north", "east", "south", "west", "up", "down")}
-
-
-def add_unit01_face(bones):
-    """Overlay an original Unit-01 mask on SmOd's overly square base head."""
-    bones.append({
-        "name": "Unit01FaceMask",
-        "parent": "Head",
-        "pivot": [0, 174, -15],
-        "cubes": [
-            {"origin": [-5, 175, -18], "size": [10, 9, 5], "uv": solid_uv(480, 130)},
-            {"origin": [-8, 169, -19], "size": [16, 6, 4], "uv": solid_uv(480, 178)},
-            {"origin": [-7, 171.5, -20], "size": [5, 1.8, 1.5], "uv": solid_uv(480, 162),
-             "rotation": [0, 0, -7], "pivot": [-2, 172, -20]},
-            {"origin": [2, 171.5, -20], "size": [5, 1.8, 1.5], "uv": solid_uv(480, 162),
-             "rotation": [0, 0, 7], "pivot": [2, 172, -20]},
-            {"origin": [-9, 162, -18.5], "size": [6, 8, 4], "uv": solid_uv(480, 130),
-             "rotation": [0, 0, -10], "pivot": [-3, 169, -17]},
-            {"origin": [3, 162, -18.5], "size": [6, 8, 4], "uv": solid_uv(480, 130),
-             "rotation": [0, 0, 10], "pivot": [3, 169, -17]},
-            {"origin": [-8, 164, -19.5], "size": [2, 5, 1.5], "uv": solid_uv(480, 146)},
-            {"origin": [6, 164, -19.5], "size": [2, 5, 1.5], "uv": solid_uv(480, 146)},
-            {"origin": [-5, 157, -18], "size": [10, 7, 5], "uv": solid_uv(480, 130)},
-            {"origin": [-3.5, 151, -17.5], "size": [7, 7, 4.5], "uv": solid_uv(480, 130)},
-            {"origin": [-3, 149, -17], "size": [6, 3, 4], "uv": solid_uv(480, 178)},
-            {"origin": [-1.5, 158, -19.2], "size": [3, 3, 1.5], "uv": solid_uv(480, 146)},
-        ],
-    })
-
-
 def scale_geometry(data, eud_lance=None, unit=1):
     geometry = data["minecraft:geometry"][0]
     description = geometry["description"]
@@ -199,8 +167,6 @@ def scale_geometry(data, eud_lance=None, unit=1):
                         face["uv"] = scale_values(face["uv"], SCALE)
                     if "uv_size" in face:
                         face["uv_size"] = scale_values(face["uv_size"], SCALE)
-    if unit == 1:
-        add_unit01_face(geometry["bones"])
     geometry["bones"].extend(weapon_bones(geometry["bones"], eud_lance))
     data["format_version"] = "1.12.0"
     return data
@@ -397,6 +363,18 @@ def install_smod_pose_overrides(output):
             "Lowerarm2": {"rotation": {"0.0": [-36, 14, 0]}},
         },
     }
+    # Low two-handed firing brace. This controller only owns the arm chains;
+    # the base prone animation remains responsible for torso, pelvis and legs.
+    output["animation.eva_unit01.prone_aim"] = {
+        "loop": True,
+        "animation_length": 1.2,
+        "bones": {
+            "Rightarm": {"rotation": {"0.0": [-66, -3, -5], "0.6": [-67, -3, -5], "1.2": [-66, -3, -5]}},
+            "Lowerarm": {"rotation": {"0.0": [-24, 0, 0]}},
+            "Leftarm": {"rotation": {"0.0": [-64, 22, 9], "0.6": [-65, 22, 9], "1.2": [-64, 22, 9]}},
+            "Lowerarm2": {"rotation": {"0.0": [-30, 16, 0]}},
+        },
+    }
     # Two-handed Longinus thrust. Both hands stay on the same shaft line:
     # compact pull-back, full-body forward contact, then controlled recovery.
     output["animation.eva_unit01.lance_thrust"] = {
@@ -493,13 +471,8 @@ def render_texture(source_path, target_path, lance_path=None):
         "$metal=New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(255,66,72,86));"
         "$dark=New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(255,30,34,43));"
         "$red=New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(255,196,14,28));"
-        "$purple=New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(255,88,26,148));"
-        "$green=New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(255,75,220,38));"
-        "$gold=New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(255,225,171,31));"
         "$g.FillRectangle($steel,400,0,42,72);$g.FillRectangle($metal,400,80,72,128);"
         "$g.FillRectangle($dark,472,80,32,40);$g.FillRectangle($red,400,220,104,148);"
-        "$g.FillRectangle($purple,480,130,16,16);$g.FillRectangle($green,480,146,16,16);"
-        "$g.FillRectangle($gold,480,162,16,16);$g.FillRectangle($dark,480,178,16,16);"
         f"{lance_draw}$g.Dispose();"
         f"$bmp.Save('{target_path}',[System.Drawing.Imaging.ImageFormat]::Png);$bmp.Dispose();"
     )
@@ -551,6 +524,12 @@ def main():
         "Lance of Longinus geometry/texture from EUD 1.1.0 (CC BY-NC 4.0).\n"
         "LOCAL TESTING ONLY. Do not commit or redistribute this generated pack.\n"
         "Obtain the authors' explicit permission before public use.\n", encoding="utf-8")
+    # The base generator replaces the entire pack. Reinstall every local-only
+    # extension immediately so Unit-00, Mass Production EVA and Angels cannot
+    # silently disappear after a Unit-01/02 rebuild.
+    subprocess.run([sys.executable, str(REPO / "tools/make_smod_angel_pack.py"), str(SOURCE)], check=True)
+    if EUD_SOURCE.exists():
+        subprocess.run([sys.executable, str(REPO / "tools/make_eud_eva00_pack.py")], check=True)
     print(f"local pack written -> {OUT}")
 
 

@@ -135,6 +135,16 @@ def main():
             "cabeza": {"rotation": {"0.0": [-3, 4, 0]}},
         },
     }
+    out_anims["animation.eva_unit01.prone_aim"] = {
+        "loop": True,
+        "animation_length": 0.5,
+        "bones": {
+            "brazoderecho": {"rotation": {"0.0": [-112, -8, -10]}},
+            "brazoderechobajo": {"rotation": {"0.0": [-34, 0, 0]}},
+            "brazoizquierda": {"rotation": {"0.0": [-108, 14, 22]}},
+            "brazobajo": {"rotation": {"0.0": [-30, -8, -4]}},
+        },
+    }
     out_anims["animation.eva_unit01.crouch"] = {
         "loop": True,
         "animation_length": 1.2,

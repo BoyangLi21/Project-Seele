@@ -17,7 +17,7 @@ public final class VisualLabAutomation
 {
     private static final boolean ENABLED = Boolean.getBoolean("projectseele.visualCapture");
     private static final String[] ALL_POSES = {
-            "idle", "walk_contact", "crouch", "prone",
+            "idle", "walk_contact", "crouch", "prone", "prone_cannon",
             "knife_windup", "knife_contact", "knife_recovery",
             "lance_windup", "lance_contact", "lance_recovery", "cannon"
     };

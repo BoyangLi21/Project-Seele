@@ -305,6 +305,7 @@ public final class VisualCaptureManager
                 case EvaUnit01Entity.VISUAL_KNIFE_RECOVERY -> "knife_recovery";
                 case EvaUnit01Entity.VISUAL_CROUCH -> "crouch";
                 case EvaUnit01Entity.VISUAL_PRONE -> "prone";
+                case EvaUnit01Entity.VISUAL_PRONE_CANNON -> "prone_cannon";
                 case EvaUnit01Entity.VISUAL_LANCE_WINDUP -> "lance_windup";
                 case EvaUnit01Entity.VISUAL_LANCE_CONTACT -> "lance_contact";
                 case EvaUnit01Entity.VISUAL_LANCE_RECOVERY -> "lance_recovery";

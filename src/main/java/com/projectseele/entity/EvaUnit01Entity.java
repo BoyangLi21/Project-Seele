@@ -83,6 +83,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     public static final int VISUAL_LANCE_CONTACT = 9;
     public static final int VISUAL_LANCE_RECOVERY = 10;
     public static final int VISUAL_CANNON = 11;
+    public static final int VISUAL_PRONE_CANNON = 12;
 
     private static final float MELEE_FIST_DAMAGE = 20.0F;
     private static final float MELEE_KNIFE_DAMAGE = 60.0F;
@@ -159,6 +160,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     private static final RawAnimation ANIM_CRUCIFIED = RawAnimation.begin().thenLoop("animation.eva_unit01.crucified");
     private static final RawAnimation ANIM_CRAWL = RawAnimation.begin().thenLoop("animation.eva_unit01.crawl");
     private static final RawAnimation ANIM_AIM = RawAnimation.begin().thenLoop("animation.eva_unit01.aim");
+    private static final RawAnimation ANIM_PRONE_AIM = RawAnimation.begin().thenLoop("animation.eva_unit01.prone_aim");
     private static final RawAnimation ANIM_MELEE = RawAnimation.begin().thenPlay("animation.eva_unit01.melee");
     private static final RawAnimation ANIM_MELEE_LEFT = RawAnimation.begin().thenPlay("animation.eva_unit01.melee_left");
     private static final RawAnimation ANIM_KNIFE = RawAnimation.begin().thenPlay("animation.eva_unit01.knife");
@@ -343,14 +345,14 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     /** Development-only fixed pose used by the screenshot Visual Lab. */
     public void setVisualPose(int pose)
     {
-        int safePose = Mth.clamp(pose, VISUAL_NORMAL, VISUAL_CANNON);
+        int safePose = Mth.clamp(pose, VISUAL_NORMAL, VISUAL_PRONE_CANNON);
         this.entityData.set(DATA_VISUAL_POSE, safePose);
         if (safePose == VISUAL_KNIFE_WINDUP || safePose == VISUAL_KNIFE_CONTACT
                 || safePose == VISUAL_KNIFE_RECOVERY)
         {
             this.entityData.set(DATA_WEAPON, WEAPON_KNIFE);
         }
-        else if (safePose == VISUAL_CANNON)
+        else if (safePose == VISUAL_CANNON || safePose == VISUAL_PRONE_CANNON)
         {
             this.entityData.set(DATA_WEAPON, WEAPON_CANNON);
         }
@@ -1132,7 +1134,8 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         // SmOd's head tops out higher than the placeholder skeleton's, so the
         // standing height is per-family.
         double standing = this.getUnitVariant() == UNIT_00 ? 25.4D : 27.2D;
-        boolean proneView = this.isPilotProne() || this.getVisualPose() == VISUAL_PRONE;
+        boolean proneView = this.isPilotProne() || this.getVisualPose() == VISUAL_PRONE
+                || this.getVisualPose() == VISUAL_PRONE_CANNON;
         boolean crouchView = this.isPilotCrouching() || this.getVisualPose() == VISUAL_CROUCH;
         // Bent stances move SmOd's head forward with the torso. Reusing the
         // standing socket leaves the camera inside the chest; prone also
@@ -1213,6 +1216,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
                 case VISUAL_LANCE_CONTACT -> { return state.setAndContinue(ANIM_VISUAL_LANCE_CONTACT); }
                 case VISUAL_LANCE_RECOVERY -> { return state.setAndContinue(ANIM_VISUAL_LANCE_RECOVERY); }
                 case VISUAL_CANNON -> { return state.setAndContinue(ANIM_VISUAL_CANNON); }
+                case VISUAL_PRONE_CANNON -> { return state.setAndContinue(ANIM_PRONE); }
                 default -> { }
             }
             if (this.getActivationTicks() > 0)
@@ -1242,8 +1246,14 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         }));
         controllers.add(new AnimationController<>(this, "arms", 8, state ->
         {
-            if (this.getVisualPose() == VISUAL_NORMAL && this.getWeapon() == WEAPON_CANNON
-                    && !this.isPilotCrouching() && !this.isPilotProne())
+            if (this.getWeapon() == WEAPON_CANNON
+                    && (this.isPilotProne() || this.getVisualPose() == VISUAL_PRONE_CANNON))
+            {
+                return state.setAndContinue(ANIM_PRONE_AIM);
+            }
+            if (this.getWeapon() == WEAPON_CANNON
+                    && !this.isPilotCrouching() && !this.isPilotProne()
+                    && (this.getVisualPose() == VISUAL_NORMAL || this.getVisualPose() == VISUAL_CANNON))
             {
                 return state.setAndContinue(ANIM_AIM);
             }
