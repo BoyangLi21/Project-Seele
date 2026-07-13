@@ -61,18 +61,21 @@ VIEW_AXES = {
 # model pixel as 1/16 block and EvaUnit01Renderer applies scale 2.5.
 MODEL_PIXELS_PER_BLOCK = 16.0 / 2.5
 FIRST_PERSON_SOCKETS = {
-    "standing": {"eye_height": 24.8, "forward": 5.0},
-    "crouch": {"eye_height": 15.75, "forward": 4.0},
-    "prone": {"eye_height": 10.8, "forward": 10.2},
+    "standing": {"eye_height": 24.63, "forward": 3.70},
+    "crouch": {"eye_height": 19.70, "forward": 0.80},
+    "prone": {"eye_height": 10.80, "forward": -10.20},
 }
 FIRST_PERSON_PITCH = {
     "forward": 12.0,
     "pitch_down": 70.0,
 }
 FIRST_PERSON_HIDDEN_ROOTS = {
-    "head", "Head", "Neck", "horn", "pylon_l", "pylon_r",
+    "head", "Head", "horn", "Horn", "neck", "Neck",
 }
-PRONE_FIRST_PERSON_HIDDEN_PARTS = {"torso_lower", "torso_upper"}
+LOW_STANCE_FIRST_PERSON_HIDDEN_PARTS = {
+    "crouch": {"torso_lower", "torso_upper"},
+    "prone": {"torso_lower", "torso_upper"},
+}
 
 
 def model_identity(mesh_path):
@@ -378,9 +381,11 @@ def first_person_camera(stance, view, eye_height=None, forward_offset=None,
                         right_offset=None):
     """Return camera position and orthonormal axes in model-pixel space.
 
-    Tiger's animated hands move toward +Z, matching the real rider's positive
-    forward socket in the established in-game captures.  The mesh emitter
-    reflects model X, hence screen-right is model -X.
+    Tiger/SmOd's face and horn point toward local -Z. ``forward`` uses the
+    signed Java positionRider convention: yaw zero maps a negative value to
+    the rig's local +Z, so model-space camera Z is ``-forward``.  The prone
+    spine rotates its head pivot far into +Z, while view direction remains -Z.
+    The mesh emitter reflects model X, hence screen-right is model -X.
     """
     socket = FIRST_PERSON_SOCKETS[stance]
     effective_eye_height = (socket["eye_height"] if eye_height is None
@@ -392,10 +397,10 @@ def first_person_camera(stance, view, eye_height=None, forward_offset=None,
     effective_right = 0.0 if right_offset is None else float(right_offset)
     camera = (effective_right * MODEL_PIXELS_PER_BLOCK,
               effective_eye_height * MODEL_PIXELS_PER_BLOCK,
-              effective_forward * MODEL_PIXELS_PER_BLOCK)
+              -effective_forward * MODEL_PIXELS_PER_BLOCK)
     right = (-1.0, 0.0, 0.0)
-    forward = (0.0, -math.sin(pitch), math.cos(pitch))
-    up = (0.0, math.cos(pitch), math.sin(pitch))
+    forward = (0.0, -math.sin(pitch), -math.cos(pitch))
+    up = (0.0, math.cos(pitch), -math.sin(pitch))
     return (camera, right, up, forward, pitch_degrees,
             effective_eye_height, effective_forward)
 
@@ -455,13 +460,13 @@ def collect_first_person_scene(mesh, texture_path, matrices, pivots, parents,
         stance, view, eye_height, forward_offset, right_offset)
     near = near_blocks * MODEL_PIXELS_PER_BLOCK
     tangent = math.tan(math.radians(fov) / 2.0)
-    hidden = hidden_bones(parents, FIRST_PERSON_HIDDEN_ROOTS)
-    if stance == "prone":
-        hidden.update(PRONE_FIRST_PERSON_HIDDEN_PARTS)
+    camera_cover_hidden = hidden_bones(parents, FIRST_PERSON_HIDDEN_ROOTS)
+    exact_hidden = set(LOW_STANCE_FIRST_PERSON_HIDDEN_PARTS.get(stance, ()))
     # Preview-only exact mesh-part suppression. Unlike the renderer's camera
     # roots this deliberately does not hide descendants, so a pylon comparison
     # cannot accidentally remove the shared torso/arm hierarchy.
-    hidden.update(extra_hidden)
+    exact_hidden.update(extra_hidden)
+    hidden = camera_cover_hidden | exact_hidden
     triangles = []
     visible_bounds = {}
     for source_mesh, source_texture in ((mesh, texture_path), *attachments):
@@ -549,12 +554,18 @@ def collect_first_person_scene(mesh, texture_path, matrices, pivots, parents,
         "source_contract": {
             "renderer_scale": 2.5,
             "model_pixels_per_block": MODEL_PIXELS_PER_BLOCK,
+            "model_forward_axis": "local -Z (horn direction)",
+            "camera_local_position_model_pixels": [round(value, 4) for value in camera],
+            "view_forward_model": [round(value, 6) for value in forward],
             "eye_height_blocks": effective_eye_height,
             "forward_blocks": effective_forward,
             "pitch_degrees": pitch,
             "vertical_fov_degrees": fov,
             "aspect": aspect,
             "near_plane_blocks": near_blocks,
+            "camera_cover_hidden_bones": sorted(
+                camera_cover_hidden.intersection(mesh["parts"])),
+            "exact_hidden_mesh_parts": sorted(exact_hidden.intersection(mesh["parts"])),
             "hidden_bones": sorted(hidden.intersection(mesh["parts"])),
         },
         "left_arm": left,
@@ -597,13 +608,24 @@ def pose_metrics(mesh, matrices, pivots, positions, attachments=()):
             values = part["vertices"]
             minimum = float("inf")
             maximum = float("-inf")
+            minimum_xyz = [float("inf"), float("inf"), float("inf")]
+            maximum_xyz = [float("-inf"), float("-inf"), float("-inf")]
             for index in range(0, len(values), stride):
                 absolute = [values[index + axis] + part["pivot"][axis] for axis in range(3)]
-                y = transform(matrices[bone], absolute)[1]
+                posed = transform(matrices[bone], absolute)
+                y = posed[1]
                 minimum = min(minimum, y)
                 maximum = max(maximum, y)
+                for axis in range(3):
+                    minimum_xyz[axis] = min(minimum_xyz[axis], posed[axis])
+                    maximum_xyz[axis] = max(maximum_xyz[axis], posed[axis])
             key = bone if mesh_index == 0 else f"attachment:{bone}"
-            bone_bounds[key] = {"min_y": round(minimum, 4), "max_y": round(maximum, 4)}
+            bone_bounds[key] = {
+                "min_y": round(minimum, 4),
+                "max_y": round(maximum, 4),
+                "min_xyz": [round(value, 4) for value in minimum_xyz],
+                "max_xyz": [round(value, 4) for value in maximum_xyz],
+            }
             overall_minimum = min(overall_minimum, minimum)
             overall_maximum = max(overall_maximum, maximum)
     joints = {bone: [round(value, 4) for value in transform(matrix, pivots[bone])]

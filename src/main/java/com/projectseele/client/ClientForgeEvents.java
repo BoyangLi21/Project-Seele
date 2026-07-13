@@ -277,6 +277,10 @@ public final class ClientForgeEvents
         {
             return;
         }
+        // Suppress the player's normal item/skin hands. The EVA is already
+        // rendered once in world space by EvaUnit01Renderer; drawing it again
+        // here would create a second camera-space pose that can never remain
+        // identical to the third-person skeleton.
         event.setCanceled(true);
     }
 

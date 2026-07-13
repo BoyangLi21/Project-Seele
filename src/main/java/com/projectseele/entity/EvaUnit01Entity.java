@@ -133,6 +133,8 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     private static final double SILO_ENTRY_MIN_DISTANCE = 4.0D;
     private static final double SILO_ENTRY_MAX_DISTANCE = 11.0D;
     private static final int NO_LAUNCH_CARRIER = Integer.MIN_VALUE;
+    /** Mechanical elevation limit of the shared cannon/body aim rig. */
+    public static final float MAX_CANNON_AIM_PITCH = 20.0F;
 
     private static final EntityDataAccessor<Integer> DATA_WEAPON =
             SynchedEntityData.defineId(EvaUnit01Entity.class, EntityDataSerializers.INT);
@@ -144,6 +146,8 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             SynchedEntityData.defineId(EvaUnit01Entity.class, EntityDataSerializers.INT);
     private static final EntityDataAccessor<Integer> DATA_CANNON_COOLDOWN =
             SynchedEntityData.defineId(EvaUnit01Entity.class, EntityDataSerializers.INT);
+    private static final EntityDataAccessor<Float> DATA_CANNON_AIM_PITCH =
+            SynchedEntityData.defineId(EvaUnit01Entity.class, EntityDataSerializers.FLOAT);
     private static final EntityDataAccessor<Boolean> DATA_CROUCHING =
             SynchedEntityData.defineId(EvaUnit01Entity.class, EntityDataSerializers.BOOLEAN);
     private static final EntityDataAccessor<Boolean> DATA_SPRINTING =
@@ -249,6 +253,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         this.entityData.define(DATA_AT_ENERGY, AT_FIELD_MAX);
         this.entityData.define(DATA_CANNON_CHARGE, 0);
         this.entityData.define(DATA_CANNON_COOLDOWN, 0);
+        this.entityData.define(DATA_CANNON_AIM_PITCH, 0.0F);
         this.entityData.define(DATA_CROUCHING, false);
         this.entityData.define(DATA_SPRINTING, false);
         this.entityData.define(DATA_PRONE, false);
@@ -384,6 +389,15 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     public int getCannonCooldown()
     {
         return this.entityData.get(DATA_CANNON_COOLDOWN);
+    }
+
+    /**
+     * Physical barrel elevation shared by the visible Gecko rig and the shot
+     * ray. Positive pitch points down, matching {@link Player#getXRot()}.
+     */
+    public float getCannonAimPitch()
+    {
+        return this.entityData.get(DATA_CANNON_AIM_PITCH);
     }
 
     public boolean isPilotCrouching()
@@ -557,6 +571,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             this.entityData.set(DATA_WEAPON, WEAPON_FISTS);
             this.entityData.set(DATA_VISUAL_POSE, VISUAL_NORMAL);
             this.entityData.set(DATA_CANNON_CHARGE, 0);
+            this.entityData.set(DATA_CANNON_AIM_PITCH, 0.0F);
             this.entityData.set(DATA_CROUCHING, false);
             this.entityData.set(DATA_PRONE, false);
             this.entityData.set(DATA_SPRINTING, false);
@@ -597,6 +612,10 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         int next = (this.getWeapon() + 1) % 4;
         this.entityData.set(DATA_WEAPON, next);
         this.entityData.set(DATA_CANNON_CHARGE, 0);
+        if (next != WEAPON_CANNON)
+        {
+            this.entityData.set(DATA_CANNON_AIM_PITCH, 0.0F);
+        }
         this.chargingHeld = false;
         String key = switch (next)
         {
@@ -910,8 +929,17 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     private void fireCannon(ServerLevel level, ServerPlayer pilot)
     {
         this.triggerAnim("strike", "cannon_fire");
-        Vec3 from = pilot.getEyePosition();
-        Vec3 dir = pilot.getLookAngle();
+        // The beam follows the same mechanically limited elevation rendered on
+        // torso_upper. Using the unconstrained camera look here would let the
+        // hit ray leave the visible barrel at steep pitch angles.
+        Vec3 dir = Vec3.directionFromRotation(this.getCannonAimPitch(), this.getYRot());
+        // Match the reviewed hand/receiver pivots of the authored standing and
+        // prone cannon stances. A fixed standing-height muzzle would otherwise
+        // fire more than sixteen blocks above the visible prone weapon.
+        double receiverHeight = this.isPilotProne() ? 2.55D : 22.35D;
+        Vec3 muzzle = this.position().add(0.0D, receiverHeight, 0.0D)
+                .add(dir.scale(12.5D));
+        Vec3 from = muzzle;
         double range = SeeleConfig.CANNON_RANGE.get();
         Vec3 farEnd = from.add(dir.scale(range));
         BlockHitResult blockHit = level.clip(
@@ -943,10 +971,6 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
                 SeeleConfig.CANNON_EXPLOSION_RADIUS.get().floatValue(), Level.ExplosionInteraction.MOB);
         final Vec3 impact = end;
 
-        // Muzzle roughly at the cannon barrel, right hand height.
-        Vec3 muzzle = this.position()
-                .add(this.getForward().scale(8.75D))
-                .add(0.0D, 18.75D, 0.0D);
         SeeleNetwork.CHANNEL.send(PacketDistributor.TRACKING_ENTITY_AND_SELF.with(() -> this),
                 new ClientboundCannonBeamPacket(muzzle.x, muzzle.y, muzzle.z, end.x, end.y, end.z));
         SeeleNetwork.CHANNEL.send(PacketDistributor.NEAR.with(() -> new PacketDistributor.TargetPoint(
@@ -1547,18 +1571,31 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     @Override
     protected void tickRidden(Player player, Vec3 input)
     {
+        if (!this.level().isClientSide)
+        {
+            float aimPitch = !this.isCrucified()
+                    && !this.isPilotControlLocked()
+                    && this.getWeapon() == WEAPON_CANNON
+                    ? Mth.clamp(player.getXRot(), -MAX_CANNON_AIM_PITCH, MAX_CANNON_AIM_PITCH)
+                    : 0.0F;
+            if (Math.abs(this.getCannonAimPitch() - aimPitch) > 0.01F)
+            {
+                this.entityData.set(DATA_CANNON_AIM_PITCH, aimPitch);
+            }
+        }
         if (this.isCrucified())
         {
             // Nailed to the Tree: no steering, no movement; V still ejects.
             return;
         }
         super.tickRidden(player, input);
-        // The Unit turns with the pilot's view, horse-style.
-        this.setRot(player.getYRot(), player.getXRot() * 0.5F);
+        // Yaw steers the chassis; camera pitch remains pilot-only input. Cannon
+        // elevation is synchronized separately and applied to the one world
+        // skeleton, so the entire EVA never pitches with the camera.
+        this.setRot(player.getYRot(), 0.0F);
         this.yRotO = this.yBodyRot = this.yHeadRot = this.getYRot();
-        // The player renderer is cancelled client-side while mounted. Keep
-        // the entity itself visible so Forge still fires first-person hand
-        // rendering events for the dedicated cockpit arms.
+        // The player renderer is cancelled client-side while mounted. Do not
+        // leave the pilot invisibility flag set after an older cockpit pass.
         if (player.isInvisible())
         {
             player.setInvisible(false);
@@ -1571,6 +1608,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         super.removePassenger(passenger);
         this.chargingHeld = false;
         this.entityData.set(DATA_CANNON_CHARGE, 0);
+        this.entityData.set(DATA_CANNON_AIM_PITCH, 0.0F);
         this.entityData.set(DATA_ACTIVATION_TICKS, 0);
         if (this.isLaunchSequenceActive())
         {
@@ -1694,9 +1732,9 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         {
             return;
         }
-        // The pilot rides at head height: first person is the Unit's own eyes.
-        // The normal world body remains rendered; only the enclosing head
-        // shell is clipped by the renderer.
+        // The pilot rides at the animated rig's head socket. First person sees
+        // the same world entity and the same evaluated bones as third person;
+        // this socket changes only with whole-body stance, never with weapon.
         float rad = (float) Math.toRadians(this.yBodyRot);
         // All three reviewed Tiger bodies share the same 192-pixel height and
         // semantic rig contract. Keep one eye-socket calculation so Unit-00
@@ -1704,21 +1742,14 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         boolean proneView = this.isPilotProne() || this.getVisualPose() == VISUAL_PRONE
                 || this.getVisualPose() == VISUAL_PRONE_CANNON;
         boolean crouchView = this.isPilotCrouching() || this.getVisualPose() == VISUAL_CROUCH;
-        // Express the socket as desired eye position because the passenger
-        // camera adds its own eye height after positionRider. Offline
-        // perspective projection found 15.75/4.0 as the clear crouch socket:
-        // both real forearms enter opposite lower corners without torso
-        // clipping. The adopted all-fours pose puts both palms ahead of the
-        // head; 10.2 blocks is the nearest reviewed prone socket that keeps
-        // the complete forearm/hand chains on opposite lower sides.
-        double targetEyeHeight = proneView ? 10.8D : crouchView ? 15.75D : 24.8D;
-        // The prone cannon brace pulls both elbows and the receiver back
-        // toward the shoulders.  Keeping the crawl socket at 10.2 blocks in
-        // that pose puts the camera almost inside both fists.  The reviewed
-        // 3.5-block socket preserves the same real arm chains while leaving
-        // the cannon and both hands readable on opposite sides.
-        boolean proneCannon = proneView && this.getWeapon() == WEAPON_CANNON;
-        double forward = proneCannon ? 3.5D : proneView ? 10.2D : crouchView ? 4.0D : 5.0D;
+        // These coordinates place the camera on the visible face plane rather
+        // than at the neck pivot inside the chest shell. The prone animation
+        // moves the head behind the entity origin in world-forward space, so
+        // its signed forward offset is intentionally negative. Express Y as
+        // the desired eye position because Camera adds the player's own eye
+        // height after positionRider.
+        double targetEyeHeight = proneView ? 10.80D : crouchView ? 19.70D : 24.63D;
+        double forward = proneView ? -10.20D : crouchView ? 0.80D : 3.70D;
         double seatHeight = targetEyeHeight - passenger.getEyeHeight();
         move.accept(passenger,
                 this.getX() - Math.sin(rad) * forward,

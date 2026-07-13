@@ -1,5 +1,5 @@
 @echo off
-setlocal
+setlocal EnableExtensions EnableDelayedExpansion
 title Project SEELE - local test client
 rem Project SEELE - one-click test client.
 rem Uses the standalone JDK 17 if JAVA_HOME is not already set to one.
@@ -120,21 +120,26 @@ if errorlevel 1 (
     pause
     exit /b 1
 )
-python tools\render_tree_of_life_preview.py --layout current --strict
-if errorlevel 1 (
-    echo Tree-of-Life composition validation failed.
-    pause
-    exit /b 1
-)
 if /i "%~1"=="offline" (
-    echo Rendering the complete offline EVA evidence matrix...
+    set "OFFLINE_FAILED=0"
+    echo Running the fail-closed offline visual recovery suite...
+    python tools\validate_third_person_pose.py
+    if errorlevel 1 set "OFFLINE_FAILED=1"
+    python tools\validate_crucified_pose.py
+    if errorlevel 1 set "OFFLINE_FAILED=1"
+    python tools\render_launch_silo_preview.py --strict
+    if errorlevel 1 set "OFFLINE_FAILED=1"
+    python tools\render_tree_of_life_preview.py --layout current --strict
+    if errorlevel 1 set "OFFLINE_FAILED=1"
     python tools\render_eva_validation_matrix.py
-    if errorlevel 1 (
-        echo Offline EVA visual-contract validation failed.
+    if errorlevel 1 set "OFFLINE_FAILED=1"
+    if "!OFFLINE_FAILED!"=="1" (
+        echo One or more offline visual-recovery gates failed.
+        echo Inspect the generated reports and PNG evidence before running Forge.
         pause
         exit /b 1
     )
-    echo Offline evidence matrix complete. Forge was not started.
+    echo Offline visual-recovery suite complete. Forge was not started.
     pause
     exit /b 0
 )

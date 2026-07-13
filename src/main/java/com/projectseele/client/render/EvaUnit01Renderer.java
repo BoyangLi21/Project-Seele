@@ -10,6 +10,7 @@ import com.projectseele.entity.EvaUnit01Entity;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.LightTexture;
 import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.client.renderer.culling.Frustum;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.resources.ResourceLocation;
 import org.jetbrains.annotations.Nullable;
@@ -20,9 +21,11 @@ import software.bernie.geckolib.renderer.GeoEntityRenderer;
 /**
  * GeckoLib-driven EVA renderer.
  *
- * GeckoLib is the sole authority for body and arm poses. In first person the
- * normal world body remains continuous; only the head shell surrounding the
- * camera is removed. There is no detached screen-space arm viewmodel.
+ * GeckoLib is the sole authority for body and arm poses. First person observes
+ * this same world-space skeleton from the pilot's head socket. Only mesh
+ * shells that physically enclose the camera are suppressed; there is no
+ * second arm render pass, reflected scale, camera-space pose or detached
+ * viewmodel.
  */
 public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
 {
@@ -37,8 +40,8 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
     private static final ResourceLocation POSITRON_TEXTURE =
             new ResourceLocation(ProjectSeele.MODID, "textures/entity/positron_cannon.png");
     private static final Set<String> CAMERA_COVER_BONES = Set.of(
-            "head", "Head", "Neck", "horn", "pylon_l", "pylon_r");
-    private static final Set<String> PRONE_CAMERA_MESH_COVER = Set.of(
+            "head", "Head", "horn", "Horn", "neck", "Neck");
+    private static final Set<String> LOW_STANCE_CAMERA_MESH_COVER = Set.of(
             "torso_lower", "torso_upper");
     private boolean pilotView;
     private boolean strictFailureReported;
@@ -80,6 +83,24 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
     }
 
     @Override
+    public boolean shouldRender(EvaUnit01Entity entity, Frustum frustum,
+                                double cameraX, double cameraY, double cameraZ)
+    {
+        Minecraft minecraft = Minecraft.getInstance();
+        // The crouch/prone head socket can sit just beyond the entity's coarse
+        // gameplay AABB while hands and weapon remain in front of the camera.
+        // Do not let frustum culling make the shared body disappear only in
+        // first person; every other observer keeps the normal culling path.
+        if (minecraft.options.getCameraType().isFirstPerson()
+                && minecraft.getCameraEntity() != null
+                && minecraft.getCameraEntity().getVehicle() == entity)
+        {
+            return true;
+        }
+        return super.shouldRender(entity, frustum, cameraX, cameraY, cameraZ);
+    }
+
+    @Override
     public void preRender(PoseStack poseStack, EvaUnit01Entity animatable, BakedGeoModel model,
                           @Nullable MultiBufferSource bufferSource, @Nullable VertexConsumer buffer,
                           boolean isReRender, float partialTick, int packedLight, int packedOverlay,
@@ -101,6 +122,15 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
                     hideSubtree(bone);
                 }
             });
+        }
+        // This is a small additive elevation layer on the one world skeleton,
+        // after GeckoLib has evaluated the authored two-hand cannon stance.
+        // It is deliberately view-agnostic: first and third person observe the
+        // same torso, arms, weapon socket and physical pitch limit.
+        if (!isReRender && animatable.getWeapon() == EvaUnit01Entity.WEAPON_CANNON)
+        {
+            model.getBone("torso_upper").ifPresent(bone -> bone.setRotX(
+                    bone.getRotX() + (float) Math.toRadians(animatable.getCannonAimPitch())));
         }
         // Weapon visibility applies on top in every view.
         setWeaponVisibility(model, "knife", animatable.getWeapon() == EvaUnit01Entity.WEAPON_KNIFE);
@@ -173,15 +203,24 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
         {
             return true;
         }
-        boolean prone = entity.isPilotProne()
+        if (CAMERA_COVER_BONES.contains(bone.getName()))
+        {
+            return false;
+        }
+        boolean lowStance = entity.isPilotCrouching() || entity.isPilotProne()
+                || entity.getVisualPose() == EvaUnit01Entity.VISUAL_CROUCH
                 || entity.getVisualPose() == EvaUnit01Entity.VISUAL_PRONE
                 || entity.getVisualPose() == EvaUnit01Entity.VISUAL_PRONE_CANNON;
-        return !prone || !PRONE_CAMERA_MESH_COVER.contains(bone.getName());
+        // The low head socket sits inside the chest shell. Suppress only the
+        // two enclosing mesh parts, never their bones or descendants: both
+        // arms, hands and weapons remain the one evaluated world skeleton.
+        return !lowStance || !LOW_STANCE_CAMERA_MESH_COVER.contains(bone.getName());
     }
 
     private static void hideSubtree(GeoBone bone)
     {
         bone.setHidden(true);
+        bone.setChildrenHidden(true);
         for (GeoBone child : bone.getChildBones())
         {
             hideSubtree(child);

@@ -527,17 +527,17 @@ public final class ClientFxManager
         };
         /** Move names outside the ritual bodies; centre-column labels alternate sides. */
         private static final float[] LABEL_X_OFFSETS = {
-                -28.0F, -28.0F, 28.0F, -28.0F, 28.0F,
-                55.0F, -28.0F, 28.0F, -55.0F, 32.0F
+                -29.0F, -36.0F, 29.0F, -32.5F, 35.5F,
+                63.5F, -57.0F, 26.0F, -61.0F, 36.5F
         };
         /** Collision-searched offsets from each path midpoint, in local tree space. */
         private static final float[][] PATH_LABEL_OFFSETS = {
-                {-2.173F,-3.358F},{2.173F,-3.358F},{-4.0F,0.0F},{0.0F,-4.0F},
-                {-4.0F,0.0F},{3.273F,-2.299F},{-4.0F,0.0F},{3.273F,2.299F},
-                {0.0F,-4.0F},{-1.713F,-5.391F},{-4.0F,0.0F},{1.839F,3.552F},
-                {-4.0F,4.0F},{-0.706F,5.613F},{3.866F,8.066F},{4.0F,0.0F},
-                {-8.0F,4.0F},{1.839F,-3.552F},{-1.839F,-3.552F},
-                {3.165F,-2.446F},{-3.165F,-2.446F},{8.0F,0.0F}
+                {1.0F,11.0F},{1.0F,-6.5F},{0.0F,0.0F},{0.0F,0.5F},
+                {-15.5F,0.0F},{1.5F,0.0F},{-17.0F,0.0F},{-0.5F,-1.0F},
+                {0.0F,-5.5F},{0.0F,-11.5F},{0.0F,1.0F},{-1.0F,-12.5F},
+                {0.0F,1.0F},{-1.0F,-3.0F},{1.5F,-3.0F},{0.0F,0.5F},
+                {-5.0F,-7.5F},{1.0F,-11.5F},{-1.0F,-11.5F},
+                {-6.0F,0.0F},{1.5F,0.0F},{-16.5F,0.0F}
         };
 
         private final UUID eventId;
@@ -686,13 +686,13 @@ public final class ClientFxManager
             float top = TreeOfLifeLayout.localY(9);
             float titleLit = nodeLight(t, 9);
             drawLabel(poseStack, buffer, "SYSTEMA SEPHIROTHICVM",
-                    new Vector3f(0.0F, top + 38.0F, 0.8F), 1.02F, base * titleLit);
+                    new Vector3f(0.0F, top + 41.25F, 0.8F), 1.02F, base * titleLit);
             drawLabel(poseStack, buffer, "X DIVINORVM NOMINVM",
-                    new Vector3f(0.0F, top + 31.0F, 0.8F), 0.87F, base * titleLit);
+                    new Vector3f(0.0F, top + 34.25F, 0.8F), 0.87F, base * titleLit);
             drawLabel(poseStack, buffer, "OTZ CHIIM",
-                    new Vector3f(0.0F, top + 24.5F, 0.8F), 0.78F, base * titleLit);
+                    new Vector3f(0.0F, top + 27.75F, 0.8F), 0.78F, base * titleLit);
             drawLabel(poseStack, buffer, displayHebrew("\u05E2\u05E5 \u05D7\u05D9\u05D9\u05DD"),
-                    new Vector3f(0.0F, top + 18.0F, 0.8F), 0.86F, base * titleLit);
+                    new Vector3f(0.0F, top + 21.25F, 0.8F), 0.86F, base * titleLit);
 
             for (int i = 0; i < TreeOfLifeLayout.NODES.length; i++)
             {

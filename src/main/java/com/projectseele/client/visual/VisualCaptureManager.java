@@ -251,10 +251,11 @@ public final class VisualCaptureManager
             AABB formation = new AABB(this.origin, this.origin).inflate(230.0D);
             int massCount = minecraft.level.getEntitiesOfClass(
                     MassProductionEvaEntity.class, formation, Entity::isAlive).size();
-            float expectedYaw = TreeOfLifeLayout.frontFacingYawDegrees(this.yaw);
+            Vec3 frontNormal = TreeOfLifeLayout.frontNormal(this.yaw);
             long facingCount = minecraft.level.getEntitiesOfClass(
                     MassProductionEvaEntity.class, formation, Entity::isAlive).stream()
-                    .filter(mass -> Math.abs(Mth.wrapDegrees(mass.getYRot() - expectedYaw)) < 1.0F)
+                    .filter(mass -> Vec3.directionFromRotation(0.0F, mass.getYRot())
+                            .dot(frontNormal) > 0.999D)
                     .count();
             long ritualCount = minecraft.level.getEntitiesOfClass(
                     MassProductionEvaEntity.class, formation, Entity::isAlive).stream()
@@ -264,11 +265,16 @@ public final class VisualCaptureManager
                     EvaUnit01Entity.class, formation,
                     unit -> unit.isAlive() && unit.getUnitVariant() == EvaUnit01Entity.UNIT_01
                             && unit.isCrucified()).stream().findFirst().orElse(null);
+            boolean unitFacingFront = crucified != null
+                    && Vec3.directionFromRotation(0.0F, crucified.getYRot())
+                    .dot(frontNormal) > 0.999D;
             ProjectSeele.LOGGER.info(
-                    "Impact visual evidence: massCount={} massFacingFront={} massRitual={} crucifiedUnit01={} unit01={} mass={}",
+                    "Impact visual evidence: massCount={} massFacingFront={} massRitual={} crucifiedUnit01={} unitFacingFront={} unit01={} mass={}",
                     massCount, facingCount, ritualCount, crucified != null,
+                    unitFacingFront,
                     this.unitMeshTag, this.massMeshTag);
             if (massCount != 9 || facingCount != 9 || ritualCount != 9 || crucified == null
+                    || !unitFacingFront
                     || !this.unitFingerprint.valid() || !this.massFingerprint.valid())
             {
                 ProjectSeele.LOGGER.error(

@@ -7,8 +7,14 @@ hand-maintained layout.  It projects the current front-capture camera onto a
 silhouettes at the nine Mass-Production EVA nodes plus a cruciform Unit-01 at
 Tiferet.  The silhouettes are composition probes, not model replacements.
 
-This is an offline framing/readability check.  It cannot approve mesh pose,
-depth-test behaviour or Minecraft's exact font rasterisation.
+The body silhouettes remain deliberately schematic, but their screen-space
+envelopes come from the real local SmOd triangle meshes after the ritual and
+crucified GeckoLib animations are sampled.  This lets the strict report reject
+an overlapping formation without pretending that gameplay hitboxes describe
+the rendered models.
+
+This is an offline framing/readability check.  It cannot approve depth-test
+behaviour or Minecraft's exact font rasterisation.
 """
 
 from __future__ import annotations
@@ -25,12 +31,22 @@ from typing import Iterable, Sequence
 
 from PIL import Image, ImageDraw, ImageFont
 
+try:
+    import render_unit01_rig_preview as rig
+except ModuleNotFoundError:  # Support ``python -m tools.render_tree_of_life_preview``.
+    from tools import render_unit01_rig_preview as rig
+
 
 ROOT = Path(__file__).resolve().parents[1]
 LAYOUT_SOURCE = ROOT / "src/main/java/com/projectseele/fx/TreeOfLifeLayout.java"
 FX_SOURCE = ROOT / "src/main/java/com/projectseele/client/fx/ClientFxManager.java"
 CAPTURE_SOURCE = ROOT / "src/main/java/com/projectseele/client/visual/VisualCaptureManager.java"
 ENTITY_SOURCE = ROOT / "src/main/java/com/projectseele/registry/ModEntities.java"
+CLIENT_EVENTS_SOURCE = ROOT / "src/main/java/com/projectseele/client/ClientEvents.java"
+UNIT_RENDERER_SOURCE = ROOT / "src/main/java/com/projectseele/client/render/EvaUnit01Renderer.java"
+DEFAULT_ASSET_ROOT = (
+    ROOT / "run/resourcepacks/eva_real_model/assets/projectseele"
+)
 DEFAULT_OUTPUT = ROOT / "external-assets/work/tree-of-life-preview"
 
 RED = (255, 0, 0, 255)
@@ -39,6 +55,26 @@ RED_SOFT = (92, 0, 0, 255)
 BODY_FILL = (23, 25, 31, 255)
 MASS_OUTLINE = (225, 229, 236, 255)
 UNIT_OUTLINE = (195, 255, 206, 255)
+
+
+@dataclass(frozen=True)
+class VisualEnvelope:
+    model: str
+    animation: str
+    renderer_scale: float
+    sample_time: float
+    vertex_count: int
+    # Posed renderer-local bounds in blocks: min x/y/z, max x/y/z.
+    bounds: tuple[float, float, float, float, float, float]
+    source_files: tuple[Path, ...]
+
+    @property
+    def width(self) -> float:
+        return self.bounds[3] - self.bounds[0]
+
+    @property
+    def height(self) -> float:
+        return self.bounds[4] - self.bounds[1]
 
 
 @dataclass(frozen=True)
@@ -59,6 +95,8 @@ class TreeData:
     mass_height: float
     unit_width: float
     unit_height: float
+    mass_visual: VisualEnvelope
+    unit_visual: VisualEnvelope
     outer_radius: float
     centre_radius: float
     path_offset: float
@@ -191,7 +229,87 @@ def entity_size(source: str, registry_name: str) -> tuple[float, float]:
     return float(match.group(1)), float(match.group(2))
 
 
-def parse_tree() -> TreeData:
+def renderer_scales() -> tuple[float, float]:
+    client = read(CLIENT_EVENTS_SOURCE)
+    unit_renderer = read(UNIT_RENDERER_SOURCE)
+    mass = require_match(
+        r'ColossalHumanoidRenderer\.Style\.MASS_PRODUCTION,\s*'
+        r'"mass_production_eva",\s*([\d.]+)F',
+        client,
+        "Mass Production renderer scale",
+        re.S,
+    )
+    unit = require_match(
+        r"\bwithScale\(([\d.]+)F\)",
+        unit_renderer,
+        "Unit-01 renderer scale",
+    )
+    return float(mass.group(1)), float(unit.group(1))
+
+
+def posed_visual_envelope(asset_root: Path, model: str, animation: str,
+                           renderer_scale: float, sample_time: float = 0.0) -> VisualEnvelope:
+    mesh_path = asset_root / "mesh" / f"{model}.mesh.json"
+    geo_path = asset_root / "geo" / f"{model}.geo.json"
+    animation_path = asset_root / "animations" / f"{model}.animation.json"
+    missing = [path for path in (mesh_path, geo_path, animation_path) if not path.is_file()]
+    if missing:
+        raise ValueError(
+            "high-detail visual envelope requires the generated local SmOd pack; missing: "
+            + ", ".join(str(path) for path in missing)
+        )
+
+    mesh = json.loads(mesh_path.read_text(encoding="utf-8"))
+    pivots, parents, base_rotations = rig.load_skeleton(mesh, geo_path)
+    selected, sampled, rotations, positions = rig.select_animation(
+        animation_path, animation, sample_time
+    )
+    matrices: dict[str, list[list[float]]] = {}
+    for bone in mesh.get("parts", {}):
+        rig.bone_matrix(
+            bone, pivots, parents, rotations, positions,
+            base_rotations, matrices,
+        )
+
+    # LocalTriangleMeshLayer emits one model pixel as 1/16 block.  Its X
+    # reflection only swaps the extrema, so retain the exact front envelope by
+    # applying the same reflection here before renderer scale.
+    factor = renderer_scale / 16.0
+    points: list[tuple[float, float, float]] = []
+    stride = int(mesh.get("stride", 0))
+    if stride != 8:
+        raise ValueError(f"{model} mesh stride must be 8, got {stride}")
+    for bone, part in mesh.get("parts", {}).items():
+        if bone not in matrices:
+            raise ValueError(f"{model} has no pose matrix for mesh bone {bone}")
+        values = part.get("vertices", ())
+        pivot = part.get("pivot", (0.0, 0.0, 0.0))
+        for index in range(0, len(values), stride):
+            absolute = [values[index + axis] + pivot[axis] for axis in range(3)]
+            posed = rig.transform(matrices[bone], absolute)
+            points.append((-posed[0] * factor, posed[1] * factor, -posed[2] * factor))
+    if not points:
+        raise ValueError(f"{model} high-detail mesh contains no vertices")
+
+    return VisualEnvelope(
+        model=model,
+        animation=selected,
+        renderer_scale=renderer_scale,
+        sample_time=sampled,
+        vertex_count=len(points),
+        bounds=(
+            min(point[0] for point in points),
+            min(point[1] for point in points),
+            min(point[2] for point in points),
+            max(point[0] for point in points),
+            max(point[1] for point in points),
+            max(point[2] for point in points),
+        ),
+        source_files=(mesh_path, geo_path, animation_path),
+    )
+
+
+def parse_tree(asset_root: Path) -> TreeData:
     layout = read(LAYOUT_SOURCE)
     fx = read(FX_SOURCE)
     capture = read(CAPTURE_SOURCE)
@@ -302,6 +420,13 @@ def parse_tree() -> TreeData:
 
     mass_size = entity_size(entities, "mass_production_eva")
     unit_size = entity_size(entities, "eva_unit01")
+    mass_scale, unit_scale = renderer_scales()
+    mass_visual = posed_visual_envelope(
+        asset_root, "mass_production_eva", "animation.entity_mp.ritual", mass_scale
+    )
+    unit_visual = posed_visual_envelope(
+        asset_root, "eva_unit01", "animation.eva_unit01.crucified", unit_scale
+    )
     return TreeData(
         column_x=float_constant(layout, "COLUMN_X"),
         row_y=float_constant(layout, "ROW_Y"),
@@ -319,6 +444,8 @@ def parse_tree() -> TreeData:
         mass_height=mass_size[1],
         unit_width=unit_size[0],
         unit_height=unit_size[1],
+        mass_visual=mass_visual,
+        unit_visual=unit_visual,
         centre_radius=float(radii.group(1)),
         outer_radius=float(radii.group(2)),
         path_offset=path_offset,
@@ -403,11 +530,49 @@ def screen_bbox(projection: Projection, centre: tuple[float, float], width: floa
     return x - half_width, y - half_height, x + half_width, y + half_height
 
 
+def posed_entity_screen_bbox(projection: Projection, node: tuple[float, float],
+                             gameplay_height: float,
+                             visual: VisualEnvelope) -> tuple[float, float, float, float]:
+    """Conservatively project the real posed mesh envelope at a ritual node.
+
+    ThirdImpactDirector positions each entity at nodeY minus half its gameplay
+    hitbox height.  The high-detail mesh is then rendered around that entity
+    origin.  Project all eight corners because the front/back extent changes
+    perspective scale even though the tableau is nominally planar.
+    """
+    min_x, min_y, min_z, max_x, max_y, max_z = visual.bounds
+    entity_y = node[1] - gameplay_height * 0.5
+    points = [
+        projection.point(node[0] + x, entity_y + y, z)
+        for x in (min_x, max_x)
+        for y in (min_y, max_y)
+        for z in (min_z, max_z)
+    ]
+    return (
+        min(point[0] for point in points),
+        min(point[1] for point in points),
+        max(point[0] for point in points),
+        max(point[1] for point in points),
+    )
+
+
+def world_box_centre_and_size(node: tuple[float, float], gameplay_height: float,
+                              visual: VisualEnvelope) -> tuple[tuple[float, float], float, float]:
+    min_x, min_y, _, max_x, max_y, _ = visual.bounds
+    entity_y = node[1] - gameplay_height * 0.5
+    return (
+        (node[0] + (min_x + max_x) * 0.5,
+         entity_y + (min_y + max_y) * 0.5),
+        max_x - min_x,
+        max_y - min_y,
+    )
+
+
 def draw_mass_silhouette(draw: ImageDraw.ImageDraw, projection: Projection,
                          centre: tuple[float, float], width: float, height: float,
                          supersample: int) -> tuple[float, float, float, float]:
-    # A compact front-facing winged humanoid.  It is intentionally simple but
-    # retains the full 10x26 collision silhouette used by the entity.
+    # A compact front-facing winged humanoid.  It is intentionally simple; its
+    # width/height now come from the sampled SmOd ritual mesh, not the hitbox.
     cx, cy = centre
     sx = width / 10.0
     sy = height / 26.0
@@ -439,45 +604,45 @@ def draw_unit_cross(draw: ImageDraw.ImageDraw, projection: Projection,
     cx, cy = centre
     half_height = height * 0.5
     arm_y = height / 6.0
-    arm_span = max(width * 3.75, height * 1.05)
-    head_width = width * 0.52
+    # The sampled crucified mesh already includes the true horizontal arm
+    # span.  Expanding this value again recreated the old fake cross geometry.
+    arm_span = width
+    head_width = min(width * 0.18, height * 0.20)
     head_height = height * 0.16
-    outline = max(2, round(projection.length(0.7) * supersample))
-    body_width = max(2, round(projection.length(4.4) * supersample))
-    limb_width = max(2, round(projection.length(2.4) * supersample))
-    # 30-block tall body, rigid horizontal arms: the requested acceptance
-    # silhouette is visible even when the real mesh cannot be sampled offline.
+    edge_width = max(2, round(projection.length(0.7) * supersample))
+    body_width = max(3, round(projection.length(4.4) * supersample))
+    limb_width = max(3, round(projection.length(2.4) * supersample))
+    body_line = [
+        scaled_point(projection.point(cx, cy - half_height + 0.5), supersample),
+        scaled_point(projection.point(cx, cy + half_height - head_height), supersample),
+    ]
+    arm_line = [
+        scaled_point(projection.point(cx - arm_span * 0.5, cy + arm_y), supersample),
+        scaled_point(projection.point(cx + arm_span * 0.5, cy + arm_y), supersample),
+    ]
+    # Draw the pale edge first and the dark body second.  The former ordering
+    # painted a thin pale stripe through the centre of each limb, making the
+    # crucified Unit read as a wire even though its sampled envelope was wide.
+    draw.line(body_line, fill=UNIT_OUTLINE, width=body_width + edge_width * 2)
+    draw.line(arm_line, fill=UNIT_OUTLINE, width=limb_width + edge_width * 2)
     draw.line(
-        [scaled_point(projection.point(cx, cy - half_height + 0.5), supersample),
-         scaled_point(projection.point(cx, cy + half_height - head_height), supersample)],
+        body_line,
         fill=BODY_FILL, width=body_width,
     )
     draw.line(
-        [scaled_point(projection.point(cx - arm_span * 0.5, cy + arm_y), supersample),
-         scaled_point(projection.point(cx + arm_span * 0.5, cy + arm_y), supersample)],
+        arm_line,
         fill=BODY_FILL, width=limb_width,
-    )
-    # Pale edge strokes read as a foreground model without changing the Tree's
-    # pure-red colour contract.
-    draw.line(
-        [scaled_point(projection.point(cx, cy - half_height + 0.5), supersample),
-         scaled_point(projection.point(cx, cy + half_height - head_height), supersample)],
-        fill=UNIT_OUTLINE, width=outline,
-    )
-    draw.line(
-        [scaled_point(projection.point(cx - arm_span * 0.5, cy + arm_y), supersample),
-         scaled_point(projection.point(cx + arm_span * 0.5, cy + arm_y), supersample)],
-        fill=UNIT_OUTLINE, width=outline,
     )
     head_centre_y = cy + half_height - head_height * 0.5
     head = screen_bbox(projection, (cx, head_centre_y), head_width, head_height)
-    draw.ellipse(scaled_bbox(head, supersample), fill=BODY_FILL, outline=UNIT_OUTLINE, width=outline)
+    draw.ellipse(scaled_bbox(head, supersample), fill=BODY_FILL, outline=UNIT_OUTLINE, width=edge_width)
     horn_a = scaled_point(projection.point(cx, cy + half_height - 0.6), supersample)
     horn_b = scaled_point(projection.point(cx, cy + half_height + height * 0.10), supersample)
-    draw.line([horn_a, horn_b], fill=UNIT_OUTLINE, width=max(1, outline // 2))
-    core = screen_bbox(projection, (cx, cy + height * 0.07), width * 0.19, width * 0.19)
+    draw.line([horn_a, horn_b], fill=UNIT_OUTLINE, width=max(1, edge_width // 2))
+    core_size = min(width, height) * 0.06
+    core = screen_bbox(projection, (cx, cy + height * 0.07), core_size, core_size)
     draw.ellipse(scaled_bbox(core, supersample), fill=RED)
-    return screen_bbox(projection, (cx, cy + height * 0.05), arm_span, height * 1.20)
+    return screen_bbox(projection, centre, arm_span, height)
 
 
 def label_specs(data: TreeData) -> list[LabelSpec]:
@@ -731,17 +896,27 @@ def render(data: TreeData, projection: Projection, supersample: int,
             draw.line([scaled_point(start, supersample), scaled_point(tip, supersample)],
                       fill=RED_SOFT, width=max(1, wing_width - feather))
 
-    # Bodies render in front of the backplate.
+    # Bodies render in front of the backplate.  Drawing remains schematic, but
+    # every collision/readability box below is the conservative perspective
+    # projection of the real posed high-detail mesh envelope.
     entity_boxes: dict[str, tuple[float, float, float, float]] = {}
     for index in range(len(data.nodes)):
-        centre = data.node_world(index)
+        node = data.node_world(index)
         if index == data.tiferet:
-            entity_boxes["unit01_tiferet"] = draw_unit_cross(
-                draw, projection, centre, data.unit_width, data.unit_height, supersample
+            centre, width, height = world_box_centre_and_size(
+                node, data.unit_height, data.unit_visual
+            )
+            draw_unit_cross(draw, projection, centre, width, height, supersample)
+            entity_boxes["unit01_tiferet"] = posed_entity_screen_bbox(
+                projection, node, data.unit_height, data.unit_visual
             )
         else:
-            entity_boxes[f"mass_{index + 1}"] = draw_mass_silhouette(
-                draw, projection, centre, data.mass_width, data.mass_height, supersample
+            centre, width, height = world_box_centre_and_size(
+                node, data.mass_height, data.mass_visual
+            )
+            draw_mass_silhouette(draw, projection, centre, width, height, supersample)
+            entity_boxes[f"mass_{index + 1}"] = posed_entity_screen_bbox(
+                projection, node, data.mass_height, data.mass_visual
             )
 
     # Labels are a separate foreground pass in ClientFxManager.
@@ -795,6 +970,26 @@ def render(data: TreeData, projection: Projection, supersample: int,
                     "label_box_fraction": round(ratio, 4),
                 })
 
+    entity_pairs: list[dict[str, object]] = []
+    entity_pairs_any: list[dict[str, object]] = []
+    entity_items = list(entity_boxes.items())
+    for index, (first_name, first_box) in enumerate(entity_items):
+        for second_name, second_box in entity_items[index + 1 :]:
+            overlap = bbox_intersection(first_box, second_box)
+            if overlap <= 0.0:
+                continue
+            smaller = min(bbox_area(first_box), bbox_area(second_box))
+            ratio = overlap / smaller if smaller else 0.0
+            record = {
+                "entities": [first_name, second_name],
+                "overlap_pixels": round(overlap, 2),
+                "smaller_box_fraction": round(ratio, 4),
+            }
+            if overlap >= 0.5:
+                entity_pairs_any.append(record)
+            if ratio >= 0.05:
+                entity_pairs.append(record)
+
     clipped = [
         label.identifier for label in labels
         if label.bbox[0] < 0 or label.bbox[1] < 0
@@ -829,26 +1024,33 @@ def render(data: TreeData, projection: Projection, supersample: int,
         "composition_height_below_80_percent": occupancy_height <= 0.80,
         "composition_width_below_70_percent": occupancy_width <= 0.70,
         "no_label_bbox_collisions": not label_pairs_any,
-        "no_entity_bbox_collisions": not label_entity_any,
+        "no_entity_bbox_collisions": not entity_pairs_any,
         "pure_red_labels_have_no_backdrop": all(
             not label.backed for label in labels
         ),
     }
     if layout_mode == "candidate":
         checks["candidate_has_zero_label_bbox_collisions"] = not label_pairs_any
-        checks["candidate_has_zero_entity_bbox_collisions"] = not label_entity_any
+        checks["candidate_has_zero_entity_bbox_collisions"] = not entity_pairs_any
         checks["candidate_pure_red_labels_have_no_backdrop"] = all(
             not label.backed for label in labels
         )
         checks["candidate_has_all_parsed_path_offsets"] = not adopted_java_layout["unresolved_path_letters"]
     report: dict[str, object] = {
-        "schema": 1,
+        "schema": 2,
         "status": "PASS" if all(checks.values()) else "FAIL",
-        "scope": "offline composition only; not mesh/pose/depth/font visual acceptance",
+        "scope": (
+            "offline composition using real posed high-detail mesh envelopes; "
+            "not depth/font/runtime visual acceptance"
+        ),
         "layout_mode": layout_mode,
         "source": {
             str(path.relative_to(ROOT)).replace("\\", "/"): hashlib.sha256(path.read_bytes()).hexdigest()
-            for path in (LAYOUT_SOURCE, FX_SOURCE, CAPTURE_SOURCE, ENTITY_SOURCE)
+            for path in (
+                LAYOUT_SOURCE, FX_SOURCE, CAPTURE_SOURCE, ENTITY_SOURCE,
+                CLIENT_EVENTS_SOURCE, UNIT_RENDERER_SOURCE,
+                *data.mass_visual.source_files, *data.unit_visual.source_files,
+            )
         },
         "camera": {
             "resolution": [projection.width, projection.height],
@@ -864,9 +1066,33 @@ def render(data: TreeData, projection: Projection, supersample: int,
             "latin_names": len(data.names),
             "hebrew_names": len(data.hebrew),
             "hebrew_path_letters": len(data.letters),
-            "entity_placeholders": len(entity_boxes),
+            "posed_model_envelopes": len(entity_boxes),
             "mass_entity_size": [data.mass_width, data.mass_height],
             "unit01_entity_size": [data.unit_width, data.unit_height],
+            "mass_visual_envelope": {
+                "model": data.mass_visual.model,
+                "animation": data.mass_visual.animation,
+                "sample_time": data.mass_visual.sample_time,
+                "renderer_scale": data.mass_visual.renderer_scale,
+                "vertex_count": data.mass_visual.vertex_count,
+                "renderer_local_bounds_blocks": [
+                    round(value, 4) for value in data.mass_visual.bounds
+                ],
+                "width_blocks": round(data.mass_visual.width, 4),
+                "height_blocks": round(data.mass_visual.height, 4),
+            },
+            "unit01_visual_envelope": {
+                "model": data.unit_visual.model,
+                "animation": data.unit_visual.animation,
+                "sample_time": data.unit_visual.sample_time,
+                "renderer_scale": data.unit_visual.renderer_scale,
+                "vertex_count": data.unit_visual.vertex_count,
+                "renderer_local_bounds_blocks": [
+                    round(value, 4) for value in data.unit_visual.bounds
+                ],
+                "width_blocks": round(data.unit_visual.width, 4),
+                "height_blocks": round(data.unit_visual.height, 4),
+            },
             "nominal_outer_radius": data.outer_radius,
             "maximum_breathing_outer_radius": round(data.outer_radius * 1.045, 3),
             "path_lane_offset": data.path_offset,
@@ -876,6 +1102,10 @@ def render(data: TreeData, projection: Projection, supersample: int,
             "screen_bbox": [round(value, 2) for value in composition],
             "width_fraction": round(occupancy_width, 4),
             "height_fraction": round(occupancy_height, 4),
+            "posed_entity_screen_bboxes": {
+                name: [round(value, 2) for value in box]
+                for name, box in entity_boxes.items()
+            },
         },
         "readability": {
             "labels_total": len(labels),
@@ -886,9 +1116,11 @@ def render(data: TreeData, projection: Projection, supersample: int,
             "label_label_any_bbox_overlaps": label_pairs_any,
             "label_entity_overlaps": label_entity,
             "label_entity_any_bbox_overlaps": label_entity_any,
+            "entity_entity_overlaps": entity_pairs,
+            "entity_entity_any_bbox_overlaps": entity_pairs_any,
         },
         "occlusion": {
-            "render_order": ["tree_backplate", "entity_placeholders", "labels"],
+            "render_order": ["tree_backplate", "posed_model_silhouettes", "labels"],
             "raw_backplate_bbox_overlap": raw_backplate_overlap,
             "note": "Tree/entity bbox intersections are conservative; backplate is drawn behind bodies. Label/entity overlap remains foreground risk.",
         },
@@ -939,7 +1171,9 @@ def text_report(report: dict[str, object], png_path: Path) -> str:
         f"  label/label overlaps: {len(readability['label_label_overlaps'])}",
         f"  label/entity overlaps: {len(readability['label_entity_overlaps'])}",
         f"  any label bbox collisions: {len(readability['label_label_any_bbox_overlaps'])}",
-        f"  any entity bbox collisions: {len(readability['label_entity_any_bbox_overlaps'])}",
+        f"  any label/entity bbox collisions: {len(readability['label_entity_any_bbox_overlaps'])}",
+        f"  material entity/entity overlaps: {len(readability['entity_entity_overlaps'])}",
+        f"  any entity/entity bbox collisions: {len(readability['entity_entity_any_bbox_overlaps'])}",
         "",
         "Checks",
     ]
@@ -947,8 +1181,8 @@ def text_report(report: dict[str, object], png_path: Path) -> str:
     lines.extend([
         "",
         "Boundary",
-        "  This preview proves only source parsing, front-camera framing and approximate text overlap.",
-        "  It does not approve real meshes, animation, Minecraft depth testing or exact font rendering.",
+        "  This preview samples real local meshes and Gecko animation into conservative visual envelopes.",
+        "  It does not approve silhouette aesthetics, Minecraft depth testing or exact font rendering.",
     ])
     return "\n".join(lines) + "\n"
 
@@ -956,6 +1190,11 @@ def text_report(report: dict[str, object], png_path: Path) -> str:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument(
+        "--asset-root", type=Path, default=DEFAULT_ASSET_ROOT,
+        help=("generated local SmOd assets/projectseele directory used for real posed "
+              "mesh envelopes"),
+    )
     parser.add_argument("--width", type=int, default=1280)
     parser.add_argument("--height", type=int, default=720)
     parser.add_argument(
@@ -978,7 +1217,7 @@ def main() -> int:
     if not 20.0 <= args.fov_degrees <= 140.0:
         raise SystemExit("--fov-degrees must be between 20 and 140")
 
-    data = parse_tree()
+    data = parse_tree(args.asset_root.resolve())
     frame_top = data.node_world(9)[1] + data.frame_top_margin
     target_y = (data.frame_bottom + frame_top) * 0.5
     projection = Projection(
