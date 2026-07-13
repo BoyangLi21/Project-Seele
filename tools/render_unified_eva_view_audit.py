@@ -12,7 +12,7 @@ import render_unit01_rig_preview as rig
 EXPECTED_SOCKETS = {
     "standing": {"eye_height": 24.63, "forward": 3.70},
     "crouch": {"eye_height": 19.70, "forward": 0.80},
-    "prone": {"eye_height": 10.80, "forward": -10.20},
+    "prone": {"eye_height": 10.80, "forward": 10.33},
 }
 
 EXPECTED_HIDDEN_ROOTS = {

@@ -447,6 +447,7 @@ def build_mass_mesh(positions, texcoords, normals, triangles, pivots, scale, min
 
 
 def build_mass_animations():
+    canonical = json.loads(UNIT01_BASE_ANIMATION.read_text(encoding="utf-8"))["animations"]
     idle = {
         "loop": True, "animation_length": 3.2, "bones": {
             "torso_upper": {"rotation": {"0.0": [0, 0, 0], "1.6": [1.4, 0, 0],
@@ -485,21 +486,14 @@ def build_mass_animations():
                                       "1.0": [0, 5, 2]}},
         },
     }
-    ritual = {
-        "loop": True, "animation_length": 3.0, "bones": {
-            "torso_upper": {"rotation": {"0.0": [3, 0, 0]}},
-            "head": {"rotation": {"0.0": [15, 0, 0], "1.5": [18, 0, 0],
-                                    "3.0": [15, 0, 0]}},
-            "arm_l": {"rotation": {"0.0": [0, 0, 86]}},
-            "arm_r": {"rotation": {"0.0": [0, 0, -86]}},
-            "forearm_l": {"rotation": {"0.0": [0, 0, 0]}},
-            "forearm_r": {"rotation": {"0.0": [0, 0, 0]}},
-            "leg_l": {"rotation": {"0.0": [0, 0, -2]}},
-            "leg_r": {"rotation": {"0.0": [0, 0, 2]}},
-            "wing_l": {"rotation": {"0.0": [0, 0, -2]}},
-            "wing_r": {"rotation": {"0.0": [0, 0, 2]}},
-        },
-    }
+    # Mass-production EVAs use the same crucifix body contract as Unit-01.
+    # Keeping this pose sourced from the canonical catalogue prevents palm
+    # mirroring and shoulder signs from silently drifting between generators.
+    ritual = copy.deepcopy(canonical["animation.eva_unit01.crucified"])
+    ritual["bones"].pop("foot_l", None)
+    ritual["bones"].pop("foot_r", None)
+    ritual["bones"]["wing_l"] = {"rotation": {"0.0": [0, 0, -2]}}
+    ritual["bones"]["wing_r"] = {"rotation": {"0.0": [0, 0, 2]}}
     attack = {
         "animation_length": 0.62, "bones": {
             "torso_upper": {"rotation": {"0.0": [0, -10, 0], "0.14": [0, 8, 0],

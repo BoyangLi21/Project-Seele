@@ -10,12 +10,16 @@ import net.minecraft.world.phys.Vec3;
  */
 public final class TreeOfLifeLayout
 {
+    /** Ritual-space orientation; semantic indices remain Keter through Malkuth. */
+    public static final String TABLEAU_ORIENTATION = "EOE_INVERTED";
     // The old 84 x 179 block diagram overwhelmed the entities and often ran
     // outside the player's view. This 62 x 134 block field is paired with
     // equal-height ritual vessels and reads as one complete glyph.
     public static final float COLUMN_X = 31.0F;
     public static final float ROW_Y = 21.0F;
+    public static final int KETER = 0;
     public static final int TIFERET = 5;
+    public static final int MALKUTH = 9;
 
     /**
      * Local plane coordinates (x across, y up), index 0..9 = Keter..Malkuth.

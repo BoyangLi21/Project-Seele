@@ -79,14 +79,22 @@ class VisualEnvelope:
 
 @dataclass(frozen=True)
 class TreeData:
+    tableau_orientation: str
     column_x: float
     row_y: float
+    keter: int
     tiferet: int
+    malkuth: int
     nodes: tuple[tuple[float, float], ...]
     paths: tuple[tuple[int, int], ...]
     names: tuple[str, ...]
     hebrew: tuple[str, ...]
+    numerals: tuple[str, ...]
+    divine_names: tuple[str, ...]
+    archangels: tuple[str, ...]
+    choirs: tuple[str, ...]
     letters: tuple[str, ...]
+    path_numerals: tuple[str, ...]
     camera_distance: float
     frame_bottom: float
     frame_top_margin: float
@@ -104,13 +112,29 @@ class TreeData:
     path_inner_width: float
     ring_outer_width: float
     ring_inner_width: float
-    name_y: float
-    name_scale: float
-    hebrew_y: float
-    hebrew_scale: float
+    node_tick_count: int
+    node_name_y: float
+    node_name_scale: float
+    divine_name_y: float
+    divine_name_scale: float
+    external_archangel_y: float
+    external_archangel_scale: float
+    external_choir_y: float
+    external_choir_scale: float
     path_letter_offset: float
     path_letter_scale: float
-    title_rows: tuple[tuple[str, float, float], ...]
+    glory_scale: float
+    glory_length_base: float
+    glory_length_step: float
+    glory_width_base: float
+    glory_width_step: float
+    label_rotation_degrees: float
+    diagram_text_z: float
+    internal_name_scale: float
+    internal_divine_scale: float
+    internal_archangel_scale: float
+    internal_choir_scale: float
+    path_number_scale: float
     label_x_offsets: tuple[float, ...]
     path_label_offsets: tuple[tuple[float, float], ...]
     all_labels_backed: bool
@@ -154,6 +178,8 @@ class LabelBox:
     bbox: tuple[float, float, float, float]
     projected_height: float
     backed: bool
+    depth_layer: str
+    rotation_degrees: float
 
 
 @dataclass(frozen=True)
@@ -165,6 +191,8 @@ class LabelSpec:
     position: tuple[float, float]
     scale: float
     force_backing: bool = False
+    depth_layer: str = "foreground"
+    rotation_degrees: float = 0.0
 
 
 def read(path: Path) -> str:
@@ -213,6 +241,11 @@ def float_constant(source: str, name: str) -> float:
 def int_constant(source: str, name: str) -> int:
     match = require_match(rf"\b{name}\s*=\s*(\d+)\s*;", source, name)
     return int(match.group(1))
+
+
+def string_constant(source: str, name: str) -> str:
+    match = require_match(rf'\b{name}\s*=\s*"([^"]+)"\s*;', source, name)
+    return match.group(1)
 
 
 def entity_size(source: str, registry_name: str) -> tuple[float, float]:
@@ -330,12 +363,23 @@ def parse_tree(asset_root: Path) -> TreeData:
     )
     names = quoted_values(java_initializer(fx, "SEPHIRA_NAMES"))
     hebrew = quoted_values(java_initializer(fx, "SEPHIRA_HEBREW"))
+    numerals = quoted_values(java_initializer(fx, "SEPHIRA_NUMERALS"))
+    divine_names = quoted_values(java_initializer(fx, "SEPHIRA_DIVINE_NAMES"))
+    archangels = quoted_values(java_initializer(fx, "SEPHIRA_ARCHANGELS"))
+    choirs = quoted_values(java_initializer(fx, "SEPHIRA_CHOIRS"))
     letters = quoted_values(java_initializer(fx, "PATH_LETTERS"))
-    if (len(nodes), len(paths), len(names), len(hebrew), len(letters)) != (10, 22, 10, 10, 22):
+    path_numerals = quoted_values(java_initializer(fx, "PATH_NUMERALS"))
+    if (len(nodes), len(paths), len(names), len(hebrew), len(numerals),
+            len(divine_names), len(archangels), len(choirs),
+            len(letters), len(path_numerals)) \
+            != (10, 22, 10, 10, 10, 10, 10, 10, 22, 22):
         raise ValueError(
             "unexpected Tree contract: "
             f"nodes={len(nodes)} paths={len(paths)} names={len(names)} "
-            f"hebrew={len(hebrew)} letters={len(letters)}"
+            f"hebrew={len(hebrew)} numerals={len(numerals)} "
+            f"divine={len(divine_names)} letters={len(letters)} "
+            f"archangels={len(archangels)} choirs={len(choirs)} "
+            f"pathNumerals={len(path_numerals)}"
         )
 
     radii = require_match(
@@ -386,37 +430,14 @@ def parse_tree(asset_root: Path) -> TreeData:
             f"pathOffsets={len(path_label_offsets)}/{len(paths)}"
         )
 
-    node_labels = require_match(
-        r"SEPHIRA_NAMES\[i\].*?new Vector3f\(labelX,\s*c\.y\s*\+\s*([\d.]+)F,\s*0\.9F\),\s*([\d.]+)F.*?"
-        r"SEPHIRA_HEBREW\[i\].*?new Vector3f\(labelX,\s*c\.y\s*-\s*([\d.]+)F,\s*0\.9F\),\s*([\d.]+)F",
-        fx,
-        "node label layout",
+    glory = require_match(
+        r"float\s+s\s*=\s*([\d.]+)F;.*?"
+        r"float\s+len\s*=\s*\(([\d.]+)F\s*-\s*f\s*\*\s*([\d.]+)F\).*?"
+        r"\(([\d.]+)F\s*-\s*f\s*\*\s*([\d.]+)F\)\s*\*\s*s",
+        fx[fx.index("private static void drawTiferetGlory"):],
+        "Tiferet glory geometry",
         re.S,
     )
-    path_label = require_match(
-        r"\.add\(PATH_LABEL_OFFSETS\[i\]\[0\],\s*PATH_LABEL_OFFSETS\[i\]\[1\],\s*1\.0F\).*?"
-        r"drawLabel\(poseStack,\s*buffer,\s*PATH_LETTERS\[i\],\s*letterPos,\s*([\d.]+)F",
-        fx,
-        "path letter layout",
-        re.S,
-    )
-
-    title_rows: list[tuple[str, float, float]] = []
-    for text, offset, scale in re.findall(
-        r'drawLabel\(poseStack,\s*buffer,\s*"([^"]+)",\s*\n\s*new Vector3f\(0\.0F,\s*top\s*\+\s*([\d.]+)F,\s*0\.8F\),\s*([\d.]+)F',
-        fx,
-    ):
-        title_rows.append((text, float(offset), float(scale)))
-    hebrew_title = require_match(
-        r'displayHebrew\("((?:\\.|[^"\\])*)"\),\s*\n\s*new Vector3f\(0\.0F,\s*top\s*\+\s*([\d.]+)F,\s*0\.8F\),\s*([\d.]+)F',
-        fx,
-        "Hebrew title",
-    )
-    title_rows.append(
-        (java_string(hebrew_title.group(1)), float(hebrew_title.group(2)), float(hebrew_title.group(3)))
-    )
-    if len(title_rows) != 4:
-        raise ValueError(f"expected four heading rows, found {len(title_rows)}")
 
     mass_size = entity_size(entities, "mass_production_eva")
     unit_size = entity_size(entities, "eva_unit01")
@@ -428,14 +449,22 @@ def parse_tree(asset_root: Path) -> TreeData:
         asset_root, "eva_unit01", "animation.eva_unit01.crucified", unit_scale
     )
     return TreeData(
+        tableau_orientation=string_constant(layout, "TABLEAU_ORIENTATION"),
         column_x=float_constant(layout, "COLUMN_X"),
         row_y=float_constant(layout, "ROW_Y"),
+        keter=int_constant(layout, "KETER"),
         tiferet=int_constant(layout, "TIFERET"),
+        malkuth=int_constant(layout, "MALKUTH"),
         nodes=nodes,
         paths=paths,
         names=names,
         hebrew=hebrew,
+        numerals=numerals,
+        divine_names=divine_names,
+        archangels=archangels,
+        choirs=choirs,
         letters=letters,
+        path_numerals=path_numerals,
         camera_distance=float_constant(capture, "CAMERA_DISTANCE"),
         frame_bottom=float_constant(capture, "FRAME_BOTTOM"),
         frame_top_margin=float_constant(capture, "FRAME_TOP_MARGIN"),
@@ -453,13 +482,29 @@ def parse_tree(asset_root: Path) -> TreeData:
         path_inner_width=float(path_widths.group(3)),
         ring_outer_width=float(ring_widths.group(1)),
         ring_inner_width=float(ring_widths.group(2)),
-        name_y=float(node_labels.group(1)),
-        name_scale=float(node_labels.group(2)),
-        hebrew_y=-float(node_labels.group(3)),
-        hebrew_scale=float(node_labels.group(4)),
+        node_tick_count=int_constant(fx, "NODE_TICK_COUNT"),
+        node_name_y=float_constant(fx, "EXTERNAL_NAME_Y"),
+        node_name_scale=float_constant(fx, "EXTERNAL_NAME_SCALE"),
+        divine_name_y=float_constant(fx, "EXTERNAL_DIVINE_Y"),
+        divine_name_scale=float_constant(fx, "EXTERNAL_DIVINE_SCALE"),
+        external_archangel_y=float_constant(fx, "EXTERNAL_ARCHANGEL_Y"),
+        external_archangel_scale=float_constant(fx, "EXTERNAL_ARCHANGEL_SCALE"),
+        external_choir_y=float_constant(fx, "EXTERNAL_CHOIR_Y"),
+        external_choir_scale=float_constant(fx, "EXTERNAL_CHOIR_SCALE"),
         path_letter_offset=0.0,
-        path_letter_scale=float(path_label.group(1)),
-        title_rows=tuple(title_rows),
+        path_letter_scale=float_constant(fx, "PATH_LETTER_SCALE"),
+        glory_scale=float(glory.group(1)),
+        glory_length_base=float(glory.group(2)),
+        glory_length_step=float(glory.group(3)),
+        glory_width_base=float(glory.group(4)),
+        glory_width_step=float(glory.group(5)),
+        label_rotation_degrees=float_constant(fx, "LABEL_ROTATION_DEGREES"),
+        diagram_text_z=float_constant(fx, "DIAGRAM_TEXT_Z"),
+        internal_name_scale=float_constant(fx, "INTERNAL_NAME_SCALE"),
+        internal_divine_scale=float_constant(fx, "INTERNAL_DIVINE_SCALE"),
+        internal_archangel_scale=float_constant(fx, "INTERNAL_ARCHANGEL_SCALE"),
+        internal_choir_scale=float_constant(fx, "INTERNAL_CHOIR_SCALE"),
+        path_number_scale=float_constant(fx, "PATH_NUMBER_SCALE"),
         label_x_offsets=label_x_offsets,
         path_label_offsets=path_label_offsets,
         all_labels_backed=(
@@ -647,25 +692,66 @@ def draw_unit_cross(draw: ImageDraw.ImageDraw, projection: Projection,
 
 def label_specs(data: TreeData) -> list[LabelSpec]:
     labels: list[LabelSpec] = []
-    top = data.node_world(9)[1]
-    for index, (logical, offset, scale) in enumerate(data.title_rows):
-        display = reverse_hebrew(logical) if any("\u0590" <= ch <= "\u05ff" for ch in logical) else logical
-        labels.append(LabelSpec(
-            f"title_{index + 1}", "title", display, logical, (0.0, top + offset), scale,
-            data.all_labels_backed,
-        ))
     for index in range(len(data.nodes)):
         x, y = data.node_world(index)
         label_x = x + data.label_x_offsets[index]
+        primary = f"{data.numerals[index]}  {data.hebrew[index]}"
         labels.append(LabelSpec(
-            f"node_{index + 1}_latin", "sephira_latin",
-            f"{index + 1}  {data.names[index]}", f"{index + 1}  {data.names[index]}",
-            (label_x, y + data.name_y), data.name_scale, data.all_labels_backed,
+            f"node_{index + 1}_name", "sephira_name",
+            reverse_hebrew(primary), primary,
+            (label_x, y + data.node_name_y), data.node_name_scale,
+            force_backing=data.all_labels_backed,
+            rotation_degrees=data.label_rotation_degrees,
         ))
         labels.append(LabelSpec(
-            f"node_{index + 1}_hebrew", "sephira_hebrew",
+            f"node_{index + 1}_divine", "divine_name",
+            reverse_hebrew(data.divine_names[index]), data.divine_names[index],
+            (label_x, y + data.divine_name_y), data.divine_name_scale,
+            force_backing=data.all_labels_backed,
+            rotation_degrees=data.label_rotation_degrees,
+        ))
+        labels.append(LabelSpec(
+            f"node_{index + 1}_archangel", "archangel_name",
+            reverse_hebrew(data.archangels[index]), data.archangels[index],
+            (label_x, y + data.external_archangel_y),
+            data.external_archangel_scale,
+            force_backing=data.all_labels_backed,
+            rotation_degrees=data.label_rotation_degrees,
+        ))
+        labels.append(LabelSpec(
+            f"node_{index + 1}_choir", "choir_name",
+            reverse_hebrew(data.choirs[index]), data.choirs[index],
+            (label_x, y + data.external_choir_y), data.external_choir_scale,
+            force_backing=data.all_labels_backed,
+            rotation_degrees=data.label_rotation_degrees,
+        ))
+        labels.append(LabelSpec(
+            f"node_{index + 1}_inner_name", "inner_name",
             reverse_hebrew(data.hebrew[index]), data.hebrew[index],
-            (label_x, y + data.hebrew_y), data.hebrew_scale, data.all_labels_backed,
+            (x, y + 9.4), data.internal_name_scale,
+            depth_layer="backplate",
+            rotation_degrees=data.label_rotation_degrees,
+        ))
+        labels.append(LabelSpec(
+            f"node_{index + 1}_inner_archangel", "inner_archangel",
+            reverse_hebrew(data.archangels[index]), data.archangels[index],
+            (x, y + 5.7), data.internal_archangel_scale,
+            depth_layer="backplate",
+            rotation_degrees=data.label_rotation_degrees,
+        ))
+        labels.append(LabelSpec(
+            f"node_{index + 1}_inner_choir", "inner_choir",
+            reverse_hebrew(data.choirs[index]), data.choirs[index],
+            (x, y - 5.7), data.internal_choir_scale,
+            depth_layer="backplate",
+            rotation_degrees=data.label_rotation_degrees,
+        ))
+        labels.append(LabelSpec(
+            f"node_{index + 1}_inner_divine", "inner_divine",
+            reverse_hebrew(data.divine_names[index]), data.divine_names[index],
+            (x, y - 9.4), data.internal_divine_scale,
+            depth_layer="backplate",
+            rotation_degrees=data.label_rotation_degrees,
         ))
     for index, (left, right) in enumerate(data.paths):
         ax, ay = data.node_world(left)
@@ -678,7 +764,16 @@ def label_specs(data: TreeData) -> list[LabelSpec]:
         labels.append(LabelSpec(
             f"path_{index + 1:02d}_{left + 1}_{right + 1}", "path_letter",
             data.letters[index], data.letters[index], position, data.path_letter_scale,
-            data.all_labels_backed,
+            force_backing=data.all_labels_backed,
+            rotation_degrees=data.label_rotation_degrees,
+        ))
+        number_position = (position[0] + 1.8, position[1] - 2.6)
+        labels.append(LabelSpec(
+            f"path_number_{index + 1:02d}_{left + 1}_{right + 1}", "path_number",
+            reverse_hebrew(data.path_numerals[index]), data.path_numerals[index],
+            number_position, data.path_number_scale,
+            depth_layer="backplate",
+            rotation_degrees=data.label_rotation_degrees,
         ))
     return labels
 
@@ -724,8 +819,8 @@ def candidate_label_specs(
             "name": data.names[index],
             "anchor_local": [anchor_x, y],
             "offset_from_node": [offset, 0.0],
-            "latin_y_offset": data.name_y,
-            "hebrew_y_offset": data.hebrew_y,
+            "hebrew_name_y_offset": data.node_name_y,
+            "divine_name_y_offset": data.divine_name_y,
             "leader": [list(leader_start), list(leader_end)],
         })
 
@@ -740,6 +835,7 @@ def candidate_label_specs(
             "path": index + 1,
             "endpoints": [left + 1, right + 1],
             "letter": data.letters[index],
+            "hebrew_number": data.path_numerals[index],
             "local_position": [round(position[0], 3), round(position[1], 3)],
             "offset_from_midpoint": [
                 round(position[0] - midpoint[0], 3),
@@ -749,15 +845,20 @@ def candidate_label_specs(
 
     recommendation: dict[str, object] = {
         "status": "adopted in ClientFxManager.java",
-        "node_latin_scale": data.name_scale,
-        "node_hebrew_scale": data.hebrew_scale,
+        "node_hebrew_scale": data.node_name_scale,
+        "node_divine_name_scale": data.divine_name_scale,
         "path_letter_scale": data.path_letter_scale,
-        "title_rows": [
-            {"text": text, "top_offset": offset, "scale": scale}
-            for text, offset, scale in data.title_rows
-        ],
+        "path_number_scale": data.path_number_scale,
+        "internal_name_scale": data.internal_name_scale,
+        "internal_divine_scale": data.internal_divine_scale,
+        "label_rotation_degrees": data.label_rotation_degrees,
+        "detached_title_rows": 0,
+        "horizon_row": False,
         "frame_top_margin": data.frame_top_margin,
-        "display_mode": "Font.DisplayMode.SEE_THROUGH",
+        "display_modes": {
+            "foreground": "Font.DisplayMode.SEE_THROUGH",
+            "backplate_microtext": "Font.DisplayMode.NORMAL",
+        },
         "background_argb": ("0xA0000000" if data.all_labels_backed else "0x00000000"),
         "node_anchors": node_recommendations,
         "path_letter_positions": path_recommendations,
@@ -772,7 +873,7 @@ def label_geometry(projection: Projection, spec: LabelSpec,
     screen = projection.point(*spec.position)
     pixel_height = projection.length(8.0 * spec.scale)
     font = load_font(pixel_height, supersample,
-                     bold=spec.kind in {"title", "sephira_latin"})
+                     bold=spec.kind == "sephira_name")
     measured = font.getbbox(spec.text)
     width = measured[2] - measured[0]
     height = measured[3] - measured[1]
@@ -786,28 +887,51 @@ def draw_label(layer: Image.Image, projection: Projection, spec: LabelSpec,
     font, measured, width, height, left, top, pixel_height = label_geometry(
         projection, spec, supersample
     )
-    draw = ImageDraw.Draw(layer)
     backed = spec.force_backing
     padding = max(1, round(0.9 * supersample))
     if backed:
+        draw = ImageDraw.Draw(layer)
         draw.rectangle(
             [round(left - padding), round(top - padding), round(left + width + padding), round(top + height + padding)],
             fill=(0, 0, 0, 152),
         )
+    # Render each glyph row on its own tile before rotating it.  Rotating the
+    # whole label layer would preserve the old upright lettering instead of
+    # reproducing EoE's 180-degree rotation of the complete printed diagram.
+    tile_padding = max(2, supersample * 2)
+    tile = Image.new(
+        "RGBA", (max(1, round(width) + tile_padding * 2),
+                 max(1, round(height) + tile_padding * 2)), (0, 0, 0, 0)
+    )
+    tile_draw = ImageDraw.Draw(tile)
+    baseline = tile_padding - measured[1]
     if backed:
-        # The historical backed-label contract also requested a shadow.
+        # Kept only for the parser's historical comparison mode; the adopted
+        # Java contract deliberately has neither backdrop nor shadow.
         shadow = max(1, supersample)
-        draw.text((round(left + shadow), round(top + shadow - measured[1])), spec.text, font=font,
-                  fill=(38, 0, 0, 230))
-    draw.text((round(left), round(top - measured[1])), spec.text, font=font, fill=RED)
+        tile_draw.text((tile_padding + shadow, baseline + shadow), spec.text,
+                       font=font, fill=(38, 0, 0, 230))
+    tile_draw.text((tile_padding, baseline), spec.text, font=font, fill=RED)
+    rotation = spec.rotation_degrees % 360.0
+    if math.isclose(rotation, 180.0, abs_tol=1.0e-6):
+        tile = tile.transpose(Image.Transpose.ROTATE_180)
+    elif not math.isclose(rotation, 0.0, abs_tol=1.0e-6):
+        tile = tile.rotate(rotation, resample=Image.Resampling.BICUBIC, expand=False)
+    layer.alpha_composite(
+        tile,
+        (round(left) - tile_padding, round(top) - tile_padding),
+    )
     bbox = (
         left / supersample,
         top / supersample,
         (left + width) / supersample,
         (top + height) / supersample,
     )
-    return LabelBox(spec.identifier, spec.kind, spec.text, spec.logical_text,
-                    spec.position, spec.scale, bbox, height / supersample, backed)
+    return LabelBox(
+        spec.identifier, spec.kind, spec.text, spec.logical_text,
+        spec.position, spec.scale, bbox, height / supersample, backed,
+        spec.depth_layer, spec.rotation_degrees,
+    )
 
 
 def render(data: TreeData, projection: Projection, supersample: int,
@@ -869,6 +993,24 @@ def render(data: TreeData, projection: Projection, supersample: int,
         inner_radius = rx * 0.72
         inner = (cx - inner_radius, cy - inner_radius, cx + inner_radius, cy + inner_radius)
         draw.ellipse(scaled_bbox(inner, supersample), outline=RED, width=inner_width_px)
+        tick_width = max(1, round(projection.length(0.09, tree_depth) * supersample))
+        for tick in range(data.node_tick_count):
+            angle = math.tau * tick / data.node_tick_count
+            inner_tick = projection.point(
+                x + math.cos(angle) * radius * 0.79,
+                y + math.sin(angle) * radius * 0.79,
+                tree_depth,
+            )
+            outer_tick = projection.point(
+                x + math.cos(angle) * radius * 0.93,
+                y + math.sin(angle) * radius * 0.93,
+                tree_depth,
+            )
+            draw.line(
+                [scaled_point(inner_tick, supersample),
+                 scaled_point(outer_tick, supersample)],
+                fill=RED_DIM, width=tick_width,
+            )
         geometry_boxes.append(outer)
 
     leader_width = max(1, round(projection.length(0.18, tree_depth) * supersample))
@@ -880,21 +1022,35 @@ def render(data: TreeData, projection: Projection, supersample: int,
             width=leader_width,
         )
 
-    # Six Tiferet glory rays (the real Unit-01 path uses wings only).
+    # Six Tiferet glory rays (the real Unit-01 path uses wings only).  Their
+    # dimensions are parsed from Java so the preview catches another red-wall
+    # regression instead of carrying the previous 2x wing span forever.
     tx, ty = data.node_world(data.tiferet)
-    wing_width = max(1, round(projection.length(0.8, tree_depth) * supersample))
     for side in (-1.0, 1.0):
         for feather, angle_degrees in enumerate((28.0, 50.0, 72.0)):
-            length = (22.0 - feather * 4.5) * 2.0
+            length = (data.glory_length_base - feather * data.glory_length_step) * data.glory_scale
+            width = (data.glory_width_base - feather * data.glory_width_step) * data.glory_scale
+            wing_width = max(1, round(projection.length(width, tree_depth) * supersample))
             angle = math.radians(angle_degrees)
-            start = projection.point(tx, ty + 4.0, tree_depth)
+            start_y = ty + 2.0 * data.glory_scale
+            start = projection.point(tx, start_y, tree_depth)
             tip = projection.point(
                 tx + side * math.cos(angle) * length,
-                ty + 4.0 + math.sin(angle) * length,
+                start_y + math.sin(angle) * length,
                 tree_depth,
             )
             draw.line([scaled_point(start, supersample), scaled_point(tip, supersample)],
-                      fill=RED_SOFT, width=max(1, wing_width - feather))
+                      fill=RED_SOFT, width=wing_width)
+
+    # Internal ring/path inscriptions use NORMAL depth in Java.  Render their
+    # preview layer before bodies so model silhouettes visibly occlude them.
+    backplate_layer = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
+    backplate_labels = [
+        draw_label(backplate_layer, projection, spec, supersample)
+        for spec in specs if spec.depth_layer == "backplate"
+    ]
+    canvas = Image.alpha_composite(canvas, backplate_layer)
+    draw = ImageDraw.Draw(canvas)
 
     # Bodies render in front of the backplate.  Drawing remains schematic, but
     # every collision/readability box below is the conservative perspective
@@ -919,13 +1075,15 @@ def render(data: TreeData, projection: Projection, supersample: int,
                 projection, node, data.mass_height, data.mass_visual
             )
 
-    # Labels are a separate foreground pass in ClientFxManager.
+    # External names and the large path letters use SEE_THROUGH in Java, so
+    # they remain a separate foreground pass.
     label_layer = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
-    labels = [
+    foreground_labels = [
         draw_label(label_layer, projection, spec, supersample)
-        for spec in specs
+        for spec in specs if spec.depth_layer == "foreground"
     ]
     canvas = Image.alpha_composite(canvas, label_layer)
+    labels = backplate_labels + foreground_labels
 
     label_pairs: list[dict[str, object]] = []
     label_pairs_any: list[dict[str, object]] = []
@@ -951,7 +1109,7 @@ def render(data: TreeData, projection: Projection, supersample: int,
 
     label_entity: list[dict[str, object]] = []
     label_entity_any: list[dict[str, object]] = []
-    for label in labels:
+    for label in foreground_labels:
         for entity, box in entity_boxes.items():
             overlap = bbox_intersection(label.bbox, box)
             area = bbox_area(label.bbox)
@@ -999,6 +1157,31 @@ def render(data: TreeData, projection: Projection, supersample: int,
         {"label": label.identifier, "height_pixels": round(label.projected_height, 2)}
         for label in labels if label.projected_height < 8.0
     ]
+    role_minimums = {
+        # The tableau intentionally uses fine engraving rather than HUD-size
+        # captions. These floors reject disappearing glyphs while allowing
+        # the dense, mysterious register requested for the ritual backplate.
+        "sephira_name": 5.0,
+        "divine_name": 3.25,
+        "archangel_name": 2.5,
+        "choir_name": 2.25,
+        "path_letter": 5.5,
+        "inner_name": 2.5,
+        "inner_divine": 1.75,
+        "inner_archangel": 1.75,
+        "inner_choir": 1.5,
+        "path_number": 2.5,
+    }
+    undersized = [
+        {
+            "label": label.identifier,
+            "kind": label.kind,
+            "height_pixels": round(label.projected_height, 2),
+            "required_pixels": role_minimums[label.kind],
+        }
+        for label in labels
+        if label.projected_height < role_minimums[label.kind]
+    ]
     all_bounds = geometry_boxes + [label.bbox for label in labels] + list(entity_boxes.values())
     composition = union_bbox(all_bounds)
     occupancy_width = (composition[2] - composition[0]) / projection.width
@@ -1016,9 +1199,53 @@ def render(data: TreeData, projection: Projection, supersample: int,
             "visible_obscuration_after_depth_order": 0.0,
         })
 
+    node_positions = [data.node_world(index) for index in range(len(data.nodes))]
+    ys = [point[1] for point in node_positions]
+    semantic_names = (
+        "KETER", "CHOKMAH", "BINAH", "CHESED", "GEVURAH",
+        "TIFERET", "NETZACH", "HOD", "YESOD", "MALKUTH",
+    )
+    semantic_hebrew = (
+        "כתר", "חכמה", "בינה", "חסד", "גבורה",
+        "תפארת", "נצח", "הוד", "יסוד", "מלכות",
+    )
+    inverted_semantics = (
+        data.tableau_orientation == "EOE_INVERTED"
+        and data.keter == 0 and data.tiferet == 5 and data.malkuth == 9
+        and node_positions[data.keter][1] == min(ys)
+        and node_positions[data.malkuth][1] == max(ys)
+    )
+    tiferet_centre = (
+        node_positions[data.tiferet][0] == 0.0
+        and abs(node_positions[data.tiferet][1]
+                - (min(ys) + max(ys)) * 0.5) < 1.0e-6
+    )
+    semantic_labels = data.names == semantic_names and data.hebrew == semantic_hebrew
+    all_labels_rotated = (
+        math.isclose(data.label_rotation_degrees, 180.0, abs_tol=1.0e-6)
+        and all(math.isclose(label.rotation_degrees % 360.0, 180.0,
+                             abs_tol=1.0e-6) for label in labels)
+    )
+    no_horizon_row = (
+        adopted_java_layout["detached_title_rows"] == 0
+        and adopted_java_layout["horizon_row"] is False
+        and not any(label.kind == "title" for label in labels)
+    )
+    dense_internal_marks = (
+        data.node_tick_count == 12
+        and len(backplate_labels) == len(data.nodes) * 4 + len(data.paths)
+        and len(labels) == len(data.nodes) * 8 + len(data.paths) * 2
+    )
+
     checks = {
+        "eoe_inverted_semantic_order": inverted_semantics,
+        "semantic_label_index_mapping": semantic_labels,
+        "tiferet_remains_geometric_centre": tiferet_centre,
+        "all_diagram_labels_rotated_180_degrees": all_labels_rotated,
+        "no_detached_title_or_horizon_row": no_horizon_row,
+        "dense_internal_marks_present": dense_internal_marks,
         "all_labels_on_screen": not clipped,
-        "minimum_label_height_at_least_8px": not small,
+        "label_height_meets_role_threshold": not undersized,
         "no_material_label_label_overlap": not label_pairs,
         "no_material_label_entity_overlap": not label_entity,
         "composition_height_below_80_percent": occupancy_height <= 0.80,
@@ -1037,7 +1264,7 @@ def render(data: TreeData, projection: Projection, supersample: int,
         )
         checks["candidate_has_all_parsed_path_offsets"] = not adopted_java_layout["unresolved_path_letters"]
     report: dict[str, object] = {
-        "schema": 2,
+        "schema": 3,
         "status": "PASS" if all(checks.values()) else "FAIL",
         "scope": (
             "offline composition using real posed high-detail mesh envelopes; "
@@ -1061,11 +1288,30 @@ def render(data: TreeData, projection: Projection, supersample: int,
             "focal_pixels": round(projection.focal, 3),
         },
         "parsed_contract": {
+            "tableau_orientation": data.tableau_orientation,
+            "semantic_indices": {
+                "keter": data.keter,
+                "tiferet": data.tiferet,
+                "malkuth": data.malkuth,
+            },
+            "semantic_extrema": {
+                "nadir": data.names[min(range(len(ys)), key=ys.__getitem__)],
+                "crown": data.names[max(range(len(ys)), key=ys.__getitem__)],
+                "centre": data.names[data.tiferet],
+            },
             "nodes": len(data.nodes),
             "paths": len(data.paths),
             "latin_names": len(data.names),
             "hebrew_names": len(data.hebrew),
+            "hebrew_numerals": len(data.numerals),
+            "hebrew_divine_names": len(data.divine_names),
+            "hebrew_archangel_names": len(data.archangels),
+            "hebrew_choir_names": len(data.choirs),
             "hebrew_path_letters": len(data.letters),
+            "hebrew_path_numerals": len(data.path_numerals),
+            "label_rotation_degrees": data.label_rotation_degrees,
+            "node_radial_register_marks": data.node_tick_count,
+            "backplate_microtext_labels": len(backplate_labels),
             "posed_model_envelopes": len(entity_boxes),
             "mass_entity_size": [data.mass_width, data.mass_height],
             "unit01_entity_size": [data.unit_width, data.unit_height],
@@ -1097,6 +1343,13 @@ def render(data: TreeData, projection: Projection, supersample: int,
             "maximum_breathing_outer_radius": round(data.outer_radius * 1.045, 3),
             "path_lane_offset": data.path_offset,
             "path_ribbon_widths": [data.path_outer_width, data.path_inner_width],
+            "tiferet_glory": {
+                "scale": data.glory_scale,
+                "length_base": data.glory_length_base,
+                "length_step": data.glory_length_step,
+                "width_base": data.glory_width_base,
+                "width_step": data.glory_width_step,
+            },
         },
         "composition": {
             "screen_bbox": [round(value, 2) for value in composition],
@@ -1112,6 +1365,7 @@ def render(data: TreeData, projection: Projection, supersample: int,
             "minimum_projected_height_pixels": round(min(label.projected_height for label in labels), 2),
             "clipped_labels": clipped,
             "labels_below_8px": small,
+            "labels_below_role_threshold": undersized,
             "label_label_overlaps": label_pairs,
             "label_label_any_bbox_overlaps": label_pairs_any,
             "label_entity_overlaps": label_entity,
@@ -1120,9 +1374,16 @@ def render(data: TreeData, projection: Projection, supersample: int,
             "entity_entity_any_bbox_overlaps": entity_pairs_any,
         },
         "occlusion": {
-            "render_order": ["tree_backplate", "posed_model_silhouettes", "labels"],
+            "render_order": [
+                "tree_geometry", "backplate_microtext",
+                "posed_model_silhouettes", "foreground_labels",
+            ],
             "raw_backplate_bbox_overlap": raw_backplate_overlap,
-            "note": "Tree/entity bbox intersections are conservative; backplate is drawn behind bodies. Label/entity overlap remains foreground risk.",
+            "note": (
+                "Tree/entity bbox intersections are conservative. NORMAL-depth "
+                "microtext is previewed behind bodies; only SEE_THROUGH foreground "
+                "labels count as entity-occlusion failures."
+            ),
         },
         "checks": checks,
         "labels": [
@@ -1135,6 +1396,8 @@ def render(data: TreeData, projection: Projection, supersample: int,
                 "screen_bbox": [round(value, 2) for value in label.bbox],
                 "height_pixels": round(label.projected_height, 2),
                 "backed": label.backed,
+                "depth_layer": label.depth_layer,
+                "rotation_degrees": label.rotation_degrees,
             }
             for label in labels
         ],
@@ -1154,6 +1417,7 @@ def text_report(report: dict[str, object], png_path: Path) -> str:
         "Project SEELE - Tree of Life offline composition report",
         f"STATUS: {report['status']}",
         f"LAYOUT: {report['layout_mode']}",
+        f"TABLEAU ORIENTATION: {report['parsed_contract']['tableau_orientation']}",
         f"PNG: {png_path}",
         "",
         "Camera",
@@ -1218,7 +1482,7 @@ def main() -> int:
         raise SystemExit("--fov-degrees must be between 20 and 140")
 
     data = parse_tree(args.asset_root.resolve())
-    frame_top = data.node_world(9)[1] + data.frame_top_margin
+    frame_top = data.node_world(data.malkuth)[1] + data.frame_top_margin
     target_y = (data.frame_bottom + frame_top) * 0.5
     projection = Projection(
         width=args.width,

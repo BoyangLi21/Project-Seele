@@ -1,6 +1,7 @@
 {
   "itemGroup.projectseele": "Project SEELE",
   "message.projectseele.use_entry_gantry": "\u8bf7\u4ece\u80cc\u90e8\u9ad8\u4f4d\u63d2\u5165\u6813\u6808\u6865\u767b\u4e58",
+  "message.projectseele.aim_entry_plug": "\u8bf7\u5c06\u51c6\u661f\u5bf9\u51c6 EVA \u80cc\u90e8\u7684\u63d2\u5165\u6813\u63a5\u53e3",
   "message.projectseele.launch_locked": "\u53d1\u5c04\u8f7d\u53f0\u5df2\u9501\u5b9a\u2014\u2014\u63d2\u5165\u4e0e\u540c\u6b65\u8fdb\u884c\u4e2d",
   "message.projectseele.launch_interlock": "\u53d1\u5c04\u5e8f\u5217\u4e2d\u7981\u6b62\u5f39\u51fa\u63d2\u5165\u6813",
   "message.projectseele.launch_bed_occupied": "\u8be5\u53d1\u5c04\u53f0\u5df2\u88ab\u53e6\u4e00\u53f0 EVA \u5360\u7528",

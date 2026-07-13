@@ -1,6 +1,7 @@
 {
   "itemGroup.projectseele": "Project SEELE",
   "message.projectseele.use_entry_gantry": "Board from the upper dorsal entry-plug gantry",
+  "message.projectseele.aim_entry_plug": "Aim directly at the dorsal entry-plug socket",
   "message.projectseele.launch_locked": "Launch carrier locked — insertion and synchronization in progress",
   "message.projectseele.launch_interlock": "Entry-plug ejection locked during the launch sequence",
   "message.projectseele.launch_bed_occupied": "This launch bed is already claimed by another EVA",

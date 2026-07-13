@@ -140,7 +140,10 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
                 || (animatable.getUnitVariant() == EvaUnit01Entity.UNIT_00
                     && animatable.getVisualPose() == EvaUnit01Entity.VISUAL_CROUCH);
         setWeaponVisibility(model, "shield", shieldBrace);
-        boolean activating = animatable.getActivationTicks() > 0;
+        // Insertion is a transient animation but the plug itself stays seated
+        // for the entire piloted session, including after the 120-tick startup.
+        boolean activating = animatable.getActivationTicks() > 0
+                || animatable.isEntryPlugInserted();
         setWeaponVisibility(model, "entry_plug", activating);
         setWeaponVisibility(model, "plug_hatch_l", activating);
         setWeaponVisibility(model, "plug_hatch_r", activating);

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 from pathlib import Path
 import subprocess
 import sys
@@ -19,6 +20,24 @@ REPO = Path(__file__).resolve().parent.parent
 RENDERER = REPO / "tools/render_unit01_rig_preview.py"
 DEFAULT_ASSETS = REPO / "run/resourcepacks/eva_real_model/assets/projectseele"
 DEFAULT_ANIMATION = REPO / "src/main/resources/assets/projectseele/animations/eva_unit01.animation.json"
+
+
+def cosine_alignment(a: list[float], b: list[float]) -> float:
+    denominator = math.sqrt(sum(value * value for value in a)
+                            * sum(value * value for value in b))
+    return -1.0 if denominator <= 1.0e-6 else sum(
+        a[index] * b[index] for index in range(3)) / denominator
+
+
+def point_line_distance(point: list[float], origin: list[float],
+                        direction: list[float]) -> float:
+    length_sqr = sum(value * value for value in direction)
+    if length_sqr <= 1.0e-6:
+        return float("inf")
+    offset = [point[index] - origin[index] for index in range(3)]
+    along = sum(offset[index] * direction[index] for index in range(3)) / length_sqr
+    closest = [origin[index] + along * direction[index] for index in range(3)]
+    return math.sqrt(sum((point[index] - closest[index]) ** 2 for index in range(3)))
 
 
 def render(assets: Path, animation_json: Path, stem: str, pose: str,
@@ -37,6 +56,8 @@ def render(assets: Path, animation_json: Path, stem: str, pose: str,
     ]
     if attachment == "knife":
         command.extend(("--geo-cube-bone", "knife"))
+    elif attachment == "lance":
+        command.extend(("--geo-cube-bone", "lance"))
     elif attachment == "cannon":
         command.extend((
             "--attachment-mesh", str(assets / "mesh/positron_cannon.mesh.json"),
@@ -90,13 +111,62 @@ def main() -> int:
             metrics = render(args.assets, args.animation_json, "eva_unit01", pose,
                              time, args.output, "knife")
             joints = metrics["joint_world"]
+            blade = metrics["attachment_endpoints"]["attachment:knife"]
+            blade_tip = blade["far_endpoint"]
+            hand = joints["hand_r"]
+            elbow = joints["forearm_r"]
+            hand_to_tip = [blade_tip[axis] - hand[axis] for axis in range(3)]
+            hand_to_elbow = [elbow[axis] - hand[axis] for axis in range(3)]
             prefix = f"{pose}_{label}"
             checks[f"{prefix}_grounded"] = -0.15 <= metrics["overall_min_y"] <= 0.15
             checks[f"{prefix}_right_hand_forward"] = joints["hand_r"][2] <= -35.0
-            checks[f"{prefix}_blade_forward"] = joints["knife"][2] <= -40.0
+            # A progressive knife is reverse-gripped: its far tip leaves the
+            # little-finger side of the fist and points back along the outer
+            # forearm, never forward like a short sword.  Checking the actual
+            # cube endpoint closes the old loophole where only the socket
+            # pivot was forward while the blade itself faced the wrong way.
+            checks[f"{prefix}_reverse_grip"] = (
+                cosine_alignment(hand_to_tip, hand_to_elbow) >= 0.65
+                and hand_to_tip[2] >= 12.0
+                and hand_to_tip[1] <= -5.0
+            )
             checks[f"{prefix}_guard_forward"] = joints["hand_l"][2] <= -30.0
             knife_report[prefix] = metrics
     report["knife"] = knife_report
+
+    lance_report = {}
+    lance_samples = (("ready", 0.0, "", 0.0),
+                     ("windup", 0.0, "lance_thrust", 0.20),
+                     ("contact", 0.0, "lance_thrust", 0.42),
+                     ("recovery", 0.0, "lance_thrust", 0.72))
+    for label, base_time, overlay, overlay_time in lance_samples:
+        metrics = render(args.assets, args.animation_json, "eva_unit01",
+                         "lance_ready", base_time, args.output, "lance",
+                         overlay, overlay_time)
+        joints = metrics["joint_world"]
+        torso_z = joints["torso_upper"][2]
+        weapon = metrics["attachment_endpoints"]["attachment:lance"]
+        axis = weapon["vector_from_pivot"]
+        prefix = f"lance_{label}"
+        checks[f"{prefix}_elbows_in_front"] = all(
+            joints[bone][2] <= torso_z - 2.0
+            for bone in ("forearm_l", "forearm_r"))
+        checks[f"{prefix}_hands_in_front"] = all(
+            joints[bone][2] <= torso_z - 4.0
+            for bone in ("hand_l", "hand_r"))
+        checks[f"{prefix}_two_hand_grip"] = (
+            9.0 <= metrics["hand_pivot_distance"] <= 36.0
+            and abs(joints["hand_l"][2] - joints["hand_r"][2]) >= 7.0
+            and point_line_distance(joints["hand_l"], weapon["pivot"], axis) <= 10.0
+            and math.dist(joints["hand_r"], weapon["pivot"]) <= 8.0
+        )
+        checks[f"{prefix}_tip_faces_model_front"] = (
+            axis[2] <= -240.0
+            and abs(axis[0]) <= 100.0
+            and abs(axis[1]) <= 80.0
+        )
+        lance_report[prefix] = metrics
+    report["lance"] = lance_report
     report["checks"] = checks
     report["passed"] = all(checks.values())
     args.output.mkdir(parents=True, exist_ok=True)

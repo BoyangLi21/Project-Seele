@@ -303,7 +303,8 @@ public final class VisualCaptureManager
 
         private void maintainCamera(Minecraft minecraft)
         {
-            double frameTop = TreeOfLifeLayout.localY(9) + FRAME_TOP_MARGIN;
+            double frameTop = TreeOfLifeLayout.localY(TreeOfLifeLayout.MALKUTH)
+                    + FRAME_TOP_MARGIN;
             Vec3 fullTarget = this.origin.add(
                     0.0D, (FRAME_BOTTOM + frameTop) * 0.5D, 0.0D);
             Vec3 front = new Vec3(Mth.sin(this.yaw), 0.0D, Mth.cos(this.yaw));

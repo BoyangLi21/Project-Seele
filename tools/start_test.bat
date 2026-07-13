@@ -125,6 +125,8 @@ if /i "%~1"=="offline" (
     echo Running the fail-closed offline visual recovery suite...
     python tools\validate_third_person_pose.py
     if errorlevel 1 set "OFFLINE_FAILED=1"
+    python tools\validate_crawl_pose.py
+    if errorlevel 1 set "OFFLINE_FAILED=1"
     python tools\validate_crucified_pose.py
     if errorlevel 1 set "OFFLINE_FAILED=1"
     python tools\render_launch_silo_preview.py --strict

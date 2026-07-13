@@ -181,14 +181,16 @@ public class NervConstructionKitItem extends Item
      */
     private static void buildEntryGantry(ServerLevel level, BlockPos centre, BlockState accent)
     {
-        int gantryY = -8;
+        // Tiger runtime plug pivots resolve to about origin-2.1. A floor at
+        // origin-4 puts the pilot's eye beside that real synthetic socket.
+        int gantryY = -4;
         BlockState frame = Blocks.IRON_BLOCK.defaultBlockState();
         BlockState dark = Blocks.BLACK_CONCRETE.defaultBlockState();
         BlockState light = Blocks.SEA_LANTERN.defaultBlockState();
         BlockState ladder = Blocks.LADDER.defaultBlockState().setValue(LadderBlock.FACING, Direction.NORTH);
 
         // Vertical service lift from the existing low access gallery.
-        for (int y = -26; y <= -7; y++)
+        for (int y = -26; y <= -3; y++)
         {
             level.setBlock(centre.offset(0, y, 14), frame, 3);
             level.setBlock(centre.offset(0, y, 13), ladder, 3);

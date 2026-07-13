@@ -17,6 +17,9 @@
   "right_foot": "foot_r",
   "left_pylon": "pylon_l",
   "right_pylon": "pylon_r",
+  "entry_plug_attachment": "entry_plug",
+  "entry_hatch_left": "plug_hatch_l",
+  "entry_hatch_right": "plug_hatch_r",
   "shield_attachment": "shield",
   "weapon_attachment": "hand_r"
 }

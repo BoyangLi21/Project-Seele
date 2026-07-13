@@ -4,6 +4,7 @@ import com.projectseele.ProjectSeele;
 import com.projectseele.client.visual.VisualCaptureManager;
 import com.projectseele.entity.EvaUnit01Entity;
 import com.projectseele.network.SeeleNetwork;
+import com.projectseele.network.ServerboundEntryPlugPacket;
 import com.projectseele.network.ServerboundEvaControlPacket;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
@@ -11,6 +12,11 @@ import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.Mth;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.level.ClipContext;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.HitResult;
+import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.ComputeFovModifierEvent;
 import net.minecraftforge.client.event.InputEvent;
@@ -38,6 +44,8 @@ public final class ClientForgeEvents
     private static int damageFlashTicks;
     private static float lastEvaHealth = -1.0F;
     private static boolean wasPiloting;
+    /** Forge may report the same use press once for each hand. */
+    private static int lastEntryPlugRequestTick = Integer.MIN_VALUE;
 
     private ClientForgeEvents() {}
 
@@ -248,6 +256,24 @@ public final class ClientForgeEvents
         EvaUnit01Entity eva = ridden(player);
         if (eva == null)
         {
+            if (player != null && event.isUseItem() && !player.isShiftKeyDown())
+            {
+                EvaUnit01Entity entryTarget = findEntryPlugTarget(player);
+                if (entryTarget != null)
+                {
+                    // The synthetic dorsal plug sits outside parts of the
+                    // coarse 8.5-wide collision box. Extend only this narrow
+                    // aimed interaction; the server repeats every gate.
+                    event.setCanceled(true);
+                    event.setSwingHand(false);
+                    if (lastEntryPlugRequestTick != player.tickCount)
+                    {
+                        lastEntryPlugRequestTick = player.tickCount;
+                        SeeleNetwork.CHANNEL.sendToServer(
+                                new ServerboundEntryPlugPacket(entryTarget.getId()));
+                    }
+                }
+            }
             return;
         }
         if (event.isAttack())
@@ -291,6 +317,34 @@ public final class ClientForgeEvents
         {
             event.setCanceled(true);
         }
+    }
+
+    private static EvaUnit01Entity findEntryPlugTarget(LocalPlayer player)
+    {
+        AABB search = player.getBoundingBox().inflate(12.0D, 32.0D, 12.0D);
+        return player.level().getEntitiesOfClass(EvaUnit01Entity.class, search,
+                        unit -> unit.isAlive() && !unit.isVehicle()
+                                && !unit.isLaunchSequenceActive()
+                                && unit.isEntryPlugTargeted(player)
+                                && hasClearEntryPlugPath(player, unit)).stream()
+                .min((left, right) -> Double.compare(
+                        left.getEntryPlugSocketPosition().distanceToSqr(player.getEyePosition()),
+                        right.getEntryPlugSocketPosition().distanceToSqr(player.getEyePosition())))
+                .orElse(null);
+    }
+
+    /**
+     * Do not consume a normal right-click merely because an EVA socket lies
+     * behind a wall. The server repeats this trace before authorizing entry.
+     */
+    private static boolean hasClearEntryPlugPath(LocalPlayer player, EvaUnit01Entity unit)
+    {
+        Vec3 eye = player.getEyePosition();
+        Vec3 socket = unit.getEntryPlugSocketPosition();
+        BlockHitResult hit = player.level().clip(new ClipContext(
+                eye, socket, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, player));
+        return hit.getType() == HitResult.Type.MISS
+                || hit.getLocation().distanceToSqr(socket) <= 0.75D * 0.75D;
     }
 
     @SubscribeEvent

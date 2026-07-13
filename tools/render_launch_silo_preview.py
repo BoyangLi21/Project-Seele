@@ -142,6 +142,7 @@ class SiloContract:
     clear_ticks: int
     renderer_scale: float
     plug_pivot_y: float
+    runtime_plug_height: float
     plug_animation_start_y: float
     plug_animation_end_y: float
 
@@ -171,7 +172,7 @@ class SiloContract:
 
     @property
     def plug_socket_world_y(self) -> float:
-        return self.unit_base_y + self.plug_pivot_y * self.renderer_scale / 16.0
+        return self.unit_base_y + self.runtime_plug_height
 
     @property
     def plug_start_world_y(self) -> float:
@@ -298,6 +299,7 @@ def parse_contract() -> SiloContract:
         clear_ticks=int(java_number(entity, "LAUNCH_CLEAR_TICKS")),
         renderer_scale=scale,
         plug_pivot_y=float(pivot[1]),
+        runtime_plug_height=java_number(entity, "ENTRY_PLUG_HEIGHT_01"),
         plug_animation_start_y=float(ordered[0][1][1]),
         plug_animation_end_y=float(ordered[-1][1][1]),
     )
@@ -335,10 +337,11 @@ def audit_contract(contract: SiloContract) -> dict[str, Any]:
         check("eva_fits_clearance", contract.unit_width <= clear_width, contract.unit_width, f"<= {clear_width}"),
         check("permanent_bed_13x13", permanent_bed_width == 13, permanent_bed_width, 13),
         check("moving_carrier_11x11", moving_carrier_width == 11, moving_carrier_width, 11),
-        check("high_dorsal_gantry", contract.gantry_y == 22 and contract.board_bed_y == 23, {"floor_y": contract.gantry_y, "boarding_y": contract.board_bed_y}, {"floor_y": 22, "boarding_y": 23}),
-        check("ladder_20_blocks", ladder_count == 20 and contract.ladder_y == (4, 23), {"count": ladder_count, "bed_relative_y": contract.ladder_y}, {"count": 20, "bed_relative_y": [4, 23]}),
+        check("high_dorsal_gantry", contract.gantry_y == 26 and contract.board_bed_y == 27, {"floor_y": contract.gantry_y, "boarding_y": contract.board_bed_y}, {"floor_y": 26, "boarding_y": 27}),
+        check("ladder_24_blocks", ladder_count == 24 and contract.ladder_y == (4, 27), {"count": ladder_count, "bed_relative_y": contract.ladder_y}, {"count": 24, "bed_relative_y": [4, 27]}),
         check("entry_height_gate", contract.entry_min_height <= player_relative_height <= contract.entry_max_height, player_relative_height, [contract.entry_min_height, contract.entry_max_height]),
         check("entry_rear_sector", contract.entry_min_distance <= board_distance <= contract.entry_max_distance and rear_dot >= contract.entry_min_rear_dot, {"distance": board_distance, "rear_dot": round(rear_dot, 4)}, {"distance": [contract.entry_min_distance, contract.entry_max_distance], "rear_dot_min": contract.entry_min_rear_dot}),
+        check("entry_socket_matches_gantry", 0.4 <= contract.plug_socket_world_y - contract.board_bed_y <= 2.2, {"socket_y": round(contract.plug_socket_world_y, 3), "boarding_feet_y": contract.board_bed_y}, "socket 0.4..2.2 blocks above boarding feet"),
         check("plug_descends_from_above", contract.plug_animation_start_y > contract.plug_animation_end_y and contract.plug_start_world_y > contract.plug_end_world_y, {"animation_y": [contract.plug_animation_start_y, contract.plug_animation_end_y], "world_y": [round(contract.plug_start_world_y, 3), round(contract.plug_end_world_y, 3)]}, "start above end"),
         check("plug_starts_above_gantry", contract.plug_start_world_y > contract.board_bed_y, round(contract.plug_start_world_y, 3), f"> {contract.board_bed_y}"),
         check("carrier_travel_31", abs(carrier_travel - 31.0) < 1.0e-6, carrier_travel, 31.0),
@@ -376,6 +379,7 @@ def audit_contract(contract: SiloContract) -> dict[str, Any]:
             "entry_plug": {
                 "renderer_scale": contract.renderer_scale,
                 "pivot_model_y": contract.plug_pivot_y,
+                "runtime_socket_height": contract.runtime_plug_height,
                 "animation_model_y": [contract.plug_animation_start_y, contract.plug_animation_end_y],
                 "world_path_y": [round(contract.plug_start_world_y, 4), round(contract.plug_end_world_y, 4)],
             },

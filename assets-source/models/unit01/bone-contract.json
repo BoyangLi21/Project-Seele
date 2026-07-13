@@ -21,6 +21,9 @@
     "right_upper_leg": "leg_r",
     "right_lower_leg": "shin_r",
     "right_foot": "foot_r",
+    "entry_plug_attachment": "entry_plug",
+    "entry_hatch_left": "plug_hatch_l",
+    "entry_hatch_right": "plug_hatch_r",
     "weapon_socket_right": "hand_r",
     "camera_socket": "entity passenger socket"
   },
@@ -28,5 +31,10 @@
     "weighted skinning or overlapping joint liners",
     "camera socket authored in an editable source",
     "release licence and attribution review"
-  ]
+  ],
+  "entry_socket": {
+    "source": "synthetic conversion attachment; not an OBJ submesh",
+    "runtime_height_blocks": 26.917,
+    "runtime_rear_offset_blocks": 1.25
+  }
 }

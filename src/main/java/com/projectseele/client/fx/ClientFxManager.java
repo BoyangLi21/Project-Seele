@@ -508,7 +508,24 @@ public final class ClientFxManager
         /** Node reveal cadence: Keter first, rising through the inverted tree. */
         private static final int NODE_LIGHT_INTERVAL = 9;
         private static final int NODE_LIGHT_TIME = 24;
+        private static final int NODE_TICK_COUNT = 12;
         private static final int TIFERET = TreeOfLifeLayout.TIFERET;
+        private static final float LABEL_ROTATION_DEGREES = 180.0F;
+        private static final float DIAGRAM_TEXT_Z = -7.4F;
+        private static final float EXTERNAL_NAME_Y = 3.15F;
+        private static final float EXTERNAL_DIVINE_Y = 1.05F;
+        private static final float EXTERNAL_ARCHANGEL_Y = -1.05F;
+        private static final float EXTERNAL_CHOIR_Y = -3.15F;
+        private static final float EXTERNAL_NAME_SCALE = 0.40F;
+        private static final float EXTERNAL_DIVINE_SCALE = 0.28F;
+        private static final float EXTERNAL_ARCHANGEL_SCALE = 0.22F;
+        private static final float EXTERNAL_CHOIR_SCALE = 0.20F;
+        private static final float PATH_LETTER_SCALE = 0.46F;
+        private static final float INTERNAL_NAME_SCALE = 0.22F;
+        private static final float INTERNAL_DIVINE_SCALE = 0.16F;
+        private static final float INTERNAL_ARCHANGEL_SCALE = 0.16F;
+        private static final float INTERNAL_CHOIR_SCALE = 0.14F;
+        private static final float PATH_NUMBER_SCALE = 0.22F;
         private static final String[] SEPHIRA_NAMES = {
                 "KETER", "CHOKMAH", "BINAH", "CHESED", "GEVURAH",
                 "TIFERET", "NETZACH", "HOD", "YESOD", "MALKUTH"
@@ -518,6 +535,27 @@ public final class ClientFxManager
                 "\u05D7\u05E1\u05D3", "\u05D2\u05D1\u05D5\u05E8\u05D4", "\u05EA\u05E4\u05D0\u05E8\u05EA",
                 "\u05E0\u05E6\u05D7", "\u05D4\u05D5\u05D3", "\u05D9\u05E1\u05D5\u05D3", "\u05DE\u05DC\u05DB\u05D5\u05EA"
         };
+        private static final String[] SEPHIRA_NUMERALS = {
+                "\u05D0", "\u05D1", "\u05D2", "\u05D3", "\u05D4",
+                "\u05D5", "\u05D6", "\u05D7", "\u05D8", "\u05D9"
+        };
+        /** Hermetic divine names traditionally printed beside the ten Sephirot. */
+        private static final String[] SEPHIRA_DIVINE_NAMES = {
+                "\u05D0\u05D4\u05D9\u05D4", "\u05D9\u05D4", "\u05D9\u05D4\u05D5\u05D4 \u05D0\u05DC\u05D4\u05D9\u05DD",
+                "\u05D0\u05DC", "\u05D0\u05DC\u05D4\u05D9\u05DD \u05D2\u05D9\u05D1\u05D5\u05E8", "\u05D9\u05D4\u05D5\u05D4 \u05D0\u05DC\u05D5\u05D4 \u05D5\u05D3\u05E2\u05EA",
+                "\u05D9\u05D4\u05D5\u05D4 \u05E6\u05D1\u05D0\u05D5\u05EA", "\u05D0\u05DC\u05D4\u05D9\u05DD \u05E6\u05D1\u05D0\u05D5\u05EA", "\u05E9\u05D3\u05D9 \u05D0\u05DC \u05D7\u05D9", "\u05D0\u05D3\u05E0\u05D9 \u05D4\u05D0\u05E8\u05E5"
+        };
+        /** Compact Hermetic correspondences used as backplate micro-engraving. */
+        private static final String[] SEPHIRA_ARCHANGELS = {
+                "\u05DE\u05D8\u05D8\u05E8\u05D5\u05DF", "\u05E8\u05D6\u05D9\u05D0\u05DC", "\u05E6\u05E4\u05E7\u05D9\u05D0\u05DC",
+                "\u05E6\u05D3\u05E7\u05D9\u05D0\u05DC", "\u05DB\u05DE\u05D0\u05DC", "\u05E8\u05E4\u05D0\u05DC",
+                "\u05D4\u05E0\u05D9\u05D0\u05DC", "\u05DE\u05D9\u05DB\u05D0\u05DC", "\u05D2\u05D1\u05E8\u05D9\u05D0\u05DC", "\u05E1\u05E0\u05D3\u05DC\u05E4\u05D5\u05DF"
+        };
+        private static final String[] SEPHIRA_CHOIRS = {
+                "\u05D7\u05D9\u05D5\u05EA \u05D4\u05E7\u05D5\u05D3\u05E9", "\u05D0\u05D5\u05E4\u05E0\u05D9\u05DD", "\u05D0\u05E8\u05D0\u05DC\u05D9\u05DD",
+                "\u05D7\u05E9\u05DE\u05DC\u05D9\u05DD", "\u05E9\u05E8\u05E4\u05D9\u05DD", "\u05DE\u05DC\u05D0\u05DB\u05D9\u05DD",
+                "\u05D1\u05E0\u05D9 \u05D0\u05DC\u05D4\u05D9\u05DD", "\u05D0\u05DC\u05D4\u05D9\u05DD", "\u05DB\u05E8\u05D5\u05D1\u05D9\u05DD", "\u05D0\u05D9\u05E9\u05D9\u05DD"
+        };
         // PATHS is arranged for geometry/label spacing rather than alphabetic
         // order.  Keep each letter beside its canonical Golden Dawn edge.
         private static final String[] PATH_LETTERS = {
@@ -525,10 +563,19 @@ public final class ClientFxManager
                 "\u05D8", "\u05D9", "\u05DB", "\u05DC", "\u05DE", "\u05E0", "\u05E2", "\u05E1",
                 "\u05E4", "\u05E6", "\u05E8", "\u05E7", "\u05E9", "\u05EA"
         };
-        /** Move names outside the ritual bodies; centre-column labels alternate sides. */
+        /** Hebrew path numbers 11..32, ordered to match PATHS/PATH_LETTERS. */
+        private static final String[] PATH_NUMERALS = {
+                "\u05D9\u05F4\u05D0", "\u05D9\u05F4\u05D1", "\u05D9\u05F4\u05D2", "\u05D9\u05F4\u05D3",
+                "\u05D8\u05F4\u05D6", "\u05D8\u05F4\u05D5", "\u05D9\u05F4\u05D7", "\u05D9\u05F4\u05D6",
+                "\u05D9\u05F4\u05D8", "\u05DB\u05F3", "\u05DB\u05F4\u05D0", "\u05DB\u05F4\u05D1",
+                "\u05DB\u05F4\u05D2", "\u05DB\u05F4\u05D3", "\u05DB\u05F4\u05D5", "\u05DB\u05F4\u05D4",
+                "\u05DB\u05F4\u05D6", "\u05DB\u05F4\u05D7", "\u05DC\u05F3", "\u05DB\u05F4\u05D8",
+                "\u05DC\u05F4\u05D0", "\u05DC\u05F4\u05D1"
+        };
+        /** Compact Hebrew labels stay outside the ritual bodies; centre labels alternate sides. */
         private static final float[] LABEL_X_OFFSETS = {
-                -29.0F, -36.0F, 29.0F, -32.5F, 35.5F,
-                63.5F, -57.0F, 26.0F, -61.0F, 36.5F
+                -24.0F, -30.0F, 30.0F, -29.0F, 29.0F,
+                68.0F, -35.0F, 28.0F, -63.0F, 28.0F
         };
         /** Collision-searched offsets from each path midpoint, in local tree space. */
         private static final float[][] PATH_LABEL_OFFSETS = {
@@ -602,7 +649,7 @@ public final class ClientFxManager
                 Vector3f b = node(path[1]);
                 Vector3f dir = new Vector3f(b).sub(a).normalize();
                 // In-plane normal (the tree stands in local XY).
-                Vector3f offset = new Vector3f(-dir.y, dir.x, 0.0F).mul(1.2F);
+                Vector3f offset = new Vector3f(-dir.y, dir.x, 0.0F).mul(0.72F);
                 Vector3f mid = new Vector3f(a).lerp(b, 0.5F);
                 Vector3f grow = new Vector3f(b).sub(a).mul(0.5F * lit);
                 Vector3f from = new Vector3f(mid).sub(grow);
@@ -613,10 +660,10 @@ public final class ClientFxManager
                     Vector3f shift = new Vector3f(offset).mul(s);
                     RibbonRenderer.drawStarRibbon(pose, consumer,
                             new Vector3f(from).add(shift), new Vector3f(to).add(shift),
-                            0.70F, 0.70F, 1.0F, 0.0F, 0.0F, alpha * 0.72F);
+                            0.38F, 0.38F, 1.0F, 0.0F, 0.0F, alpha * 0.45F);
                     RibbonRenderer.drawStarRibbon(pose, consumer,
                             new Vector3f(from).add(shift), new Vector3f(to).add(shift),
-                            0.24F, 0.24F, 1.0F, 0.0F, 0.0F, alpha);
+                            0.12F, 0.12F, 1.0F, 0.0F, 0.0F, alpha * 0.82F);
                 }
             }
 
@@ -641,9 +688,23 @@ public final class ClientFxManager
                 poseStack.translate(c.x, c.y, c.z);
                 Matrix4f nodePose = poseStack.last().pose();
                 RibbonRenderer.drawPolyRing(nodePose, consumer, axisX, axisY, 32,
-                        radius, 1.10F, 1.0F, 0.0F, 0.0F, alpha);
+                        radius, 0.56F, 1.0F, 0.0F, 0.0F, alpha * 0.72F);
                 RibbonRenderer.drawPolyRing(nodePose, consumer, axisX, axisY, 32,
-                        radius * 0.72F, 0.40F, 1.0F, 0.0F, 0.0F, alpha);
+                        radius * 0.72F, 0.18F, 1.0F, 0.0F, 0.0F, alpha * 0.82F);
+                // Original procedural register marks add fine engraved-circle
+                // density without copying the supplied reference frame.
+                for (int tick = 0; tick < NODE_TICK_COUNT; tick++)
+                {
+                    float angle = Mth.TWO_PI * tick / NODE_TICK_COUNT;
+                    float cos = Mth.cos(angle);
+                    float sin = Mth.sin(angle);
+                    Vector3f inner = new Vector3f(cos * radius * 0.79F,
+                            sin * radius * 0.79F, 0.05F);
+                    Vector3f outer = new Vector3f(cos * radius * 0.93F,
+                            sin * radius * 0.93F, 0.05F);
+                    RibbonRenderer.drawStarRibbon(nodePose, consumer, inner, outer,
+                            0.09F, 0.09F, 1.0F, 0.0F, 0.0F, alpha * 0.56F);
+                }
                 if (centre)
                 {
                     drawTiferetGlory(nodePose, consumer, t, alpha, this.hasUnit);
@@ -667,7 +728,7 @@ public final class ClientFxManager
             poseStack.popPose();
         }
 
-        /** Full-bright red labels: ten Sephirot, ten Hebrew names and all 22 path letters. */
+        /** Full-bright inverted Hebrew tableau: node names plus 22 letters/numbers. */
         void renderLabels(PoseStack poseStack, MultiBufferSource.BufferSource buffer, float partialTick)
         {
             float t = this.age + partialTick;
@@ -681,19 +742,6 @@ public final class ClientFxManager
             poseStack.pushPose();
             poseStack.mulPose(com.mojang.math.Axis.YP.rotation(this.faceYaw));
 
-            // The Kircher-style heading immediately distinguishes the ritual
-            // glyph from ten anonymous circles.
-            float top = TreeOfLifeLayout.localY(9);
-            float titleLit = nodeLight(t, 9);
-            drawLabel(poseStack, buffer, "SYSTEMA SEPHIROTHICVM",
-                    new Vector3f(0.0F, top + 41.25F, 0.8F), 1.02F, base * titleLit);
-            drawLabel(poseStack, buffer, "X DIVINORVM NOMINVM",
-                    new Vector3f(0.0F, top + 34.25F, 0.8F), 0.87F, base * titleLit);
-            drawLabel(poseStack, buffer, "OTZ CHIIM",
-                    new Vector3f(0.0F, top + 27.75F, 0.8F), 0.78F, base * titleLit);
-            drawLabel(poseStack, buffer, displayHebrew("\u05E2\u05E5 \u05D7\u05D9\u05D9\u05DD"),
-                    new Vector3f(0.0F, top + 21.25F, 0.8F), 0.86F, base * titleLit);
-
             for (int i = 0; i < TreeOfLifeLayout.NODES.length; i++)
             {
                 float lit = nodeLight(t, i);
@@ -704,10 +752,33 @@ public final class ClientFxManager
                 Vector3f c = node(i);
                 float alpha = base * lit;
                 float labelX = c.x + LABEL_X_OFFSETS[i];
-                drawLabel(poseStack, buffer, (i + 1) + "  " + SEPHIRA_NAMES[i],
-                        new Vector3f(labelX, c.y + 2.8F, 0.9F), 0.84F, alpha);
-                drawLabel(poseStack, buffer, displayHebrew(SEPHIRA_HEBREW[i]),
-                        new Vector3f(labelX, c.y - 3.0F, 0.9F), 1.05F, alpha);
+                drawLabel(poseStack, buffer,
+                        displayHebrew(SEPHIRA_NUMERALS[i] + "  " + SEPHIRA_HEBREW[i]),
+                        new Vector3f(labelX, c.y + EXTERNAL_NAME_Y, 0.9F),
+                        EXTERNAL_NAME_SCALE, alpha);
+                drawLabel(poseStack, buffer, displayHebrew(SEPHIRA_DIVINE_NAMES[i]),
+                        new Vector3f(labelX, c.y + EXTERNAL_DIVINE_Y, 0.9F),
+                        EXTERNAL_DIVINE_SCALE, alpha * 0.82F);
+                drawLabel(poseStack, buffer, displayHebrew(SEPHIRA_ARCHANGELS[i]),
+                        new Vector3f(labelX, c.y + EXTERNAL_ARCHANGEL_Y, 0.9F),
+                        EXTERNAL_ARCHANGEL_SCALE, alpha * 0.72F);
+                drawLabel(poseStack, buffer, displayHebrew(SEPHIRA_CHOIRS[i]),
+                        new Vector3f(labelX, c.y + EXTERNAL_CHOIR_Y, 0.9F),
+                        EXTERNAL_CHOIR_SCALE, alpha * 0.64F);
+                // These micro-inscriptions sit on the red backplate and are
+                // depth-occluded by the real EVA parked inside the circle.
+                drawDiagramLabel(poseStack, buffer, displayHebrew(SEPHIRA_HEBREW[i]),
+                        new Vector3f(c.x, c.y + 9.4F, DIAGRAM_TEXT_Z),
+                        INTERNAL_NAME_SCALE, alpha * 0.68F);
+                drawDiagramLabel(poseStack, buffer, displayHebrew(SEPHIRA_ARCHANGELS[i]),
+                        new Vector3f(c.x, c.y + 5.7F, DIAGRAM_TEXT_Z),
+                        INTERNAL_ARCHANGEL_SCALE, alpha * 0.58F);
+                drawDiagramLabel(poseStack, buffer, displayHebrew(SEPHIRA_CHOIRS[i]),
+                        new Vector3f(c.x, c.y - 5.7F, DIAGRAM_TEXT_Z),
+                        INTERNAL_CHOIR_SCALE, alpha * 0.52F);
+                drawDiagramLabel(poseStack, buffer, displayHebrew(SEPHIRA_DIVINE_NAMES[i]),
+                        new Vector3f(c.x, c.y - 9.4F, DIAGRAM_TEXT_Z),
+                        INTERNAL_DIVINE_SCALE, alpha * 0.56F);
             }
 
             for (int i = 0; i < TreeOfLifeLayout.PATHS.length; i++)
@@ -722,7 +793,11 @@ public final class ClientFxManager
                 Vector3f b = node(path[1]);
                 Vector3f letterPos = new Vector3f(a).lerp(b, 0.5F)
                         .add(PATH_LABEL_OFFSETS[i][0], PATH_LABEL_OFFSETS[i][1], 1.0F);
-                drawLabel(poseStack, buffer, PATH_LETTERS[i], letterPos, 1.05F, base * lit);
+                drawLabel(poseStack, buffer, PATH_LETTERS[i], letterPos,
+                        PATH_LETTER_SCALE, base * lit);
+                drawDiagramLabel(poseStack, buffer, displayHebrew(PATH_NUMERALS[i]),
+                        new Vector3f(letterPos.x + 1.8F, letterPos.y - 2.6F, DIAGRAM_TEXT_Z),
+                        PATH_NUMBER_SCALE, base * lit * 0.62F);
             }
             poseStack.popPose();
         }
@@ -737,6 +812,23 @@ public final class ClientFxManager
         private static void drawLabel(PoseStack poseStack, MultiBufferSource.BufferSource buffer,
                                       String text, Vector3f position, float scale, float alpha)
         {
+            drawLabel(poseStack, buffer, text, position, scale, alpha,
+                    Font.DisplayMode.SEE_THROUGH);
+        }
+
+        private static void drawDiagramLabel(PoseStack poseStack,
+                                             MultiBufferSource.BufferSource buffer,
+                                             String text, Vector3f position,
+                                             float scale, float alpha)
+        {
+            drawLabel(poseStack, buffer, text, position, scale, alpha,
+                    Font.DisplayMode.NORMAL);
+        }
+
+        private static void drawLabel(PoseStack poseStack, MultiBufferSource.BufferSource buffer,
+                                      String text, Vector3f position, float scale, float alpha,
+                                      Font.DisplayMode displayMode)
+        {
             if (alpha <= 0.01F)
             {
                 return;
@@ -745,9 +837,11 @@ public final class ClientFxManager
             int colour = Mth.clamp((int) (alpha * 255.0F), 0, 255) << 24 | 0x00FF0000;
             poseStack.pushPose();
             poseStack.translate(position.x, position.y, position.z);
+            poseStack.mulPose(com.mojang.math.Axis.ZP.rotationDegrees(
+                    LABEL_ROTATION_DEGREES));
             poseStack.scale(scale, -scale, scale);
             font.drawInBatch(text, -font.width(text) * 0.5F, -4.0F, colour, false,
-                    poseStack.last().pose(), buffer, Font.DisplayMode.SEE_THROUGH,
+                    poseStack.last().pose(), buffer, displayMode,
                     0x00000000,
                     LightTexture.FULL_BRIGHT);
             poseStack.popPose();
@@ -758,7 +852,7 @@ public final class ClientFxManager
         private static void drawTiferetGlory(Matrix4f pose, VertexConsumer consumer,
                                              float t, float alpha, boolean hasUnit)
         {
-            float s = 2.0F;
+            float s = 1.05F;
             float pr = 1.0F;
             float pg = 0.0F;
             float pb = 0.0F;
@@ -769,10 +863,11 @@ public final class ClientFxManager
                 for (int f = 0; f < 3; f++)
                 {
                     float ang = (28.0F + f * 22.0F) * Mth.DEG_TO_RAD;
-                    float len = (22.0F - f * 4.5F) * shimmer * s;
+                    float len = (20.0F - f * 4.0F) * shimmer * s;
                     Vector3f tip = new Vector3f(side * Mth.cos(ang) * len, 2.0F * s + Mth.sin(ang) * len, 0.4F);
                     RibbonRenderer.drawStarRibbon(pose, consumer, new Vector3f(0.0F, 2.0F * s, 0.4F), tip,
-                            (2.6F - f * 0.6F) * s, 0.4F, 1.0F, 0.0F, 0.0F, alpha * (0.55F - f * 0.12F));
+                            (1.55F - f * 0.32F) * s, 0.22F, 1.0F, 0.0F, 0.0F,
+                            alpha * (0.30F - f * 0.05F));
                 }
             }
             if (hasUnit)

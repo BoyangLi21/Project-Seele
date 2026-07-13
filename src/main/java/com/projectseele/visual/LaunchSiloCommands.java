@@ -14,7 +14,6 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.InteractionHand;
 import net.minecraft.world.phys.AABB;
 import net.minecraftforge.event.RegisterCommandsEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
@@ -85,7 +84,7 @@ public final class LaunchSiloCommands
 
         // Unit-01 is the centre bay. Leave the tester on its high dorsal
         // gantry, not at the launch bed thirty blocks below ground.
-        player.teleportTo(level, origin.getX() + 0.5D, origin.getY() - 7.0D,
+        player.teleportTo(level, origin.getX() + 0.5D, origin.getY() - 3.0D,
                 origin.getZ() + 6.5D, 180.0F, 16.0F);
         source.sendSuccess(() -> Component.literal(
                 "NERV launch complex ready. Use /seele silo board to start insertion."), false);
@@ -107,11 +106,12 @@ public final class LaunchSiloCommands
             throw new IllegalStateException("Nearest EVA is not on a NERV launch bed");
         }
 
-        // Match the physical gantry built at bed +23. The ordinary mob
-        // interaction still performs all height/interlock validation.
-        player.teleportTo(player.serverLevel(), bed.getX() + 0.5D, bed.getY() + 23.0D,
-                bed.getZ() + 6.5D, 180.0F, 16.0F);
-        unit.mobInteract(player, InteractionHand.MAIN_HAND);
+        // The floor is bed+26 and the pilot stands at bed+27 beside the
+        // Tiger synthetic plug pivot. The command bypasses only the aim cone;
+        // physical rear/height/distance/line-of-sight gates still run.
+        player.teleportTo(player.serverLevel(), bed.getX() + 0.5D, bed.getY() + 27.0D,
+                bed.getZ() + 6.5D, 180.0F, -8.0F);
+        unit.tryEnterFromPlug(player, false);
         if (player.getVehicle() != unit)
         {
             source.sendFailure(Component.literal("Entry-plug boarding failed; check the gantry and launch bed."));
@@ -190,11 +190,11 @@ public final class LaunchSiloCommands
                 validBeds++;
             }
 
-            // Bed is origin-30. The catwalk floor is origin-8 (bed+22),
-            // with the player standing at bed+23 and the lift spanning +4..23.
-            boolean gantryFloor = !level.getBlockState(bed.offset(0, 22, 6)).isAir();
+            // Bed is origin-30. The catwalk floor is origin-4 (bed+26),
+            // with the player standing at bed+27 and the lift spanning +4..27.
+            boolean gantryFloor = !level.getBlockState(bed.offset(0, 26, 6)).isAir();
             boolean ladderContinuous = true;
-            for (int y = 4; y <= 23; y++)
+            for (int y = 4; y <= 27; y++)
             {
                 if (!level.getBlockState(bed.offset(0, y, 13))
                         .is(net.minecraft.world.level.block.Blocks.LADDER))

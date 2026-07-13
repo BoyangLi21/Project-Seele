@@ -24,7 +24,12 @@ BONE_MAP = {
     "arm_l": "Leftarm", "forearm_l": "Lowerarm2",
     "arm_r": "Rightarm", "forearm_r": "Lowerarm",
     "leg_l": "Leftleg", "shin_l": "bone6",
-    "leg_r": "Rightleg", "shin_r": "bone16", "head": "Head",
+    "foot_l": "bone5", "leg_r": "Rightleg", "shin_r": "bone16",
+    "foot_r": "bone17", "head": "Head",
+    "hand_l": "LeftHand", "hand_r": "RightHand",
+    "knife": "knife", "lance": "lance",
+    "entry_plug": "entry_plug",
+    "plug_hatch_l": "plug_hatch_l", "plug_hatch_r": "plug_hatch_r",
 }
 
 
@@ -173,10 +178,14 @@ def scale_geometry(data, eud_lance=None, unit=1):
 
 
 def remap_animation(animation):
+    unknown = set(animation.get("bones", {})) - set(BONE_MAP)
+    if unknown:
+        raise RuntimeError(
+            "canonical animation uses unmapped SmOd bones: "
+            + ", ".join(sorted(unknown)))
     result = copy.deepcopy(animation)
     result["bones"] = {
         BONE_MAP[name]: channels for name, channels in animation.get("bones", {}).items()
-        if name in BONE_MAP
     }
     return result
 
@@ -250,7 +259,6 @@ def build_animations(source, unit):
     built_in = json.loads((REPO / "src/main/resources/assets/projectseele/animations/eva_unit01.animation.json")
                           .read_text(encoding="utf-8"))["animations"]
     output = {name: remap_animation(animation) for name, animation in built_in.items()}
-    install_smod_pose_overrides(output)
     source_animations = source["animations"]
     output["animation.eva_unit01.idle"] = scale_position_channels(
         source_animations[f"animation.entity_eva{unit}.idle_1"])
@@ -262,196 +270,21 @@ def build_animations(source, unit):
     # SmOd's stride extrema/contact is at loop start. Sampling 0.5 seconds
     # catches the passing pose where both legs overlap in profile.
     output["animation.eva_unit01.visual_walk_contact"] = static_pose(output["animation.eva_unit01.walk"], 0.0)
-    output["animation.eva_unit01.visual_knife_windup"] = static_pose(output["animation.eva_unit01.knife"], 0.12)
-    output["animation.eva_unit01.visual_knife_contact"] = static_pose(output["animation.eva_unit01.knife"], 0.28)
-    output["animation.eva_unit01.visual_knife_recovery"] = static_pose(output["animation.eva_unit01.knife"], 0.50)
-    output["animation.eva_unit01.visual_lance_windup"] = static_pose(output["animation.eva_unit01.lance_thrust"], 0.20)
-    output["animation.eva_unit01.visual_lance_contact"] = static_pose(output["animation.eva_unit01.lance_thrust"], 0.42)
-    output["animation.eva_unit01.visual_lance_recovery"] = static_pose(output["animation.eva_unit01.lance_thrust"], 0.70)
-    output["animation.eva_unit01.visual_cannon"] = static_pose(output["animation.eva_unit01.aim"], 0.0)
+    derived_visuals = {
+        "visual_knife_windup": ("knife", 0.12),
+        "visual_knife_contact": ("knife", 0.28),
+        "visual_knife_recovery": ("knife", 0.50),
+        "visual_lance_windup": ("lance_thrust", 0.20),
+        "visual_lance_contact": ("lance_thrust", 0.42),
+        "visual_lance_recovery": ("lance_thrust", 0.70),
+        "visual_cannon": ("aim", 0.0),
+    }
+    for target, (source_name, sample_time) in derived_visuals.items():
+        target_key = f"animation.eva_unit01.{target}"
+        source_key = f"animation.eva_unit01.{source_name}"
+        if target_key not in output:
+            output[target_key] = static_pose(output[source_key], sample_time)
     return {"format_version": "1.8.0", "animations": output}
-
-
-def install_smod_pose_overrides(output):
-    # The built-in prone pose was authored for Project SEELE's placeholder
-    # bones. On SmOd's taller rig it reads like belly-swimming. These overrides
-    # keep the Unit supported by hands and knees: a low, animal-like crawl.
-    output["animation.eva_unit01.crouch"] = {
-        "loop": True,
-        "animation_length": 1.6,
-        "bones": {
-            "bone7": {"position": {"0.0": [0, -28, 2], "0.8": [0, -27, 2], "1.6": [0, -28, 2]}},
-            "Body": {"rotation": {"0.0": [12, 0, 0]}},
-            "Lowerbody": {"rotation": {"0.0": [10, -3, 0]}},
-            "Upperbody": {"rotation": {"0.0": [-8, 4, 0]}},
-            "Head": {"rotation": {"0.0": [-18, -3, 0]}},
-            "Rightleg": {"rotation": {"0.0": [-78, 0, 7]}},
-            "bone16": {"rotation": {"0.0": [125, 0, 0]}},
-            "bone17": {"rotation": {"0.0": [-48, 0, 0]}},
-            "Leftleg": {"rotation": {"0.0": [20, 0, -4]}},
-            "bone6": {"rotation": {"0.0": [48, 0, 0]}},
-            "bone5": {"rotation": {"0.0": [-20, 0, 0]}},
-            "Rightarm": {"rotation": {"0.0": [-28, 0, -7]}},
-            "Lowerarm": {"rotation": {"0.0": [-12, 0, 0]}},
-            "Leftarm": {"rotation": {"0.0": [-24, 0, 7]}},
-            "Lowerarm2": {"rotation": {"0.0": [-10, 0, 0]}},
-        },
-    }
-    output["animation.eva_unit01.crouch_walk"] = {
-        "loop": True,
-        "animation_length": 1.2,
-        "bones": {
-            "bone7": {"position": {"0.0": [0, -20, 1], "0.3": [0, -18, 1], "0.6": [0, -20, 1], "0.9": [0, -18, 1], "1.2": [0, -20, 1]}},
-            "Body": {"rotation": {"0.0": [14, 0, 0]}},
-            "Lowerbody": {"rotation": {"0.0": [8, 4, 0], "0.6": [8, -4, 0], "1.2": [8, 4, 0]}},
-            "Upperbody": {"rotation": {"0.0": [-6, -4, 0], "0.6": [-6, 4, 0], "1.2": [-6, -4, 0]}},
-            "Head": {"rotation": {"0.0": [-16, 3, 0], "0.6": [-16, -3, 0], "1.2": [-16, 3, 0]}},
-            "Rightleg": {"rotation": {"0.0": [-38, 0, 4], "0.6": [8, 0, 4], "1.2": [-38, 0, 4]}},
-            "bone16": {"rotation": {"0.0": [78, 0, 0], "0.6": [46, 0, 0], "1.2": [78, 0, 0]}},
-            "Leftleg": {"rotation": {"0.0": [8, 0, -4], "0.6": [-38, 0, -4], "1.2": [8, 0, -4]}},
-            "bone6": {"rotation": {"0.0": [46, 0, 0], "0.6": [78, 0, 0], "1.2": [46, 0, 0]}},
-            "Rightarm": {"rotation": {"0.0": [12, 0, -6], "0.6": [-30, 0, -6], "1.2": [12, 0, -6]}},
-            "Leftarm": {"rotation": {"0.0": [-30, 0, 6], "0.6": [12, 0, 6], "1.2": [-30, 0, 6]}},
-        },
-    }
-    # Kneeling low brace ("prone"): knees folded under, torso only slightly
-    # leaned so the Unit can still aim and fire. Advancing rocks the knees.
-    output["animation.eva_unit01.prone"] = {
-        "loop": True,
-        "animation_length": 2.4,
-        "bones": {
-            "bone7": {"position": {"0.0": [0, -58, 0]}},
-            "Lowerbody": {"rotation": {"0.0": [16, 0, 0]}},
-            "Upperbody": {"rotation": {"0.0": [12, 0, 0], "1.2": [14, 0, 0], "2.4": [12, 0, 0]}},
-            "Head": {"rotation": {"0.0": [-20, 0, 0]}},
-            "Rightarm": {"rotation": {"0.0": [-52, 0, -8]}},
-            "Lowerarm": {"rotation": {"0.0": [-26, 0, 0]}},
-            "Leftarm": {"rotation": {"0.0": [-52, 0, 8]}},
-            "Lowerarm2": {"rotation": {"0.0": [-26, 0, 0]}},
-            "Rightleg": {"rotation": {"0.0": [-28, 0, 6]}},
-            "bone16": {"rotation": {"0.0": [122, 0, 0]}},
-            "Leftleg": {"rotation": {"0.0": [-12, 0, -6]}},
-            "bone6": {"rotation": {"0.0": [114, 0, 0]}},
-        },
-    }
-    output["animation.eva_unit01.crawl"] = {
-        "loop": True,
-        "animation_length": 1.4,
-        "bones": {
-            "bone7": {"position": {"0.0": [0, -58, 0], "0.35": [0, -54, 2], "0.7": [0, -58, 0], "1.05": [0, -54, 2], "1.4": [0, -58, 0]}},
-            "Lowerbody": {"rotation": {"0.0": [18, 0, 0]}},
-            "Upperbody": {"rotation": {"0.0": [12, 5, 0], "0.7": [12, -5, 0], "1.4": [12, 5, 0]}},
-            "Head": {"rotation": {"0.0": [-18, 0, 0]}},
-            "Rightarm": {"rotation": {"0.0": [-36, 0, -8], "0.7": [-62, 0, -8], "1.4": [-36, 0, -8]}},
-            "Leftarm": {"rotation": {"0.0": [-62, 0, 8], "0.7": [-36, 0, 8], "1.4": [-62, 0, 8]}},
-            "Rightleg": {"rotation": {"0.0": [-36, 0, 6], "0.7": [-4, 0, 6], "1.4": [-36, 0, 6]}},
-            "bone16": {"rotation": {"0.0": [126, 0, 0], "0.7": [108, 0, 0], "1.4": [126, 0, 0]}},
-            "Leftleg": {"rotation": {"0.0": [-4, 0, -6], "0.7": [-36, 0, -6], "1.4": [-4, 0, -6]}},
-            "bone6": {"rotation": {"0.0": [108, 0, 0], "0.7": [126, 0, 0], "1.4": [108, 0, 0]}},
-        },
-    }
-    # Shouldered-rifle stance on SmOd's own skeleton: torso quartered away,
-    # right forearm level (the along-arm cannon points at the reticle), left
-    # arm crossed to the forestock, cheek to the scope.
-    output["animation.eva_unit01.aim"] = {
-        "loop": True,
-        "animation_length": 1.2,
-        "bones": {
-            "Rightarm": {"rotation": {"0.0": [-52, -3, -4], "0.6": [-53.5, -3, -4], "1.2": [-52, -3, -4]}},
-            "Lowerarm": {"rotation": {"0.0": [-38, 0, 0]}},
-            "Leftarm": {"rotation": {"0.0": [-54, 18, 8], "0.6": [-55, 18, 8], "1.2": [-54, 18, 8]}},
-            "Lowerarm2": {"rotation": {"0.0": [-36, 14, 0]}},
-        },
-    }
-    # Low two-handed firing brace. This controller only owns the arm chains;
-    # the base prone animation remains responsible for torso, pelvis and legs.
-    output["animation.eva_unit01.prone_aim"] = {
-        "loop": True,
-        "animation_length": 1.2,
-        "bones": {
-            "Rightarm": {"rotation": {"0.0": [-66, -3, -5], "0.6": [-67, -3, -5], "1.2": [-66, -3, -5]}},
-            "Lowerarm": {"rotation": {"0.0": [-24, 0, 0]}},
-            "Leftarm": {"rotation": {"0.0": [-64, 22, 9], "0.6": [-65, 22, 9], "1.2": [-64, 22, 9]}},
-            "Lowerarm2": {"rotation": {"0.0": [-30, 16, 0]}},
-        },
-    }
-    # Two-handed Longinus thrust. Both hands stay on the same shaft line:
-    # compact pull-back, full-body forward contact, then controlled recovery.
-    output["animation.eva_unit01.lance_thrust"] = {
-        "animation_length": 0.72,
-        "bones": {
-            "Upperbody": {"rotation": {
-                "0.0": [0, 0, 0], "0.20": [-2, 14, 0],
-                "0.42": [4, -10, 0], "0.72": [0, 0, 0]}},
-            "Rightarm": {"rotation": {
-                "0.0": [-34, -4, -6], "0.20": [-28, -10, -12],
-                "0.42": [-66, -2, -5], "0.72": [-10, 0, -5]}},
-            "Lowerarm": {"rotation": {
-                "0.0": [-48, 0, 0], "0.20": [-62, 0, 0],
-                "0.42": [-26, 0, 0], "0.72": [-6, 0, 0]}},
-            "Leftarm": {"rotation": {
-                "0.0": [-42, 18, 8], "0.20": [-38, 24, 10],
-                "0.42": [-61, 18, 8], "0.72": [-10, 0, 5]}},
-            "Lowerarm2": {"rotation": {
-                "0.0": [-46, 14, 0], "0.20": [-56, 16, 0],
-                "0.42": [-31, 14, 0], "0.72": [-5, 0, 0]}},
-            "Lowerbody": {"rotation": {
-                "0.0": [0, 0, 0], "0.20": [0, -6, 0],
-                "0.42": [5, 5, 0], "0.72": [0, 0, 0]}},
-        },
-    }
-    # Progressive-knife strike. Keep the torso readable and let the arm
-    # chain create the attack arc; the previous pose twisted the whole body
-    # while both arms crossed over the face.
-    output["animation.eva_unit01.knife"] = {
-        "animation_length": 0.52,
-        "bones": {
-            "Upperbody": {"rotation": {
-                "0.0": [0, 0, 0], "0.12": [-3, 15, 0],
-                "0.28": [4, -12, 0], "0.52": [0, 0, 0]}},
-            "Rightarm": {"rotation": {
-                "0.0": [-8, 0, -4], "0.12": [-90, -10, -28],
-                "0.28": [-58, 0, -6], "0.52": [-8, 0, -4]}},
-            "Lowerarm": {"rotation": {
-                "0.0": [0, 0, 0], "0.12": [-20, 0, 0],
-                "0.28": [-34, 0, 0], "0.52": [0, 0, 0]}},
-            "Leftarm": {"rotation": {
-                "0.0": [-10, 0, 4], "0.12": [-12, 0, 4],
-                "0.28": [-36, 0, 12], "0.52": [-10, 0, 4]}},
-            "Lowerarm2": {"rotation": {
-                "0.0": [0, 0, 0], "0.12": [0, 0, 0],
-                "0.28": [-30, 0, 0], "0.52": [0, 0, 0]}},
-        },
-    }
-    output["animation.eva_unit01.activation"] = {
-        "animation_length": 6.0,
-        "bones": {
-            "entry_plug": {"position": {"0.0": [0, 42, 0], "1.1": [0, 18, 0],
-                                         "2.0": [0, 0, 0], "6.0": [0, 0, 0]}},
-            "plug_hatch_l": {"rotation": {"0.0": [0, -62, 0], "1.5": [0, -62, 0],
-                                             "2.3": [0, 0, 0]}},
-            "plug_hatch_r": {"rotation": {"0.0": [0, 62, 0], "1.5": [0, 62, 0],
-                                             "2.3": [0, 0, 0]}},
-            "Head": {"rotation": {"0.0": [10, 0, 0], "3.4": [10, 0, 0], "5.2": [0, 0, 0]}},
-            "Leftarm": {"rotation": {"0.0": [-8, 0, 5]}},
-            "Rightarm": {"rotation": {"0.0": [-8, 0, -5]}},
-        },
-    }
-    # Nailed to the Tree: arms straight out, head bowed, gentle sway.
-    output["animation.eva_unit01.crucified"] = {
-        "loop": True,
-        "animation_length": 3.0,
-        "bones": {
-            "Leftarm": {"rotation": {"0.0": [0, 0, 86], "1.5": [0, 0, 84.5], "3.0": [0, 0, 86]}},
-            "Rightarm": {"rotation": {"0.0": [0, 0, -86], "1.5": [0, 0, -84.5], "3.0": [0, 0, -86]}},
-            "Lowerarm": {"rotation": {"0.0": [0, 0, 0]}},
-            "Lowerarm2": {"rotation": {"0.0": [0, 0, 0]}},
-            "Head": {"rotation": {"0.0": [14, 0, 0], "1.5": [16, 0, 0], "3.0": [14, 0, 0]}},
-            "Leftleg": {"rotation": {"0.0": [0, 0, -2]}},
-            "Rightleg": {"rotation": {"0.0": [0, 0, 2]}},
-            "Upperbody": {"rotation": {"0.0": [3, 0, 0]}},
-        },
-    }
 
 
 def render_texture(source_path, target_path, lance_path=None):

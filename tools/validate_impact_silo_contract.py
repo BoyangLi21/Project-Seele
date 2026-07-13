@@ -111,19 +111,96 @@ def validate_tree(gate: Gate) -> None:
             break
         visited = expanded
     gate.require("tree.connected", len(visited) == 10, f"reachable={len(visited)}/10")
-    inverted = len(nodes) == 10 and nodes[0][1] == min(y for _, y in nodes) \
-        and nodes[9][1] == max(y for _, y in nodes)
-    gate.require("tree.inverted", inverted, "Keter=nadir and Malkuth=crown")
+    orientation_match = re.search(
+        r'TABLEAU_ORIENTATION\s*=\s*"([^"]+)"\s*;', layout)
+    semantic_indices = {
+        name: int(match.group(1)) if (match := re.search(
+            rf"\b{name}\s*=\s*(\d+)\s*;", layout)) else -1
+        for name in ("KETER", "TIFERET", "MALKUTH")
+    }
+    ys = [y for _, y in nodes]
+    inverted = len(nodes) == 10 \
+        and orientation_match is not None \
+        and orientation_match.group(1) == "EOE_INVERTED" \
+        and semantic_indices == {"KETER": 0, "TIFERET": 5, "MALKUTH": 9} \
+        and nodes[semantic_indices["KETER"]][1] == min(ys) \
+        and nodes[semantic_indices["MALKUTH"]][1] == max(ys)
+    gate.require(
+        "tree.eoe_inverted_semantics",
+        inverted,
+        "orientation=EOE_INVERTED; semantic Keter=nadir and Malkuth=crown",
+    )
+    tiferet_centre = inverted \
+        and nodes[semantic_indices["TIFERET"]][0] == 0.0 \
+        and abs(nodes[semantic_indices["TIFERET"]][1]
+                - (min(ys) + max(ys)) * 0.5) < 1.0e-6
+    gate.require(
+        "tree.tiferet_centre",
+        tiferet_centre,
+        "Tiferet remains at the geometric centre while the semantic Tree is inverted",
+    )
 
     names = quoted_values(java_initializer(client_fx, "SEPHIRA_NAMES"))
     hebrew = quoted_values(java_initializer(client_fx, "SEPHIRA_HEBREW"))
+    numerals = quoted_values(java_initializer(client_fx, "SEPHIRA_NUMERALS"))
+    divine_names = quoted_values(java_initializer(client_fx, "SEPHIRA_DIVINE_NAMES"))
+    archangels = quoted_values(java_initializer(client_fx, "SEPHIRA_ARCHANGELS"))
+    choirs = quoted_values(java_initializer(client_fx, "SEPHIRA_CHOIRS"))
     letters = quoted_values(java_initializer(client_fx, "PATH_LETTERS"))
-    gate.require("tree.latin_labels", len(names) == 10, f"latin={len(names)}/10")
+    path_numerals = quoted_values(java_initializer(client_fx, "PATH_NUMERALS"))
+    expected_names = [
+        "KETER", "CHOKMAH", "BINAH", "CHESED", "GEVURAH",
+        "TIFERET", "NETZACH", "HOD", "YESOD", "MALKUTH",
+    ]
+    expected_hebrew = [
+        r"\u05DB\u05EA\u05E8", r"\u05D7\u05DB\u05DE\u05D4", r"\u05D1\u05D9\u05E0\u05D4",
+        r"\u05D7\u05E1\u05D3", r"\u05D2\u05D1\u05D5\u05E8\u05D4", r"\u05EA\u05E4\u05D0\u05E8\u05EA",
+        r"\u05E0\u05E6\u05D7", r"\u05D4\u05D5\u05D3", r"\u05D9\u05E1\u05D5\u05D3", r"\u05DE\u05DC\u05DB\u05D5\u05EA",
+    ]
+    gate.require(
+        "tree.semantic_label_mapping",
+        names == expected_names and hebrew == expected_hebrew,
+        "indices 0..9 retain Keter..Malkuth in Latin and Hebrew despite inverted coordinates",
+    )
+    gate.require("tree.latin_catalog", len(names) == 10,
+                 f"latin={len(names)}/10 retained for reports only")
     gate.require("tree.hebrew_labels", len(hebrew) == 10, f"hebrew={len(hebrew)}/10")
+    gate.require(
+        "tree.hebrew_numerals",
+        numerals == [r"\u05D0", r"\u05D1", r"\u05D2", r"\u05D3", r"\u05D4",
+                     r"\u05D5", r"\u05D6", r"\u05D7", r"\u05D8", r"\u05D9"],
+        f"numerals={len(numerals)}/10 in canonical order",
+    )
+    gate.require(
+        "tree.hebrew_divine_names",
+        len(divine_names) == 10 and all(divine_names),
+        f"divineNames={len(divine_names)}/10",
+    )
+    gate.require(
+        "tree.hebrew_correspondence_density",
+        len(archangels) == 10 and len(choirs) == 10
+        and all(archangels) and all(choirs),
+        f"archangels={len(archangels)}/10 choirs={len(choirs)}/10",
+    )
     gate.require(
         "tree.path_letters",
         len(letters) == 22 and len(set(letters)) == 22,
         f"letters={len(letters)}/22 unique={len(set(letters))}",
+    )
+    expected_path_numerals = [
+        r"\u05D9\u05F4\u05D0", r"\u05D9\u05F4\u05D1", r"\u05D9\u05F4\u05D2",
+        r"\u05D9\u05F4\u05D3", r"\u05D8\u05F4\u05D6", r"\u05D8\u05F4\u05D5",
+        r"\u05D9\u05F4\u05D7", r"\u05D9\u05F4\u05D6", r"\u05D9\u05F4\u05D8",
+        r"\u05DB\u05F3", r"\u05DB\u05F4\u05D0", r"\u05DB\u05F4\u05D1",
+        r"\u05DB\u05F4\u05D2", r"\u05DB\u05F4\u05D3", r"\u05DB\u05F4\u05D5",
+        r"\u05DB\u05F4\u05D4", r"\u05DB\u05F4\u05D6", r"\u05DB\u05F4\u05D7",
+        r"\u05DC\u05F3", r"\u05DB\u05F4\u05D8", r"\u05DC\u05F4\u05D0",
+        r"\u05DC\u05F4\u05D1",
+    ]
+    gate.require(
+        "tree.path_numeral_mapping",
+        path_numerals == expected_path_numerals,
+        f"pathNumerals={len(path_numerals)}/22 ordered with the 11..32 path catalogue",
     )
     # Golden Dawn edge mapping.  Merely checking 22 unique glyphs previously
     # allowed four swapped pairs to pass while visibly labelling the wrong
@@ -162,6 +239,73 @@ def validate_tree(gate: Gate) -> None:
     )
     gate.require("tree.pure_red_contract", pure_red,
                  "rings, glory and text use RGB 1/0/0 with no label backdrop/shadow")
+
+    label_start = client_fx.index("void renderLabels(")
+    label_end = client_fx.index("private static String displayHebrew", label_start)
+    label_block = client_fx[label_start:label_end]
+    no_horizon_row = all(token not in client_fx for token in (
+        "HORIZON", "AETERNITATIS", "TITLE_X",
+        r"\u05E2\u05E5 \u05D4\u05D7\u05D9\u05D9\u05DD",
+        r"\u05E2\u05E9\u05E8 \u05D4\u05E1\u05E4\u05D9\u05E8\u05D5\u05EA",
+    )) and "SEPHIRA_NAMES[i]" not in label_block
+    gate.require(
+        "tree.no_detached_title_or_horizon_row",
+        no_horizon_row,
+        "the EoE diagram has no detached custom title or HORIZON AETERNITATIS row",
+    )
+
+    rotated_labels = all(token in client_fx for token in (
+        "LABEL_ROTATION_DEGREES = 180.0F",
+        "Axis.ZP.rotationDegrees(",
+        "LABEL_ROTATION_DEGREES));",
+    ))
+    gate.require(
+        "tree.label_rotation_180",
+        rotated_labels,
+        "all node/path text shares the complete diagram's 180-degree EoE rotation",
+    )
+
+    dense_internal = all(token in client_fx for token in (
+        "NODE_TICK_COUNT = 12", "for (int tick = 0; tick < NODE_TICK_COUNT; tick++)",
+        "drawDiagramLabel", "SEPHIRA_HEBREW[i]", "SEPHIRA_DIVINE_NAMES[i]",
+        "SEPHIRA_ARCHANGELS[i]", "SEPHIRA_CHOIRS[i]",
+        "PATH_NUMERALS[i]", "Font.DisplayMode.NORMAL", "DIAGRAM_TEXT_Z = -7.4F",
+        "EXTERNAL_NAME_SCALE = 0.40F", "EXTERNAL_CHOIR_SCALE = 0.20F",
+    ))
+    gate.require(
+        "tree.dense_internal_marks",
+        dense_internal,
+        "12 radial marks per circle plus 124 compact Hebrew correspondence/path inscriptions",
+    )
+
+    thin_geometry = all(fragment in client_fx for fragment in (
+        ".mul(0.72F)", "0.38F, 0.38F", "0.12F, 0.12F",
+        "radius, 0.56F", "radius * 0.72F, 0.18F", "float s = 1.05F",
+    ))
+    gate.require(
+        "tree.subordinate_red_geometry",
+        thin_geometry,
+        "paths/rings and Tiferet glory remain thinner than the ritual EVA silhouettes",
+    )
+
+    facing_source = all(fragment in layout for fragment in (
+        "return -(float) Math.toDegrees(yawRad)",
+        "return new Vec3(Math.sin(yawRad), 0.0D, Math.cos(yawRad))",
+    )) and all(fragment in director for fragment in (
+        "TreeOfLifeLayout.frontFacingYawDegrees(impact.yaw)",
+        "faceFront(mass, formationYaw)",
+        "entity.yBodyRot = yaw", "entity.yHeadRot = yaw",
+    ))
+    sample_alignment = all(
+        abs((-math.sin(math.radians(-math.degrees(yaw)))) - math.sin(yaw)) < 1.0e-6
+        and abs(math.cos(math.radians(-math.degrees(yaw))) - math.cos(yaw)) < 1.0e-6
+        for yaw in (-2.4, -0.75, 0.0, 0.8, 2.7)
+    )
+    gate.require(
+        "tree.single_front_plane",
+        facing_source and sample_alignment,
+        "Minecraft entity forward vector matches the Tree front normal for sampled yaws",
+    )
 
     animations = animation_doc.get("animations", {})
     crucified = animations.get("animation.eva_unit01.crucified")
@@ -259,7 +403,7 @@ def validate_tree(gate: Gate) -> None:
     resync = all(token in packet for token in (
         "eventId", "buf.readUUID()", "buf.writeUUID(this.eventId)",
         "initialTreeAge", "buf.readVarInt()", "buf.writeVarInt(this.initialTreeAge)",
-    )) and 'PROTOCOL_VERSION = "3"' in network \
+    )) and 'PROTOCOL_VERSION = "4"' in network \
         and all(token in game_events for token in (
             "PlayerLoggedInEvent", "PlayerChangedDimensionEvent", "PlayerRespawnEvent",
             "ThirdImpactDirector.syncTo(player)",
@@ -267,7 +411,7 @@ def validate_tree(gate: Gate) -> None:
         and "tree.eventId.equals(packet.eventId)" in client_fx \
         and "Math.max(tree.age" in client_fx
     gate.require("impact.client_resync", resync,
-                 "protocol-v3 event-id sync resumes Tree age without replacement")
+                 "protocol-v4 event-id sync resumes Tree age without replacement")
 
 
 def number(source: str, name: str) -> float:
@@ -284,6 +428,10 @@ def validate_silo(gate: Gate) -> None:
     builder = read("src/main/java/com/projectseele/item/NervConstructionKitItem.java")
     entity = read("src/main/java/com/projectseele/entity/EvaUnit01Entity.java")
     game_events = read("src/main/java/com/projectseele/GameEvents.java")
+    client = read("src/main/java/com/projectseele/client/ClientForgeEvents.java")
+    renderer = read("src/main/java/com/projectseele/client/render/EvaUnit01Renderer.java")
+    network = read("src/main/java/com/projectseele/network/SeeleNetwork.java")
+    entry_packet = read("src/main/java/com/projectseele/network/ServerboundEntryPlugPacket.java")
     doc = read("docs/LAUNCH_SILO_TEST.md")
 
     commands = all(f'Commands.literal("{name}")' in command
@@ -300,22 +448,22 @@ def validate_silo(gate: Gate) -> None:
     min_height = number(entity, "SILO_ENTRY_MIN_HEIGHT")
     max_height = number(entity, "SILO_ENTRY_MAX_HEIGHT")
     gantry_y = int(gantry_match.group(1)) if gantry_match else 999
-    # Bed is origin-30, EVA base origin-29, gantry standing Y origin-7.
-    relative_entry_height = (-7) - (-29)
-    high_entry = gantry_y == -8 and min_height <= relative_entry_height <= max_height \
-        and "bed.getY() + 23.0D" in command
+    # Bed is origin-30, EVA base origin-29, gantry standing Y origin-3.
+    relative_entry_height = (-3) - (-29)
+    high_entry = gantry_y == -4 and min_height <= relative_entry_height <= max_height \
+        and "bed.getY() + 27.0D" in command
     gate.require(
         "silo.high_entry",
         high_entry,
         f"gantryY={gantry_y} relativeEntry={relative_entry_height} allowed={min_height:g}..{max_height:g}",
     )
     ladder = (
-        "for (int y = -26; y <= -7; y++)" in builder
+        "for (int y = -26; y <= -3; y++)" in builder
         and "LadderBlock.FACING, Direction.NORTH" in builder
-        and "for (int y = 4; y <= 23; y++)" in command
+        and "for (int y = 4; y <= 27; y++)" in command
         and "ladderContinuous" in command
     )
-    gate.require("silo.gantry_access", ladder, "all 20 ladder blocks are runtime-audited")
+    gate.require("silo.gantry_access", ladder, "all 24 ladder blocks are runtime-audited")
 
     rear_entry = all(token in entity for token in (
         "SILO_ENTRY_MIN_REAR_DOT", "SILO_ENTRY_MIN_DISTANCE", "SILO_ENTRY_MAX_DISTANCE",
@@ -324,6 +472,50 @@ def validate_silo(gate: Gate) -> None:
     ))
     gate.require("silo.rear_entry_gate", rear_entry,
                  "high entry requires the rear-side distance and facing cone")
+    plug_interaction = all(token in entity for token in (
+        "ENTRY_PLUG_HEIGHT_00", "ENTRY_PLUG_HEIGHT_01", "ENTRY_PLUG_HEIGHT_02",
+        "getEntryPlugSocketPosition", "isEntryPlugTargeted", "tryEnterFromPlug",
+        "DATA_ENTRY_PLUG_INSERTED", "SILO_BAY_YAW",
+    )) and all(token in client for token in (
+        "findEntryPlugTarget", "ServerboundEntryPlugPacket",
+    )) and "ServerboundEntryPlugPacket.class" in network \
+        and "eva.tryEnterFromPlug(sender)" in entry_packet
+    gate.require("silo.entry_plug_interaction", plug_interaction,
+                 "aimed dorsal socket works beyond the coarse entity AABB and is revalidated server-side")
+    persistent_plug_visual = all(token in renderer for token in (
+        "animatable.getActivationTicks() > 0",
+        "|| animatable.isEntryPlugInserted()",
+        'setWeaponVisibility(model, "entry_plug", activating)',
+        'setWeaponVisibility(model, "plug_hatch_l", activating)',
+        'setWeaponVisibility(model, "plug_hatch_r", activating)',
+    ))
+    gate.require(
+        "silo.persistent_entry_plug_visual",
+        persistent_plug_visual,
+        "the inserted plug and both hatch leaves remain visible after the insertion animation",
+    )
+    entry_start = entity.find("public InteractionResult tryEnterFromPlug(Player player, boolean requireAim)")
+    entry_end = entity.find("private void alignForSiloBoarding", entry_start)
+    entry_body = entity[entry_start:entry_end] if entry_start >= 0 and entry_end > entry_start else ""
+    clear_path_at = entry_body.find("hasClearEntryPlugPath(player)")
+    align_at = entry_body.find("alignForSiloBoarding(launchBed)")
+    mount_at = entry_body.find("player.startRiding(this, true)")
+    authorization_order = 0 <= clear_path_at < align_at < mount_at
+    gate.require("silo.authorize_before_alignment", authorization_order,
+                 "visible pose is used for every entry gate before the silo may align or mount the EVA")
+    client_entry_filter = all(token in client for token in (
+        "hasClearEntryPlugPath(player, unit)", "ClipContext.Block.COLLIDER",
+        "lastEntryPlugRequestTick", "lastEntryPlugRequestTick != player.tickCount",
+    ))
+    gate.require("silo.client_entry_filter", client_entry_filter,
+                 "blocked sockets do not swallow use input and main/offhand emit one packet per tick")
+    socket_heights = [number(entity, name) for name in (
+        "ENTRY_PLUG_HEIGHT_00", "ENTRY_PLUG_HEIGHT_01", "ENTRY_PLUG_HEIGHT_02")]
+    socket_geometry = all(26.8 < value < 27.1 for value in socket_heights) \
+        and max(socket_heights) - min(socket_heights) < 0.01 \
+        and abs(number(entity, "ENTRY_PLUG_REAR_OFFSET") - 1.25) < 1.0e-6
+    gate.require("silo.variant_entry_sockets", socket_geometry,
+                 f"runtimeHeights={socket_heights} rearOffset={number(entity, 'ENTRY_PLUG_REAR_OFFSET'):g}")
     bed_envelope = all(token in entity for token in (
         "for (int x = -5; x <= 5; x++)", "for (int z = -5; z <= 5; z++)",
         "launchBedClaimedByAnother", "launch_bed_occupied",
@@ -347,6 +539,23 @@ def validate_silo(gate: Gate) -> None:
         launch_contract,
         f"targetAboveBed={target:g} ascentTicks={ascent_ticks:g} carrier opens/closes",
     )
+    freeze_and_easing = all(token in entity for token in (
+        "enforceLaunchLock()", "this.isCrucified() || this.isPilotControlLocked()",
+        "public void travel(Vec3 input)", "public boolean isPushable()",
+        "LAUNCH_PASSENGER_RESTORE_GRACE_TICKS",
+        "progress * progress * (3.0F - 2.0F * progress)",
+    ))
+    gate.require("silo.freeze_and_deterministic_ascent", freeze_and_easing,
+                 "activation is position/yaw/input locked and ascent follows a persisted smoothstep clock")
+    reset_start = entity.find("private void resetLaunchSequence()")
+    reset_end = entity.find("@Override\n    public void die", reset_start)
+    reset_body = entity[reset_start:reset_end] if reset_start >= 0 and reset_end > reset_start else ""
+    abandoned_cleanup = all(token in reset_body for token in (
+        "boolean abandoned = this.getControllingPassenger() == null",
+        "if (abandoned)", "DATA_ACTIVATION_TICKS, 0", "DATA_ENTRY_PLUG_INSERTED, false",
+    ))
+    gate.require("silo.abandoned_entry_cleanup", abandoned_cleanup,
+                 "passenger-restore timeout clears the inserted plug and activation overlay")
     moving_carrier = all(token in entity for token in (
         "SeeleLaunchCarrierY", "updateMovingCarrier()", "setMovingCarrierLayer",
         "for (int x = -5; x <= 5; x++)", "for (int z = -5; z <= 5; z++)",
@@ -379,7 +588,8 @@ def validate_silo(gate: Gate) -> None:
     gate.require(
         "silo.documentation",
         "/seele silo audit" in doc and "clearShafts=3" in doc
-        and "11×11" in doc and "背部扇区" in doc,
+        and "11×11" in doc and "背部扇区" in doc
+        and "LAUNCH_CLEAR" in doc and "18 tick" in doc and "0.9" in doc,
         "manual test names the structural gate and expected result",
     )
 

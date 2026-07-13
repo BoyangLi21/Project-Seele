@@ -63,7 +63,7 @@ MODEL_PIXELS_PER_BLOCK = 16.0 / 2.5
 FIRST_PERSON_SOCKETS = {
     "standing": {"eye_height": 24.63, "forward": 3.70},
     "crouch": {"eye_height": 19.70, "forward": 0.80},
-    "prone": {"eye_height": 10.80, "forward": -10.20},
+    "prone": {"eye_height": 10.80, "forward": 10.33},
 }
 FIRST_PERSON_PITCH = {
     "forward": 12.0,
@@ -382,9 +382,9 @@ def first_person_camera(stance, view, eye_height=None, forward_offset=None,
     """Return camera position and orthonormal axes in model-pixel space.
 
     Tiger/SmOd's face and horn point toward local -Z. ``forward`` uses the
-    signed Java positionRider convention: yaw zero maps a negative value to
-    the rig's local +Z, so model-space camera Z is ``-forward``.  The prone
-    spine rotates its head pivot far into +Z, while view direction remains -Z.
+    positive Java positionRider convention for every stance; the preview's
+    model-space camera Z is ``-forward``, matching the rendered face direction.
+    The prone spine rotates its head socket forward without reversing that sign.
     The mesh emitter reflects model X, hence screen-right is model -X.
     """
     socket = FIRST_PERSON_SOCKETS[stance]
@@ -600,12 +600,14 @@ def scene_bounds(scene_by_view):
 def pose_metrics(mesh, matrices, pivots, positions, attachments=()):
     """Return contact and joint data in unprojected model-pixel coordinates."""
     bone_bounds = {}
+    attachment_endpoints = {}
     overall_minimum = float("inf")
     overall_maximum = float("-inf")
     for mesh_index, source_mesh in enumerate((mesh, *attachments)):
         stride = int(source_mesh["stride"])
         for bone, part in source_mesh["parts"].items():
             values = part["vertices"]
+            posed_vertices = []
             minimum = float("inf")
             maximum = float("-inf")
             minimum_xyz = [float("inf"), float("inf"), float("inf")]
@@ -613,6 +615,7 @@ def pose_metrics(mesh, matrices, pivots, positions, attachments=()):
             for index in range(0, len(values), stride):
                 absolute = [values[index + axis] + part["pivot"][axis] for axis in range(3)]
                 posed = transform(matrices[bone], absolute)
+                posed_vertices.append(posed)
                 y = posed[1]
                 minimum = min(minimum, y)
                 maximum = max(maximum, y)
@@ -626,6 +629,28 @@ def pose_metrics(mesh, matrices, pivots, positions, attachments=()):
                 "min_xyz": [round(value, 4) for value in minimum_xyz],
                 "max_xyz": [round(value, 4) for value in maximum_xyz],
             }
+            if mesh_index > 0 and posed_vertices:
+                pivot_world = transform(matrices[bone], part["pivot"])
+                distances = [math.sqrt(sum((vertex[axis] - pivot_world[axis]) ** 2
+                                                   for axis in range(3)))
+                             for vertex in posed_vertices]
+                maximum_distance = max(distances)
+                # Average the far cap instead of reporting one arbitrary cube
+                # corner.  This makes the vector stable for a knife blade,
+                # cannon muzzle and the forked Longinus tip alike.
+                tolerance = max(0.25, maximum_distance * 0.02)
+                far_vertices = [vertex for vertex, distance in zip(posed_vertices, distances)
+                                if distance >= maximum_distance - tolerance]
+                endpoint = [sum(vertex[axis] for vertex in far_vertices) / len(far_vertices)
+                            for axis in range(3)]
+                vector = [endpoint[axis] - pivot_world[axis] for axis in range(3)]
+                attachment_endpoints[key] = {
+                    "pivot": [round(value, 4) for value in pivot_world],
+                    "far_endpoint": [round(value, 4) for value in endpoint],
+                    "vector_from_pivot": [round(value, 4) for value in vector],
+                    "length": round(math.sqrt(sum(value * value for value in vector)), 4),
+                    "far_cap_vertex_count": len(far_vertices),
+                }
             overall_minimum = min(overall_minimum, minimum)
             overall_maximum = max(overall_maximum, maximum)
     joints = {bone: [round(value, 4) for value in transform(matrix, pivots[bone])]
@@ -640,6 +665,7 @@ def pose_metrics(mesh, matrices, pivots, positions, attachments=()):
         "overall_max_y": round(overall_maximum, 4),
         "root_position": [round(value, 4) for value in positions.get("root", (0, 0, 0))],
         "bone_bounds": bone_bounds,
+        "attachment_endpoints": attachment_endpoints,
         "joint_world": joints,
         "hand_pivot_distance": None if hand_distance is None else round(hand_distance, 4),
     }
