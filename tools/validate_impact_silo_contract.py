@@ -434,7 +434,7 @@ def validate_tree(gate: Gate) -> None:
     resync = all(token in packet for token in (
         "eventId", "buf.readUUID()", "buf.writeUUID(this.eventId)",
         "initialTreeAge", "buf.readVarInt()", "buf.writeVarInt(this.initialTreeAge)",
-    )) and 'PROTOCOL_VERSION = "5"' in network \
+    )) and 'PROTOCOL_VERSION = "6"' in network \
         and all(token in game_events for token in (
             "PlayerLoggedInEvent", "PlayerChangedDimensionEvent", "PlayerRespawnEvent",
             "ThirdImpactDirector.syncTo(player)",
@@ -442,7 +442,7 @@ def validate_tree(gate: Gate) -> None:
         and "tree.eventId.equals(packet.eventId)" in client_fx \
         and "Math.max(tree.age" in client_fx
     gate.require("impact.client_resync", resync,
-                 "protocol-v5 event-id sync resumes Tree age without replacement")
+                 "protocol-v6 event-id sync resumes Tree age without replacement")
 
 
 def number(source: str, name: str) -> float:
@@ -464,6 +464,10 @@ def validate_silo(gate: Gate) -> None:
     renderer = read("src/main/java/com/projectseele/client/render/EvaUnit01Renderer.java")
     network = read("src/main/java/com/projectseele/network/SeeleNetwork.java")
     entry_packet = read("src/main/java/com/projectseele/network/ServerboundEntryPlugPacket.java")
+    silo_packet = read("src/main/java/com/projectseele/network/ClientboundSiloCapturePacket.java")
+    automation = read("src/main/java/com/projectseele/visual/VisualLabAutomation.java")
+    capture = read("src/main/java/com/projectseele/client/visual/VisualCaptureManager.java")
+    capture_validator = read("tools/validate_visual_capture_run.py")
     doc = read("docs/LAUNCH_SILO_TEST.md")
 
     commands = all(f'Commands.literal("{name}")' in command
@@ -535,6 +539,24 @@ def validate_silo(gate: Gate) -> None:
         and "ladderContinuous" in command
     )
     gate.require("silo.gantry_access", ladder, "all 24 ladder blocks are runtime-audited")
+    climb_through_hatch = all(token in builder for token in (
+        "x == 0 && z == 13", "? ladder", "level.setBlock(centre.offset(x, gantryY, z), deck, 3)",
+    ))
+    gate.require(
+        "silo.gantry_climb_through_hatch",
+        climb_through_hatch,
+        "the upper deck preserves the twenty-fourth ladder cell as a real access opening",
+    )
+    parked_heading_sync = all(token in builder for token in (
+        "unit.setYRot(launchYaw)", "unit.setYBodyRot(launchYaw)",
+        "unit.setYHeadRot(launchYaw)", "unit.yRotO = launchYaw",
+        "unit.yBodyRotO = launchYaw", "unit.yHeadRotO = launchYaw",
+    ))
+    gate.require(
+        "silo.parked_heading_sync",
+        parked_heading_sync,
+        "parked EVA look/body/head interpolation all face away from the dorsal gantry",
+    )
 
     rear_entry = all(token in entity for token in (
         "SILO_ENTRY_MIN_REAR_DOT", "SILO_ENTRY_MIN_DISTANCE", "SILO_ENTRY_MAX_DISTANCE",
@@ -652,6 +674,52 @@ def validate_silo(gate: Gate) -> None:
     )) and "NERV silo audit" in command
     gate.require("silo.runtime_evidence", log_contract,
                  "structure, lock, ascent and surface-clear logs are present")
+    automated_visual = all(token in automation for token in (
+        'CAPTURE_UNIT.equals("silo")', "LaunchSiloCommands.setupVisualCapture",
+        "LaunchSiloCommands.board", "ClientboundSiloCapturePacket",
+    )) and all(token in silo_packet for token in (
+        "VisualCaptureManager.startSilo", "buffer.readVarInt()",
+        "buffer.writeVarInt(this.entityId)",
+    )) and all(token in network for token in (
+        "ClientboundSiloCapturePacket.class", 'PROTOCOL_VERSION = "6"',
+    )) and all(token in capture for token in (
+        '"gantry_rear_socket"', '"plug_descent_external"',
+        '"plug_descent_cockpit"', '"hatch_locked"', '"ascent_mid"',
+        '"surface_clear"', "TIMEOUT_TICKS = 420",
+        "phase == EvaUnit01Entity.LAUNCH_LOCKED",
+        "phase == EvaUnit01Entity.LAUNCH_ASCENT",
+        "phase == EvaUnit01Entity.LAUNCH_CLEAR",
+        'String filename = "silo_"',
+    )) and all(token in capture_validator for token in (
+        '"silo": 6', "SILO_STAGES", "VISUAL SILO",
+    ))
+    gate.require(
+        "silo.automated_visual_matrix",
+        automated_visual,
+        "six screenshots wait on the real gantry/insertion/ascent/surface state machine",
+    )
+    socket_framed_capture = all(token in capture for token in (
+        "Vec3 socket = unit.getEntryPlugSocketPosition()",
+        "socket.add(rear.scale(9.0D))", "right.scale(5.25D)",
+        "subtract(right.scale(5.25D))", "add(rear.scale(5.4D))",
+        "minecraft.gui.getChat().clearMessages(false)",
+    )) and all(token not in capture for token in (
+        "right.scale(34.0D)", "right.scale(36.0D)", "forward.scale(27.0D)",
+    ))
+    gate.require(
+        "silo.socket_framed_capture",
+        socket_framed_capture,
+        "gantry/plug cameras use the authoritative dorsal socket and stay inside the shaft or open shutter",
+    )
+    deterministic_lighting = all(token in command for token in (
+        "level.setDayTime(6000L)",
+        "level.setWeatherParameters(12000, 0, false, false)",
+    ))
+    gate.require(
+        "silo.deterministic_capture_lighting",
+        deterministic_lighting,
+        "the dedicated unattended scene resets persisted night and rain before capture",
+    )
     gate.require(
         "silo.audit_geometry",
         all(token in command for token in (
@@ -664,7 +732,8 @@ def validate_silo(gate: Gate) -> None:
         "silo.documentation",
         "/seele silo audit" in doc and "clearShafts=3" in doc
         and "11×11" in doc and "背部扇区" in doc
-        and "LAUNCH_CLEAR" in doc and "18 tick" in doc and "0.9" in doc,
+        and "LAUNCH_CLEAR" in doc and "18 tick" in doc and "0.9" in doc
+        and "visual silo" in doc and "六张 PNG" in doc,
         "manual test names the structural gate and expected result",
     )
 

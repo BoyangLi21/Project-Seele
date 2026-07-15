@@ -4,12 +4,16 @@ import java.util.UUID;
 
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.projectseele.ProjectSeele;
+import com.projectseele.entity.EvaUnit01Entity;
+import com.projectseele.network.ClientboundSiloCapturePacket;
+import com.projectseele.network.SeeleNetwork;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.network.PacketDistributor;
 
 /** Dev-only unattended Visual Lab runner enabled by -PvisualCapture=true. */
 @Mod.EventBusSubscriber(modid = ProjectSeele.MODID, bus = Mod.EventBusSubscriber.Bus.FORGE)
@@ -34,6 +38,7 @@ public final class VisualLabAutomation
             System.getProperty("projectseele.visualCaptureUnit", "unit01");
     private static final boolean IMPACT_CAPTURE = CAPTURE_UNIT.equals("impact");
     private static final boolean MASS_CAPTURE = CAPTURE_UNIT.equals("mass");
+    private static final boolean SILO_CAPTURE = CAPTURE_UNIT.equals("silo");
     private static final String[] POSES = REQUESTED_POSE.equals("all")
             ? ALL_POSES : REQUESTED_POSE.split(",");
     private static final String[] MASS_POSES = REQUESTED_POSE.equals("all")
@@ -83,8 +88,42 @@ public final class VisualLabAutomation
         {
             if (ticks == 40)
             {
-                VisualLabCommands.setup(player.createCommandSourceStack(),
-                        IMPACT_CAPTURE ? "unit01" : CAPTURE_UNIT);
+                if (SILO_CAPTURE)
+                {
+                    LaunchSiloCommands.setupVisualCapture(player.createCommandSourceStack());
+                }
+                else
+                {
+                    VisualLabCommands.setup(player.createCommandSourceStack(),
+                            IMPACT_CAPTURE ? "unit01" : CAPTURE_UNIT);
+                }
+            }
+            if (SILO_CAPTURE)
+            {
+                if (ticks == 55)
+                {
+                    EvaUnit01Entity unit = LaunchSiloCommands.nearestCagedUnit(player);
+                    SeeleNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
+                            new ClientboundSiloCapturePacket(unit.getId()));
+                    ProjectSeele.LOGGER.info(
+                            "Visual Lab armed launch-silo scene capture for {}", unit.getStringUUID());
+                }
+                if (ticks == 120)
+                {
+                    if (LaunchSiloCommands.board(player.createCommandSourceStack()) != 1)
+                    {
+                        throw new IllegalStateException("Visual Silo boarding command failed");
+                    }
+                    ProjectSeele.LOGGER.info(
+                            "Visual Lab started real entry-plug synchronization and catapult sequence");
+                }
+                if (ticks > 500)
+                {
+                    ProjectSeele.LOGGER.error(
+                            "VISUAL SILO AUTOMATION INVALID: launch sequence exceeded 500 ticks");
+                    playerId = null;
+                }
+                return;
             }
             if (IMPACT_CAPTURE)
             {
@@ -134,6 +173,14 @@ public final class VisualLabAutomation
         catch (CommandSyntaxException | RuntimeException exception)
         {
             ProjectSeele.LOGGER.error("Visual Lab automation failed", exception);
+            if (SILO_CAPTURE)
+            {
+                // Hand the integrated client an invalid subject deliberately;
+                // its capture manager records the failure and closes the
+                // unattended game instead of leaving it parked in-world.
+                SeeleNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
+                        new ClientboundSiloCapturePacket(-1));
+            }
             playerId = null;
         }
     }

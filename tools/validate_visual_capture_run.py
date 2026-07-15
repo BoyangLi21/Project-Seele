@@ -18,14 +18,23 @@ SNAPSHOT = REPO / "run/.projectseele_visual_before.json"
 # includes run/jump/fall/crouch-walk/crawl instead of certifying only idle and
 # one walk contact frame; the final rifle pose also proves the local weapon
 # derivative and its shared first-/third-person skeleton.
-EXPECTED = {"unit01": 364, "unit00": 364, "unit02": 364, "mass": 35, "impact": 3}
+EXPECTED = {
+    "unit01": 364, "unit00": 364, "unit02": 364,
+    "mass": 35, "silo": 6, "impact": 3,
+}
 VIEWS_PER_POSE = {"unit01": 13, "unit00": 13, "unit02": 13, "mass": 7}
 FAILURE_PATTERNS = (
     r"VISUAL (?:CAPTURE|BATCH|MASS POSE|IMPACT) INVALID",
     r"Strict (?:Visual|Impact) capture refused",
     r"Visual screenshot failed",
     r"Visual capture failed: subject missing",
+    r"VISUAL SILO (?:CAPTURE|AUTOMATION) INVALID",
+    r"Launch-silo visual screenshot failed",
     r"Visual Lab automation failed",
+)
+SILO_STAGES = (
+    "gantry_rear_socket", "plug_descent_external", "plug_descent_cockpit",
+    "hatch_locked", "ascent_mid", "surface_clear",
 )
 
 
@@ -79,6 +88,12 @@ def verify(target: str) -> int:
     if wrong_prefix:
         print(f"VISUAL RUN INVALID: unexpected filenames: {wrong_prefix[:3]}", file=sys.stderr)
         return 1
+    if target == "silo":
+        missing = [stage for stage in SILO_STAGES
+                   if not any(path.name.endswith(f"_{stage}.png") for path in pngs)]
+        if missing:
+            print(f"VISUAL RUN INVALID: silo stages missing: {missing}", file=sys.stderr)
+            return 1
     try:
         log = LATEST_LOG.read_text(encoding="utf-8", errors="replace")
     except OSError as exc:
@@ -106,8 +121,8 @@ def main() -> int:
                         help="comma-separated targeted capture list; begin records its exact PNG count")
     args = parser.parse_args()
     poses = normalise_poses(args.poses)
-    if poses and args.target == "impact":
-        parser.error("impact capture has fixed views and does not accept --poses")
+    if poses and args.target in {"impact", "silo"}:
+        parser.error(f"{args.target} capture has fixed stages and does not accept --poses")
     return begin(args.target, poses) if args.action == "begin" else verify(args.target)
 
 

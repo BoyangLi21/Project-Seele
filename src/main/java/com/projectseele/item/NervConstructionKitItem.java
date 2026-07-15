@@ -206,7 +206,13 @@ public class NervConstructionKitItem extends Item
         {
             for (int x = -3; x <= 3; x++)
             {
-                level.setBlock(centre.offset(x, gantryY, z), x == 0 && z % 3 == 0 ? accent : dark, 3);
+                // Keep a real climb-through hatch at the top of the service
+                // ladder. Filling this cell with the deck made the gantry look
+                // complete while leaving the upper platform unreachable.
+                BlockState deck = x == 0 && z == 13
+                        ? ladder
+                        : (x == 0 && z % 3 == 0 ? accent : dark);
+                level.setBlock(centre.offset(x, gantryY, z), deck, 3);
                 if (Math.abs(x) == 3)
                 {
                     level.setBlock(centre.offset(x, gantryY + 1, z), Blocks.IRON_BARS.defaultBlockState(), 3);
@@ -236,7 +242,19 @@ public class NervConstructionKitItem extends Item
         }
         // Face away from the +Z service gallery, placing the gantry at the
         // dorsal/rear side of every Unit rather than in front of its face.
-        unit.moveTo(bay.getX() + 0.5D, bay.getY() - 29.0D, bay.getZ() + 0.5D, 180.0F, 0.0F);
+        float launchYaw = 180.0F;
+        unit.moveTo(bay.getX() + 0.5D, bay.getY() - 29.0D, bay.getZ() + 0.5D,
+                launchYaw, 0.0F);
+        // moveTo updates the entity look direction, but a LivingEntity keeps
+        // separate body/head interpolation fields. Leaving those at zero made
+        // the parked mesh face the rear gantry until launch lock synchronized
+        // it several seconds later, while interaction already used 180 deg.
+        unit.setYRot(launchYaw);
+        unit.setYBodyRot(launchYaw);
+        unit.setYHeadRot(launchYaw);
+        unit.yRotO = launchYaw;
+        unit.yBodyRotO = launchYaw;
+        unit.yHeadRotO = launchYaw;
         unit.setPersistenceRequired();
         level.addFreshEntity(unit);
     }

@@ -42,7 +42,7 @@ public final class LaunchSiloCommands
                                 .executes(context -> audit(context.getSource())))));
     }
 
-    private static int setup(CommandSourceStack source) throws CommandSyntaxException
+    static int setup(CommandSourceStack source) throws CommandSyntaxException
     {
         ServerPlayer player = source.getPlayerOrException();
         ServerLevel level = player.serverLevel();
@@ -91,7 +91,45 @@ public final class LaunchSiloCommands
         return 1;
     }
 
-    private static int board(CommandSourceStack source) throws CommandSyntaxException
+    /** Rebuilds one fixed complex so unattended screenshot runs are repeatable. */
+    static int setupVisualCapture(CommandSourceStack source) throws CommandSyntaxException
+    {
+        ServerPlayer player = source.getPlayerOrException();
+        ServerLevel level = player.serverLevel();
+        player.stopRiding();
+        int minSurface = level.getMinBuildHeight() + 36;
+        int maxSurface = level.getMaxBuildHeight() - 34;
+        int surfaceY = Math.max(minSurface, Math.min(maxSurface, 96));
+        BlockPos origin = new BlockPos(0, surfaceY, 0);
+
+        // Visual regression frames must expose the machinery, not inherit a
+        // persisted world's midnight storm. This changes only the dedicated
+        // unattended test world used by setupVisualCapture.
+        level.setDayTime(6000L);
+        level.setWeatherParameters(12000, 0, false, false);
+
+        // The quick-play world persists between runs. Remove only old EVA
+        // airframes in the fixed test envelope; buildComplex overwrites every
+        // shaft/carrier block at the same origin without touching the rest of
+        // the user's world.
+        level.getEntitiesOfClass(EvaUnit01Entity.class,
+                new AABB(origin).inflate(80.0D, 80.0D, 80.0D)).forEach(EvaUnit01Entity::discard);
+        NervConstructionKitItem.buildComplex(level, origin);
+        SiloAudit setupAudit = inspectComplex(level, origin);
+        logAudit("visual-setup", setupAudit);
+        if (!setupAudit.valid())
+        {
+            throw new IllegalStateException(
+                    "Visual launch complex failed structural audit: " + setupAudit.summary());
+        }
+        player.teleportTo(level, origin.getX() + 0.5D, origin.getY() - 3.0D,
+                origin.getZ() + 6.5D, 180.0F, 16.0F);
+        source.sendSuccess(() -> Component.literal(
+                "Repeatable NERV launch complex ready for visual capture."), false);
+        return 1;
+    }
+
+    static int board(CommandSourceStack source) throws CommandSyntaxException
     {
         ServerPlayer player = source.getPlayerOrException();
         if (player.isPassenger())
@@ -194,18 +232,29 @@ public final class LaunchSiloCommands
             // with the player standing at bed+27 and the lift spanning +4..27.
             boolean gantryFloor = !level.getBlockState(bed.offset(0, 26, 6)).isAir();
             boolean ladderContinuous = true;
+            BlockPos firstMissingLadder = null;
             for (int y = 4; y <= 27; y++)
             {
                 if (!level.getBlockState(bed.offset(0, y, 13))
                         .is(net.minecraft.world.level.block.Blocks.LADDER))
                 {
                     ladderContinuous = false;
+                    firstMissingLadder = bed.offset(0, y, 13);
                     break;
                 }
             }
             if (gantryFloor && ladderContinuous)
             {
                 validHighGantries++;
+            }
+            else
+            {
+                ProjectSeele.LOGGER.error(
+                        "NERV gantry invalid: variant={} bed={} floor={} firstMissingLadder={} state={}",
+                        unit.getUnitVariant(), bed.toShortString(), gantryFloor,
+                        firstMissingLadder == null ? "none" : firstMissingLadder.toShortString(),
+                        firstMissingLadder == null ? "n/a"
+                                : level.getBlockState(firstMissingLadder).toString());
             }
 
             boolean clear = true;
@@ -261,7 +310,7 @@ public final class LaunchSiloCommands
         }
     }
 
-    private static EvaUnit01Entity nearestCagedUnit(ServerPlayer player)
+    static EvaUnit01Entity nearestCagedUnit(ServerPlayer player)
     {
         AABB area = player.getBoundingBox().inflate(160.0D, 96.0D, 160.0D);
         return player.serverLevel().getEntitiesOfClass(EvaUnit01Entity.class, area,

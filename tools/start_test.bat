@@ -207,7 +207,7 @@ if /i "%~1"=="visual" (
     if /i "%~2"=="all" (
         echo Capturing Unit-01, Unit-00, Unit-02, Mass Production and Third Impact.
         echo Each client closes automatically before the next target starts.
-        for %%U in (unit01 unit00 unit02 mass impact) do (
+        for %%U in (unit01 unit00 unit02 mass silo impact) do (
             echo.
             echo === Visual suite target: %%U ===
             python tools\validate_visual_capture_run.py begin %%U
@@ -224,6 +224,15 @@ if /i "%~1"=="visual" (
             )
         )
         echo Complete Visual Lab suite finished.
+    ) else if /i "%~2"=="silo" (
+        echo Capturing the real entry-plug synchronization and launch-catapult sequence.
+        echo Six frames are state-gated: gantry, plug travel, cockpit, hatch, ascent, surface.
+        python tools\validate_visual_capture_run.py begin silo
+        if errorlevel 1 exit /b 1
+        call gradlew.bat runClient -PquickPlayWorld=SEELE_VISUAL_TEST_2 -PvisualCapture=true -PvisualCaptureUnit=silo
+        if errorlevel 1 exit /b 1
+        python tools\validate_visual_capture_run.py verify silo
+        if errorlevel 1 exit /b 1
     ) else if /i "%~2"=="impact" (
         echo Capturing the complete Third Impact front tableau.
         python tools\validate_visual_capture_run.py begin impact
@@ -275,7 +284,7 @@ if /i "%~1"=="visual" (
         if errorlevel 1 exit /b 1
     ) else (
         echo Unknown visual target "%~2".
-        echo Use: visual all, unit01, unit00, unit02, mass, or impact.
+        echo Use: visual all, unit01, unit00, unit02, mass, silo, or impact.
         pause
         exit /b 2
     )
