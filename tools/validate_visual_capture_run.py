@@ -14,10 +14,11 @@ REPO = Path(__file__).resolve().parent.parent
 CAPTURE_ROOT = REPO / "run/screenshots/projectseele_visual"
 LATEST_LOG = REPO / "run/logs/latest.log"
 SNAPSHOT = REPO / "run/.projectseele_visual_before.json"
-# Nineteen frozen Unit poses x thirteen cameras.  Locomotion regression now
+# Twenty-eight frozen Unit poses x thirteen cameras. Locomotion regression now
 # includes run/jump/fall/crouch-walk/crawl instead of certifying only idle and
-# one walk contact frame.
-EXPECTED = {"unit01": 247, "unit00": 247, "unit02": 247, "mass": 35, "impact": 3}
+# one walk contact frame; the final rifle pose also proves the local weapon
+# derivative and its shared first-/third-person skeleton.
+EXPECTED = {"unit01": 364, "unit00": 364, "unit02": 364, "mass": 35, "impact": 3}
 VIEWS_PER_POSE = {"unit01": 13, "unit00": 13, "unit02": 13, "mass": 7}
 FAILURE_PATTERNS = (
     r"VISUAL (?:CAPTURE|BATCH|MASS POSE|IMPACT) INVALID",

@@ -59,6 +59,7 @@ STANDARD_EVA_BONE_PARENTS = {
     "aim_pitch": "torso_upper",
     "arm_l": "aim_pitch",
     "arm_r": "aim_pitch",
+    "n2": "hand_r",
 }
 
 STANDARD_EVA_ATTACHMENT_CUBES = {
@@ -86,6 +87,9 @@ STANDARD_EVA_ANIMATION_BONES = {
     "animation.eva_unit01.lance_ready": {
         "arm_l", "arm_r", "forearm_l", "forearm_r", "lance"
     } | STANDARD_EVA_FINGER_BONES,
+    "animation.eva_unit01.lance_carry": {
+        "arm_l", "arm_r", "forearm_l", "forearm_r", "lance"
+    } | STANDARD_EVA_FINGER_BONES,
     "animation.eva_unit01.shield_brace": {"arm_l", "arm_r", "forearm_l", "forearm_r"},
     "animation.eva_unit01.visual_lance_windup": {"arm_l", "arm_r", "forearm_l", "forearm_r"},
     "animation.eva_unit01.visual_lance_contact": {"arm_l", "arm_r", "forearm_l", "forearm_r"},
@@ -106,7 +110,7 @@ ASSETS = {
         "required_bone_parents": STANDARD_EVA_BONE_PARENTS,
         "minimum_bone_cubes": STANDARD_EVA_ATTACHMENT_CUBES,
         "required_animation_bones": STANDARD_EVA_ANIMATION_BONES,
-        "required_geo_bones": {"root", "aim_pitch", "knife", "cannon", "lance", "entry_plug", "plug_hatch_l", "plug_hatch_r"},
+        "required_geo_bones": {"root", "aim_pitch", "knife", "cannon", "lance", "n2", "entry_plug", "plug_hatch_l", "plug_hatch_r"},
         "forbidden_cube_bones": NO_LEGACY_BODY_CUBES,
         "expected_texture_size": (1024, 512),
         "required_animations": {
@@ -115,10 +119,16 @@ ASSETS = {
             "animation.eva_unit01.aim", "animation.eva_unit01.prone_aim",
             "animation.eva_unit01.crucified", "animation.eva_unit01.activation",
             "animation.eva_unit01.visual_cannon", "animation.eva_unit01.lance_ready",
+            "animation.eva_unit01.lance_carry",
             "animation.eva_unit01.visual_lance_windup",
             "animation.eva_unit01.visual_lance_contact",
             "animation.eva_unit01.visual_lance_recovery",
             "animation.eva_unit01.shield_brace",
+            "animation.eva_unit01.n2_ready",
+            "animation.eva_unit01.prone_melee",
+            "animation.eva_unit01.prone_knife",
+            "animation.eva_unit01.prone_lance_thrust",
+            "animation.eva_unit01.prone_smash",
         },
         "canonical_body_animations": True,
     },
@@ -132,7 +142,7 @@ ASSETS = {
         "required_bone_parents": {**STANDARD_EVA_BONE_PARENTS, "shield": "forearm_l"},
         "minimum_bone_cubes": {**STANDARD_EVA_ATTACHMENT_CUBES, "shield": 2},
         "required_animation_bones": STANDARD_EVA_ANIMATION_BONES,
-        "required_geo_bones": {"root", "aim_pitch", "knife", "cannon", "lance", "shield", "entry_plug", "plug_hatch_l", "plug_hatch_r"},
+        "required_geo_bones": {"root", "aim_pitch", "knife", "cannon", "lance", "n2", "shield", "entry_plug", "plug_hatch_l", "plug_hatch_r"},
         "forbidden_cube_bones": NO_LEGACY_BODY_CUBES,
         "expected_texture_size": (1024, 512),
         "required_animations": {
@@ -141,10 +151,16 @@ ASSETS = {
             "animation.eva_unit01.aim", "animation.eva_unit01.prone_aim",
             "animation.eva_unit01.crucified", "animation.eva_unit01.activation",
             "animation.eva_unit01.visual_cannon", "animation.eva_unit01.lance_ready",
+            "animation.eva_unit01.lance_carry",
             "animation.eva_unit01.visual_lance_windup",
             "animation.eva_unit01.visual_lance_contact",
             "animation.eva_unit01.visual_lance_recovery",
             "animation.eva_unit01.shield_brace",
+            "animation.eva_unit01.n2_ready",
+            "animation.eva_unit01.prone_melee",
+            "animation.eva_unit01.prone_knife",
+            "animation.eva_unit01.prone_lance_thrust",
+            "animation.eva_unit01.prone_smash",
         },
         "canonical_body_animations": True,
     },
@@ -158,7 +174,7 @@ ASSETS = {
         "required_bone_parents": STANDARD_EVA_BONE_PARENTS,
         "minimum_bone_cubes": STANDARD_EVA_ATTACHMENT_CUBES,
         "required_animation_bones": STANDARD_EVA_ANIMATION_BONES,
-        "required_geo_bones": {"root", "aim_pitch", "knife", "cannon", "lance", "entry_plug", "plug_hatch_l", "plug_hatch_r"},
+        "required_geo_bones": {"root", "aim_pitch", "knife", "cannon", "lance", "n2", "entry_plug", "plug_hatch_l", "plug_hatch_r"},
         "forbidden_cube_bones": NO_LEGACY_BODY_CUBES,
         "expected_texture_size": (1024, 512),
         "required_animations": {
@@ -167,10 +183,16 @@ ASSETS = {
             "animation.eva_unit01.aim", "animation.eva_unit01.prone_aim",
             "animation.eva_unit01.crucified", "animation.eva_unit01.activation",
             "animation.eva_unit01.visual_cannon", "animation.eva_unit01.lance_ready",
+            "animation.eva_unit01.lance_carry",
             "animation.eva_unit01.visual_lance_windup",
             "animation.eva_unit01.visual_lance_contact",
             "animation.eva_unit01.visual_lance_recovery",
             "animation.eva_unit01.shield_brace",
+            "animation.eva_unit01.n2_ready",
+            "animation.eva_unit01.prone_melee",
+            "animation.eva_unit01.prone_knife",
+            "animation.eva_unit01.prone_lance_thrust",
+            "animation.eva_unit01.prone_smash",
         },
         "canonical_body_animations": True,
     },
@@ -244,6 +266,14 @@ ACCESSORY_ASSETS = {
     "longinus_lance": {
         "expected_triangles": 384,
         "required_parts": {"lance"},
+    },
+    "eva_pallet_smg": {
+        "accepted_triangles": {240, 292},
+        "required_parts": {"cannon"},
+    },
+    "eva_n2_device": {
+        "expected_triangles": 356,
+        "required_parts": {"n2"},
     },
 }
 
@@ -538,14 +568,23 @@ def validate_asset(root: Path, name: str) -> str:
 def validate_accessory_assets(root: Path) -> str:
     summaries = []
     for stem, contract in ACCESSORY_ASSETS.items():
+        accepted_triangles = contract.get("accepted_triangles")
+        expected_triangles = contract.get("expected_triangles")
+        minimum_triangles = (min(accepted_triangles) if accepted_triangles
+                             else expected_triangles)
         spec = {
-            "minimum_triangles": contract["expected_triangles"],
-            "expected_triangles": contract["expected_triangles"],
+            "minimum_triangles": minimum_triangles,
+            "expected_triangles": expected_triangles,
             "minimum_parts": len(contract["required_parts"]),
             "expected_parts": len(contract["required_parts"]),
             "required_parts": contract["required_parts"],
         }
         parts, triangles, _ = validate_mesh(root / "mesh" / f"{stem}.mesh.json", spec)
+        if accepted_triangles and triangles not in accepted_triangles:
+            raise ValidationError(
+                f"{stem}: expected one of {sorted(accepted_triangles)}, "
+                f"found {triangles} triangles"
+            )
         texture_stem = contract.get("texture_stem", stem)
         texture = root / "textures" / "entity" / f"{texture_stem}.png"
         require_nonempty(texture)

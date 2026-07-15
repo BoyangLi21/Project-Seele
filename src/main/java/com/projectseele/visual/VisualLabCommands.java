@@ -38,7 +38,7 @@ public final class VisualLabCommands
             "normal", "idle", "walk_contact", "run_contact", "jump", "fall",
             "crouch", "crouch_walk", "prone", "crawl", "prone_cannon",
             "knife_ready", "knife_windup", "knife_contact", "knife_recovery",
-            "lance_ready", "lance_windup", "lance_contact", "lance_recovery", "cannon"
+            "lance_ready", "lance_windup", "lance_contact", "lance_recovery", "cannon", "rifle"
     };
     private static final String[] MASS_POSES = {
             "normal", "idle", "move", "attack", "revive", "ritual"
@@ -303,6 +303,15 @@ public final class VisualLabCommands
             case "lance_contact" -> EvaUnit01Entity.VISUAL_LANCE_CONTACT;
             case "lance_recovery" -> EvaUnit01Entity.VISUAL_LANCE_RECOVERY;
             case "cannon" -> EvaUnit01Entity.VISUAL_CANNON;
+            case "rifle" -> EvaUnit01Entity.VISUAL_RIFLE;
+            case "crouch_knife_contact" -> EvaUnit01Entity.VISUAL_CROUCH_KNIFE_CONTACT;
+            case "prone_knife_contact" -> EvaUnit01Entity.VISUAL_PRONE_KNIFE_CONTACT;
+            case "crouch_lance_contact" -> EvaUnit01Entity.VISUAL_CROUCH_LANCE_CONTACT;
+            case "prone_lance_contact" -> EvaUnit01Entity.VISUAL_PRONE_LANCE_CONTACT;
+            case "n2_ready" -> EvaUnit01Entity.VISUAL_N2_READY;
+            case "rifle_walk_contact" -> EvaUnit01Entity.VISUAL_RIFLE_WALK_CONTACT;
+            case "crouch_rifle_contact" -> EvaUnit01Entity.VISUAL_CROUCH_RIFLE_CONTACT;
+            case "prone_rifle" -> EvaUnit01Entity.VISUAL_PRONE_RIFLE;
             default -> throw new IllegalArgumentException("Unknown visual pose: " + name);
         };
         unit.setVisualPose(visualPose);

@@ -12,6 +12,7 @@ import com.projectseele.client.render.RibbonRenderer;
 import com.projectseele.network.ClientboundAtFieldRipplePacket;
 import com.projectseele.network.ClientboundCannonBeamPacket;
 import com.projectseele.network.ClientboundCrossExplosionPacket;
+import com.projectseele.network.ClientboundRifleTracerPacket;
 import com.projectseele.fx.TreeOfLifeLayout;
 import com.projectseele.network.ClientboundThirdImpactPacket;
 import com.projectseele.registry.ModSounds;
@@ -44,6 +45,9 @@ public final class ClientFxManager
 {
     private static final List<WorldFx> ACTIVE = new ArrayList<>();
     private static ClientLevel activeLevel;
+    private static int nuclearFlashTicks;
+    private static int nuclearFlashDuration;
+    private static float nuclearFlashStrength;
     // Lightning's additive pass vanished entirely in actual framebuffer
     // captures on the current NVIDIA/Forge stack. The Tree needs a stable
     // position-colour quad pass; other transient energy FX keep lightning.
@@ -84,12 +88,35 @@ public final class ClientFxManager
     public static void addNukeFx(com.projectseele.network.ClientboundNukeFxPacket packet)
     {
         Vec3 pos = new Vec3(packet.x, packet.y, packet.z);
-        if (com.projectseele.config.SeeleConfig.FX_INTENSITY.get() > 0.0D)
+        float configuredIntensity = fxIntensity();
+        if (configuredIntensity > 0.0F)
         {
             ACTIVE.add(new NukeExplosion(pos, packet.scale));
             if (packet.angelCross)
             {
                 ACTIVE.add(new CrossExplosion(pos, packet.scale * 0.5F));
+            }
+            // A strategic detonation should overexpose the entry-plug feed
+            // even when the impact itself is just outside the camera. Scale
+            // 3.6 covers the cannon packet radius; N2's exact 3x scale covers
+            // its correspondingly larger audience. Distance still attenuates
+            // the flash, and FX intensity 0 disables it entirely.
+            Minecraft minecraft = Minecraft.getInstance();
+            if (minecraft.getCameraEntity() != null)
+            {
+                double distance = minecraft.getCameraEntity().getEyePosition().distanceTo(pos);
+                double visibleRadius = packet.scale * 60.0D;
+                float distanceFactor = Mth.clamp((float) (1.0D - distance / visibleRadius),
+                        0.0F, 1.0F);
+                float strength = Mth.clamp((0.18F + distanceFactor * 0.82F)
+                        * configuredIntensity, 0.0F, 1.0F);
+                int duration = Mth.clamp(Math.round(12.0F + packet.scale * 0.9F), 14, 30);
+                if (strength >= nuclearFlashStrength || nuclearFlashTicks <= 0)
+                {
+                    nuclearFlashDuration = duration;
+                    nuclearFlashTicks = duration;
+                    nuclearFlashStrength = strength;
+                }
             }
         }
         Minecraft minecraft = Minecraft.getInstance();
@@ -130,10 +157,31 @@ public final class ClientFxManager
         }
     }
 
+    public static void addRifleTracer(ClientboundRifleTracerPacket packet)
+    {
+        ACTIVE.add(new RifleTracer(new Vec3(packet.x1, packet.y1, packet.z1),
+                new Vec3(packet.x2, packet.y2, packet.z2)));
+    }
+
     public static void clear()
     {
         ACTIVE.clear();
         activeLevel = null;
+        nuclearFlashTicks = 0;
+        nuclearFlashDuration = 0;
+        nuclearFlashStrength = 0.0F;
+    }
+
+    /** 0..1 optical overexposure for the GUI pass, including a short afterimage. */
+    public static float nuclearFlashOpacity(float partialTick)
+    {
+        if (nuclearFlashTicks <= 0 || nuclearFlashDuration <= 0)
+        {
+            return 0.0F;
+        }
+        float remaining = Mth.clamp((nuclearFlashTicks - partialTick)
+                / nuclearFlashDuration, 0.0F, 1.0F);
+        return Mth.clamp(nuclearFlashStrength * remaining * remaining, 0.0F, 1.0F);
     }
 
     @SubscribeEvent
@@ -149,6 +197,14 @@ public final class ClientFxManager
             return;
         }
         ensureActiveLevel();
+        if (nuclearFlashTicks > 0)
+        {
+            nuclearFlashTicks--;
+            if (nuclearFlashTicks == 0)
+            {
+                nuclearFlashStrength = 0.0F;
+            }
+        }
         Iterator<WorldFx> it = ACTIVE.iterator();
         while (it.hasNext())
         {
@@ -492,6 +548,35 @@ public final class ClientFxManager
                     0.65F * flash, 0.40F * flash, 0.55F, 0.80F, 1.0F, alpha * 0.5F);
             RibbonRenderer.drawStarRibbon(pose, consumer, start, this.end,
                     0.28F * flash, 0.16F * flash, 1.0F, 0.99F, 0.95F, alpha * 0.95F);
+        }
+    }
+
+    /** Pallet-SMG pulse: thin, fast and deliberately free of impact fireballs. */
+    private static final class RifleTracer extends WorldFx
+    {
+        static final int LIFETIME = 4;
+        private final Vector3f end;
+
+        RifleTracer(Vec3 from, Vec3 to)
+        {
+            super(from);
+            this.end = new Vector3f((float) (to.x - from.x),
+                    (float) (to.y - from.y), (float) (to.z - from.z));
+        }
+
+        @Override
+        int lifetime()
+        {
+            return LIFETIME;
+        }
+
+        @Override
+        void render(PoseStack poseStack, VertexConsumer consumer, float partialTick)
+        {
+            float alpha = Mth.clamp(1.0F - (this.age + partialTick) / LIFETIME, 0.0F, 1.0F);
+            RibbonRenderer.drawStarRibbon(poseStack.last().pose(), consumer,
+                    new Vector3f(), this.end, 0.11F, 0.045F,
+                    1.0F, 0.76F, 0.28F, alpha * 0.92F);
         }
     }
 

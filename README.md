@@ -10,7 +10,7 @@ An open-source **Neon Genesis Evangelion** universe mod for Minecraft **Forge 1.
 
 Early development. **Visual recovery is in progress.** The Ramiel combat logic is playable, but EVA models, animation, first-person presentation, launch silo and Third-Impact tableau remain prototypes and are not release quality. Current recovery is bounded to Unit-01/00/02, Mass Production EVA, the Tree and the launch/entry-plug flow; no further campaign expansion occurs before their visual gates. / **视觉基础抢救中。** 拉米尔战斗逻辑可以运行，但 EVA 模型、动画、第一人称、发射井和第三次冲击构图均仍是原型。当前只收口初/零/二号机、量产机、生命之树及发射井/插入栓；这些项目通过视觉门禁前不再扩大战役范围。
 
-Pilot controls / 驾驶操作：`WASD` 移动、`Space` 跳跃、`Shift` 单膝跪地、`Z` 趴下/匍匐、`Ctrl` 冲刺、`B` 踩踏、`R` 切换武器、`G` 开关 A.T. Field、鼠标攻击/蓄力、`V` 弹出插入栓。零号机展开 A.T. Field 后按住 `Shift`，即进入单膝举盾防御。
+Pilot controls / 驾驶操作：`WASD` 移动、`Space` 跳跃、`Shift` 单膝跪地、`Z` 趴下/匍匐、`Ctrl` 冲刺、`B` 踩踏、`R` 切换武器、`G` 开关 A.T. Field、左键近战/自动步枪、右键阳电子炮蓄能/N² 解锁、`V` 弹出插入栓。零号机展开 A.T. Field 后按住 `Shift`，即进入单膝举盾防御。战略武器测试与数值见 [`docs/WEAPONS_TEST.md`](docs/WEAPONS_TEST.md)。
 
 ## Docs / 文档
 

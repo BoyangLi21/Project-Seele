@@ -174,6 +174,20 @@ def build_unit_skeleton(config, scale, minimum_y, finger_pivots=None):
         if bone["name"] in {"arm_l", "arm_r"}:
             bone["parent"] = "aim_pitch"
 
+    # Match Unit-01's hand-carried N2 socket. Variant base geometries predate
+    # this semantic bone, so it must be grafted after their final hand pivot
+    # has been retargeted.
+    if not any(bone["name"] == "n2" for bone in bones):
+        bones.append({
+            "name": "n2",
+            "parent": "hand_r",
+            "pivot": [
+                new_pivots["hand_r"][0],
+                new_pivots["hand_r"][1] - 5.0,
+                new_pivots["hand_r"][2],
+            ],
+        })
+
     for bone in bones:
         if bone["name"] == "cannon":
             bone.pop("cubes", None)
@@ -188,7 +202,7 @@ def build_unit_skeleton(config, scale, minimum_y, finger_pivots=None):
     return data, {bone["name"]: bone.get("pivot", [0, 0, 0]) for bone in bones}
 
 
-def sync_shared_rig_animations(animation):
+def sync_shared_rig_animations(animation, canonical_path=UNIT01_BASE_ANIMATION):
     """Use Unit-01 as the sole pose source for the shared 35-part Tiger rig.
 
     Unit-00 and Unit-02 used to copy only the low/cannon poses.  Switching to
@@ -198,11 +212,16 @@ def sync_shared_rig_animations(animation):
     come from the same catalogue; variant-only attachments remain geometry
     bones whose visibility is controlled by the renderer.
     """
-    source = json.loads(UNIT01_BASE_ANIMATION.read_text(encoding="utf-8"))["animations"]
+    source = json.loads(canonical_path.read_text(encoding="utf-8"))["animations"]
     target = animation["animations"]
     for key, pose in source.items():
         target[key] = copy.deepcopy(pose)
-    return tiger.repair_tiger_runtime_animations(animation)
+    # The generated local Unit-01 catalogue has already passed through the
+    # Tiger retarget exactly once. Applying repair_tiger_runtime_animations
+    # again here can silently move the shared body away from the exact pose
+    # that Unit-01 renders. Variant generation is therefore a literal pose
+    # copy, not a second retargeting pass.
+    return animation
 
 
 def add_visual_poses(animation):
@@ -276,10 +295,18 @@ def write_unit(config, output):
         finger_faces)
     mesh["source"] = config["source"]
     validate_mesh(mesh)
-    animation = add_visual_poses(sync_shared_rig_animations(json.loads(
-        config["base_animation"].read_text(encoding="utf-8"))))
-
     target = config["target"]
+    canonical_path = output / "animations" / "eva_unit01.animation.json"
+    if not canonical_path.exists():
+        raise RuntimeError(
+            "generated Unit-01 animation is missing; run "
+            "make_tiger_unit01_pack.py before generating EVA variants"
+        )
+    animation = add_visual_poses(sync_shared_rig_animations(
+        json.loads(config["base_animation"].read_text(encoding="utf-8")),
+        canonical_path,
+    ))
+
     write_json(output / "geo" / f"{target}.geo.json", skeleton)
     write_json(output / "animations" / f"{target}.animation.json", animation)
     write_json(output / "mesh" / f"{target}.mesh.json", mesh, compact=True)

@@ -23,6 +23,7 @@ import net.minecraftforge.client.event.InputEvent;
 import net.minecraftforge.client.event.RenderHandEvent;
 import net.minecraftforge.client.event.RenderGuiOverlayEvent;
 import net.minecraftforge.client.event.RenderPlayerEvent;
+import net.minecraftforge.client.gui.overlay.VanillaGuiOverlay;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
@@ -32,8 +33,10 @@ import org.lwjgl.glfw.GLFW;
 @Mod.EventBusSubscriber(modid = ProjectSeele.MODID, bus = Mod.EventBusSubscriber.Bus.FORGE, value = Dist.CLIENT)
 public final class ClientForgeEvents
 {
-    /** Tracks the held use-key while the cannon is out (charge start/stop). */
+    /** Tracks the held use-key for cannon charge or N2 arming edges. */
     private static boolean chargeHeld;
+    /** Local optical sight state; rifle fire itself remains server-authoritative. */
+    private static boolean rifleAimHeld;
     private static boolean crouchHeld;
     private static boolean sprintHeld;
     private static boolean jumpHeld;
@@ -67,6 +70,24 @@ public final class ClientForgeEvents
     public static float damageFlash(float partialTick)
     {
         return Mth.clamp((damageFlashTicks - partialTick) / 18.0F, 0.0F, 1.0F);
+    }
+
+    /** Immediate local input state, used so optical/N2 overlays do not wait for a round trip. */
+    public static boolean isWeaponUseHeld()
+    {
+        return chargeHeld;
+    }
+
+    public static boolean isCannonScopeActive(EvaUnit01Entity eva)
+    {
+        return eva != null && eva.getWeapon() == EvaUnit01Entity.WEAPON_CANNON
+                && (chargeHeld || eva.getCannonCharge() > 0);
+    }
+
+    public static boolean isRifleSightActive(EvaUnit01Entity eva)
+    {
+        return eva != null && eva.getWeapon() == EvaUnit01Entity.WEAPON_RIFLE
+                && rifleAimHeld;
     }
 
     private static void send(int action)
@@ -169,7 +190,7 @@ public final class ClientForgeEvents
         }
         while (Keybinds.STOMP.consumeClick())
         {
-            if (eva != null && eva.getWeapon() != EvaUnit01Entity.WEAPON_CANNON)
+            if (eva != null && eva.isMeleeWeapon())
             {
                 send(ServerboundEvaControlPacket.ACTION_STOMP);
             }
@@ -184,6 +205,18 @@ public final class ClientForgeEvents
 
         if (eva != null && minecraft.screen == null)
         {
+            if (eva.getWeapon() == EvaUnit01Entity.WEAPON_CANNON
+                    || eva.getWeapon() == EvaUnit01Entity.WEAPON_RIFLE)
+            {
+                // Keep the camera, server ray and physical aim parent on one
+                // mechanical elevation envelope. Without this, the optical
+                // crosshair can look beyond the barrel's clamped hit ray.
+                float pitch = Mth.clamp(player.getXRot(),
+                        -EvaUnit01Entity.MAX_CANNON_AIM_PITCH,
+                        EvaUnit01Entity.MAX_CANNON_AIM_PITCH);
+                player.setXRot(pitch);
+                player.xRotO = pitch;
+            }
             boolean rawSprint = rawKey(minecraft,
                     GLFW.GLFW_KEY_LEFT_CONTROL, GLFW.GLFW_KEY_RIGHT_CONTROL);
             boolean rawJump = minecraft.options.keyJump.isDown();
@@ -209,14 +242,31 @@ public final class ClientForgeEvents
         }
         else
         {
+            // Send release edges before clearing the client cache. Otherwise
+            // opening a menu while Shift/Ctrl is held can leave the server
+            // EVA permanently crouched or sprinting after the key is released
+            // behind the GUI.
+            if (eva != null)
+            {
+                if (crouchHeld)
+                {
+                    send(ServerboundEvaControlPacket.ACTION_CROUCH_STOP);
+                }
+                if (sprintHeld)
+                {
+                    send(ServerboundEvaControlPacket.ACTION_SPRINT_STOP);
+                }
+            }
             crouchHeld = false;
             sprintHeld = false;
             jumpHeld = false;
         }
 
-        // Hold-to-charge: mirror the use key into charge start/stop packets.
+        // Hold-to-use: cannon optical charge and N2 arming share one validated
+        // server edge, but expose different synchronized progress values.
         boolean wantCharge = eva != null
-                && eva.getWeapon() == EvaUnit01Entity.WEAPON_CANNON
+                && (eva.getWeapon() == EvaUnit01Entity.WEAPON_CANNON
+                    || eva.getWeapon() == EvaUnit01Entity.WEAPON_N2)
                 && minecraft.screen == null
                 && minecraft.options.keyUse.isDown();
         if (wantCharge != chargeHeld)
@@ -225,6 +275,18 @@ public final class ClientForgeEvents
             send(wantCharge
                     ? ServerboundEvaControlPacket.ACTION_CHARGE_START
                     : ServerboundEvaControlPacket.ACTION_CHARGE_STOP);
+        }
+        rifleAimHeld = eva != null
+                && eva.getWeapon() == EvaUnit01Entity.WEAPON_RIFLE
+                && minecraft.screen == null
+                && minecraft.options.keyUse.isDown();
+
+        // The pallet SMG is automatic. The client may request every tick;
+        // the entity's authoritative cooldown determines the actual fire rate.
+        if (eva != null && eva.getWeapon() == EvaUnit01Entity.WEAPON_RIFLE
+                && minecraft.screen == null && minecraft.options.keyAttack.isDown())
+        {
+            send(ServerboundEvaControlPacket.ACTION_RIFLE_FIRE);
         }
     }
 
@@ -280,14 +342,17 @@ public final class ClientForgeEvents
         {
             event.setCanceled(true);
             event.setSwingHand(false);
-            send(ServerboundEvaControlPacket.ACTION_MELEE);
+            if (eva.isMeleeWeapon())
+            {
+                send(ServerboundEvaControlPacket.ACTION_MELEE);
+            }
         }
         else if (event.isUseItem())
         {
             // Never let the pilot eat/place things through the plug wall.
             event.setCanceled(true);
             event.setSwingHand(false);
-            if (eva.getWeapon() != EvaUnit01Entity.WEAPON_CANNON)
+            if (eva.isMeleeWeapon())
             {
                 send(ServerboundEvaControlPacket.ACTION_SMASH);
             }
@@ -314,6 +379,15 @@ public final class ClientForgeEvents
     public static void onRenderGuiOverlay(RenderGuiOverlayEvent.Pre event)
     {
         if (VisualCaptureManager.isSuppressingGui())
+        {
+            event.setCanceled(true);
+            return;
+        }
+        Minecraft minecraft = Minecraft.getInstance();
+        EvaUnit01Entity eva = ridden(minecraft.player);
+        boolean opticalSight = isCannonScopeActive(eva) || isRifleSightActive(eva);
+        if (opticalSight && (event.getOverlay() == VanillaGuiOverlay.HOTBAR.type()
+                || event.getOverlay() == VanillaGuiOverlay.CROSSHAIR.type()))
         {
             event.setCanceled(true);
         }
@@ -363,9 +437,13 @@ public final class ClientForgeEvents
         if (event.getPlayer() instanceof LocalPlayer player)
         {
             EvaUnit01Entity eva = ridden(player);
-            if (eva != null && eva.getWeapon() == EvaUnit01Entity.WEAPON_CANNON && eva.getCannonCharge() > 0)
+            if (isCannonScopeActive(eva))
             {
                 event.setNewFovModifier(Mth.lerp(eva.chargeProgress(), 1.0F, 0.16F));
+            }
+            else if (isRifleSightActive(eva))
+            {
+                event.setNewFovModifier(0.72F);
             }
         }
     }

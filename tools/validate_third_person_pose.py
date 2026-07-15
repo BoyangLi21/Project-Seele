@@ -82,6 +82,18 @@ def render(assets: Path, animation_json: Path | None, stem: str, pose: str,
             "--attachment-texture",
             str(assets / "textures/entity/positron_cannon.png"),
         ))
+    elif attachment == "rifle":
+        command.extend((
+            "--attachment-mesh", str(assets / "mesh/eva_pallet_smg.mesh.json"),
+            "--attachment-texture",
+            str(assets / "textures/entity/eva_pallet_smg.png"),
+        ))
+    elif attachment == "n2":
+        command.extend((
+            "--attachment-mesh", str(assets / "mesh/eva_n2_device.mesh.json"),
+            "--attachment-texture",
+            str(assets / "textures/entity/eva_n2_device.png"),
+        ))
     if overlay:
         command.extend(("--overlay-animation", overlay,
                         "--overlay-time", str(overlay_time)))
@@ -136,46 +148,54 @@ def main() -> int:
         report[stem] = {"idle": idle, "aim": aim, "recoil": recoil}
 
     knife_report = {}
-    for pose in ("knife", "knife_left"):
-        for label, time in (("guard", 0.12), ("contact", 0.28), ("recovery", 0.42)):
-            metrics = render(args.assets, args.animation_json, "eva_unit01", pose,
-                             time, args.output, "knife")
-            joints = metrics["joint_world"]
-            blade = metrics["attachment_endpoints"]["attachment:knife"]
-            blade_tip = blade["far_endpoint"]
-            hand = joints["hand_r"]
-            elbow = joints["forearm_r"]
-            hand_to_tip = [blade_tip[axis] - hand[axis] for axis in range(3)]
-            blade_axis = blade["vector_from_pivot"]
-            prefix = f"{pose}_{label}"
-            torso = joints["torso_upper"]
-            # Attack keys deliberately add up to one Bedrock pixel of body
-            # lift.  This is still visible foot contact at EVA scale; larger
-            # gaps are rejected.
-            checks[f"{prefix}_grounded"] = -0.2 <= metrics["overall_min_y"] <= 1.25
-            checks[f"{prefix}_right_hand_forward"] = (
-                joints["hand_r"][2] <= torso[2] - 28.0)
-            # Reverse grip is defined by the actual downloaded blade leaving
-            # the little-finger side of the fist and pointing down, not by an
-            # old cube model's arbitrary forearm-axis sign.
-            checks[f"{prefix}_reverse_grip"] = (
-                math.dist(hand, blade["pivot"]) <= 7.0
-                and hand_to_tip[1] <= -20.0
-                and blade_axis[1] / blade["length"] <= -0.80
-            )
-            checks[f"{prefix}_guard_forward"] = (
-                joints["hand_l"][2] <= torso[2] - 28.0)
-            knife_report[prefix] = metrics
+    knife_samples = (
+        ("guard", "knife_ready", 0.0),
+        ("contact", "knife", 0.32),
+        ("recovery", "knife", 0.48),
+        # knife_left deliberately aliases the right-hand clip. Sampling it
+        # prevents the old alternating attachment/arm mismatch from returning.
+        ("left_alias_contact", "knife_left", 0.32),
+    )
+    for label, pose, time in knife_samples:
+        metrics = render(args.assets, args.animation_json, "eva_unit01", pose,
+                         time, args.output, "knife")
+        joints = metrics["joint_world"]
+        blade = metrics["attachment_endpoints"]["attachment:knife"]
+        blade_tip = blade["far_endpoint"]
+        hand = joints["hand_r"]
+        hand_to_tip = [blade_tip[axis] - hand[axis] for axis in range(3)]
+        blade_axis = blade["vector_from_pivot"]
+        prefix = f"knife_{label}"
+        torso = joints["torso_upper"]
+        checks[f"{prefix}_grounded"] = -0.2 <= metrics["overall_min_y"] <= 1.25
+        required_reach = 12.0 if label == "guard" else 24.0
+        checks[f"{prefix}_right_hand_forward"] = (
+            joints["hand_r"][2] <= torso[2] - required_reach)
+        # A tucked guard is diagonally down/back along the forearm; the slash
+        # phases require a steeper downward blade. Both still leave the
+        # little-finger side of the same right fist.
+        downward_ratio = -0.50 if label == "guard" else -0.70
+        minimum_drop = -15.0 if label == "guard" else -20.0
+        checks[f"{prefix}_reverse_grip"] = (
+            math.dist(hand, blade["pivot"]) <= 7.0
+            and hand_to_tip[1] <= minimum_drop
+            and blade_axis[1] / blade["length"] <= downward_ratio
+        )
+        checks[f"{prefix}_guard_forward"] = (
+            joints["hand_l"][2] <= torso[2] - 18.0)
+        knife_report[prefix] = metrics
     report["knife"] = knife_report
 
     lance_report = {}
     lance_samples = (("ready", 0.0, "", 0.0),
                      ("windup", 0.0, "lance_thrust", 0.20),
                      ("contact", 0.0, "lance_thrust", 0.42),
-                     ("recovery", 0.0, "lance_thrust", 0.72))
+                     ("recovery", 0.0, "lance_thrust", 0.72),
+                     ("moving", 0.0, "lance_carry", 0.0))
     for label, base_time, overlay, overlay_time in lance_samples:
+        base_pose = "walk" if label == "moving" else "lance_ready"
         metrics = render(args.assets, args.animation_json, "eva_unit01",
-                         "lance_ready", base_time, args.output, "lance",
+                         base_pose, base_time, args.output, "lance",
                          overlay, overlay_time)
         joints = metrics["joint_world"]
         torso_z = joints["torso_upper"][2]
@@ -198,8 +218,58 @@ def main() -> int:
             cosine_alignment(axis, [0.0, 0.0, -1.0]) >= 0.95
             and axis[2] <= -0.90 * weapon["length"]
         )
+        if label == "moving":
+            checks[f"{prefix}_locomotion_preserved"] = (
+                abs(metrics["root_position"][1]) >= 1.0
+                and abs(joints["foot_l"][2] - joints["foot_r"][2]) >= 10.0
+            )
         lance_report[prefix] = metrics
     report["lance"] = lance_report
+
+    rifle_report = {}
+    rifle_samples = (
+        ("standing", "aim", 0.0, "", 0.0),
+        ("moving", "walk", 0.0, "aim", 0.0),
+        ("prone", "prone", 0.0, "prone_aim", 0.0),
+    )
+    for label, base_pose, base_time, overlay, overlay_time in rifle_samples:
+        metrics = render(args.assets, args.animation_json, "eva_unit01",
+                         base_pose, base_time, args.output, "rifle",
+                         overlay, overlay_time)
+        joints = metrics["joint_world"]
+        muzzle = metrics["attachment_endpoints"]["attachment:cannon"]
+        prefix = f"rifle_{label}"
+        checks[f"{prefix}_muzzle_forward"] = (
+            cosine_alignment(muzzle["vector_from_pivot"], [0.0, 0.0, -1.0])
+            >= (0.995 if label != "moving" else 0.985)
+        )
+        checks[f"{prefix}_two_hand_pose"] = (
+            metrics["hand_pivot_distance"] <= 22.0
+            and all(joints[bone][2] <= joints["torso_upper"][2] - 35.0
+                    for bone in ("hand_l", "hand_r"))
+        )
+        checks[f"{prefix}_ground_clearance"] = metrics["overall_min_y"] >= -0.2
+        if label == "moving":
+            checks[f"{prefix}_locomotion_preserved"] = (
+                abs(metrics["root_position"][1]) >= 1.0
+                and abs(joints["foot_l"][2] - joints["foot_r"][2]) >= 10.0
+            )
+        rifle_report[prefix] = metrics
+    report["rifle"] = rifle_report
+
+    n2 = render(args.assets, args.animation_json, "eva_unit01", "n2_ready",
+                0.0, args.output, "n2")
+    n2_joints = n2["joint_world"]
+    n2_pivot = n2["attachment_endpoints"]["attachment:n2"]["pivot"]
+    checks["n2_right_hand_on_handle"] = (
+        math.dist(n2_joints["hand_r"], n2_pivot) <= 6.5)
+    checks["n2_left_hand_braces_case"] = (
+        math.dist(n2_joints["hand_l"], n2_pivot) <= 11.0)
+    checks["n2_two_hand_carry"] = (
+        8.0 <= n2["hand_pivot_distance"] <= 18.0
+        and n2["overall_min_y"] >= -0.2)
+    report["n2"] = n2
+
     report["checks"] = checks
     report["passed"] = all(checks.values())
     args.output.mkdir(parents=True, exist_ok=True)

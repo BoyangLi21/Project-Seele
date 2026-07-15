@@ -46,6 +46,7 @@ public class ClientEvents
         event.registerAboveAll("eva_cockpit", EvaHud.COCKPIT);
         event.registerAboveAll("sniper_scope", EvaHud.SCOPE);
         event.registerAboveAll("plug_insertion", EvaHud.INSERTION);
+        event.registerAboveAll("nuclear_flash", EvaHud.NUCLEAR_FLASH);
     }
 
     @SubscribeEvent

@@ -83,9 +83,27 @@ POSE_CASES = (
     {"name": "prone_aim", "animation": "prone", "time": 0.0,
      "stance": "prone", "overlay": "prone_aim", "attachment": "cannon",
      "weapon_bone": "cannon"},
+    {"name": "rifle_aim", "animation": "aim", "time": 0.0,
+     "stance": "standing", "attachment": "rifle",
+     "weapon_bone": "cannon"},
+    {"name": "rifle_walk_contact", "animation": "walk", "time": 0.0,
+     "stance": "standing", "overlay": "aim", "overlay_time": 0.0,
+     "attachment": "rifle", "weapon_bone": "cannon"},
+    {"name": "n2_ready", "animation": "n2_ready", "time": 0.0,
+     "stance": "standing", "attachment": "n2",
+     "weapon_bone": "n2"},
+    {"name": "prone_knife_contact", "animation": "prone", "time": 0.0,
+     "stance": "prone", "overlay": "prone_knife", "overlay_time": 0.34,
+     "attachment": "knife", "weapon_bone": "knife"},
+    {"name": "prone_lance_contact", "animation": "prone", "time": 0.0,
+     "stance": "prone", "overlay": "prone_lance_thrust", "overlay_time": 0.42,
+     "attachment": "lance", "weapon_bone": "lance"},
     {"name": "lance_ready", "animation": "lance_ready", "time": 0.0,
      "stance": "standing", "attachment": "lance",
      "weapon_bone": "lance"},
+    {"name": "lance_walk_contact", "animation": "walk", "time": 0.0,
+     "stance": "standing", "overlay": "lance_carry", "overlay_time": 0.0,
+     "attachment": "lance", "weapon_bone": "lance", "third_only": True},
     {"name": "lance_windup", "animation": "lance_thrust", "time": 0.20,
      "stance": "standing", "attachment": "lance",
      "weapon_bone": "lance"},
@@ -136,7 +154,7 @@ def render_command(assets: Path, stem: str, case: dict, output: Path,
     ]
     if case.get("overlay"):
         command.extend(("--overlay-animation", case["overlay"],
-                        "--overlay-time", "0.0"))
+                        "--overlay-time", str(case.get("overlay_time", 0.0))))
     attachment = case.get("attachment")
     if attachment == "cannon":
         command.extend((
@@ -144,6 +162,20 @@ def render_command(assets: Path, stem: str, case: dict, output: Path,
             str(assets / "mesh/positron_cannon.mesh.json"),
             "--attachment-texture",
             str(assets / "textures/entity/positron_cannon.png"),
+        ))
+    elif attachment == "rifle":
+        command.extend((
+            "--attachment-mesh",
+            str(assets / "mesh/eva_pallet_smg.mesh.json"),
+            "--attachment-texture",
+            str(assets / "textures/entity/eva_pallet_smg.png"),
+        ))
+    elif attachment == "n2":
+        command.extend((
+            "--attachment-mesh",
+            str(assets / "mesh/eva_n2_device.mesh.json"),
+            "--attachment-texture",
+            str(assets / "textures/entity/eva_n2_device.png"),
         ))
     elif attachment == "knife":
         unit02 = stem == "eva_unit02"
@@ -419,6 +451,10 @@ def main() -> int:
         args.assets / "textures/entity/entry_plug.png",
         args.assets / "mesh/positron_cannon.mesh.json",
         args.assets / "textures/entity/positron_cannon.png",
+        args.assets / "mesh/eva_pallet_smg.mesh.json",
+        args.assets / "textures/entity/eva_pallet_smg.png",
+        args.assets / "mesh/eva_n2_device.mesh.json",
+        args.assets / "textures/entity/eva_n2_device.png",
     ))
     for unit in UNITS:
         stem = f"eva_{unit}"

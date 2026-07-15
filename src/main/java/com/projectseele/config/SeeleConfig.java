@@ -33,6 +33,9 @@ public final class SeeleConfig
 
     // ----- common: EVA Unit-01 -----
     public static final ForgeConfigSpec.DoubleValue EVA_MAX_HEALTH;
+    public static final ForgeConfigSpec.DoubleValue EVA_RIFLE_DAMAGE;
+    public static final ForgeConfigSpec.DoubleValue EVA_RIFLE_RANGE;
+    public static final ForgeConfigSpec.IntValue EVA_RIFLE_INTERVAL_TICKS;
 
     // ----- common: positron sniper cannon (EVA weapon) -----
     public static final ForgeConfigSpec.IntValue CANNON_CHARGE_TICKS;
@@ -41,6 +44,13 @@ public final class SeeleConfig
     public static final ForgeConfigSpec.DoubleValue CANNON_MOB_DAMAGE;
     public static final ForgeConfigSpec.DoubleValue CANNON_CORE_DAMAGE;
     public static final ForgeConfigSpec.DoubleValue CANNON_EXPLOSION_RADIUS;
+    public static final ForgeConfigSpec.DoubleValue CANNON_BLAST_DAMAGE;
+    public static final ForgeConfigSpec.IntValue CANNON_TERRAIN_RADIUS;
+    public static final ForgeConfigSpec.IntValue CANNON_CRATER_DEPTH;
+
+    // ----- common: strategic explosions -----
+    public static final ForgeConfigSpec.IntValue N2_ARM_TICKS;
+    public static final ForgeConfigSpec.IntValue STRATEGIC_BLOCKS_PER_TICK;
 
     // ----- client -----
     public static final ForgeConfigSpec.BooleanValue ALARM_VIGNETTE;
@@ -108,6 +118,18 @@ public final class SeeleConfig
                 .defineInRange("maxHealth", 300.0D, 1.0D, 10000.0D);
         common.pop();
 
+        common.push("eva_pallet_smg");
+        EVA_RIFLE_DAMAGE = common
+                .comment("Damage per EVA pallet-SMG pulse. Angel A.T. Fields still block it completely.")
+                .defineInRange("damage", 22.0D, 0.0D, 10000.0D);
+        EVA_RIFLE_RANGE = common
+                .comment("Pallet-SMG hitscan range in blocks.")
+                .defineInRange("range", 192.0D, 16.0D, 1024.0D);
+        EVA_RIFLE_INTERVAL_TICKS = common
+                .comment("Minimum ticks between automatic pallet-SMG pulses.")
+                .defineInRange("intervalTicks", 3, 1, 40);
+        common.pop();
+
         common.push("positron_cannon");
         CANNON_CHARGE_TICKS = common
                 .comment("Hold-to-charge time in ticks before the sniper cannon can fire.")
@@ -126,8 +148,26 @@ public final class SeeleConfig
                         "hits with margin left for its armor reduction.")
                 .defineInRange("coreDamage", 210.0D, 0.0D, 100000.0D);
         CANNON_EXPLOSION_RADIUS = common
-                .comment("Explosion radius at the cannon impact point.")
-                .defineInRange("explosionRadius", 54.0D, 0.0D, 96.0D);
+                .comment("Immediate living-target blast radius at the cannon impact point.")
+                .defineInRange("explosionRadius", 36.0D, 0.0D, 96.0D);
+        CANNON_BLAST_DAMAGE = common
+                .comment("Maximum immediate blast damage at ground zero (separate from the core ray).")
+                .defineInRange("blastDamage", 160.0D, 0.0D, 100000.0D);
+        CANNON_TERRAIN_RADIUS = common
+                .comment("Radius of the staged mountain-carving crater. N2 uses exactly three times this radius.")
+                .defineInRange("terrainRadius", 64, 8, 192);
+        CANNON_CRATER_DEPTH = common
+                .comment("Depth of the staged cannon crater. N2 uses exactly three times this depth.")
+                .defineInRange("craterDepth", 32, 4, 128);
+        common.pop();
+
+        common.push("strategic_explosions");
+        N2_ARM_TICKS = common
+                .comment("Continuous use-key hold required to arm the EVA-carried N2 self-destruct.")
+                .defineInRange("n2ArmTicks", 100, 20, 400);
+        STRATEGIC_BLOCKS_PER_TICK = common
+                .comment("Global terrain-edit budget for staged cannon/N2 craters. Lower values reduce tick spikes.")
+                .defineInRange("blocksPerTick", 2048, 128, 20000);
         common.pop();
 
         COMMON_SPEC = common.build();

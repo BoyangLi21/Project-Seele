@@ -61,6 +61,18 @@ public final class VisualCaptureManager
         return tag.matches("triangle-mesh-14391-p1-[0-9a-f]{8}");
     }
 
+    private static boolean isExpectedRifleMesh(String tag)
+    {
+        // The 292-triangle TV Pallet Rifle is local-only.  The 240-triangle
+        // original rifle remains a legal clean-room fallback for public packs.
+        return tag.matches("triangle-mesh-(?:292|240)-p1-[0-9a-f]{8}");
+    }
+
+    private static boolean isExpectedN2Mesh(String tag)
+    {
+        return tag.matches("triangle-mesh-356-p1-[0-9a-f]{8}");
+    }
+
     public static void start(int entityId, int pose)
     {
         Minecraft minecraft = Minecraft.getInstance();
@@ -378,6 +390,7 @@ public final class VisualCaptureManager
         private final Entity originalCamera;
         private final CameraType originalCameraType;
         private final boolean originalHideGui;
+        private final boolean originalUseDown;
         private final float originalYaw;
         private final float originalPitch;
         private final String bodyModelTag;
@@ -400,6 +413,7 @@ public final class VisualCaptureManager
             this.originalCamera = minecraft.getCameraEntity();
             this.originalCameraType = minecraft.options.getCameraType();
             this.originalHideGui = minecraft.options.hideGui;
+            this.originalUseDown = minecraft.options.keyUse.isDown();
             this.originalYaw = minecraft.player.getYRot();
             this.originalPitch = minecraft.player.getXRot();
             Entity visualEntity = minecraft.level == null ? null : minecraft.level.getEntity(entityId);
@@ -419,13 +433,26 @@ public final class VisualCaptureManager
                     ? LocalVisualAssetFingerprint.inspect("mass_production_eva")
                     : EvaUnit01Renderer.visualFingerprintForVariant(variant);
             this.bodyModelTag = this.bodyFingerprint.compactTag();
-            String weaponTag = !this.massSubject && this.poseName.contains("cannon")
-                    ? LocalTriangleMeshLayer.captureTag(
-                            EvaUnit01Renderer.positronMeshResource()) : null;
+            boolean cannonPose = !this.massSubject && this.poseName.contains("cannon");
+            boolean riflePose = !this.massSubject && this.poseName.contains("rifle");
+            boolean n2Pose = !this.massSubject && this.poseName.equals("n2_ready");
+            String weaponName = cannonPose ? "positron" : riflePose ? "rifle"
+                    : n2Pose ? "n2" : null;
+            String weaponTag = cannonPose
+                    ? LocalTriangleMeshLayer.captureTag(EvaUnit01Renderer.positronMeshResource())
+                    : riflePose
+                    ? LocalTriangleMeshLayer.captureTag(EvaUnit01Renderer.rifleMeshResource())
+                    : n2Pose
+                    ? LocalTriangleMeshLayer.captureTag(EvaUnit01Renderer.n2MeshResource())
+                    : null;
             this.modelTag = weaponTag == null ? this.bodyModelTag
-                    : this.bodyModelTag + "__positron-" + weaponTag;
+                    : this.bodyModelTag + "__" + weaponName + "-" + weaponTag;
+            boolean weaponMeshValid = weaponTag == null
+                    || cannonPose && isExpectedCannonMesh(weaponTag)
+                    || riflePose && isExpectedRifleMesh(weaponTag)
+                    || n2Pose && isExpectedN2Mesh(weaponTag);
             if (!this.bodyFingerprint.valid()
-                    || weaponTag != null && !isExpectedCannonMesh(weaponTag))
+                    || !weaponMeshValid)
             {
                 ProjectSeele.LOGGER.error(
                         "VISUAL CAPTURE INVALID: {} loaded {} instead of the required local meshes",
@@ -533,6 +560,11 @@ public final class VisualCaptureManager
         private void position(Minecraft minecraft, Entity subject)
         {
             String name = this.views[this.view];
+            // The cockpit rifle frame is an end-to-end proof of the RMB
+            // optical feed. Every other frame keeps the key released so the
+            // clean first-person views still inspect the physical world mesh.
+            minecraft.options.keyUse.setDown(this.poseName.contains("rifle")
+                    && name.equals("first_person_cockpit"));
             minecraft.options.setCameraType(CameraType.FIRST_PERSON);
             if (name.startsWith("first_person"))
             {
@@ -565,7 +597,13 @@ public final class VisualCaptureManager
                         || unit.getVisualPose() == EvaUnit01Entity.VISUAL_CROUCH_WALK
                         || unit.getVisualPose() == EvaUnit01Entity.VISUAL_PRONE
                         || unit.getVisualPose() == EvaUnit01Entity.VISUAL_CRAWL
-                        || unit.getVisualPose() == EvaUnit01Entity.VISUAL_PRONE_CANNON);
+                        || unit.getVisualPose() == EvaUnit01Entity.VISUAL_PRONE_CANNON
+                        || unit.getVisualPose() == EvaUnit01Entity.VISUAL_PRONE_KNIFE_CONTACT
+                        || unit.getVisualPose() == EvaUnit01Entity.VISUAL_PRONE_LANCE_CONTACT
+                        || unit.getVisualPose() == EvaUnit01Entity.VISUAL_PRONE_RIFLE
+                        || unit.getVisualPose() == EvaUnit01Entity.VISUAL_CROUCH_KNIFE_CONTACT
+                        || unit.getVisualPose() == EvaUnit01Entity.VISUAL_CROUCH_LANCE_CONTACT
+                        || unit.getVisualPose() == EvaUnit01Entity.VISUAL_CROUCH_RIFLE_CONTACT);
             Vec3 centre = subject.position().add(0.0D,
                     subject.getBbHeight() * (faceClose ? (lowFace ? 0.60D : 0.84D) : 0.52D), 0.0D);
             float yaw = this.referenceYaw * Mth.DEG_TO_RAD;
@@ -679,6 +717,7 @@ public final class VisualCaptureManager
             minecraft.setCameraEntity(this.originalCamera != null ? this.originalCamera : minecraft.player);
             minecraft.options.setCameraType(this.originalCameraType);
             minecraft.options.hideGui = this.originalHideGui;
+            minecraft.options.keyUse.setDown(this.originalUseDown);
             if (minecraft.player != null)
             {
                 minecraft.player.setYRot(this.originalYaw);
@@ -721,6 +760,15 @@ public final class VisualCaptureManager
                 case EvaUnit01Entity.VISUAL_LANCE_CONTACT -> "lance_contact";
                 case EvaUnit01Entity.VISUAL_LANCE_RECOVERY -> "lance_recovery";
                 case EvaUnit01Entity.VISUAL_CANNON -> "cannon";
+                case EvaUnit01Entity.VISUAL_RIFLE -> "rifle";
+                case EvaUnit01Entity.VISUAL_CROUCH_KNIFE_CONTACT -> "crouch_knife_contact";
+                case EvaUnit01Entity.VISUAL_PRONE_KNIFE_CONTACT -> "prone_knife_contact";
+                case EvaUnit01Entity.VISUAL_CROUCH_LANCE_CONTACT -> "crouch_lance_contact";
+                case EvaUnit01Entity.VISUAL_PRONE_LANCE_CONTACT -> "prone_lance_contact";
+                case EvaUnit01Entity.VISUAL_N2_READY -> "n2_ready";
+                case EvaUnit01Entity.VISUAL_RIFLE_WALK_CONTACT -> "rifle_walk_contact";
+                case EvaUnit01Entity.VISUAL_CROUCH_RIFLE_CONTACT -> "crouch_rifle_contact";
+                case EvaUnit01Entity.VISUAL_PRONE_RIFLE -> "prone_rifle";
                 default -> "normal";
             };
         }
@@ -736,7 +784,11 @@ public final class VisualCaptureManager
             String requested = System.getProperty("projectseele.visualCapturePose", "all");
             if (requested.equals("all"))
             {
-                return pose.equals(unitName.equals("mass") ? "ritual" : "cannon");
+                // Keep this synchronized with VisualLabAutomation.ALL_POSES.
+                // Rifle was appended after cannon; retaining cannon here set
+                // shutdown, then the rifle session reset it to -1 and left an
+                // unattended client running forever after all screenshots.
+                return pose.equals(unitName.equals("mass") ? "ritual" : "rifle");
             }
             String[] poses = requested.split(",");
             if (poses.length == 0)

@@ -120,6 +120,34 @@ if exist "external-assets\work\positron_rifle_export\positron_rifle.obj" (
         )
     )
 )
+rem Prefer the exact locally reviewed TV Pallet Rifle when its ignored source
+rem is installed. The procedural MIT model remains a safe fallback.
+set "SEELE_TV_RIFLE=0"
+if exist "external-assets\work\pallet-rifle-oni\palett\palett.obj" if exist "external-assets\work\pallet-rifle-oni\palett\palett.bmp" set "SEELE_TV_RIFLE=1"
+if "%SEELE_TV_RIFLE%"=="1" (
+    python tools\make_downloaded_pallet_rifle_pack.py
+    if errorlevel 1 (
+        echo Local TV Pallet Rifle generation failed.
+        pause
+        exit /b 1
+    )
+) else (
+    python tools\make_original_eva_rifle.py
+    if errorlevel 1 (
+        echo Original EVA pallet SMG generation failed.
+        pause
+        exit /b 1
+    )
+)
+set "SEELE_TV_RIFLE="
+rem Original hand-carried N2 self-destruction device. It reads the final Tiger
+rem hand socket and is never substituted by the old SmOd placeholder cube.
+python tools\make_original_n2_device.py
+if errorlevel 1 (
+    echo Original EVA-carried N2 device generation failed.
+    pause
+    exit /b 1
+)
 python tools\validate_local_eva_pack.py
 if errorlevel 1 (
     echo Local EVA resource-pack validation failed.
@@ -132,12 +160,20 @@ if errorlevel 1 (
     pause
     exit /b 1
 )
+python tools\validate_weapon_systems.py
+if errorlevel 1 (
+    echo EVA firearm, scope or strategic-explosion validation failed.
+    pause
+    exit /b 1
+)
 if /i "%~1"=="offline" (
     set "OFFLINE_FAILED=0"
     echo Running the fail-closed offline visual recovery suite...
     python tools\validate_third_person_pose.py
     if errorlevel 1 set "OFFLINE_FAILED=1"
     python tools\validate_crawl_pose.py
+    if errorlevel 1 set "OFFLINE_FAILED=1"
+    python tools\validate_low_stance_pose.py
     if errorlevel 1 set "OFFLINE_FAILED=1"
     python tools\validate_crucified_pose.py
     if errorlevel 1 set "OFFLINE_FAILED=1"

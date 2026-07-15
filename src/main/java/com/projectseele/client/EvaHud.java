@@ -1,6 +1,7 @@
 package com.projectseele.client;
 
 import com.projectseele.config.SeeleConfig;
+import com.projectseele.client.fx.ClientFxManager;
 import com.projectseele.entity.EvaUnit01Entity;
 import com.projectseele.entity.RamielEntity;
 import net.minecraft.ChatFormatting;
@@ -31,6 +32,22 @@ public final class EvaHud
     private static final int PANEL_BG = 0x90101010;
 
     private EvaHud() {}
+
+    /** Strategic-blast optical overexposure, registered above the cockpit. */
+    public static final IGuiOverlay NUCLEAR_FLASH =
+            (gui, graphics, partialTick, width, height) ->
+    {
+        float opacity = ClientFxManager.nuclearFlashOpacity(partialTick);
+        if (opacity <= 0.0F)
+        {
+            return;
+        }
+        int alpha = Mth.clamp(Math.round(opacity * 242.0F), 0, 242);
+        // The first frames are near-white; the quadratic fade leaves a warm
+        // retinal afterimage instead of a hard on/off rectangle.
+        int colour = (alpha << 24) | 0x00FFF1CE;
+        graphics.fill(0, 0, width, height, colour);
+    };
 
     /**
      * Entry-plug insertion cinematic: dark clunk, LCL floods bottom-to-top,
@@ -258,53 +275,89 @@ public final class EvaHud
         }
     };
 
-    /** Sniper scope: crosshair, charge bar, rangefinder and core-lock call-outs. */
+    /** Entry-plug optical fire control: independent of the enormous world-space cannon. */
     public static final IGuiOverlay SCOPE = (gui, guiGraphics, partialTick, width, height) ->
     {
         Minecraft minecraft = Minecraft.getInstance();
         LocalPlayer player = minecraft.player;
-        if (player == null || !(player.getVehicle() instanceof EvaUnit01Entity eva)
-                || eva.getWeapon() != EvaUnit01Entity.WEAPON_CANNON
-                || eva.getCannonCharge() <= 0)
+        if (player == null || !(player.getVehicle() instanceof EvaUnit01Entity eva))
+        {
+            return;
+        }
+        if (eva.getWeapon() == EvaUnit01Entity.WEAPON_N2
+                && (ClientForgeEvents.isWeaponUseHeld() || eva.getN2ArmTicks() > 0))
+        {
+            renderN2Arming(guiGraphics, gui.getFont(), eva, width, height);
+            return;
+        }
+        if (ClientForgeEvents.isRifleSightActive(eva))
+        {
+            renderRifleSight(guiGraphics, gui.getFont(), player, eva, width, height);
+            return;
+        }
+        if (!ClientForgeEvents.isCannonScopeActive(eva))
         {
             return;
         }
         int cx = width / 2;
         int cy = height / 2;
         float progress = eva.chargeProgress();
-
-        // Scope shading around a central window.
-        int frameH = Math.round(height * 0.14F);
-        int frameW = Math.round(width * 0.18F);
-        int shade = 0xC8000000;
-        guiGraphics.fill(0, 0, width, frameH, shade);
-        guiGraphics.fill(0, height - frameH, width, height, shade);
-        guiGraphics.fill(0, frameH, frameW, height - frameH, shade);
-        guiGraphics.fill(width - frameW, frameH, width, height - frameH, shade);
-
-        // Crosshair with a breathing gap.
-        int reach = 70;
-        int gap = 10 - Math.round(6 * progress);
-        guiGraphics.fill(cx - reach, cy, cx - gap, cy + 1, NERV_ORANGE);
-        guiGraphics.fill(cx + gap, cy, cx + reach, cy + 1, NERV_ORANGE);
-        guiGraphics.fill(cx, cy - reach, cx + 1, cy - gap, NERV_ORANGE);
-        guiGraphics.fill(cx, cy + gap, cx + 1, cy + reach, NERV_ORANGE);
-        // Corner brackets.
-        int b = 110;
-        int len = 22;
-        guiGraphics.fill(cx - b, cy - b, cx - b + len, cy - b + 2, NERV_ORANGE);
-        guiGraphics.fill(cx - b, cy - b, cx - b + 2, cy - b + len, NERV_ORANGE);
-        guiGraphics.fill(cx + b - len, cy - b, cx + b, cy - b + 2, NERV_ORANGE);
-        guiGraphics.fill(cx + b - 2, cy - b, cx + b, cy - b + len, NERV_ORANGE);
-        guiGraphics.fill(cx - b, cy + b - 2, cx - b + len, cy + b, NERV_ORANGE);
-        guiGraphics.fill(cx - b, cy + b - len, cx - b + 2, cy + b, NERV_ORANGE);
-        guiGraphics.fill(cx + b - len, cy + b - 2, cx + b, cy + b, NERV_ORANGE);
-        guiGraphics.fill(cx + b - 2, cy + b - len, cx + b, cy + b, NERV_ORANGE);
-
-        // Charge bar.
-        int barW = 180;
-        int by = cy + b + 14;
         boolean ready = progress >= 1.0F;
+        int lockColour = ready ? 0xFF66FF7A : NERV_ORANGE;
+
+        // Original entry-plug optical feed: cool LCL glass, sparse engineering
+        // grid and orange NERV instrumentation. No anime frame is copied.
+        guiGraphics.fill(0, 0, width, height, 0x4F020912);
+        int gridX = Math.max(48, width / 16);
+        int gridY = Math.max(36, height / 12);
+        for (int x = cx % gridX; x < width; x += gridX)
+        {
+            guiGraphics.fill(x, 0, x + 1, height, 0x2439D8E8);
+        }
+        for (int y = cy % gridY; y < height; y += gridY)
+        {
+            guiGraphics.fill(0, y, width, y + 1, 0x2439D8E8);
+        }
+        int edge = Math.max(10, width / 90);
+        guiGraphics.fill(0, 0, width, edge, 0xD006090D);
+        guiGraphics.fill(0, height - edge, width, height, 0xD006090D);
+        guiGraphics.fill(0, edge, edge, height - edge, 0xB006090D);
+        guiGraphics.fill(width - edge, edge, width, height - edge, 0xB006090D);
+
+        Component title = Component.translatable("hud.projectseele.yashima_fire_control")
+                .withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD);
+        guiGraphics.drawString(gui.getFont(), title, edge + 8, edge + 7, 0xFFFFFFFF);
+        String power = String.format("GRID LOAD %05.1f%%", progress * 100.0F);
+        guiGraphics.drawString(gui.getFont(), power,
+                width - edge - 8 - gui.getFont().width(power), edge + 7,
+                ready ? 0xFF66FF7A : 0xFFFFB000);
+
+        // Twin acquisition symbols converge on the optical axis as the
+        // national-grid charge stabilises. Their overlap is the fire cue.
+        int travel = Math.max(42, Math.min(116, width / 9));
+        int offset = Math.round((1.0F - progress) * travel);
+        int pulse = 2 + Math.round((Mth.sin((player.tickCount + partialTick) * 0.24F) + 1.0F) * 2.0F);
+        drawDiamond(guiGraphics, cx - offset, cy, 20 + pulse, lockColour);
+        drawDiamond(guiGraphics, cx + offset, cy, 14 + pulse, lockColour);
+        drawDiamond(guiGraphics, cx, cy, 5, ready ? 0xFFFFFFFF : AT_CYAN);
+
+        // Cover vanilla's crosshair and replace it with a mechanically clean
+        // boresight. The same player look vector is used by the server ray.
+        guiGraphics.fill(cx - 4, cy - 4, cx + 5, cy + 5, 0xFF020912);
+        int reach = Math.max(42, Math.min(86, width / 12));
+        int gap = ready ? 5 : 9;
+        guiGraphics.fill(cx - reach, cy, cx - gap, cy + 1, lockColour);
+        guiGraphics.fill(cx + gap, cy, cx + reach, cy + 1, lockColour);
+        guiGraphics.fill(cx, cy - reach, cx + 1, cy - gap, lockColour);
+        guiGraphics.fill(cx, cy + gap, cx + 1, cy + reach, lockColour);
+
+        int bracket = Math.max(84, Math.min(138, Math.min(width, height) / 3));
+        drawCornerBrackets(guiGraphics, cx, cy, bracket, 24, lockColour);
+        int scanY = cy - bracket + Math.floorMod(player.tickCount * 3, bracket * 2);
+        guiGraphics.fill(cx - bracket + 3, scanY, cx + bracket - 3, scanY + 1, 0x5539D8E8);
+
+        int barW = Math.max(180, Math.min(360, width / 3));
+        int by = Math.min(height - edge - 34, cy + bracket + 14);
         guiGraphics.fill(cx - barW / 2, by, cx + barW / 2, by + 8, 0xFF202020);
         guiGraphics.fill(cx - barW / 2, by, cx - barW / 2 + Math.round(barW * progress), by + 8,
                 ready ? 0xFF35D435 : NERV_ORANGE);
@@ -313,16 +366,128 @@ public final class EvaHud
                 : Component.translatable("hud.projectseele.charging").withStyle(ChatFormatting.GOLD);
         guiGraphics.drawCenteredString(gui.getFont(), chargeText, cx, by + 12, 0xFFFFFFFF);
 
-        // Rangefinder + target designation.
-        scopeReadout(guiGraphics, gui.getFont(), player, eva, cx, cy - b - 24, ready);
+        scopeReadout(guiGraphics, gui.getFont(), player, eva, cx,
+                Math.max(edge + 24, cy - bracket - 26), ready,
+                SeeleConfig.CANNON_RANGE.get());
     };
 
-    private static void scopeReadout(GuiGraphics guiGraphics, Font font,
-                                     LocalPlayer player, EvaUnit01Entity eva, int cx, int y, boolean ready)
+    private static void renderRifleSight(GuiGraphics graphics, Font font, LocalPlayer player,
+                                         EvaUnit01Entity eva, int width, int height)
     {
-        double range = SeeleConfig.CANNON_RANGE.get();
+        int cx = width / 2;
+        int cy = height / 2;
+        int edge = Math.max(8, width / 120);
+        int sight = Math.max(72, Math.min(126, Math.min(width, height) / 3));
+        int green = 0xFF75F08A;
+
+        // Original entry-plug optical feed: a compact rifle director rather
+        // than a copied series frame. RMB switches to this camera feed while
+        // third person continues to see the physical two-hand shoulder pose.
+        graphics.fill(0, 0, width, height, 0x3600070B);
+        graphics.fill(0, 0, width, edge, 0xE0080B0F);
+        graphics.fill(0, height - edge, width, height, 0xE0080B0F);
+        graphics.fill(0, edge, edge, height - edge, 0xB0080B0F);
+        graphics.fill(width - edge, edge, width, height - edge, 0xB0080B0F);
+
+        Component title = Component.translatable("hud.projectseele.rifle_fire_control")
+                .withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD);
+        graphics.drawString(font, title, edge + 8, edge + 7, 0xFFFFFFFF);
+        Component mode = Component.translatable("hud.projectseele.rifle_auto")
+                .withStyle(ChatFormatting.GREEN);
+        graphics.drawString(font, mode, width - edge - 8 - font.width(mode), edge + 7, 0xFFFFFFFF);
+
+        drawCornerBrackets(graphics, cx, cy, sight, 20, green);
+        drawDiamond(graphics, cx, cy, 9, NERV_ORANGE);
+        graphics.fill(cx - sight - 28, cy, cx - 13, cy + 1, 0xB075F08A);
+        graphics.fill(cx + 13, cy, cx + sight + 28, cy + 1, 0xB075F08A);
+        graphics.fill(cx, cy - sight - 18, cx + 1, cy - 13, 0xB075F08A);
+        graphics.fill(cx, cy + 13, cx + 1, cy + sight + 18, 0xB075F08A);
+
+        int scanY = cy - sight + Math.floorMod(player.tickCount * 4, sight * 2);
+        graphics.fill(cx - sight + 4, scanY, cx + sight - 4, scanY + 1, 0x4039D8E8);
+        scopeReadout(graphics, font, player, eva, cx, cy + sight + 14,
+                true, SeeleConfig.EVA_RIFLE_RANGE.get());
+    }
+
+    private static void renderN2Arming(GuiGraphics graphics, Font font,
+                                       EvaUnit01Entity eva, int width, int height)
+    {
+        float progress = eva.n2ArmProgress();
+        int cx = width / 2;
+        int cy = height / 2;
+        boolean blink = (eva.tickCount / 4) % 2 == 0;
+        graphics.fill(0, 0, width, height, blink ? 0x66A00000 : 0x4A780000);
+        graphics.fill(0, 0, width, 6, 0xFFFF2400);
+        graphics.fill(0, height - 6, width, height, 0xFFFF2400);
+        int radius = Math.max(58, Math.min(128, Math.min(width, height) / 4));
+        drawDiamond(graphics, cx, cy, radius, 0xFFFF3A20);
+        drawDiamond(graphics, cx, cy, Math.max(18, radius - Math.round(radius * progress)),
+                0xFFFFFFFF);
+        Component warning = Component.translatable("hud.projectseele.n2_arming")
+                .withStyle(ChatFormatting.RED, ChatFormatting.BOLD);
+        graphics.drawCenteredString(font, warning, cx, cy - radius - 28, 0xFFFFFFFF);
+        float seconds = Math.max(0.0F,
+                (SeeleConfig.N2_ARM_TICKS.get() - eva.getN2ArmTicks()) / 20.0F);
+        String countdown = String.format("T−%.1f s", seconds);
+        graphics.drawCenteredString(font, countdown, cx, cy - 5, 0xFFFFFFFF);
+        int barW = Math.max(180, Math.min(420, width / 2));
+        graphics.fill(cx - barW / 2, cy + radius + 15, cx + barW / 2, cy + radius + 24, 0xDD180000);
+        graphics.fill(cx - barW / 2, cy + radius + 15,
+                cx - barW / 2 + Math.round(barW * progress), cy + radius + 24, 0xFFFF2400);
+        graphics.drawCenteredString(font,
+                Component.translatable("hud.projectseele.n2_abort"), cx, cy + radius + 30,
+                0xFFFFD0C8);
+    }
+
+    private static void drawCornerBrackets(GuiGraphics graphics, int cx, int cy,
+                                           int radius, int length, int colour)
+    {
+        graphics.fill(cx - radius, cy - radius, cx - radius + length, cy - radius + 2, colour);
+        graphics.fill(cx - radius, cy - radius, cx - radius + 2, cy - radius + length, colour);
+        graphics.fill(cx + radius - length, cy - radius, cx + radius, cy - radius + 2, colour);
+        graphics.fill(cx + radius - 2, cy - radius, cx + radius, cy - radius + length, colour);
+        graphics.fill(cx - radius, cy + radius - 2, cx - radius + length, cy + radius, colour);
+        graphics.fill(cx - radius, cy + radius - length, cx - radius + 2, cy + radius, colour);
+        graphics.fill(cx + radius - length, cy + radius - 2, cx + radius, cy + radius, colour);
+        graphics.fill(cx + radius - 2, cy + radius - length, cx + radius, cy + radius, colour);
+    }
+
+    private static void drawDiamond(GuiGraphics graphics, int cx, int cy, int radius, int colour)
+    {
+        drawLine(graphics, cx, cy - radius, cx + radius, cy, colour);
+        drawLine(graphics, cx + radius, cy, cx, cy + radius, colour);
+        drawLine(graphics, cx, cy + radius, cx - radius, cy, colour);
+        drawLine(graphics, cx - radius, cy, cx, cy - radius, colour);
+    }
+
+    private static void drawLine(GuiGraphics graphics, int x0, int y0, int x1, int y1, int colour)
+    {
+        int steps = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0));
+        if (steps == 0)
+        {
+            graphics.fill(x0, y0, x0 + 1, y0 + 1, colour);
+            return;
+        }
+        for (int index = 0; index <= steps; index++)
+        {
+            int x = Math.round(Mth.lerp(index / (float) steps, x0, x1));
+            int y = Math.round(Mth.lerp(index / (float) steps, y0, y1));
+            graphics.fill(x, y, x + 1, y + 1, colour);
+        }
+    }
+
+    private static void scopeReadout(GuiGraphics guiGraphics, Font font,
+                                     LocalPlayer player, EvaUnit01Entity eva, int cx, int y,
+                                     boolean ready, double range)
+    {
         Vec3 from = player.getEyePosition();
-        Vec3 dir = player.getLookAngle();
+        // Use the same clamped pilot rotation sampled by the server at trigger
+        // release. The synchronized skeleton pitch can trail local mouse input
+        // by one network frame and must not move the optical rangefinder left.
+        Vec3 dir = Vec3.directionFromRotation(
+                Mth.clamp(player.getXRot(), -EvaUnit01Entity.MAX_CANNON_AIM_PITCH,
+                        EvaUnit01Entity.MAX_CANNON_AIM_PITCH),
+                player.getYRot());
         Vec3 farEnd = from.add(dir.scale(range));
         BlockHitResult blockHit = player.level().clip(
                 new ClipContext(from, farEnd, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, player));

@@ -6,6 +6,7 @@ import java.util.function.Consumer;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.projectseele.ProjectSeele;
+import com.projectseele.client.ClientForgeEvents;
 import com.projectseele.entity.EvaUnit01Entity;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.LightTexture;
@@ -23,9 +24,10 @@ import software.bernie.geckolib.renderer.GeoEntityRenderer;
  *
  * GeckoLib is the sole authority for body and arm poses. First person observes
  * this same world-space skeleton from the pilot's head socket. Only mesh
- * shells that physically enclose the camera are suppressed; there is no
- * second arm render pass, reflected scale, camera-space pose or detached
- * viewmodel.
+ * shells that physically enclose the camera are suppressed. The sole special
+ * case is the building-sized positron cannon: its first-person geometry is
+ * stowed in favour of the entry-plug optical feed; third person remains the
+ * authoritative world skeleton. There is no detached arm viewmodel.
  */
 public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
 {
@@ -45,6 +47,14 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
             new ResourceLocation(ProjectSeele.MODID, "mesh/positron_cannon.mesh.json");
     private static final ResourceLocation POSITRON_TEXTURE =
             new ResourceLocation(ProjectSeele.MODID, "textures/entity/positron_cannon.png");
+    private static final ResourceLocation RIFLE_MESH =
+            new ResourceLocation(ProjectSeele.MODID, "mesh/eva_pallet_smg.mesh.json");
+    private static final ResourceLocation RIFLE_TEXTURE =
+            new ResourceLocation(ProjectSeele.MODID, "textures/entity/eva_pallet_smg.png");
+    private static final ResourceLocation N2_MESH =
+            new ResourceLocation(ProjectSeele.MODID, "mesh/eva_n2_device.mesh.json");
+    private static final ResourceLocation N2_TEXTURE =
+            new ResourceLocation(ProjectSeele.MODID, "textures/entity/eva_n2_device.png");
     private static final ResourceLocation COMMON_KNIFE_MESH =
             new ResourceLocation(ProjectSeele.MODID, "mesh/progressive_knife.mesh.json");
     private static final ResourceLocation COMMON_KNIFE_TEXTURE =
@@ -87,13 +97,22 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
                 (entity, bone) -> entity.getWeapon() == EvaUnit01Entity.WEAPON_CANNON
                         && "cannon".equals(bone.getName())));
         this.addRenderLayer(new LocalTriangleMeshLayer<>(this,
+                entity -> RIFLE_MESH, entity -> RIFLE_TEXTURE,
+                (entity, bone) -> entity.getWeapon() == EvaUnit01Entity.WEAPON_RIFLE
+                        && "cannon".equals(bone.getName())));
+        this.addRenderLayer(new LocalTriangleMeshLayer<>(this,
+                entity -> N2_MESH, entity -> N2_TEXTURE,
+                (entity, bone) -> entity.getWeapon() == EvaUnit01Entity.WEAPON_N2
+                        && "n2".equals(bone.getName())));
+        this.addRenderLayer(new LocalTriangleMeshLayer<>(this,
                 EvaUnit01Renderer::lanceMeshResource,
                 EvaUnit01Renderer::lanceTextureResource,
                 (entity, bone) -> entity.getWeapon() == EvaUnit01Entity.WEAPON_LANCE
                         && "lance".equals(bone.getName())));
         this.addRenderLayer(new LocalTriangleMeshLayer<>(this,
                 entity -> ENTRY_PLUG_MESH, entity -> ENTRY_PLUG_TEXTURE,
-                (entity, bone) -> isEntryHardwareVisible(entity, bone.getName())));
+                (entity, bone) -> !this.pilotView
+                        && isEntryHardwareVisible(entity, bone.getName())));
         this.shadowRadius = 3.6F;
         this.withScale(2.5F);
     }
@@ -162,6 +181,18 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
                     hideSubtree(bone);
                 }
             });
+            // A positron cannon is longer than the EVA's entire upper body.
+            // Looking through the physical head socket therefore puts its
+            // receiver, both forearms and the barrel between the camera and
+            // the target. In the entry plug the pilot uses the optical fire-
+            // control feed instead: stow the shared aim subtree only for this
+            // local view. Third person still renders the very same animated
+            // bones, and EvaHud supplies the sight picture while RMB is held.
+            if (animatable.getWeapon() == EvaUnit01Entity.WEAPON_CANNON
+                    || ClientForgeEvents.isRifleSightActive(animatable))
+            {
+                model.getBone("aim_pitch").ifPresent(EvaUnit01Renderer::hideSubtree);
+            }
         }
         // This is a small additive elevation layer on the one world skeleton,
         // after GeckoLib has evaluated the authored two-hand cannon stance.
@@ -180,8 +211,13 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
                 // frame (and each render layer) accumulate another camera
                 // angle, producing the view-dependent "windmill" rotation.
                 float pitch = animatable.getWeapon() == EvaUnit01Entity.WEAPON_CANNON
+                        || animatable.getWeapon() == EvaUnit01Entity.WEAPON_RIFLE
                         ? (float) Math.toRadians(animatable.getCannonAimPitch()) : 0.0F;
-                model.getBone("aim_pitch").get().setRotX(pitch);
+                // Minecraft's positive XRot looks down; the imported Bedrock
+                // aim parent uses the opposite positive-X convention. The hit
+                // ray keeps the Minecraft sign, while the visible rig must use
+                // its negation or mouse-up visibly points the barrel down.
+                model.getBone("aim_pitch").get().setRotX(-pitch);
             }
             else if (animatable.getWeapon() == EvaUnit01Entity.WEAPON_CANNON)
             {
@@ -194,8 +230,10 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
         }
         // Weapon visibility applies on top in every view.
         setWeaponVisibility(model, "knife", animatable.getWeapon() == EvaUnit01Entity.WEAPON_KNIFE);
-        setWeaponVisibility(model, "cannon", animatable.getWeapon() == EvaUnit01Entity.WEAPON_CANNON);
+        setWeaponVisibility(model, "cannon", animatable.getWeapon() == EvaUnit01Entity.WEAPON_CANNON
+                || animatable.getWeapon() == EvaUnit01Entity.WEAPON_RIFLE);
         setWeaponVisibility(model, "lance", animatable.getWeapon() == EvaUnit01Entity.WEAPON_LANCE);
+        setWeaponVisibility(model, "n2", animatable.getWeapon() == EvaUnit01Entity.WEAPON_N2);
         boolean shieldBrace = animatable.isShieldBraced()
                 || (animatable.getUnitVariant() == EvaUnit01Entity.UNIT_00
                     && animatable.getVisualPose() == EvaUnit01Entity.VISUAL_CROUCH);
@@ -204,10 +242,10 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
         // the end of insertion it is physically below the dorsal socket; the
         // closed hatch remains visible, but rendering the full 38px capsule at
         // its zero transform made it stick out of the EVA forever.
-        boolean plugTravelling = isEntryPlugTravelling(animatable);
+        boolean plugTravelling = !this.pilotView && isEntryPlugTravelling(animatable);
         setWeaponVisibility(model, "entry_plug", plugTravelling);
-        setWeaponVisibility(model, "plug_hatch_l", true);
-        setWeaponVisibility(model, "plug_hatch_r", true);
+        setWeaponVisibility(model, "plug_hatch_l", !this.pilotView);
+        setWeaponVisibility(model, "plug_hatch_r", !this.pilotView);
     }
 
     private static void setWeaponVisibility(BakedGeoModel model, String name, boolean active)
@@ -228,13 +266,21 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
                 && entity.getWeapon() == EvaUnit01Entity.WEAPON_CANNON
                 && "cannon".equals(bone.getName())
                 && LocalTriangleMeshLayer.hasPart(POSITRON_MESH, bone.getName());
+        boolean rifleMesh = entity != null
+                && entity.getWeapon() == EvaUnit01Entity.WEAPON_RIFLE
+                && "cannon".equals(bone.getName())
+                && LocalTriangleMeshLayer.hasPart(RIFLE_MESH, bone.getName());
+        boolean n2Mesh = entity != null
+                && entity.getWeapon() == EvaUnit01Entity.WEAPON_N2
+                && "n2".equals(bone.getName())
+                && LocalTriangleMeshLayer.hasPart(N2_MESH, bone.getName());
         ResourceLocation activeKnifeMesh = entity == null ? COMMON_KNIFE_MESH
                 : knifeMeshResource(entity);
         boolean knifeMesh = entity != null
                 && entity.getWeapon() == EvaUnit01Entity.WEAPON_KNIFE
                 && "knife".equals(bone.getName())
                 && LocalTriangleMeshLayer.hasPart(activeKnifeMesh, bone.getName());
-        boolean entryHardwareMesh = entity != null
+        boolean entryHardwareMesh = !this.pilotView && entity != null
                 && isEntryHardwareVisible(entity, bone.getName())
                 && LocalTriangleMeshLayer.hasPart(ENTRY_PLUG_MESH, bone.getName());
         ResourceLocation activeLanceMesh = entity == null ? LONGINUS_MESH
@@ -243,7 +289,8 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
                 && entity.getWeapon() == EvaUnit01Entity.WEAPON_LANCE
                 && "lance".equals(bone.getName())
                 && LocalTriangleMeshLayer.hasPart(activeLanceMesh, bone.getName());
-        if (bodyMesh || cannonMesh || knifeMesh || lanceMesh || entryHardwareMesh)
+        if (bodyMesh || cannonMesh || rifleMesh || n2Mesh
+                || knifeMesh || lanceMesh || entryHardwareMesh)
         {
             return;
         }
@@ -292,6 +339,16 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
     public static ResourceLocation positronMeshResource()
     {
         return POSITRON_MESH;
+    }
+
+    public static ResourceLocation rifleMeshResource()
+    {
+        return RIFLE_MESH;
+    }
+
+    public static ResourceLocation n2MeshResource()
+    {
+        return N2_MESH;
     }
 
     public static ResourceLocation knifeMeshResource(EvaUnit01Entity entity)

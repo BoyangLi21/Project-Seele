@@ -392,9 +392,11 @@ def validate_tree(gate: Gate) -> None:
     gate.require(
         "unit01.crucified_strike_gate",
         strike_controller >= 0
-        and "this.isCrucified() ? PlayState.STOP" in strike_block
+        and "if (this.isCrucified())" in strike_block
+        and "state.getController().stop()" in strike_block
+        and "return PlayState.STOP" in strike_block
         and ".receiveTriggeredAnimations()" in strike_block,
-        "triggered attacks are polled and stopped while Unit-01 is crucified",
+        "triggered attacks are explicitly stopped while Unit-01 is crucified",
     )
     gate.require(
         "unit01.crucified_state_reset",
@@ -432,7 +434,7 @@ def validate_tree(gate: Gate) -> None:
     resync = all(token in packet for token in (
         "eventId", "buf.readUUID()", "buf.writeUUID(this.eventId)",
         "initialTreeAge", "buf.readVarInt()", "buf.writeVarInt(this.initialTreeAge)",
-    )) and 'PROTOCOL_VERSION = "4"' in network \
+    )) and 'PROTOCOL_VERSION = "5"' in network \
         and all(token in game_events for token in (
             "PlayerLoggedInEvent", "PlayerChangedDimensionEvent", "PlayerRespawnEvent",
             "ThirdImpactDirector.syncTo(player)",
@@ -440,7 +442,7 @@ def validate_tree(gate: Gate) -> None:
         and "tree.eventId.equals(packet.eventId)" in client_fx \
         and "Math.max(tree.age" in client_fx
     gate.require("impact.client_resync", resync,
-                 "protocol-v4 event-id sync resumes Tree age without replacement")
+                 "protocol-v5 event-id sync resumes Tree age without replacement")
 
 
 def number(source: str, name: str) -> float:
@@ -475,7 +477,7 @@ def validate_silo(gate: Gate) -> None:
     gate.require("silo.three_variants", variants, "Unit-00/01/02 each have a launch bay")
 
     absolute_aim_pitch = (
-        'model.getBone("aim_pitch").get().setRotX(pitch);' in renderer
+        'model.getBone("aim_pitch").get().setRotX(-pitch);' in renderer
         and 'model.getBone("aim_pitch").get().getRotX() + pitch' not in renderer
         and 'bone.setRotX(bone.getRotX() + pitch)' not in renderer
         and '? (float) Math.toRadians(animatable.getCannonAimPitch()) : 0.0F'
@@ -552,10 +554,11 @@ def validate_silo(gate: Gate) -> None:
     gate.require("silo.entry_plug_interaction", plug_interaction,
                  "aimed dorsal socket works beyond the coarse entity AABB and is revalidated server-side")
     seated_plug_visual = all(token in renderer for token in (
-        "boolean plugTravelling = isEntryPlugTravelling(animatable)",
+        "boolean plugTravelling = !this.pilotView && isEntryPlugTravelling(animatable)",
         'setWeaponVisibility(model, "entry_plug", plugTravelling)',
-        'setWeaponVisibility(model, "plug_hatch_l", true)',
-        'setWeaponVisibility(model, "plug_hatch_r", true)',
+        'setWeaponVisibility(model, "plug_hatch_l", !this.pilotView)',
+        'setWeaponVisibility(model, "plug_hatch_r", !this.pilotView)',
+        "boolean entryHardwareMesh = !this.pilotView",
         "return entity.getActivationTicks() > 57",
     )) and all(token in entity for token in (
         "this.entityData.set(DATA_ENTRY_PLUG_INSERTED, true)",
@@ -564,7 +567,7 @@ def validate_silo(gate: Gate) -> None:
     gate.require(
         "silo.seated_entry_plug_visual",
         seated_plug_visual,
-        "the capsule is external only while descending; seated state persists behind closed hatches",
+        "external observers retain the travelling plug and closed hatches while the pilot cannot see dorsal hardware",
     )
     entry_start = entity.find("public InteractionResult tryEnterFromPlug(Player player, boolean requireAim)")
     entry_end = entity.find("private void alignForSiloBoarding", entry_start)

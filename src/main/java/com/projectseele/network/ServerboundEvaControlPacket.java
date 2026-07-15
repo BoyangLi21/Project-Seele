@@ -27,6 +27,7 @@ public class ServerboundEvaControlPacket
     public static final int ACTION_EXIT = 11;
     public static final int ACTION_STOMP = 12;
     public static final int ACTION_TOGGLE_PRONE = 13;
+    public static final int ACTION_RIFLE_FIRE = 14;
 
     public final int action;
 
@@ -66,6 +67,7 @@ public class ServerboundEvaControlPacket
                 case ACTION_EXIT -> eva.exitEva(sender);
                 case ACTION_STOMP -> eva.stompAttack(sender);
                 case ACTION_TOGGLE_PRONE -> eva.toggleProne(sender);
+                case ACTION_RIFLE_FIRE -> eva.fireRifle(sender);
                 default -> { }
             }
         }

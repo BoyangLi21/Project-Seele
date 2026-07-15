@@ -21,7 +21,10 @@ public final class VisualLabAutomation
             "crouch", "crouch_walk", "prone", "crawl", "prone_cannon",
             "knife_ready",
             "knife_windup", "knife_contact", "knife_recovery",
-            "lance_ready", "lance_windup", "lance_contact", "lance_recovery", "cannon"
+            "lance_ready", "lance_windup", "lance_contact", "lance_recovery", "cannon",
+            "crouch_knife_contact", "prone_knife_contact",
+            "crouch_lance_contact", "prone_lance_contact", "n2_ready",
+            "rifle_walk_contact", "crouch_rifle_contact", "prone_rifle", "rifle"
     };
     private static final String[] ALL_MASS_POSES = {
             "idle", "move", "attack", "revive", "ritual"
