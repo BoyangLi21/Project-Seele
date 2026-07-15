@@ -35,9 +35,10 @@ import net.minecraftforge.network.PacketDistributor;
 public final class VisualLabCommands
 {
     private static final String[] POSES = {
-            "normal", "idle", "walk_contact", "crouch", "prone", "prone_cannon",
-            "knife_windup", "knife_contact", "knife_recovery",
-            "lance_windup", "lance_contact", "lance_recovery", "cannon"
+            "normal", "idle", "walk_contact", "run_contact", "jump", "fall",
+            "crouch", "crouch_walk", "prone", "crawl", "prone_cannon",
+            "knife_ready", "knife_windup", "knife_contact", "knife_recovery",
+            "lance_ready", "lance_windup", "lance_contact", "lance_recovery", "cannon"
     };
     private static final String[] MASS_POSES = {
             "normal", "idle", "move", "attack", "revive", "ritual"
@@ -112,32 +113,29 @@ public final class VisualLabCommands
                                 : Blocks.GRAY_CONCRETE.defaultBlockState(), 3);
             }
         }
-        // Height rulers: orange every five blocks, iron otherwise.
+        // Purge the old foreground fixtures from persistent Visual Lab saves.
+        // Their orange/white blocks could line up with an EVA limb or head in
+        // the close cameras and masquerade as weapon-dependent body texture.
         for (int y = 1; y <= 30; y++)
         {
-            level.setBlock(centre.offset(-32, y, -30),
-                    y % 5 == 0 ? Blocks.ORANGE_CONCRETE.defaultBlockState()
-                            : Blocks.IRON_BLOCK.defaultBlockState(), 3);
-            level.setBlock(centre.offset(32, y, -30),
-                    y % 5 == 0 ? Blocks.ORANGE_CONCRETE.defaultBlockState()
-                            : Blocks.IRON_BLOCK.defaultBlockState(), 3);
+            level.setBlock(centre.offset(-32, y, -30), Blocks.AIR.defaultBlockState(), 3);
+            level.setBlock(centre.offset(32, y, -30), Blocks.AIR.defaultBlockState(), 3);
         }
-        // Door frame and step-height fixtures.
         for (int y = 1; y <= 22; y++)
         {
-            level.setBlock(centre.offset(26, y, 18), Blocks.WHITE_CONCRETE.defaultBlockState(), 3);
-            level.setBlock(centre.offset(26, y, 34), Blocks.WHITE_CONCRETE.defaultBlockState(), 3);
+            level.setBlock(centre.offset(26, y, 18), Blocks.AIR.defaultBlockState(), 3);
+            level.setBlock(centre.offset(26, y, 34), Blocks.AIR.defaultBlockState(), 3);
         }
         for (int z = -8; z <= 8; z++)
         {
-            level.setBlock(centre.offset(26, 22, 26 + z), Blocks.WHITE_CONCRETE.defaultBlockState(), 3);
+            level.setBlock(centre.offset(26, 22, 26 + z), Blocks.AIR.defaultBlockState(), 3);
         }
         for (int step = 0; step < 5; step++)
         {
             for (int x = 0; x <= step; x++)
             {
                 level.setBlock(centre.offset(-28 + x, 1 + step, 24),
-                        Blocks.SMOOTH_STONE.defaultBlockState(), 3);
+                        Blocks.AIR.defaultBlockState(), 3);
             }
         }
         level.setBlock(centre.above(), Blocks.LODESTONE.defaultBlockState(), 3);
@@ -145,13 +143,11 @@ public final class VisualLabCommands
         Entity subject = "mass".equals(unitName)
                 ? createMass(level, centre.above())
                 : createUnit(level, centre.above(), unitName);
-        ArmorStand target = new ArmorStand(level, centre.getX() + 0.5D, centre.getY() + 1.0D,
-                centre.getZ() + 28.5D);
-        target.setNoGravity(true);
-        target.setShowArms(true);
-        target.setCustomName(Component.literal("VISUAL TARGET"));
-        target.setCustomNameVisible(true);
-        level.addFreshEntity(target);
+        // Do not place a visible ArmorStand in a regression arena. Close
+        // cameras magnify a two-block wooden target until its orange limbs
+        // cover the 24-block EVA and look like weapon-dependent body paint.
+        // The concrete height rulers and door frame provide scale without a
+        // foreground entity that can contaminate screenshots.
         player.teleportTo(level, centre.getX() + 0.5D, centre.getY() + 2.0D,
                 centre.getZ() + 42.5D, 180.0F, 5.0F);
         source.sendSuccess(() -> Component.literal(
@@ -193,6 +189,12 @@ public final class VisualLabCommands
         }
         unit.moveTo(position.getX() + 0.5D, position.getY(), position.getZ() + 0.5D, 0.0F, 0.0F);
         unit.setNoAi(true);
+        // The lab is a render fixture, not a combat encounter. Ambient mobs
+        // repeatedly hitting the subject leave Minecraft's orange damage
+        // overlay on selected materials and make texture/pose review useless.
+        unit.setInvulnerable(true);
+        unit.clearFire();
+        unit.setDeltaMovement(Vec3.ZERO);
         unit.setPersistenceRequired();
         unit.setVisualPose(EvaUnit01Entity.VISUAL_IDLE);
         level.addFreshEntity(unit);
@@ -210,6 +212,9 @@ public final class VisualLabCommands
                 0.0F, 0.0F);
         mass.setNoAi(true);
         mass.setNoGravity(true);
+        mass.setInvulnerable(true);
+        mass.clearFire();
+        mass.setDeltaMovement(Vec3.ZERO);
         mass.setVisualPose(MassProductionEvaEntity.VISUAL_IDLE);
         mass.setPersistenceRequired();
         level.addFreshEntity(mass);
@@ -275,17 +280,25 @@ public final class VisualLabCommands
     {
         ServerPlayer player = source.getPlayerOrException();
         EvaUnit01Entity unit = nearestUnit(player);
+        removeVisualTargets(player.serverLevel(), unit.blockPosition());
         int visualPose = switch (name)
         {
             case "normal" -> EvaUnit01Entity.VISUAL_NORMAL;
             case "idle" -> EvaUnit01Entity.VISUAL_IDLE;
             case "walk_contact" -> EvaUnit01Entity.VISUAL_WALK_CONTACT;
+            case "run_contact" -> EvaUnit01Entity.VISUAL_RUN_CONTACT;
+            case "jump" -> EvaUnit01Entity.VISUAL_JUMP;
+            case "fall" -> EvaUnit01Entity.VISUAL_FALL;
             case "knife_windup" -> EvaUnit01Entity.VISUAL_KNIFE_WINDUP;
             case "knife_contact" -> EvaUnit01Entity.VISUAL_KNIFE_CONTACT;
             case "knife_recovery" -> EvaUnit01Entity.VISUAL_KNIFE_RECOVERY;
+            case "knife_ready" -> EvaUnit01Entity.VISUAL_KNIFE_READY;
             case "crouch" -> EvaUnit01Entity.VISUAL_CROUCH;
+            case "crouch_walk" -> EvaUnit01Entity.VISUAL_CROUCH_WALK;
             case "prone" -> EvaUnit01Entity.VISUAL_PRONE;
+            case "crawl" -> EvaUnit01Entity.VISUAL_CRAWL;
             case "prone_cannon" -> EvaUnit01Entity.VISUAL_PRONE_CANNON;
+            case "lance_ready" -> EvaUnit01Entity.VISUAL_LANCE_READY;
             case "lance_windup" -> EvaUnit01Entity.VISUAL_LANCE_WINDUP;
             case "lance_contact" -> EvaUnit01Entity.VISUAL_LANCE_CONTACT;
             case "lance_recovery" -> EvaUnit01Entity.VISUAL_LANCE_RECOVERY;
@@ -299,6 +312,8 @@ public final class VisualLabCommands
         unit.setXRot(0.0F);
         unit.yRotO = 0.0F;
         unit.xRotO = 0.0F;
+        unit.yBodyRotO = 0.0F;
+        unit.yHeadRotO = 0.0F;
         source.sendSuccess(() -> Component.literal("Visual pose: " + name), false);
         return 1;
     }
@@ -307,6 +322,7 @@ public final class VisualLabCommands
     {
         ServerPlayer player = source.getPlayerOrException();
         EvaUnit01Entity unit = nearestUnit(player);
+        removeVisualTargets(player.serverLevel(), unit.blockPosition());
         if (player.getVehicle() != unit)
         {
             player.startRiding(unit, true);
@@ -385,8 +401,16 @@ public final class VisualLabCommands
         AABB area = new AABB(centre).inflate(240.0D, 240.0D, 240.0D);
         level.getEntitiesOfClass(EvaUnit01Entity.class, area).forEach(Entity::discard);
         level.getEntitiesOfClass(MassProductionEvaEntity.class, area).forEach(Entity::discard);
+        removeVisualTargets(level, centre);
+    }
+
+    /** Remove targets left in older Visual Lab saves before any new capture. */
+    private static void removeVisualTargets(ServerLevel level, BlockPos centre)
+    {
+        AABB area = new AABB(centre).inflate(240.0D, 240.0D, 240.0D);
         level.getEntitiesOfClass(ArmorStand.class, area,
-                stand -> stand.hasCustomName() && "VISUAL TARGET".equals(stand.getCustomName().getString()))
+                stand -> stand.hasCustomName()
+                        && "VISUAL TARGET".equals(stand.getCustomName().getString()))
                 .forEach(Entity::discard);
     }
 }

@@ -66,6 +66,7 @@ def first_rotation(animation: dict[str, object], bone: str) -> list[float]:
 
 def validate_tree(gate: Gate) -> None:
     layout = read("src/main/java/com/projectseele/fx/TreeOfLifeLayout.java")
+    mod_entities = read("src/main/java/com/projectseele/registry/ModEntities.java")
     client_fx = read("src/main/java/com/projectseele/client/fx/ClientFxManager.java")
     director = read("src/main/java/com/projectseele/event/ThirdImpactDirector.java")
     saved_data = read("src/main/java/com/projectseele/event/ThirdImpactSavedData.java")
@@ -138,6 +139,34 @@ def validate_tree(gate: Gate) -> None:
         "tree.tiferet_centre",
         tiferet_centre,
         "Tiferet remains at the geometric centre while the semantic Tree is inverted",
+    )
+
+    mass_registration = re.search(
+        r"MASS_PRODUCTION_EVA\s*=.*?clientTrackingRange\((\d+)\)",
+        mod_entities,
+        re.S,
+    )
+    mass_tracking_range = int(mass_registration.group(1)) if mass_registration else -1
+    gate.require(
+        "impact.mass_tracking_range",
+        mass_tracking_range >= 32,
+        f"clientTrackingRange={mass_tracking_range}; fixed Tree camera requires >=32",
+    )
+
+    configure_start = director.find("private static void configureVessel(")
+    configure_end = director.find("private static void ensureRestored(", configure_start)
+    configure_body = director[configure_start:configure_end] \
+        if configure_start >= 0 and configure_end > configure_start else ""
+    preview_persistent = (
+        "mass.assignRitualOwner(impact.id, nodeIndex, !impact.persistent);"
+        in configure_body
+        and "mass.setPersistenceRequired();" in configure_body
+        and "if (impact.persistent)" not in configure_body
+    )
+    gate.require(
+        "impact.preview_vessels_persistent",
+        preview_persistent,
+        "all nine visual-preview Monsters resist the vanilla 128-block despawn rule",
     )
 
     names = quoted_values(java_initializer(client_fx, "SEPHIRA_NAMES"))
@@ -425,6 +454,7 @@ def number(source: str, name: str) -> float:
 
 def validate_silo(gate: Gate) -> None:
     command = read("src/main/java/com/projectseele/visual/LaunchSiloCommands.java")
+    visual_lab = read("src/main/java/com/projectseele/visual/VisualLabCommands.java")
     builder = read("src/main/java/com/projectseele/item/NervConstructionKitItem.java")
     entity = read("src/main/java/com/projectseele/entity/EvaUnit01Entity.java")
     game_events = read("src/main/java/com/projectseele/GameEvents.java")
@@ -443,6 +473,45 @@ def validate_silo(gate: Gate) -> None:
         "ModEntities.EVA_UNIT02.get().create(level)",
     ))
     gate.require("silo.three_variants", variants, "Unit-00/01/02 each have a launch bay")
+
+    absolute_aim_pitch = (
+        'model.getBone("aim_pitch").get().setRotX(pitch);' in renderer
+        and 'model.getBone("aim_pitch").get().getRotX() + pitch' not in renderer
+        and 'bone.setRotX(bone.getRotX() + pitch)' not in renderer
+        and '? (float) Math.toRadians(animatable.getCannonAimPitch()) : 0.0F'
+        in renderer
+    )
+    gate.require(
+        "visual.absolute_cannon_pitch",
+        absolute_aim_pitch,
+        "cannon elevation is assigned once per frame and resets to zero; no cumulative arm rotation",
+    )
+    isolated_body_texture = all(token in renderer for token in (
+        "entity -> textureResourceForVariant(entity.getUnitVariant())",
+        "public static ResourceLocation textureResourceForVariant(int variant)",
+        "case EvaUnit01Entity.UNIT_00 -> TEXTURE_00",
+        "case EvaUnit01Entity.UNIT_02 -> TEXTURE_02",
+        "default -> TEXTURE_01",
+    ))
+    gate.require(
+        "visual.variant_texture_isolation",
+        isolated_body_texture,
+        "each EVA body requests its own texture buffer independently of all weapon layers",
+    )
+    clean_lab_foreground = (
+        "new ArmorStand(level" not in visual_lab
+        and visual_lab.count("removeVisualTargets(player.serverLevel(), unit.blockPosition())") >= 2
+        and '"VISUAL TARGET".equals(stand.getCustomName().getString())' in visual_lab
+        and "Blocks.ORANGE_CONCRETE.defaultBlockState()" not in visual_lab
+        and "Blocks.WHITE_CONCRETE.defaultBlockState()" not in visual_lab
+        and "Blocks.SMOOTH_STONE.defaultBlockState()" not in visual_lab
+        and visual_lab.count("Blocks.AIR.defaultBlockState()") >= 5
+    )
+    gate.require(
+        "visual.no_foreground_target_occlusion",
+        clean_lab_foreground,
+        "Visual Lab purges all old foreground rulers/fixtures and visible ArmorStand targets",
+    )
 
     gantry_match = re.search(r"int gantryY\s*=\s*(-?\d+)\s*;", builder)
     min_height = number(entity, "SILO_ENTRY_MIN_HEIGHT")
@@ -482,17 +551,20 @@ def validate_silo(gate: Gate) -> None:
         and "eva.tryEnterFromPlug(sender)" in entry_packet
     gate.require("silo.entry_plug_interaction", plug_interaction,
                  "aimed dorsal socket works beyond the coarse entity AABB and is revalidated server-side")
-    persistent_plug_visual = all(token in renderer for token in (
-        "animatable.getActivationTicks() > 0",
-        "|| animatable.isEntryPlugInserted()",
-        'setWeaponVisibility(model, "entry_plug", activating)',
-        'setWeaponVisibility(model, "plug_hatch_l", activating)',
-        'setWeaponVisibility(model, "plug_hatch_r", activating)',
+    seated_plug_visual = all(token in renderer for token in (
+        "boolean plugTravelling = isEntryPlugTravelling(animatable)",
+        'setWeaponVisibility(model, "entry_plug", plugTravelling)',
+        'setWeaponVisibility(model, "plug_hatch_l", true)',
+        'setWeaponVisibility(model, "plug_hatch_r", true)',
+        "return entity.getActivationTicks() > 57",
+    )) and all(token in entity for token in (
+        "this.entityData.set(DATA_ENTRY_PLUG_INSERTED, true)",
+        "this.getControllingPassenger() != null && !this.isEntryPlugInserted()",
     ))
     gate.require(
-        "silo.persistent_entry_plug_visual",
-        persistent_plug_visual,
-        "the inserted plug and both hatch leaves remain visible after the insertion animation",
+        "silo.seated_entry_plug_visual",
+        seated_plug_visual,
+        "the capsule is external only while descending; seated state persists behind closed hatches",
     )
     entry_start = entity.find("public InteractionResult tryEnterFromPlug(Player player, boolean requireAim)")
     entry_end = entity.find("private void alignForSiloBoarding", entry_start)

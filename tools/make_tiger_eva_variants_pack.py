@@ -126,19 +126,22 @@ def translate_bone_geometry(bone, delta):
             cube["pivot"] = [cube["pivot"][axis] + delta[axis] for axis in range(3)]
 
 
-def build_unit_skeleton(config, scale, minimum_y):
+def build_unit_skeleton(config, scale, minimum_y, finger_pivots=None):
+    finger_pivots = finger_pivots or {}
+    source_pivots = {**tiger.SOURCE_PIVOTS, **finger_pivots}
     data = json.loads(config["base_geo"].read_text(encoding="utf-8"))
     geometry = data["minecraft:geometry"][0]
     geometry["description"]["identifier"] = f"geometry.{config['target']}"
     geometry["description"]["texture_width"] = ATLAS_WIDTH
     geometry["description"]["texture_height"] = ATLAS_HEIGHT
     tiger.ensure_foot_bones(geometry)
+    tiger.ensure_finger_bones(geometry, finger_pivots)
     bones = geometry["bones"]
     old_pivots = {bone["name"]: copy.deepcopy(bone.get("pivot", [0, 0, 0]))
                   for bone in bones}
 
     for bone in bones:
-        source_pivot = tiger.SOURCE_PIVOTS.get(bone["name"])
+        source_pivot = source_pivots.get(bone["name"])
         if source_pivot is not None:
             bone["pivot"] = [round(source_pivot[0] * scale, 5),
                              round((source_pivot[1] - minimum_y) * scale, 5),
@@ -147,7 +150,7 @@ def build_unit_skeleton(config, scale, minimum_y):
     # Preserve authored attachment offsets (weapons, entry plug, horn and the
     # Unit-00 shield) when their standard parent joint moves to the OBJ rig.
     new_pivots = {bone["name"]: bone.get("pivot", [0, 0, 0]) for bone in bones}
-    standard_names = set(tiger.SOURCE_PIVOTS)
+    standard_names = set(source_pivots)
     for bone in bones:
         parent = bone.get("parent")
         if bone["name"] in standard_names or parent not in standard_names:
@@ -156,12 +159,27 @@ def build_unit_skeleton(config, scale, minimum_y):
         translate_bone_geometry(bone, delta)
         new_pivots[bone["name"]] = bone["pivot"]
 
+    # Match Unit-01's semantic shoulder-space pitch layer.  Variant bodies use
+    # the same renderer and animation catalogue, so letting only Unit-01 own
+    # this parent would make Unit-00/02 cannon elevation fall back to two
+    # independently rotated arms.
+    arm_index = next(index for index, bone in enumerate(bones)
+                     if bone["name"] == "arm_l")
+    aim_pivot = [0.0,
+                 round((new_pivots["arm_l"][1] + new_pivots["arm_r"][1]) * 0.5, 5),
+                 0.0]
+    bones.insert(arm_index, {
+        "name": "aim_pitch", "parent": "torso_upper", "pivot": aim_pivot})
+    for bone in bones:
+        if bone["name"] in {"arm_l", "arm_r"}:
+            bone["parent"] = "aim_pitch"
+
     for bone in bones:
         if bone["name"] == "cannon":
             bone.pop("cubes", None)
 
     for bone in bones:
-        if bone["name"] in tiger.BODY_MESH_BONES or bone["name"] == "horn":
+        if bone["name"] in standard_names - {"root"} or bone["name"] == "horn":
             bone.pop("cubes", None)
         else:
             for cube in bone.get("cubes", []):
@@ -171,7 +189,7 @@ def build_unit_skeleton(config, scale, minimum_y):
 
 
 def sync_shared_rig_animations(animation):
-    """Use Unit-01 as the sole pose source for the shared 17-part Tiger rig.
+    """Use Unit-01 as the sole pose source for the shared 35-part Tiger rig.
 
     Unit-00 and Unit-02 used to copy only the low/cannon poses.  Switching to
     idle, knife or Longinus could therefore restore their old pre-Tiger arm
@@ -184,7 +202,7 @@ def sync_shared_rig_animations(animation):
     target = animation["animations"]
     for key, pose in source.items():
         target[key] = copy.deepcopy(pose)
-    return animation
+    return tiger.repair_tiger_runtime_animations(animation)
 
 
 def add_visual_poses(animation):
@@ -192,6 +210,13 @@ def add_visual_poses(animation):
     poses = {
         "visual_idle": ("idle", 0.0),
         "visual_walk_contact": ("walk", 0.0),
+        "visual_run_contact": ("run", 0.0),
+        "visual_jump": ("jump", 0.0),
+        "visual_fall": ("fall", 0.0),
+        "visual_crouch_walk": ("crouch_walk", 0.0),
+        "visual_crawl": ("crawl", 0.0),
+        "visual_knife_ready": ("knife_ready", 0.0),
+        "visual_lance_ready": ("lance_ready", 0.0),
         "visual_knife_windup": ("knife", 0.12),
         "visual_knife_contact": ("knife", 0.28),
         "visual_knife_recovery": ("knife", 0.50),
@@ -203,7 +228,7 @@ def add_visual_poses(animation):
     for target, (source, time) in poses.items():
         source_key = f"animation.eva_unit01.{source}"
         target_key = f"animation.eva_unit01.{target}"
-        if source_key in animations and target_key not in animations:
+        if source_key in animations:
             animations[target_key] = tiger.static_pose(
                 animations[source_key], time)
     return animation
@@ -241,12 +266,14 @@ def validate_mesh(mesh):
 def write_unit(config, output):
     obj_text, texture = read_unit_source(config)
     positions, texcoords, normals, triangles = tiger.parse_obj(obj_text)
+    finger_faces, finger_pivots = tiger.discover_finger_rig(positions, triangles)
     minimum_y = min(position[1] for position in positions)
     height = max(position[1] for position in positions) - minimum_y
     scale = UNIT_MODEL_HEIGHT / height
-    skeleton, pivots = build_unit_skeleton(config, scale, minimum_y)
+    skeleton, pivots = build_unit_skeleton(config, scale, minimum_y, finger_pivots)
     mesh, counts = tiger.build_mesh(
-        positions, texcoords, normals, triangles, pivots, scale, minimum_y)
+        positions, texcoords, normals, triangles, pivots, scale, minimum_y,
+        finger_faces)
     mesh["source"] = config["source"]
     validate_mesh(mesh)
     animation = add_visual_poses(sync_shared_rig_animations(json.loads(
@@ -447,7 +474,9 @@ def build_mass_mesh(positions, texcoords, normals, triangles, pivots, scale, min
 
 
 def build_mass_animations():
-    canonical = json.loads(UNIT01_BASE_ANIMATION.read_text(encoding="utf-8"))["animations"]
+    canonical_data = json.loads(UNIT01_BASE_ANIMATION.read_text(encoding="utf-8"))
+    tiger.repair_tiger_runtime_animations(canonical_data)
+    canonical = canonical_data["animations"]
     idle = {
         "loop": True, "animation_length": 3.2, "bones": {
             "torso_upper": {"rotation": {"0.0": [0, 0, 0], "1.6": [1.4, 0, 0],

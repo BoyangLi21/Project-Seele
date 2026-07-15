@@ -24,23 +24,47 @@ CANONICAL_EVA_ANIMATION = (
     REPO / "src/main/resources/assets/projectseele/animations/eva_unit01.animation.json"
 )
 
+STANDARD_EVA_FINGER_ROOTS = {
+    f"finger_{digit}_{side}"
+    for digit in ("thumb", "index", "middle", "ring", "little")
+    for side in ("l", "r")
+}
+STANDARD_EVA_FINGER_TIPS = {
+    f"finger_{digit}_tip_{side}"
+    for digit in ("thumb", "index", "middle", "ring", "little")
+    for side in ("l", "r")
+}
+STANDARD_EVA_FINGER_BONES = STANDARD_EVA_FINGER_ROOTS | STANDARD_EVA_FINGER_TIPS
+# The detached thumb cap remains on its proximal bone; its child is an
+# animation socket without triangles. The four long digits per hand have a
+# real distal mesh segment, giving 18 finger mesh parts and 20 finger bones.
+STANDARD_EVA_FINGER_MESH_PARTS = STANDARD_EVA_FINGER_ROOTS | {
+    name for name in STANDARD_EVA_FINGER_TIPS if "finger_thumb_tip_" not in name
+}
 STANDARD_EVA_MESH_PARTS = {
     "torso_upper", "torso_lower", "head",
     "pylon_r", "pylon_l",
     "arm_r", "arm_l", "forearm_r", "forearm_l", "hand_r", "hand_l",
     "leg_r", "leg_l", "shin_r", "shin_l", "foot_r", "foot_l",
-}
+} | STANDARD_EVA_FINGER_MESH_PARTS
 
 STANDARD_EVA_FOOT_PARENTS = {
     "foot_l": "shin_l",
     "foot_r": "shin_r",
+}
+STANDARD_EVA_BONE_PARENTS = {
+    **STANDARD_EVA_FOOT_PARENTS,
+    **{name: "hand_" + name[-1] for name in STANDARD_EVA_FINGER_ROOTS},
+    **{name: name.replace("_tip_", "_") for name in STANDARD_EVA_FINGER_TIPS},
+    "aim_pitch": "torso_upper",
+    "arm_l": "aim_pitch",
+    "arm_r": "aim_pitch",
 }
 
 STANDARD_EVA_ATTACHMENT_CUBES = {
     "entry_plug": 5,
     "plug_hatch_l": 1,
     "plug_hatch_r": 1,
-    "lance": 40,
 }
 NO_LEGACY_BODY_CUBES = STANDARD_EVA_MESH_PARTS | {"horn", "cannon"}
 MASS_MESH_PARTS = {
@@ -53,8 +77,15 @@ STANDARD_EVA_ANIMATION_BONES = {
     "animation.eva_unit01.walk": {"root", "leg_l", "leg_r", "shin_l", "shin_r"},
     "animation.eva_unit01.crouch": {"foot_l", "foot_r", "leg_l", "leg_r", "shin_l", "shin_r"},
     "animation.eva_unit01.prone": {"arm_l", "arm_r", "forearm_l", "forearm_r"},
-    "animation.eva_unit01.aim": {"arm_l", "arm_r", "forearm_l", "forearm_r", "hand_l"},
-    "animation.eva_unit01.lance_ready": {"arm_l", "arm_r", "forearm_l", "forearm_r"},
+    "animation.eva_unit01.aim": {
+        "arm_l", "arm_r", "forearm_l", "forearm_r", "hand_l"
+    } | STANDARD_EVA_FINGER_BONES,
+    "animation.eva_unit01.knife_ready": {
+        "arm_l", "arm_r", "forearm_l", "forearm_r", "knife"
+    } | STANDARD_EVA_FINGER_BONES,
+    "animation.eva_unit01.lance_ready": {
+        "arm_l", "arm_r", "forearm_l", "forearm_r", "lance"
+    } | STANDARD_EVA_FINGER_BONES,
     "animation.eva_unit01.shield_brace": {"arm_l", "arm_r", "forearm_l", "forearm_r"},
     "animation.eva_unit01.visual_lance_windup": {"arm_l", "arm_r", "forearm_l", "forearm_r"},
     "animation.eva_unit01.visual_lance_contact": {"arm_l", "arm_r", "forearm_l", "forearm_r"},
@@ -72,10 +103,10 @@ ASSETS = {
         "minimum_parts": len(STANDARD_EVA_MESH_PARTS),
         "expected_parts": len(STANDARD_EVA_MESH_PARTS),
         "required_parts": STANDARD_EVA_MESH_PARTS,
-        "required_bone_parents": STANDARD_EVA_FOOT_PARENTS,
+        "required_bone_parents": STANDARD_EVA_BONE_PARENTS,
         "minimum_bone_cubes": STANDARD_EVA_ATTACHMENT_CUBES,
         "required_animation_bones": STANDARD_EVA_ANIMATION_BONES,
-        "required_geo_bones": {"root", "knife", "cannon", "lance", "entry_plug", "plug_hatch_l", "plug_hatch_r"},
+        "required_geo_bones": {"root", "aim_pitch", "knife", "cannon", "lance", "entry_plug", "plug_hatch_l", "plug_hatch_r"},
         "forbidden_cube_bones": NO_LEGACY_BODY_CUBES,
         "expected_texture_size": (1024, 512),
         "required_animations": {
@@ -98,10 +129,10 @@ ASSETS = {
         "minimum_parts": len(STANDARD_EVA_MESH_PARTS),
         "expected_parts": len(STANDARD_EVA_MESH_PARTS),
         "required_parts": STANDARD_EVA_MESH_PARTS,
-        "required_bone_parents": {**STANDARD_EVA_FOOT_PARENTS, "shield": "forearm_l"},
+        "required_bone_parents": {**STANDARD_EVA_BONE_PARENTS, "shield": "forearm_l"},
         "minimum_bone_cubes": {**STANDARD_EVA_ATTACHMENT_CUBES, "shield": 2},
         "required_animation_bones": STANDARD_EVA_ANIMATION_BONES,
-        "required_geo_bones": {"root", "knife", "cannon", "lance", "shield", "entry_plug", "plug_hatch_l", "plug_hatch_r"},
+        "required_geo_bones": {"root", "aim_pitch", "knife", "cannon", "lance", "shield", "entry_plug", "plug_hatch_l", "plug_hatch_r"},
         "forbidden_cube_bones": NO_LEGACY_BODY_CUBES,
         "expected_texture_size": (1024, 512),
         "required_animations": {
@@ -124,10 +155,10 @@ ASSETS = {
         "minimum_parts": len(STANDARD_EVA_MESH_PARTS),
         "expected_parts": len(STANDARD_EVA_MESH_PARTS),
         "required_parts": STANDARD_EVA_MESH_PARTS,
-        "required_bone_parents": STANDARD_EVA_FOOT_PARENTS,
+        "required_bone_parents": STANDARD_EVA_BONE_PARENTS,
         "minimum_bone_cubes": STANDARD_EVA_ATTACHMENT_CUBES,
         "required_animation_bones": STANDARD_EVA_ANIMATION_BONES,
-        "required_geo_bones": {"root", "knife", "cannon", "lance", "entry_plug", "plug_hatch_l", "plug_hatch_r"},
+        "required_geo_bones": {"root", "aim_pitch", "knife", "cannon", "lance", "entry_plug", "plug_hatch_l", "plug_hatch_r"},
         "forbidden_cube_bones": NO_LEGACY_BODY_CUBES,
         "expected_texture_size": (1024, 512),
         "required_animations": {
@@ -173,6 +204,7 @@ ASSETS = {
             },
         },
         "forbidden_cube_bones": MASS_MESH_PARTS,
+        # EUD's replica-lance texture occupies the extra 64-pixel column.
         "expected_texture_size": (1088, 512),
         "minimum_right_half_alpha_pixels": 8_000,
     },
@@ -183,6 +215,35 @@ ASSETS = {
         "minimum_parts": 1,
         "required_parts": {"cannon"},
         "mesh_only": True,
+    },
+}
+
+ACCESSORY_ASSETS = {
+    "progressive_knife": {
+        "expected_triangles": 3_766,
+        "required_parts": {"knife"},
+    },
+    "eva02_weapons": {
+        "expected_triangles": 3_256,
+        "required_parts": {"knife", "sword"},
+    },
+    "eva02_knife": {
+        "expected_triangles": 1_032,
+        "required_parts": {"knife"},
+        "texture_stem": "eva02_weapons",
+    },
+    "eva02_special_weapon": {
+        "expected_triangles": 2_224,
+        "required_parts": {"lance"},
+        "texture_stem": "eva02_weapons",
+    },
+    "entry_plug": {
+        "expected_triangles": 1_352,
+        "required_parts": {"entry_plug", "plug_hatch_l", "plug_hatch_r"},
+    },
+    "longinus_lance": {
+        "expected_triangles": 384,
+        "required_parts": {"lance"},
     },
 }
 
@@ -456,8 +517,15 @@ def validate_asset(root: Path, name: str) -> str:
                     f"{stem}: {animation_name} misses required animated bones "
                     f"{', '.join(missing_animation_bones)}"
                 )
-        if spec.get("canonical_body_animations"):
-            canonical = read_json(CANONICAL_EVA_ANIMATION).get("animations", {})
+        if spec.get("canonical_body_animations") and stem != "eva_unit01":
+            # The checked-in catalogue targets the small public fallback rig.
+            # Tiger retargeting (including its ten digit bones) is deliberately
+            # local-only, so the generated Unit-01 animation is the canonical
+            # 35-part runtime source for Unit-00 and Unit-02, including the
+            # articulated distal segments of all four long fingers per hand.
+            canonical = read_json(
+                root / "animations/eva_unit01.animation.json"
+            ).get("animations", {})
             for animation_name, canonical_pose in canonical.items():
                 if animations.get(animation_name) != canonical_pose:
                     raise ValidationError(
@@ -465,6 +533,29 @@ def validate_asset(root: Path, name: str) -> str:
                         "Unit-01 shared-rig pose"
                     )
     return f"{name}: triangle-mesh-{triangles}, {parts} parts"
+
+
+def validate_accessory_assets(root: Path) -> str:
+    summaries = []
+    for stem, contract in ACCESSORY_ASSETS.items():
+        spec = {
+            "minimum_triangles": contract["expected_triangles"],
+            "expected_triangles": contract["expected_triangles"],
+            "minimum_parts": len(contract["required_parts"]),
+            "expected_parts": len(contract["required_parts"]),
+            "required_parts": contract["required_parts"],
+        }
+        parts, triangles, _ = validate_mesh(root / "mesh" / f"{stem}.mesh.json", spec)
+        texture_stem = contract.get("texture_stem", stem)
+        texture = root / "textures" / "entity" / f"{texture_stem}.png"
+        require_nonempty(texture)
+        try:
+            with Image.open(texture) as image:
+                image.verify()
+        except (OSError, ValueError) as exc:
+            raise ValidationError(f"invalid accessory texture {texture}: {exc}") from exc
+        summaries.append(f"{stem}={triangles}t/{parts}p")
+    return "downloaded accessories: " + ", ".join(summaries)
 
 
 def main() -> int:
@@ -487,6 +578,7 @@ def main() -> int:
         results = [validate_asset(args.pack_assets, name) for name in args.require]
         if {"unit01", "unit00", "unit02"}.issubset(args.require):
             results.append(validate_shared_attachment_offsets(args.pack_assets))
+            results.append(validate_accessory_assets(args.pack_assets))
         results.append(validate_runtime_fingerprint_contract())
     except ValidationError as exc:
         print(f"LOCAL EVA PACK INVALID: {exc}", file=sys.stderr)

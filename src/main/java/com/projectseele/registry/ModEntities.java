@@ -56,7 +56,11 @@ public class ModEntities
     public static final RegistryObject<EntityType<MassProductionEvaEntity>> MASS_PRODUCTION_EVA =
             ENTITY_TYPES.register("mass_production_eva",
                     () -> EntityType.Builder.of(MassProductionEvaEntity::new, MobCategory.MONSTER)
-                            .sized(10.0F, 26.0F).fireImmune().clientTrackingRange(16)
+                            // The fixed Tree camera is 120 blocks off-plane;
+                            // crown/nadir vessels add 67 vertical blocks. A
+                            // range of 16 dropped those four client-side while
+                            // the server still held a 9/9 formation.
+                            .sized(10.0F, 26.0F).fireImmune().clientTrackingRange(32)
                             .build("mass_production_eva"));
 
     public static final RegistryObject<EntityType<ShamshelEntity>> SHAMSHEL = ENTITY_TYPES.register("shamshel",

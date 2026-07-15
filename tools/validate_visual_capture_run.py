@@ -14,7 +14,11 @@ REPO = Path(__file__).resolve().parent.parent
 CAPTURE_ROOT = REPO / "run/screenshots/projectseele_visual"
 LATEST_LOG = REPO / "run/logs/latest.log"
 SNAPSHOT = REPO / "run/.projectseele_visual_before.json"
-EXPECTED = {"unit01": 156, "unit00": 156, "unit02": 156, "mass": 35, "impact": 3}
+# Nineteen frozen Unit poses x thirteen cameras.  Locomotion regression now
+# includes run/jump/fall/crouch-walk/crawl instead of certifying only idle and
+# one walk contact frame.
+EXPECTED = {"unit01": 247, "unit00": 247, "unit02": 247, "mass": 35, "impact": 3}
+VIEWS_PER_POSE = {"unit01": 13, "unit00": 13, "unit02": 13, "mass": 7}
 FAILURE_PATTERNS = (
     r"VISUAL (?:CAPTURE|BATCH|MASS POSE|IMPACT) INVALID",
     r"Strict (?:Visual|Impact) capture refused",
@@ -30,11 +34,20 @@ def batch_names() -> set[str]:
     return {path.name for path in CAPTURE_ROOT.iterdir() if path.is_dir()}
 
 
-def begin(target: str) -> int:
+def normalise_poses(value: str | None) -> list[str]:
+    return [pose.strip() for pose in (value or "").split(",") if pose.strip()]
+
+
+def begin(target: str, poses: list[str]) -> int:
     SNAPSHOT.parent.mkdir(parents=True, exist_ok=True)
-    SNAPSHOT.write_text(json.dumps({"target": target, "batches": sorted(batch_names())}),
+    SNAPSHOT.write_text(json.dumps({
+        "target": target,
+        "poses": poses,
+        "batches": sorted(batch_names()),
+    }),
                         encoding="utf-8")
-    print(f"Visual capture baseline recorded for {target}")
+    suffix = f" ({', '.join(poses)})" if poses else ""
+    print(f"Visual capture baseline recorded for {target}{suffix}")
     return 0
 
 
@@ -54,7 +67,9 @@ def verify(target: str) -> int:
         return 1
     batch = CAPTURE_ROOT / fresh[0]
     pngs = sorted(batch.glob("*.png"))
-    expected = EXPECTED[target]
+    poses = [str(value) for value in before.get("poses", [])]
+    expected = (len(poses) * VIEWS_PER_POSE[target]
+                if poses and target in VIEWS_PER_POSE else EXPECTED[target])
     if len(pngs) != expected:
         print(f"VISUAL RUN INVALID: {batch} has {len(pngs)} PNGs; expected {expected}",
               file=sys.stderr)
@@ -86,8 +101,13 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("action", choices=("begin", "verify"))
     parser.add_argument("target", choices=tuple(EXPECTED))
+    parser.add_argument("--poses",
+                        help="comma-separated targeted capture list; begin records its exact PNG count")
     args = parser.parse_args()
-    return begin(args.target) if args.action == "begin" else verify(args.target)
+    poses = normalise_poses(args.poses)
+    if poses and args.target == "impact":
+        parser.error("impact capture has fixed views and does not accept --poses")
+    return begin(args.target, poses) if args.action == "begin" else verify(args.target)
 
 
 if __name__ == "__main__":

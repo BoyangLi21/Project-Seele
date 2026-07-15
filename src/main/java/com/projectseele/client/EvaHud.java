@@ -231,15 +231,9 @@ public final class EvaHud
                 x, y + 25, 0xFFFFFFFF);
 
         // Weapon line.
-        String weaponKey = switch (eva.getWeapon())
-        {
-            case EvaUnit01Entity.WEAPON_KNIFE -> "msg.projectseele.weapon_knife";
-            case EvaUnit01Entity.WEAPON_CANNON -> "msg.projectseele.weapon_cannon";
-            case EvaUnit01Entity.WEAPON_LANCE -> "msg.projectseele.weapon_lance";
-            default -> "msg.projectseele.weapon_fists";
-        };
         guiGraphics.drawString(gui.getFont(),
-                Component.translatable(weaponKey).withStyle(ChatFormatting.YELLOW),
+                Component.translatable(eva.getWeaponTranslationKey())
+                        .withStyle(ChatFormatting.YELLOW),
                 x + 44, y + 25, 0xFFFFFFFF);
 
         String stanceKey = eva.isShieldBraced() ? "hud.projectseele.stance_shield"

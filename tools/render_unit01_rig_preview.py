@@ -61,9 +61,9 @@ VIEW_AXES = {
 # model pixel as 1/16 block and EvaUnit01Renderer applies scale 2.5.
 MODEL_PIXELS_PER_BLOCK = 16.0 / 2.5
 FIRST_PERSON_SOCKETS = {
-    "standing": {"eye_height": 24.63, "forward": 3.70},
+    "standing": {"eye_height": 24.63, "forward": 1.00},
     "crouch": {"eye_height": 19.70, "forward": 0.80},
-    "prone": {"eye_height": 10.80, "forward": 10.33},
+    "prone": {"eye_height": 7.00, "forward": 12.00},
 }
 FIRST_PERSON_PITCH = {
     "forward": 12.0,
@@ -72,9 +72,10 @@ FIRST_PERSON_PITCH = {
 FIRST_PERSON_HIDDEN_ROOTS = {
     "head", "Head", "horn", "Horn", "neck", "Neck",
 }
-LOW_STANCE_FIRST_PERSON_HIDDEN_PARTS = {
-    "crouch": {"torso_lower", "torso_upper"},
-    "prone": {"torso_lower", "torso_upper"},
+FIRST_PERSON_CAMERA_COVER_PARTS = {
+    "standing": {"torso_lower", "torso_upper", "pylon_l", "pylon_r"},
+    "crouch": {"torso_lower", "torso_upper", "pylon_l", "pylon_r"},
+    "prone": {"torso_lower", "torso_upper", "pylon_l", "pylon_r"},
 }
 
 
@@ -201,8 +202,16 @@ def discover_geo(mesh_path, explicit):
 
 
 def load_skeleton(mesh, geo_path):
-    pivots = {bone: tuple(float(value) for value in part["pivot"])
-              for bone, part in mesh["parts"].items()}
+    # BakedModelFactory reflects Bedrock's bone pivot on X before Gecko's
+    # renderer ever sees it.  The local triangle layer likewise reflects each
+    # emitted vertex on X.  Applying only the latter made rotated parts orbit
+    # around the opposite shoulder: an idle pose looked plausible while every
+    # weapon pose exploded sideways in the real client.
+    pivots = {
+        bone: (-float(part["pivot"][0]), float(part["pivot"][1]),
+               float(part["pivot"][2]))
+        for bone, part in mesh["parts"].items()
+    }
     parents = dict(DEFAULT_PARENT)
     base_rotations = {}
     if geo_path:
@@ -211,7 +220,8 @@ def load_skeleton(mesh, geo_path):
         for bone in geometry["bones"]:
             name = bone["name"]
             if "pivot" in bone:
-                pivots[name] = vector(bone["pivot"], f"geo/{name}/pivot")
+                raw_pivot = vector(bone["pivot"], f"geo/{name}/pivot")
+                pivots[name] = (-raw_pivot[0], raw_pivot[1], raw_pivot[2])
             if "parent" in bone:
                 parents[name] = bone["parent"]
             if "rotation" in bone:
@@ -292,7 +302,14 @@ def load_geo_cube_mesh(geo_path, requested_bones):
 
 
 def bone_matrix(bone, pivots, parents, rotations, positions, base_rotations, cache, active=None):
-    """Return a deformation matrix acting on absolute bind-pose coordinates."""
+    """Return GeckoLib's exact per-bone PoseStack deformation matrix.
+
+    ``BakedModelFactory`` negates bone-pivot X and Bedrock rotation X/Y;
+    ``RenderUtils.translateMatrixToBone`` also negates animated X position.
+    The local triangle layer then reflects emitted vertex X, matching Gecko's
+    baked cubes.  All four conversions are required for the preview to agree
+    with the real client once a limb leaves its bind pose.
+    """
     if bone in cache:
         return cache[bone]
     if active is None:
@@ -308,10 +325,12 @@ def bone_matrix(bone, pivots, parents, rotations, positions, base_rotations, cac
     position = positions.get(bone, (0.0, 0.0, 0.0))
     animated_rotation = rotations.get(bone, (0.0, 0.0, 0.0))
     bind_rotation = base_rotations.get(bone, (0.0, 0.0, 0.0))
-    combined_rotation = tuple(bind_rotation[index] + animated_rotation[index]
-                              for index in range(3))
-    local = multiply(translation(pivot),
-                     multiply(translation(position),
+    raw_rotation = tuple(bind_rotation[index] + animated_rotation[index]
+                         for index in range(3))
+    combined_rotation = (-raw_rotation[0], -raw_rotation[1], raw_rotation[2])
+    runtime_position = (-position[0], position[1], position[2])
+    local = multiply(translation(runtime_position),
+                     multiply(translation(pivot),
                               multiply(rotation(combined_rotation),
                                        translation(tuple(-value for value in pivot)))))
     cache[bone] = multiply(parent_matrix, local)
@@ -324,9 +343,10 @@ def project(point, view):
 
 
 def collect_scene(mesh, texture_path, view, matrices, pivots, parents,
-                  attachments=()):
+                  attachments=(), isolated_bones=()):
     triangles = []
     transformed_by_bone = {}
+    isolated = set(isolated_bones)
     for source_mesh, source_texture in ((mesh, texture_path), *attachments):
         texture = Image.open(source_texture).convert("RGB")
         pixels = texture.load()
@@ -335,6 +355,8 @@ def collect_scene(mesh, texture_path, view, matrices, pivots, parents,
         if stride != 8:
             raise ValueError(f"expected stride 8, got {stride}")
         for bone, part in source_mesh["parts"].items():
+            if isolated and bone not in isolated:
+                continue
             matrix = matrices[bone]
             pivot = part["pivot"]
             values = part["vertices"]
@@ -345,7 +367,8 @@ def collect_scene(mesh, texture_path, view, matrices, pivots, parents,
                 for vertex in range(3):
                     index = start + vertex * stride
                     absolute = [values[index + axis] + pivot[axis] for axis in range(3)]
-                    points.append(project(transform(matrix, absolute), view))
+                    emitted = [-absolute[0], absolute[1], absolute[2]]
+                    points.append(project(transform(matrix, emitted), view))
                     uvs.append(values[index + 3:index + 5])
                 u = sum(value[0] for value in uvs) / 3.0
                 v = sum(value[1] for value in uvs) / 3.0
@@ -385,7 +408,10 @@ def first_person_camera(stance, view, eye_height=None, forward_offset=None,
     positive Java positionRider convention for every stance; the preview's
     model-space camera Z is ``-forward``, matching the rendered face direction.
     The prone spine rotates its head socket forward without reversing that sign.
-    The mesh emitter reflects model X, hence screen-right is model -X.
+    Vertex emission has already reflected model X before this function sees
+    the posed point.  A pilot looking along model -Z therefore uses +X as
+    screen-right.  Reusing the front inspection camera's -X axis here mirrors
+    left and right hands a second time.
     """
     socket = FIRST_PERSON_SOCKETS[stance]
     effective_eye_height = (socket["eye_height"] if eye_height is None
@@ -398,7 +424,7 @@ def first_person_camera(stance, view, eye_height=None, forward_offset=None,
     camera = (effective_right * MODEL_PIXELS_PER_BLOCK,
               effective_eye_height * MODEL_PIXELS_PER_BLOCK,
               -effective_forward * MODEL_PIXELS_PER_BLOCK)
-    right = (-1.0, 0.0, 0.0)
+    right = (1.0, 0.0, 0.0)
     forward = (0.0, -math.sin(pitch), -math.cos(pitch))
     up = (0.0, math.cos(pitch), -math.sin(pitch))
     return (camera, right, up, forward, pitch_degrees,
@@ -461,7 +487,7 @@ def collect_first_person_scene(mesh, texture_path, matrices, pivots, parents,
     near = near_blocks * MODEL_PIXELS_PER_BLOCK
     tangent = math.tan(math.radians(fov) / 2.0)
     camera_cover_hidden = hidden_bones(parents, FIRST_PERSON_HIDDEN_ROOTS)
-    exact_hidden = set(LOW_STANCE_FIRST_PERSON_HIDDEN_PARTS.get(stance, ()))
+    exact_hidden = set(FIRST_PERSON_CAMERA_COVER_PARTS.get(stance, ()))
     # Preview-only exact mesh-part suppression. Unlike the renderer's camera
     # roots this deliberately does not hide descendants, so a pylon comparison
     # cannot accidentally remove the shared torso/arm hierarchy.
@@ -488,7 +514,8 @@ def collect_first_person_scene(mesh, texture_path, matrices, pivots, parents,
                 for vertex in range(3):
                     index = start + vertex * stride
                     absolute = [values[index + axis] + pivot[axis] for axis in range(3)]
-                    posed = transform(matrix, absolute)
+                    emitted = [-absolute[0], absolute[1], absolute[2]]
+                    posed = transform(matrix, emitted)
                     camera_polygon.append(camera_point(posed, camera, right, up, forward))
                     uvs.append(values[index + 3:index + 5])
                 camera_polygon = clip_near_plane(camera_polygon, near)
@@ -583,17 +610,26 @@ def collect_first_person_scene(mesh, texture_path, matrices, pivots, parents,
     return (triangles, joints, segments), diagnostic
 
 
-def scene_bounds(scene_by_view):
+def scene_bounds(scene_by_view, focus_bones=(), padding=1.12):
+    """Return one comparable square bound for every requested view.
+
+    ``focus_bones`` is a review aid for hand/weapon and joint close-ups.  It
+    changes only the camera crop; the complete body is still transformed and
+    rendered, so parent-chain mistakes remain visible if they enter the crop.
+    """
+    focus = set(focus_bones)
     xs = []
     ys = []
     for triangles, _, _ in scene_by_view.values():
-        xs.extend(point[0] for _, polygon, _, _ in triangles for point in polygon)
-        ys.extend(point[1] for _, polygon, _, _ in triangles for point in polygon)
+        selected = [item for item in triangles if not focus or item[3] in focus]
+        xs.extend(point[0] for _, polygon, _, _ in selected for point in polygon)
+        ys.extend(point[1] for _, polygon, _, _ in selected for point in polygon)
     if not xs or not ys:
-        raise ValueError("mesh contains no renderable triangles")
+        requested = ", ".join(sorted(focus)) if focus else "entire mesh"
+        raise ValueError(f"mesh contains no renderable triangles for {requested}")
     centre_x = (min(xs) + max(xs)) / 2.0
     centre_y = (min(ys) + max(ys)) / 2.0
-    span = max(max(xs) - min(xs), max(ys) - min(ys), 1.0) * 1.12
+    span = max(max(xs) - min(xs), max(ys) - min(ys), 1.0) * padding
     return centre_x, centre_y, span, min(ys), max(ys)
 
 
@@ -614,7 +650,8 @@ def pose_metrics(mesh, matrices, pivots, positions, attachments=()):
             maximum_xyz = [float("-inf"), float("-inf"), float("-inf")]
             for index in range(0, len(values), stride):
                 absolute = [values[index + axis] + part["pivot"][axis] for axis in range(3)]
-                posed = transform(matrices[bone], absolute)
+                emitted = [-absolute[0], absolute[1], absolute[2]]
+                posed = transform(matrices[bone], emitted)
                 posed_vertices.append(posed)
                 y = posed[1]
                 minimum = min(minimum, y)
@@ -630,7 +667,9 @@ def pose_metrics(mesh, matrices, pivots, positions, attachments=()):
                 "max_xyz": [round(value, 4) for value in maximum_xyz],
             }
             if mesh_index > 0 and posed_vertices:
-                pivot_world = transform(matrices[bone], part["pivot"])
+                emitted_pivot = [-part["pivot"][0], part["pivot"][1],
+                                 part["pivot"][2]]
+                pivot_world = transform(matrices[bone], emitted_pivot)
                 distances = [math.sqrt(sum((vertex[axis] - pivot_world[axis]) ** 2
                                                    for axis in range(3)))
                              for vertex in posed_vertices]
@@ -788,6 +827,14 @@ def parse_args():
                               "may be repeated for lance/shield/entry-plug checks"))
     parser.add_argument("--views", nargs="+", choices=tuple(VIEW_AXES),
                         default=("front", "side", "back"))
+    parser.add_argument("--focus-bone", action="append", default=[],
+                        help=("crop orthographic views around exact mesh bone(s); "
+                              "repeat for a hand plus fingers/weapon"))
+    parser.add_argument("--focus-padding", type=float, default=1.35,
+                        help="close-up crop padding multiplier (default: 1.35)")
+    parser.add_argument("--isolate-bone", action="append", default=[],
+                        help=("orthographic diagnostic: render only exact mesh "
+                              "bone(s); may be repeated"))
     parser.add_argument("--first-person-stance", choices=tuple(FIRST_PERSON_SOCKETS),
                         help=("render the real world-body mesh through Unit-01's "
                               "standing/crouch/prone rider socket instead of orthographic views"))
@@ -938,9 +985,11 @@ def main():
         metrics_path = args.output / f"{model_slug}_rig_{output_slug}_{sample_time:.3f}_metrics.json"
     else:
         scenes = {view: collect_scene(mesh, args.texture, view, matrices, pivots, parents,
-                                      attachments)
+                                      attachments, args.isolate_bone)
                   for view in args.views}
-        bounds = scene_bounds(scenes)
+        if args.focus_padding <= 0.0:
+            raise SystemExit("--focus-padding must be positive")
+        bounds = scene_bounds(scenes, args.focus_bone, args.focus_padding)
         paths = []
         for view, scene in scenes.items():
             path = args.output / f"{model_slug}_rig_{slug}_{sample_time:.3f}_{view}.png"

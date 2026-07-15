@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Validate Unit-01's Tree-of-Life crucifix pose against the real SmOd rig.
+"""Validate Unit-01's Tree-of-Life crucifix pose against the active Tiger rig.
 
 This is deliberately a skeleton-space contract, not a gameplay hitbox check.
-It samples the canonical Gecko animation, applies it to the generated SmOd
+It samples the canonical Gecko animation, applies it to the generated Tiger
 geometry hierarchy and verifies the cross silhouette at every authored arm
 keyframe.  The ordinary EVA animations are never involved.
 """
@@ -16,9 +16,7 @@ import render_unit01_rig_preview as rig
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_ASSETS = ROOT / "run/resourcepacks/eva_real_model/assets/projectseele"
-DEFAULT_ANIMATION = (
-    ROOT / "src/main/resources/assets/projectseele/animations/eva_unit01.animation.json"
-)
+DEFAULT_ANIMATION = DEFAULT_ASSETS / "animations/eva_unit01.animation.json"
 DEFAULT_OUTPUT = ROOT / "external-assets/work/crucified-validation/crucified_pose_report.json"
 
 
@@ -79,10 +77,14 @@ def sample_pose(mesh, geo, animation_json, time):
         "hands_share_shoulder_plane": hand_plane_error <= 1.0,
         "elbows_near_arm_plane": max(left_elbow_error, right_elbow_error) <= 2.0,
         "full_cross_arm_span": hand_span >= 155.0,
+        "arms_extend_to_own_sides": (
+            joints["hand_l"][0] < joints["arm_l"][0] < 0.0
+            and joints["hand_r"][0] > joints["arm_r"][0] > 0.0
+        ),
         "ankles_close_together": ankle_gap <= 6.0,
         "legs_converge_without_crossing": (
-            joints["foot_l"][0] > 0.0
-            and joints["foot_r"][0] < 0.0
+            joints["foot_l"][0] <= 0.0
+            and joints["foot_r"][0] >= 0.0
             and ankle_to_hip_ratio <= 0.30
         ),
         "feet_are_level": foot_level_error <= 0.1,
@@ -134,7 +136,7 @@ def main():
         for time in authored_times(args.animation_json)
     ]
     report = {
-        "contract": "canonical crucified animation applied to the real SmOd Unit-01 rig",
+        "contract": "canonical crucified animation applied to the active Tiger Unit-01 rig",
         "inputs": {
             "mesh": str(mesh_path),
             "geo": str(geo_path),

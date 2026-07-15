@@ -14,18 +14,19 @@ if not exist "%SEELE_HOME%\gradlew.bat" (
 )
 cd /d "%SEELE_HOME%"
 set "PYTHONUTF8=1"
-rem SmOd is the required private Unit-01/02 model source.
-rem Never fall back to Chikita: both converters used to share one output and
-rem an old desktop launcher could silently replace the active model pack.
+rem SmOd remains the required private base/Angel source.  Its old Unit-01/02
+rem conversions are overwritten below; the active four EVA bodies are the
+rem locally downloaded Tigerar1 meshes.  Never fall back to Chikita: an old
+rem desktop launcher could silently replace the reviewed resource pack.
 if not exist "evaaddon1-0.zip" (
-    echo SmOd source evaaddon1-0.zip was not found in %SEELE_HOME%.
-    echo Project SEELE will not start with a fallback EVA model.
+    echo SmOd base/Angel source evaaddon1-0.zip was not found in %SEELE_HOME%.
+    echo Project SEELE will not start with an incomplete local resource pack.
     pause
     exit /b 1
 )
 where python >nul 2>nul
 if errorlevel 1 (
-    echo Python was not found; the local SmOd model pack cannot be generated.
+    echo Python was not found; the local EVA resource pack cannot be generated.
     pause
     exit /b 1
 )
@@ -49,8 +50,8 @@ if exist "eud-1.1.0-forge-1.20.1.jar" (
         exit /b 1
     )
 )
-rem Tigerar1's CC BY-SA mesh is the preferred local Unit-01 visual source.
-rem Run it last so it replaces only Unit-01 while preserving other SmOd assets.
+rem Tigerar1's CC BY-SA meshes are the active local EVA body sources.  Install
+rem them after SmOd so no legacy body can survive a weapon/stance transition.
 if exist "external-assets\incoming\evangelion-unit-01.zip" (
     python tools\make_tiger_unit01_pack.py
     if errorlevel 1 (
@@ -92,6 +93,17 @@ if exist "eud-1.1.0-forge-1.20.1.jar" (
     python tools\make_eud_weapon_pack.py
     if errorlevel 1 (
         echo EUD Longinus model generation failed.
+        pause
+        exit /b 1
+    )
+)
+rem Adapt the downloaded common knife, EVA-02 weapons and entry plug only
+rem after all Tiger bodies exist, because every attachment reads their final
+rem reviewed hand/back socket pivots. This local pack is never redistributed.
+if exist "external-assets\incoming\progressive-knife.zip" if exist "external-assets\incoming\eva-02-rebuild-version-not-rigged.zip" if exist "eud-1.1.0-forge-1.20.1.jar" (
+    python tools\make_downloaded_eva_accessories_pack.py
+    if errorlevel 1 (
+        echo Downloaded EVA accessory generation failed.
         pause
         exit /b 1
     )

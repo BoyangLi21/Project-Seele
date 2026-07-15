@@ -35,14 +35,38 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
             new ResourceLocation(ProjectSeele.MODID, "mesh/eva_unit01.mesh.json");
     private static final ResourceLocation MESH_02 =
             new ResourceLocation(ProjectSeele.MODID, "mesh/eva_unit02.mesh.json");
+    private static final ResourceLocation TEXTURE_00 =
+            new ResourceLocation(ProjectSeele.MODID, "textures/entity/eva_unit00.png");
+    private static final ResourceLocation TEXTURE_01 =
+            new ResourceLocation(ProjectSeele.MODID, "textures/entity/eva_unit01.png");
+    private static final ResourceLocation TEXTURE_02 =
+            new ResourceLocation(ProjectSeele.MODID, "textures/entity/eva_unit02.png");
     private static final ResourceLocation POSITRON_MESH =
             new ResourceLocation(ProjectSeele.MODID, "mesh/positron_cannon.mesh.json");
     private static final ResourceLocation POSITRON_TEXTURE =
             new ResourceLocation(ProjectSeele.MODID, "textures/entity/positron_cannon.png");
+    private static final ResourceLocation COMMON_KNIFE_MESH =
+            new ResourceLocation(ProjectSeele.MODID, "mesh/progressive_knife.mesh.json");
+    private static final ResourceLocation COMMON_KNIFE_TEXTURE =
+            new ResourceLocation(ProjectSeele.MODID, "textures/entity/progressive_knife.png");
+    private static final ResourceLocation UNIT02_KNIFE_MESH =
+            new ResourceLocation(ProjectSeele.MODID, "mesh/eva02_knife.mesh.json");
+    private static final ResourceLocation UNIT02_SPECIAL_WEAPON_MESH =
+            new ResourceLocation(ProjectSeele.MODID, "mesh/eva02_special_weapon.mesh.json");
+    private static final ResourceLocation UNIT02_WEAPONS_TEXTURE =
+            new ResourceLocation(ProjectSeele.MODID, "textures/entity/eva02_weapons.png");
+    private static final ResourceLocation ENTRY_PLUG_MESH =
+            new ResourceLocation(ProjectSeele.MODID, "mesh/entry_plug.mesh.json");
+    private static final ResourceLocation ENTRY_PLUG_TEXTURE =
+            new ResourceLocation(ProjectSeele.MODID, "textures/entity/entry_plug.png");
+    private static final ResourceLocation LONGINUS_MESH =
+            new ResourceLocation(ProjectSeele.MODID, "mesh/longinus_lance.mesh.json");
+    private static final ResourceLocation LONGINUS_TEXTURE =
+            new ResourceLocation(ProjectSeele.MODID, "textures/entity/longinus_lance.png");
     private static final Set<String> CAMERA_COVER_BONES = Set.of(
             "head", "Head", "horn", "Horn", "neck", "Neck");
-    private static final Set<String> LOW_STANCE_CAMERA_MESH_COVER = Set.of(
-            "torso_lower", "torso_upper");
+    private static final Set<String> PILOT_CAMERA_MESH_COVER = Set.of(
+            "torso_lower", "torso_upper", "pylon_l", "pylon_r");
     private boolean pilotView;
     private boolean strictFailureReported;
 
@@ -50,10 +74,26 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
     {
         super(context, new EvaUnit01GeoModel());
         this.addRenderLayer(new LocalTriangleMeshLayer<>(this,
-                entity -> meshResourceForVariant(entity.getUnitVariant()), null,
+                entity -> meshResourceForVariant(entity.getUnitVariant()),
+                entity -> textureResourceForVariant(entity.getUnitVariant()),
                 this::shouldRenderBodyMesh));
         this.addRenderLayer(new LocalTriangleMeshLayer<>(this,
-                entity -> POSITRON_MESH, entity -> POSITRON_TEXTURE));
+                EvaUnit01Renderer::knifeMeshResource,
+                EvaUnit01Renderer::knifeTextureResource,
+                (entity, bone) -> entity.getWeapon() == EvaUnit01Entity.WEAPON_KNIFE
+                        && "knife".equals(bone.getName())));
+        this.addRenderLayer(new LocalTriangleMeshLayer<>(this,
+                entity -> POSITRON_MESH, entity -> POSITRON_TEXTURE,
+                (entity, bone) -> entity.getWeapon() == EvaUnit01Entity.WEAPON_CANNON
+                        && "cannon".equals(bone.getName())));
+        this.addRenderLayer(new LocalTriangleMeshLayer<>(this,
+                EvaUnit01Renderer::lanceMeshResource,
+                EvaUnit01Renderer::lanceTextureResource,
+                (entity, bone) -> entity.getWeapon() == EvaUnit01Entity.WEAPON_LANCE
+                        && "lance".equals(bone.getName())));
+        this.addRenderLayer(new LocalTriangleMeshLayer<>(this,
+                entity -> ENTRY_PLUG_MESH, entity -> ENTRY_PLUG_TEXTURE,
+                (entity, bone) -> isEntryHardwareVisible(entity, bone.getName())));
         this.shadowRadius = 3.6F;
         this.withScale(2.5F);
     }
@@ -125,12 +165,32 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
         }
         // This is a small additive elevation layer on the one world skeleton,
         // after GeckoLib has evaluated the authored two-hand cannon stance.
-        // It is deliberately view-agnostic: first and third person observe the
-        // same torso, arms, weapon socket and physical pitch limit.
-        if (!isReRender && animatable.getWeapon() == EvaUnit01Entity.WEAPON_CANNON)
+        // The imported rig gives both arms a shared shoulder-space parent so
+        // pitch never rotates the head/chest away from the fixed pilot socket.
+        // First and third person therefore observe the same hands, receiver
+        // and physical pitch limit without the cockpit camera falling inside
+        // the torso whenever the pilot looks up or down.
+        if (!isReRender)
         {
-            model.getBone("torso_upper").ifPresent(bone -> bone.setRotX(
-                    bone.getRotX() + (float) Math.toRadians(animatable.getCannonAimPitch())));
+            if (model.getBone("aim_pitch").isPresent())
+            {
+                // aim_pitch is an unanimated semantic parent owned solely by
+                // this renderer. Assign the requested pitch absolutely on
+                // every primary pass. Adding to its previous value made each
+                // frame (and each render layer) accumulate another camera
+                // angle, producing the view-dependent "windmill" rotation.
+                float pitch = animatable.getWeapon() == EvaUnit01Entity.WEAPON_CANNON
+                        ? (float) Math.toRadians(animatable.getCannonAimPitch()) : 0.0F;
+                model.getBone("aim_pitch").get().setRotX(pitch);
+            }
+            else if (animatable.getWeapon() == EvaUnit01Entity.WEAPON_CANNON)
+            {
+                // Public fallback rigs pre-date the semantic aim parent. Do
+                // not mutate their animated arm bones here: an additive
+                // fallback cannot be idempotent across Gecko render layers.
+                // Their authored aim pose remains stable until regenerated
+                // with the current semantic-parent converter.
+            }
         }
         // Weapon visibility applies on top in every view.
         setWeaponVisibility(model, "knife", animatable.getWeapon() == EvaUnit01Entity.WEAPON_KNIFE);
@@ -140,13 +200,14 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
                 || (animatable.getUnitVariant() == EvaUnit01Entity.UNIT_00
                     && animatable.getVisualPose() == EvaUnit01Entity.VISUAL_CROUCH);
         setWeaponVisibility(model, "shield", shieldBrace);
-        // Insertion is a transient animation but the plug itself stays seated
-        // for the entire piloted session, including after the 120-tick startup.
-        boolean activating = animatable.getActivationTicks() > 0
-                || animatable.isEntryPlugInserted();
-        setWeaponVisibility(model, "entry_plug", activating);
-        setWeaponVisibility(model, "plug_hatch_l", activating);
-        setWeaponVisibility(model, "plug_hatch_r", activating);
+        // Only the travelling portion of the plug is outside the armour.  At
+        // the end of insertion it is physically below the dorsal socket; the
+        // closed hatch remains visible, but rendering the full 38px capsule at
+        // its zero transform made it stick out of the EVA forever.
+        boolean plugTravelling = isEntryPlugTravelling(animatable);
+        setWeaponVisibility(model, "entry_plug", plugTravelling);
+        setWeaponVisibility(model, "plug_hatch_l", true);
+        setWeaponVisibility(model, "plug_hatch_r", true);
     }
 
     private static void setWeaponVisibility(BakedGeoModel model, String name, boolean active)
@@ -167,12 +228,44 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
                 && entity.getWeapon() == EvaUnit01Entity.WEAPON_CANNON
                 && "cannon".equals(bone.getName())
                 && LocalTriangleMeshLayer.hasPart(POSITRON_MESH, bone.getName());
-        if (bodyMesh || cannonMesh)
+        ResourceLocation activeKnifeMesh = entity == null ? COMMON_KNIFE_MESH
+                : knifeMeshResource(entity);
+        boolean knifeMesh = entity != null
+                && entity.getWeapon() == EvaUnit01Entity.WEAPON_KNIFE
+                && "knife".equals(bone.getName())
+                && LocalTriangleMeshLayer.hasPart(activeKnifeMesh, bone.getName());
+        boolean entryHardwareMesh = entity != null
+                && isEntryHardwareVisible(entity, bone.getName())
+                && LocalTriangleMeshLayer.hasPart(ENTRY_PLUG_MESH, bone.getName());
+        ResourceLocation activeLanceMesh = entity == null ? LONGINUS_MESH
+                : lanceMeshResource(entity);
+        boolean lanceMesh = entity != null
+                && entity.getWeapon() == EvaUnit01Entity.WEAPON_LANCE
+                && "lance".equals(bone.getName())
+                && LocalTriangleMeshLayer.hasPart(activeLanceMesh, bone.getName());
+        if (bodyMesh || cannonMesh || knifeMesh || lanceMesh || entryHardwareMesh)
         {
             return;
         }
         super.renderCubesOfBone(poseStack, bone, buffer, packedLight, packedOverlay,
                 red, green, blue, alpha);
+    }
+
+    /**
+     * The 6s activation clip seats the capsule at 3.15s, then spends the
+     * remaining time closing the hatch and bringing the EVA online.  Keeping
+     * the plug rendered for all 120 ticks exposes it through seams after it is
+     * already internal, so stop drawing it at that authored seating frame.
+     */
+    private static boolean isEntryPlugTravelling(EvaUnit01Entity entity)
+    {
+        return entity.getActivationTicks() > 57;
+    }
+
+    private static boolean isEntryHardwareVisible(EvaUnit01Entity entity, String boneName)
+    {
+        return "plug_hatch_l".equals(boneName) || "plug_hatch_r".equals(boneName)
+                || ("entry_plug".equals(boneName) && isEntryPlugTravelling(entity));
     }
 
     public static ResourceLocation meshResourceForVariant(int variant)
@@ -185,9 +278,44 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
         };
     }
 
+    /** Keep body vertices on a variant-owned buffer, never a weapon buffer. */
+    public static ResourceLocation textureResourceForVariant(int variant)
+    {
+        return switch (variant)
+        {
+            case EvaUnit01Entity.UNIT_00 -> TEXTURE_00;
+            case EvaUnit01Entity.UNIT_02 -> TEXTURE_02;
+            default -> TEXTURE_01;
+        };
+    }
+
     public static ResourceLocation positronMeshResource()
     {
         return POSITRON_MESH;
+    }
+
+    public static ResourceLocation knifeMeshResource(EvaUnit01Entity entity)
+    {
+        return entity.getUnitVariant() == EvaUnit01Entity.UNIT_02
+                ? UNIT02_KNIFE_MESH : COMMON_KNIFE_MESH;
+    }
+
+    private static ResourceLocation knifeTextureResource(EvaUnit01Entity entity)
+    {
+        return entity.getUnitVariant() == EvaUnit01Entity.UNIT_02
+                ? UNIT02_WEAPONS_TEXTURE : COMMON_KNIFE_TEXTURE;
+    }
+
+    public static ResourceLocation lanceMeshResource(EvaUnit01Entity entity)
+    {
+        return entity.getUnitVariant() == EvaUnit01Entity.UNIT_02
+                ? UNIT02_SPECIAL_WEAPON_MESH : LONGINUS_MESH;
+    }
+
+    private static ResourceLocation lanceTextureResource(EvaUnit01Entity entity)
+    {
+        return entity.getUnitVariant() == EvaUnit01Entity.UNIT_02
+                ? UNIT02_WEAPONS_TEXTURE : LONGINUS_TEXTURE;
     }
 
     public static LocalVisualAssetFingerprint.Fingerprint visualFingerprintForVariant(int variant)
@@ -210,14 +338,13 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
         {
             return false;
         }
-        boolean lowStance = entity.isPilotCrouching() || entity.isPilotProne()
-                || entity.getVisualPose() == EvaUnit01Entity.VISUAL_CROUCH
-                || entity.getVisualPose() == EvaUnit01Entity.VISUAL_PRONE
-                || entity.getVisualPose() == EvaUnit01Entity.VISUAL_PRONE_CANNON;
-        // The low head socket sits inside the chest shell. Suppress only the
-        // two enclosing mesh parts, never their bones or descendants: both
-        // arms, hands and weapons remain the one evaluated world skeleton.
-        return !lowStance || !LOW_STANCE_CAMERA_MESH_COVER.contains(bone.getName());
+        // The rider socket is fixed to the entity while attack animations can
+        // rotate the chest through that socket.  Suppress only the four rigid
+        // shells enclosing the pilot in every stance; never hide their bones
+        // or descendants.  Arms, hands, fingers and weapons therefore remain
+        // the exact world skeleton seen by third person without the chest
+        // becoming an opaque wall during a knife strike or spear lunge.
+        return !PILOT_CAMERA_MESH_COVER.contains(bone.getName());
     }
 
     private static void hideSubtree(GeoBone bone)

@@ -474,6 +474,12 @@ public final class VisualCaptureManager
             {
                 this.referenceYaw = entity.getYRot();
             }
+            // A ridden Mob is free to copy the pilot's yaw again on the next
+            // tick.  Capture labels are meaningless if that turns the airframe
+            // between FRONT/SIDE/BACK frames, so the initial body heading is a
+            // hard session invariant.  Lock every interpolation field as well;
+            // otherwise the renderer can still blend toward the stale heading.
+            this.maintainSubjectOrientation(entity);
             if (this.view >= this.views.length)
             {
                 minecraft.player.displayClientMessage(Component.literal(
@@ -556,11 +562,13 @@ public final class VisualCaptureManager
             boolean faceClose = name.equals("face_close");
             boolean lowFace = subject instanceof EvaUnit01Entity unit
                     && (unit.getVisualPose() == EvaUnit01Entity.VISUAL_CROUCH
+                        || unit.getVisualPose() == EvaUnit01Entity.VISUAL_CROUCH_WALK
                         || unit.getVisualPose() == EvaUnit01Entity.VISUAL_PRONE
+                        || unit.getVisualPose() == EvaUnit01Entity.VISUAL_CRAWL
                         || unit.getVisualPose() == EvaUnit01Entity.VISUAL_PRONE_CANNON);
             Vec3 centre = subject.position().add(0.0D,
                     subject.getBbHeight() * (faceClose ? (lowFace ? 0.60D : 0.84D) : 0.52D), 0.0D);
-            float yaw = subject.getYRot() * Mth.DEG_TO_RAD;
+            float yaw = this.referenceYaw * Mth.DEG_TO_RAD;
             Vec3 forward = new Vec3(-Mth.sin(yaw), 0.0D, Mth.cos(yaw));
             Vec3 right = new Vec3(-forward.z, 0.0D, forward.x);
             boolean close = name.endsWith("close");
@@ -596,6 +604,14 @@ public final class VisualCaptureManager
         {
             if (!this.views[this.view].startsWith("first_person"))
             {
+                // A previous pose ends on the PITCH_DOWN frame.  The local
+                // player can otherwise send that stale 70-degree look angle
+                // back to the server while the next pose's external cameras
+                // are settling, which visibly depresses the synchronized
+                // cannon even though the capture command set server pitch 0.
+                minecraft.player.setYRot(this.referenceYaw);
+                minecraft.player.setYHeadRot(this.referenceYaw);
+                minecraft.player.setXRot(0.0F);
                 return;
             }
             String name = this.views[this.view];
@@ -620,6 +636,21 @@ public final class VisualCaptureManager
             minecraft.player.setYRot(yaw);
             minecraft.player.setYHeadRot(yaw);
             minecraft.player.setXRot(pitch);
+        }
+
+        private void maintainSubjectOrientation(Entity subject)
+        {
+            subject.setYRot(this.referenceYaw);
+            subject.setXRot(0.0F);
+            subject.yRotO = this.referenceYaw;
+            subject.xRotO = 0.0F;
+            if (subject instanceof net.minecraft.world.entity.LivingEntity living)
+            {
+                living.setYBodyRot(this.referenceYaw);
+                living.setYHeadRot(this.referenceYaw);
+                living.yBodyRotO = this.referenceYaw;
+                living.yHeadRotO = this.referenceYaw;
+            }
         }
 
         private void capture(Minecraft minecraft)
@@ -673,12 +704,19 @@ public final class VisualCaptureManager
             {
                 case EvaUnit01Entity.VISUAL_IDLE -> "idle";
                 case EvaUnit01Entity.VISUAL_WALK_CONTACT -> "walk_contact";
+                case EvaUnit01Entity.VISUAL_RUN_CONTACT -> "run_contact";
+                case EvaUnit01Entity.VISUAL_JUMP -> "jump";
+                case EvaUnit01Entity.VISUAL_FALL -> "fall";
                 case EvaUnit01Entity.VISUAL_KNIFE_WINDUP -> "knife_windup";
                 case EvaUnit01Entity.VISUAL_KNIFE_CONTACT -> "knife_contact";
                 case EvaUnit01Entity.VISUAL_KNIFE_RECOVERY -> "knife_recovery";
+                case EvaUnit01Entity.VISUAL_KNIFE_READY -> "knife_ready";
                 case EvaUnit01Entity.VISUAL_CROUCH -> "crouch";
+                case EvaUnit01Entity.VISUAL_CROUCH_WALK -> "crouch_walk";
                 case EvaUnit01Entity.VISUAL_PRONE -> "prone";
+                case EvaUnit01Entity.VISUAL_CRAWL -> "crawl";
                 case EvaUnit01Entity.VISUAL_PRONE_CANNON -> "prone_cannon";
+                case EvaUnit01Entity.VISUAL_LANCE_READY -> "lance_ready";
                 case EvaUnit01Entity.VISUAL_LANCE_WINDUP -> "lance_windup";
                 case EvaUnit01Entity.VISUAL_LANCE_CONTACT -> "lance_contact";
                 case EvaUnit01Entity.VISUAL_LANCE_RECOVERY -> "lance_recovery";

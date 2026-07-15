@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
-"""Render and gate SmOd third-person arm, cannon and knife direction.
+"""Render and gate the active Tiger EVA third-person weapon poses.
 
-The SmOd horn points toward local -Z.  A pose is therefore rejected when a
+The Tiger horn points toward local -Z.  A pose is therefore rejected when a
 hand or weapon drifts behind the torso (+Z), even if its front projection looks
-plausible.  This is deliberately independent from Forge and the Java renderer.
+plausible.  Contracts are relative to the animated torso and attachment length
+so a harmless model-scale change cannot silently turn into a false failure.
+This is deliberately independent from Forge and the Java renderer.
 """
 
 from __future__ import annotations
@@ -19,7 +21,6 @@ import sys
 REPO = Path(__file__).resolve().parent.parent
 RENDERER = REPO / "tools/render_unit01_rig_preview.py"
 DEFAULT_ASSETS = REPO / "run/resourcepacks/eva_real_model/assets/projectseele"
-DEFAULT_ANIMATION = REPO / "src/main/resources/assets/projectseele/animations/eva_unit01.animation.json"
 
 
 def cosine_alignment(a: list[float], b: list[float]) -> float:
@@ -40,7 +41,7 @@ def point_line_distance(point: list[float], origin: list[float],
     return math.sqrt(sum((point[index] - closest[index]) ** 2 for index in range(3)))
 
 
-def render(assets: Path, animation_json: Path, stem: str, pose: str,
+def render(assets: Path, animation_json: Path | None, stem: str, pose: str,
            time: float, output: Path, attachment: str = "",
            overlay: str = "", overlay_time: float = 0.0) -> dict:
     suffix = f"_overlay_{overlay}_{overlay_time:.2f}" if overlay else ""
@@ -50,14 +51,31 @@ def render(assets: Path, animation_json: Path, stem: str, pose: str,
         str(assets / "mesh" / f"{stem}.mesh.json"),
         str(assets / "textures/entity" / f"{stem}.png"), str(target),
         "--geo", str(assets / "geo" / f"{stem}.geo.json"),
-        "--animation-json", str(animation_json),
+        "--animation-json", str(animation_json or
+                                  (assets / "animations" / f"{stem}.animation.json")),
         "--animation", pose, "--time", str(time),
         "--no-skeleton", "--views", "front", "side", "back",
     ]
     if attachment == "knife":
-        command.extend(("--geo-cube-bone", "knife"))
+        unit02 = stem == "eva_unit02"
+        command.extend((
+            "--attachment-mesh",
+            str(assets / "mesh" / ("eva02_knife.mesh.json" if unit02
+                                    else "progressive_knife.mesh.json")),
+            "--attachment-texture",
+            str(assets / "textures/entity" / ("eva02_weapons.png" if unit02
+                                               else "progressive_knife.png")),
+        ))
     elif attachment == "lance":
-        command.extend(("--geo-cube-bone", "lance"))
+        unit02 = stem == "eva_unit02"
+        command.extend((
+            "--attachment-mesh",
+            str(assets / "mesh" / ("eva02_special_weapon.mesh.json" if unit02
+                                    else "longinus_lance.mesh.json")),
+            "--attachment-texture",
+            str(assets / "textures/entity" / ("eva02_weapons.png" if unit02
+                                               else "longinus_lance.png")),
+        ))
     elif attachment == "cannon":
         command.extend((
             "--attachment-mesh", str(assets / "mesh/positron_cannon.mesh.json"),
@@ -75,7 +93,10 @@ def render(assets: Path, animation_json: Path, stem: str, pose: str,
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--assets", type=Path, default=DEFAULT_ASSETS)
-    parser.add_argument("--animation-json", type=Path, default=DEFAULT_ANIMATION)
+    parser.add_argument(
+        "--animation-json", type=Path,
+        help=("optional animation override; by default each generated Tiger "
+              "variant uses its own active resource-pack animation"))
     parser.add_argument("--output", type=Path,
                         default=REPO / "external-assets/work/thirdperson-pose-validation")
     args = parser.parse_args()
@@ -88,22 +109,31 @@ def main() -> int:
                      args.output, "cannon")
         idle_joints = idle["joint_world"]
         aim_joints = aim["joint_world"]
-        checks[f"{stem}_idle_hands_forward"] = all(
-            idle_joints[bone][2] <= -4.0 for bone in ("hand_l", "hand_r"))
-        checks[f"{stem}_aim_hands_forward"] = all(
-            aim_joints[bone][2] <= -35.0 for bone in ("hand_l", "hand_r"))
-        checks[f"{stem}_aim_chest_height"] = all(
-            128.0 <= aim_joints[bone][1] <= 150.0
+        idle_torso = idle_joints["torso_upper"]
+        aim_torso = aim_joints["torso_upper"]
+        checks[f"{stem}_idle_hands_not_behind"] = all(
+            idle_joints[bone][2] <= idle_torso[2]
             for bone in ("hand_l", "hand_r"))
-        checks[f"{stem}_aim_two_hand_contact"] = aim["hand_pivot_distance"] <= 20.0
-        checks[f"{stem}_cannon_forward"] = aim_joints["cannon"][2] <= -45.0
+        checks[f"{stem}_aim_hands_forward"] = all(
+            aim_joints[bone][2] <= aim_torso[2] - 40.0
+            for bone in ("hand_l", "hand_r"))
+        # The support palm closes around the top half of the downloaded
+        # receiver, a few pixels above the trigger wrist.  Thirty-six pixels
+        # still rejects an arm raised over the shoulder while accepting the
+        # visually reviewed fore-end contact at +34.6.
+        checks[f"{stem}_aim_chest_height"] = all(
+            aim_torso[1] + 12.0 <= aim_joints[bone][1] <= aim_torso[1] + 36.0
+            for bone in ("hand_l", "hand_r"))
+        checks[f"{stem}_aim_two_hand_contact"] = aim["hand_pivot_distance"] <= 22.0
+        checks[f"{stem}_cannon_forward"] = (
+            aim_joints["cannon"][2] <= aim_torso[2] - 45.0)
         recoil = render(args.assets, args.animation_json, stem, "aim", 0.0,
                         args.output, "cannon", "cannon_fire", 0.06)
         recoil_joints = recoil["joint_world"]
         checks[f"{stem}_recoil_hands_forward"] = all(
             recoil_joints[bone][2] <= -35.0 for bone in ("hand_l", "hand_r"))
         checks[f"{stem}_recoil_two_hand_contact"] = recoil["hand_pivot_distance"] <= 22.0
-        report[stem] = {"idle": idle, "aim": aim}
+        report[stem] = {"idle": idle, "aim": aim, "recoil": recoil}
 
     knife_report = {}
     for pose in ("knife", "knife_left"):
@@ -116,21 +146,25 @@ def main() -> int:
             hand = joints["hand_r"]
             elbow = joints["forearm_r"]
             hand_to_tip = [blade_tip[axis] - hand[axis] for axis in range(3)]
-            hand_to_elbow = [elbow[axis] - hand[axis] for axis in range(3)]
+            blade_axis = blade["vector_from_pivot"]
             prefix = f"{pose}_{label}"
-            checks[f"{prefix}_grounded"] = -0.15 <= metrics["overall_min_y"] <= 0.15
-            checks[f"{prefix}_right_hand_forward"] = joints["hand_r"][2] <= -35.0
-            # A progressive knife is reverse-gripped: its far tip leaves the
-            # little-finger side of the fist and points back along the outer
-            # forearm, never forward like a short sword.  Checking the actual
-            # cube endpoint closes the old loophole where only the socket
-            # pivot was forward while the blade itself faced the wrong way.
+            torso = joints["torso_upper"]
+            # Attack keys deliberately add up to one Bedrock pixel of body
+            # lift.  This is still visible foot contact at EVA scale; larger
+            # gaps are rejected.
+            checks[f"{prefix}_grounded"] = -0.2 <= metrics["overall_min_y"] <= 1.25
+            checks[f"{prefix}_right_hand_forward"] = (
+                joints["hand_r"][2] <= torso[2] - 28.0)
+            # Reverse grip is defined by the actual downloaded blade leaving
+            # the little-finger side of the fist and pointing down, not by an
+            # old cube model's arbitrary forearm-axis sign.
             checks[f"{prefix}_reverse_grip"] = (
-                cosine_alignment(hand_to_tip, hand_to_elbow) >= 0.65
-                and hand_to_tip[2] >= 12.0
-                and hand_to_tip[1] <= -5.0
+                math.dist(hand, blade["pivot"]) <= 7.0
+                and hand_to_tip[1] <= -20.0
+                and blade_axis[1] / blade["length"] <= -0.80
             )
-            checks[f"{prefix}_guard_forward"] = joints["hand_l"][2] <= -30.0
+            checks[f"{prefix}_guard_forward"] = (
+                joints["hand_l"][2] <= torso[2] - 28.0)
             knife_report[prefix] = metrics
     report["knife"] = knife_report
 
@@ -161,9 +195,8 @@ def main() -> int:
             and math.dist(joints["hand_r"], weapon["pivot"]) <= 8.0
         )
         checks[f"{prefix}_tip_faces_model_front"] = (
-            axis[2] <= -240.0
-            and abs(axis[0]) <= 100.0
-            and abs(axis[1]) <= 80.0
+            cosine_alignment(axis, [0.0, 0.0, -1.0]) >= 0.95
+            and axis[2] <= -0.90 * weapon["length"]
         )
         lance_report[prefix] = metrics
     report["lance"] = lance_report

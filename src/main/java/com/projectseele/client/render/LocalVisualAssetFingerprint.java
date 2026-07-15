@@ -17,9 +17,9 @@ import net.minecraft.server.packs.resources.Resource;
 public final class LocalVisualAssetFingerprint
 {
     private static final Map<String, MeshContract> CONTRACTS = Map.of(
-            "eva_unit00", new MeshContract(3_692, 17),
-            "eva_unit01", new MeshContract(4_226, 17),
-            "eva_unit02", new MeshContract(3_952, 17),
+            "eva_unit00", new MeshContract(3_692, 35),
+            "eva_unit01", new MeshContract(4_226, 35),
+            "eva_unit02", new MeshContract(3_952, 35),
             "mass_production_eva", new MeshContract(4_901, 15));
     private static final Map<String, Fingerprint> CACHE = new ConcurrentHashMap<>();
 

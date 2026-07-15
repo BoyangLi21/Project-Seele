@@ -303,10 +303,11 @@ public final class ThirdImpactDirector
         mass.setTarget(null);
         mass.setVisualPose(MassProductionEvaEntity.VISUAL_RITUAL);
         mass.assignRitualOwner(impact.id, nodeIndex, !impact.persistent);
-        if (impact.persistent)
-        {
-            mass.setPersistenceRequired();
-        }
+        // Visual-preview vessels are still Monster instances.  The fixed
+        // full-Tree camera places the crown/nadir more than 128 blocks from
+        // the real player, so vanilla despawning removed exactly those four
+        // vessels unless preview and story formations are both persistent.
+        mass.setPersistenceRequired();
     }
 
     private static void ensureRestored(ServerLevel level)

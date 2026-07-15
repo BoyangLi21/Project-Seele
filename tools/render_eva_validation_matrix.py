@@ -2,10 +2,10 @@
 """Render fail-closed offline evidence for the current EVA visual contract.
 
 The first-person rows use the same complete world mesh, Gecko skeleton and
-animation as the third-person rows. Camera-cover head/horn/neck roots may hide;
-in crouch/prone only, the two exact torso mesh parts enclosing the camera are
-clipped without hiding their bones or children. This tool deliberately does
-not implement or approve the rejected RenderHand arm viewmodel.
+animation as the third-person rows. Camera-cover head/horn/neck roots and the
+four rigid torso/pylon shells enclosing the rider may hide without hiding
+their bones or children. This tool deliberately does not implement or approve
+the rejected RenderHand arm viewmodel.
 
 Offline PASS proves inputs, camera direction, visibility contracts and static
 geometry only.  It never replaces a tagged Minecraft capture reviewed by a
@@ -33,40 +33,72 @@ ALLOWED_CAMERA_COVER_BONES = {
     "head", "Head", "horn", "Horn", "neck", "Neck",
 }
 ALWAYS_FORBIDDEN_HIDDEN_BONES = {
-    "root", "pylon_l", "pylon_r",
+    "root",
     "arm_l", "forearm_l", "hand_l", "arm_r", "forearm_r", "hand_r",
 }
-LOW_STANCE_EXACT_HIDDEN_PARTS = {
-    "crouch": {"torso_lower", "torso_upper"},
-    "prone": {"torso_lower", "torso_upper"},
-}
-HEAD_SOCKET_OFFSET_RANGES = {
-    # Camera minus animated head-joint coordinates, in model pixels. The head
-    # joint is at the neck pivot, not at the eyes, so a non-zero offset is the
-    # intended contract and is shared by all three Tiger bodies.
-    "standing": ((-2.0, 2.0), (-3.0, 3.0), (-26.0, -18.0)),
-    "crouch": ((-2.0, 2.0), (7.0, 13.0), (-12.0, -6.0)),
-    "prone": ((-2.0, 2.0), (5.0, 11.0), (-7.0, 0.0)),
+EXACT_HIDDEN_PARTS = {
+    "standing": {"torso_lower", "torso_upper", "pylon_l", "pylon_r"},
+    "crouch": {"torso_lower", "torso_upper", "pylon_l", "pylon_r"},
+    "prone": {"torso_lower", "torso_upper", "pylon_l", "pylon_r"},
 }
 
 # Every Unit must produce both exterior and pilot-eye evidence for these rows.
-# Knife is sampled at contact; prone aim is the same controller layering used
-# by the game (prone base plus prone_aim arm overlay).
+# This is intentionally the complete player-visible locomotion/weapon set, not
+# a handful of convenient idle poses.  Downloaded attachments are selected by
+# variant exactly as EvaUnit01Renderer does at runtime.
 POSE_CASES = (
     {"name": "standing", "animation": "idle", "time": 0.0,
      "stance": "standing"},
+    {"name": "walk_contact", "animation": "walk", "time": 0.0,
+     "stance": "standing"},
+    {"name": "run_contact", "animation": "run", "time": 0.0,
+     "stance": "standing"},
+    {"name": "jump", "animation": "jump", "time": 0.0,
+     "stance": "standing"},
+    {"name": "fall", "animation": "fall", "time": 0.0,
+     "stance": "standing"},
     {"name": "crouch", "animation": "crouch", "time": 0.0,
+     "stance": "crouch"},
+    {"name": "crouch_walk", "animation": "crouch_walk", "time": 0.0,
      "stance": "crouch"},
     {"name": "prone", "animation": "prone", "time": 0.0,
      "stance": "prone"},
-    {"name": "knife", "animation": "knife", "time": 0.28,
-     "stance": "standing", "geo_cube_bones": ("knife",),
+    {"name": "crawl", "animation": "crawl", "time": 0.70,
+     "stance": "prone"},
+    {"name": "knife_ready", "animation": "knife_ready", "time": 0.0,
+     "stance": "standing", "attachment": "knife",
+     "weapon_bone": "knife"},
+    {"name": "knife_windup", "animation": "knife", "time": 0.12,
+     "stance": "standing", "attachment": "knife",
+     "weapon_bone": "knife"},
+    {"name": "knife_contact", "animation": "knife", "time": 0.28,
+     "stance": "standing", "attachment": "knife",
+     "weapon_bone": "knife"},
+    {"name": "knife_recovery", "animation": "knife", "time": 0.50,
+     "stance": "standing", "attachment": "knife",
      "weapon_bone": "knife"},
     {"name": "aim", "animation": "aim", "time": 0.0,
-     "stance": "standing", "cannon": True, "weapon_bone": "cannon"},
-    {"name": "prone_aim", "animation": "prone", "time": 0.0,
-     "stance": "prone", "overlay": "prone_aim", "cannon": True,
+     "stance": "standing", "attachment": "cannon",
      "weapon_bone": "cannon"},
+    {"name": "prone_aim", "animation": "prone", "time": 0.0,
+     "stance": "prone", "overlay": "prone_aim", "attachment": "cannon",
+     "weapon_bone": "cannon"},
+    {"name": "lance_ready", "animation": "lance_ready", "time": 0.0,
+     "stance": "standing", "attachment": "lance",
+     "weapon_bone": "lance"},
+    {"name": "lance_windup", "animation": "lance_thrust", "time": 0.20,
+     "stance": "standing", "attachment": "lance",
+     "weapon_bone": "lance"},
+    {"name": "lance_contact", "animation": "lance_thrust", "time": 0.42,
+     "stance": "standing", "attachment": "lance",
+     "weapon_bone": "lance"},
+    {"name": "lance_recovery", "animation": "lance_thrust", "time": 0.60,
+     "stance": "standing", "attachment": "lance",
+     "weapon_bone": "lance"},
+    {"name": "activation_raised", "animation": "activation", "time": 0.0,
+     "stance": "standing", "attachment": "plug", "third_only": True},
+    {"name": "activation_seating", "animation": "activation", "time": 3.05,
+     "stance": "standing", "attachment": "plug", "third_only": True},
 )
 
 MASS_POSES = (
@@ -105,12 +137,38 @@ def render_command(assets: Path, stem: str, case: dict, output: Path,
     if case.get("overlay"):
         command.extend(("--overlay-animation", case["overlay"],
                         "--overlay-time", "0.0"))
-    if case.get("cannon"):
+    attachment = case.get("attachment")
+    if attachment == "cannon":
         command.extend((
             "--attachment-mesh",
             str(assets / "mesh/positron_cannon.mesh.json"),
             "--attachment-texture",
             str(assets / "textures/entity/positron_cannon.png"),
+        ))
+    elif attachment == "knife":
+        unit02 = stem == "eva_unit02"
+        command.extend((
+            "--attachment-mesh",
+            str(assets / "mesh" / ("eva02_knife.mesh.json" if unit02
+                                    else "progressive_knife.mesh.json")),
+            "--attachment-texture",
+            str(assets / "textures/entity" / ("eva02_weapons.png" if unit02
+                                               else "progressive_knife.png")),
+        ))
+    elif attachment == "lance":
+        unit02 = stem == "eva_unit02"
+        command.extend((
+            "--attachment-mesh",
+            str(assets / "mesh" / ("eva02_special_weapon.mesh.json" if unit02
+                                    else "longinus_lance.mesh.json")),
+            "--attachment-texture",
+            str(assets / "textures/entity" / ("eva02_weapons.png" if unit02
+                                               else "longinus_lance.png")),
+        ))
+    elif attachment == "plug":
+        command.extend((
+            "--attachment-mesh", str(assets / "mesh/entry_plug.mesh.json"),
+            "--attachment-texture", str(assets / "textures/entity/entry_plug.png"),
         ))
     for bone in case.get("geo_cube_bones", ()):
         command.extend(("--geo-cube-bone", bone))
@@ -170,7 +228,7 @@ def validate_unified_view(metrics: dict, label: str, stance: str,
             failures.append(
                 f"{label}/{name}: non-camera-cover bones hidden: "
                 f"{sorted(camera_cover - ALLOWED_CAMERA_COVER_BONES)}")
-        expected_exact = LOW_STANCE_EXACT_HIDDEN_PARTS.get(stance, set())
+        expected_exact = EXACT_HIDDEN_PARTS.get(stance, set())
         if exact_hidden != expected_exact:
             failures.append(
                 f"{label}/{name}: exact camera-clipped mesh parts "
@@ -245,11 +303,12 @@ def validate_unified_view(metrics: dict, label: str, stance: str,
             "head_mesh_max_model_pixels": maximum,
             "inside_head_mesh_with_1px_tolerance": inside_head,
         }
-        ranges = HEAD_SOCKET_OFFSET_RANGES[stance]
-        if any(not ranges[axis][0] <= delta[axis] <= ranges[axis][1]
-               for axis in range(3)):
-            failures.append(
-                f"{label}: {stance} camera/head-joint offset {delta} outside contract")
+        # The head joint moves and rotates with locomotion, so a fixed offset
+        # range is the wrong invariant.  What matters in the actual unified
+        # view is that the rider camera remains inside the animated head shell
+        # which the renderer alone suppresses to prevent self-occlusion.
+        if not inside_head:
+            failures.append(f"{label}: pilot camera left the animated head volume")
     return failures, view_summary
 
 
@@ -259,6 +318,8 @@ def render_unit(assets: Path, batch: Path, unit: str,
     for case in POSE_CASES:
         for view_kind, first_person in (("third_person", False),
                                         ("first_person", True)):
+            if first_person and case.get("third_only"):
+                continue
             label = f"{unit}/{view_kind}/{case['name']}"
             output = batch / unit / view_kind / case["name"]
             output.mkdir(parents=True, exist_ok=False)
@@ -346,6 +407,19 @@ def main() -> int:
     records: list[dict] = []
 
     required = [WORLD_RENDERER, UNIFIED_AUDIT]
+    required.extend((
+        args.assets / "mesh/progressive_knife.mesh.json",
+        args.assets / "textures/entity/progressive_knife.png",
+        args.assets / "mesh/eva02_knife.mesh.json",
+        args.assets / "mesh/eva02_special_weapon.mesh.json",
+        args.assets / "textures/entity/eva02_weapons.png",
+        args.assets / "mesh/longinus_lance.mesh.json",
+        args.assets / "textures/entity/longinus_lance.png",
+        args.assets / "mesh/entry_plug.mesh.json",
+        args.assets / "textures/entity/entry_plug.png",
+        args.assets / "mesh/positron_cannon.mesh.json",
+        args.assets / "textures/entity/positron_cannon.png",
+    ))
     for unit in UNITS:
         stem = f"eva_{unit}"
         required.extend((
@@ -374,11 +448,11 @@ def main() -> int:
             "pose_source": "one Gecko skeleton and animation evaluation",
             "pilot_camera": "EVA eye socket looking along local -Z",
             "hidden_roots_allowed": sorted(ALLOWED_CAMERA_COVER_BONES),
-            "low_stance_exact_camera_clip_parts": {
+            "exact_camera_clip_parts": {
                 stance: sorted(parts)
-                for stance, parts in LOW_STANCE_EXACT_HIDDEN_PARTS.items()
+                for stance, parts in EXACT_HIDDEN_PARTS.items()
             },
-            "head_socket_offset_ranges_model_pixels": HEAD_SOCKET_OFFSET_RANGES,
+            "head_socket_contract": "pilot camera remains inside animated head mesh",
             "render_hand": "cancel vanilla player hand only; no EVA arm pass",
             "negative_viewmodel_scale": "rejected",
         },

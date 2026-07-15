@@ -10,17 +10,18 @@ import render_unit01_rig_preview as rig
 
 
 EXPECTED_SOCKETS = {
-    "standing": {"eye_height": 24.63, "forward": 3.70},
+    "standing": {"eye_height": 24.63, "forward": 1.00},
     "crouch": {"eye_height": 19.70, "forward": 0.80},
-    "prone": {"eye_height": 10.80, "forward": 10.33},
+    "prone": {"eye_height": 7.00, "forward": 12.00},
 }
 
 EXPECTED_HIDDEN_ROOTS = {
     "head", "Head", "horn", "Horn", "neck", "Neck",
 }
-EXPECTED_LOW_STANCE_HIDDEN_PARTS = {
-    "crouch": {"torso_lower", "torso_upper"},
-    "prone": {"torso_lower", "torso_upper"},
+EXPECTED_CAMERA_COVER_PARTS = {
+    "standing": {"torso_lower", "torso_upper", "pylon_l", "pylon_r"},
+    "crouch": {"torso_lower", "torso_upper", "pylon_l", "pylon_r"},
+    "prone": {"torso_lower", "torso_upper", "pylon_l", "pylon_r"},
 }
 
 
@@ -29,8 +30,8 @@ def assert_unified_contract():
         raise SystemExit("unified audit socket drift: update runtime and audit together")
     if rig.FIRST_PERSON_HIDDEN_ROOTS != EXPECTED_HIDDEN_ROOTS:
         raise SystemExit("unified audit hidden-root drift: only camera-cover bones may hide")
-    if rig.LOW_STANCE_FIRST_PERSON_HIDDEN_PARTS != EXPECTED_LOW_STANCE_HIDDEN_PARTS:
-        raise SystemExit("unified audit low-stance camera clipping contract drift")
+    if rig.FIRST_PERSON_CAMERA_COVER_PARTS != EXPECTED_CAMERA_COVER_PARTS:
+        raise SystemExit("unified audit pilot camera clipping contract drift")
 
 
 if __name__ == "__main__":

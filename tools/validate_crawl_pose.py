@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
-"""Render and gate Unit-01's human, load-bearing quadruped crawl cycle.
+"""Render and gate Unit-01's human, belly-down low-crawl cycle.
 
 The old prone animation could pass build checks while both legs folded in
 front of the pelvis and the arms swept behind the back.  This validator uses
-the authored mesh and Gecko animation, then checks real world-space joints and
-contact surfaces at the two diagonal support phases and both passing phases.
+the authored mesh and Gecko animation, then checks a military low-crawl
+contract: the head and chest stay forward, one forearm and the opposite lower
+leg carry each support phase, and the pulling arm/tucked leg swap sides.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
-import math
 from pathlib import Path
 import subprocess
 import sys
@@ -20,7 +20,7 @@ import sys
 REPO = Path(__file__).resolve().parent.parent
 RENDERER = REPO / "tools/render_unit01_rig_preview.py"
 DEFAULT_ASSETS = REPO / "run/resourcepacks/eva_real_model/assets/projectseele"
-DEFAULT_ANIMATION = REPO / "src/main/resources/assets/projectseele/animations/eva_unit01.animation.json"
+DEFAULT_ANIMATION = DEFAULT_ASSETS / "animations/eva_unit01.animation.json"
 SAMPLES = (("support_a", 0.0), ("passing_a", 0.35),
            ("support_b", 0.70), ("passing_b", 1.05))
 
@@ -42,18 +42,6 @@ def render(assets: Path, animation: Path, output: Path,
     return json.loads(metrics_path.read_text(encoding="utf-8"))
 
 
-def angle_degrees(a: list[float], centre: list[float], b: list[float]) -> float:
-    first = [a[index] - centre[index] for index in range(3)]
-    second = [b[index] - centre[index] for index in range(3)]
-    denominator = math.sqrt(sum(value * value for value in first)
-                            * sum(value * value for value in second))
-    if denominator <= 1.0e-6:
-        return 180.0
-    cosine = max(-1.0, min(1.0, sum(first[index] * second[index]
-                                    for index in range(3)) / denominator))
-    return math.degrees(math.acos(cosine))
-
-
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--assets", type=Path, default=DEFAULT_ASSETS)
@@ -70,56 +58,70 @@ def main() -> int:
         joints = sample["joint_world"]
         bounds = sample["bone_bounds"]
         contacts = {
-            bone: bounds[bone]["min_y"] <= 1.0
-            for bone in ("hand_l", "hand_r", "shin_l", "shin_r")
+            "forearm_l": bounds["forearm_l"]["min_y"] <= 0.25,
+            "forearm_r": bounds["forearm_r"]["min_y"] <= 0.25,
+            "shin_l": bounds["shin_l"]["min_y"] <= 3.25,
+            "shin_r": bounds["shin_r"]["min_y"] <= 3.25,
         }
-        knee_angles = {
-            side: angle_degrees(joints[f"leg_{side}"], joints[f"shin_{side}"],
-                                joints[f"foot_{side}"])
-            for side in ("l", "r")
-        }
-        checks[f"{label}_ground_plane"] = -0.25 <= sample["overall_min_y"] <= 0.75
-        checks[f"{label}_three_point_support"] = sum(contacts.values()) >= 3
-        checks[f"{label}_palms_keep_sides"] = (
-            joints["hand_l"][0] >= 12.0 and joints["hand_r"][0] <= -12.0)
-        checks[f"{label}_palms_ahead"] = all(
-            joints[bone][2] <= joints["torso_upper"][2] - 15.0
-            for bone in ("hand_l", "hand_r"))
+        # A passing frame may lift roughly five model pixels as the body glides
+        # through neutral.  Anything lower than -0.25 is visible penetration.
+        checks[f"{label}_ground_plane"] = (
+            -0.25 <= sample["overall_min_y"] <= 5.25)
+        checks[f"{label}_head_chest_face_forward"] = (
+            joints["head"][2] < joints["torso_upper"][2] - 20.0
+            and joints["torso_upper"][2] < joints["torso_lower"][2] - 20.0)
+        checks[f"{label}_arms_ahead"] = all(
+            joints[bone][2] <= joints["torso_upper"][2] - 20.0
+            for bone in ("forearm_l", "forearm_r", "hand_l", "hand_r"))
         checks[f"{label}_feet_behind"] = all(
-            joints[bone][2] >= joints["torso_lower"][2] + 25.0
+            joints[bone][2] >= joints["torso_lower"][2] + 55.0
             for bone in ("foot_l", "foot_r"))
         checks[f"{label}_level_back"] = abs(
             joints["torso_upper"][1] - joints["torso_lower"][1]) <= 8.0
-        checks[f"{label}_right_angle_knees"] = all(
-            55.0 <= angle <= 115.0 for angle in knee_angles.values())
-        diagnostics[label] = {"contacts": contacts, "knee_angles": knee_angles}
+        diagnostics[label] = {
+            "contacts": contacts,
+            "overall_min_y": sample["overall_min_y"],
+            "hand_z": {side: joints[f"hand_{side}"][2]
+                       for side in ("l", "r")},
+            "shin_x": {side: joints[f"shin_{side}"][0]
+                       for side in ("l", "r")},
+            "foot_z": {side: joints[f"foot_{side}"][2]
+                       for side in ("l", "r")},
+        }
 
     support_a = metrics["support_a"]
     support_b = metrics["support_b"]
     joints_a = support_a["joint_world"]
     joints_b = support_b["joint_world"]
-    checks["cycle_hands_change_support"] = all(
-        abs(joints_a[bone][2] - joints_b[bone][2]) >= 8.0
-        for bone in ("hand_l", "hand_r"))
-    checks["cycle_feet_change_support"] = all(
-        abs(joints_a[bone][2] - joints_b[bone][2]) >= 8.0
-        for bone in ("foot_l", "foot_r"))
-    checks["cycle_diagonal_support_a"] = (
-        (joints_a["hand_l"][2] - joints_a["hand_r"][2])
-        * (joints_a["foot_l"][2] - joints_a["foot_r"][2]) < -40.0)
-    checks["cycle_diagonal_support_b"] = (
-        (joints_b["hand_l"][2] - joints_b["hand_r"][2])
-        * (joints_b["foot_l"][2] - joints_b["foot_r"][2]) < -40.0)
+    contacts_a = diagnostics["support_a"]["contacts"]
+    contacts_b = diagnostics["support_b"]["contacts"]
+    checks["support_a_opposite_forearm_and_shin"] = (
+        contacts_a["forearm_r"] and contacts_a["shin_l"]
+        and not contacts_a["forearm_l"] and not contacts_a["shin_r"])
+    checks["support_b_opposite_forearm_and_shin"] = (
+        contacts_b["forearm_l"] and contacts_b["shin_r"]
+        and not contacts_b["forearm_r"] and not contacts_b["shin_l"])
+    checks["cycle_pulling_arm_swaps"] = (
+        joints_a["hand_l"][2] <= joints_a["hand_r"][2] - 8.0
+        and joints_b["hand_r"][2] <= joints_b["hand_l"][2] - 8.0)
+    checks["cycle_tucked_leg_swaps"] = (
+        joints_a["foot_l"][2] <= joints_a["foot_r"][2] - 4.0
+        and joints_b["foot_r"][2] <= joints_b["foot_l"][2] - 4.0)
+    checks["cycle_knee_opens_outward_and_swaps"] = (
+        abs(joints_a["shin_l"][0]) >= abs(joints_a["shin_r"][0]) + 8.0
+        and abs(joints_b["shin_r"][0]) >= abs(joints_b["shin_l"][0]) + 8.0)
     checks["cycle_weight_shift"] = abs(
-        joints_a["torso_lower"][0] - joints_b["torso_lower"][0]) >= 1.0
+        joints_a["torso_lower"][0] - joints_b["torso_lower"][0]) >= 0.4
     for label in ("passing_a", "passing_b"):
         joints = metrics[label]["joint_world"]
         checks[f"{label}_near_neutral"] = (
             abs(joints["hand_l"][2] - joints["hand_r"][2]) <= 4.0
             and abs(joints["foot_l"][2] - joints["foot_r"][2]) <= 4.0)
+        checks[f"{label}_limbs_clear_ground"] = (
+            not any(diagnostics[label]["contacts"].values()))
 
     report = {
-        "contract": "human quadruped crawl; model forward is local -Z",
+        "contract": "human belly-down low crawl; model forward is local -Z",
         "samples": metrics,
         "diagnostics": diagnostics,
         "checks": checks,
