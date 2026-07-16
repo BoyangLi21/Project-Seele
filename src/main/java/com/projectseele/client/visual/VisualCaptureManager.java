@@ -67,6 +67,7 @@ public final class VisualCaptureManager
     private static SiloSession siloSession;
     private static Tokyo3Session tokyo3Session;
     private static Tokyo3RetractionSession tokyo3RetractionSession;
+    private static GeoFrontSession geoFrontSession;
     private static int shutdownTicks = -1;
 
     private VisualCaptureManager() {}
@@ -120,6 +121,11 @@ public final class VisualCaptureManager
             tokyo3RetractionSession.restore(minecraft);
             tokyo3RetractionSession = null;
         }
+        if (geoFrontSession != null)
+        {
+            geoFrontSession.restore(minecraft);
+            geoFrontSession = null;
+        }
         shutdownTicks = -1;
         session = new Session(entityId, pose, minecraft);
         minecraft.player.displayClientMessage(Component.literal("Visual capture started"), false);
@@ -158,6 +164,11 @@ public final class VisualCaptureManager
             tokyo3RetractionSession.restore(minecraft);
             tokyo3RetractionSession = null;
         }
+        if (geoFrontSession != null)
+        {
+            geoFrontSession.restore(minecraft);
+            geoFrontSession = null;
+        }
         shutdownTicks = -1;
         impactSession = new ImpactSession(origin, yaw, minecraft);
         minecraft.player.displayClientMessage(
@@ -195,6 +206,11 @@ public final class VisualCaptureManager
         {
             tokyo3RetractionSession.restore(minecraft);
             tokyo3RetractionSession = null;
+        }
+        if (geoFrontSession != null)
+        {
+            geoFrontSession.restore(minecraft);
+            geoFrontSession = null;
         }
         shutdownTicks = -1;
         siloSession = new SiloSession(entityId, minecraft);
@@ -242,6 +258,11 @@ public final class VisualCaptureManager
             tokyo3RetractionSession.restore(minecraft);
             tokyo3RetractionSession = null;
         }
+        if (geoFrontSession != null)
+        {
+            geoFrontSession.restore(minecraft);
+            geoFrontSession = null;
+        }
         shutdownTicks = -1;
         tokyo3Session = new Tokyo3Session(origin, minecraft);
         minecraft.player.displayClientMessage(
@@ -287,10 +308,65 @@ public final class VisualCaptureManager
         {
             tokyo3RetractionSession.restore(minecraft);
         }
+        if (geoFrontSession != null)
+        {
+            geoFrontSession.restore(minecraft);
+            geoFrontSession = null;
+        }
         shutdownTicks = -1;
         tokyo3RetractionSession = new Tokyo3RetractionSession(origin, minecraft);
         minecraft.player.displayClientMessage(
                 Component.literal("Tokyo-3 retraction visual capture started"), false);
+    }
+
+    /** Starts four audited views of the independent GeoFront dimension. */
+    public static void startGeoFront(BlockPos origin)
+    {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft.level == null || minecraft.player == null)
+        {
+            return;
+        }
+        if (origin.getY() <= -2000)
+        {
+            ProjectSeele.LOGGER.error(
+                    "VISUAL GEOFRONT INVALID: server-side cavern setup failed");
+            shutdownTicks = 20;
+            return;
+        }
+        if (session != null)
+        {
+            session.restore(minecraft);
+            session = null;
+        }
+        if (impactSession != null)
+        {
+            impactSession.restore(minecraft);
+            impactSession = null;
+        }
+        if (siloSession != null)
+        {
+            siloSession.restore(minecraft);
+            siloSession = null;
+        }
+        if (tokyo3Session != null)
+        {
+            tokyo3Session.restore(minecraft);
+            tokyo3Session = null;
+        }
+        if (tokyo3RetractionSession != null)
+        {
+            tokyo3RetractionSession.restore(minecraft);
+            tokyo3RetractionSession = null;
+        }
+        if (geoFrontSession != null)
+        {
+            geoFrontSession.restore(minecraft);
+        }
+        shutdownTicks = -1;
+        geoFrontSession = new GeoFrontSession(origin, minecraft);
+        minecraft.player.displayClientMessage(
+                Component.literal("GeoFront visual capture started"), false);
     }
 
     /** Suppress GUI overlays while leaving the world-space EVA body visible. */
@@ -298,6 +374,7 @@ public final class VisualCaptureManager
     {
         return impactSession != null || tokyo3Session != null
                 || tokyo3RetractionSession != null
+                || geoFrontSession != null
                 || session != null && session.isCleanFirstPerson();
     }
 
@@ -325,6 +402,15 @@ public final class VisualCaptureManager
             {
                 impactSession.restore(minecraft);
                 impactSession = null;
+            }
+            return;
+        }
+        if (geoFrontSession != null)
+        {
+            if (!geoFrontSession.tick(minecraft))
+            {
+                geoFrontSession.restore(minecraft);
+                geoFrontSession = null;
             }
             return;
         }
@@ -363,6 +449,206 @@ public final class VisualCaptureManager
         {
             session.restore(minecraft);
             session = null;
+        }
+    }
+
+    /** Four audited views of the independent GeoFront development cavern. */
+    private static final class GeoFrontSession
+    {
+        private static final int INITIAL_SETTLE_TICKS = 180;
+        private static final String[] VIEWS = {
+                "cavern_overview", "nerv_pyramid", "lcl_lake", "lift_terminals"
+        };
+        private static final int[] LIFT_X = {-28, 0, 28};
+
+        private final BlockPos origin;
+        private final Entity originalCamera;
+        private final CameraType originalCameraType;
+        private final boolean originalHideGui;
+        private final CloudStatus originalCloudStatus;
+        private ArmorStand camera;
+        private int settleTicks = INITIAL_SETTLE_TICKS;
+        private int view;
+        private boolean positioned;
+        private boolean audited;
+
+        GeoFrontSession(BlockPos origin, Minecraft minecraft)
+        {
+            this.origin = origin.immutable();
+            this.originalCamera = minecraft.getCameraEntity();
+            this.originalCameraType = minecraft.options.getCameraType();
+            this.originalHideGui = minecraft.options.hideGui;
+            this.originalCloudStatus = minecraft.options.cloudStatus().get();
+            ProjectSeele.LOGGER.info(
+                    "GeoFront visual capture batch {} at {}", CAPTURE_BATCH, this.origin);
+        }
+
+        boolean tick(Minecraft minecraft)
+        {
+            if (minecraft.level == null || minecraft.player == null)
+            {
+                return false;
+            }
+            if (!this.positioned)
+            {
+                this.position(minecraft);
+                this.positioned = true;
+                return true;
+            }
+            this.maintainCamera(minecraft);
+            if (this.settleTicks-- > 0)
+            {
+                return true;
+            }
+            if (!this.audited)
+            {
+                this.audit(minecraft);
+                this.audited = true;
+            }
+            this.capture(minecraft);
+            this.view++;
+            if (this.view >= VIEWS.length)
+            {
+                ProjectSeele.LOGGER.info(
+                        "GeoFront visual matrix finished: four audited cavern views captured");
+                if (Boolean.getBoolean("projectseele.visualCapture"))
+                {
+                    shutdownTicks = 30;
+                }
+                return false;
+            }
+            this.positioned = false;
+            this.settleTicks = 18;
+            return true;
+        }
+
+        private void audit(Minecraft minecraft)
+        {
+            boolean floor = minecraft.level.getBlockState(
+                    this.origin.offset(100, 0, 0)).is(Blocks.DEEPSLATE_TILES);
+            var wallState = minecraft.level.getBlockState(
+                    this.origin.offset(112, 32, 0));
+            boolean wall = wallState.is(Blocks.DEEPSLATE)
+                    || wallState.is(Blocks.CALCITE)
+                    || wallState.is(Blocks.POLISHED_BASALT);
+            boolean lake = minecraft.level.getBlockState(
+                    this.origin.offset(48, 1, 0)).is(Blocks.ORANGE_STAINED_GLASS);
+            boolean pyramid = minecraft.level.getBlockState(
+                    this.origin.offset(0, 29, 0)).is(Blocks.BEACON);
+            boolean sun = minecraft.level.getBlockState(
+                    this.origin.offset(0, 88, 0)).is(Blocks.SEA_LANTERN);
+            int lifts = 0;
+            for (int x : LIFT_X)
+            {
+                if (minecraft.level.getBlockState(
+                        this.origin.offset(x, 1, -76)).is(Blocks.LODESTONE))
+                {
+                    lifts++;
+                }
+            }
+            boolean bridge = minecraft.level.getBlockState(
+                    this.origin.offset(0, 2, 70)).is(Blocks.IRON_BLOCK);
+            boolean observation = minecraft.level.getBlockState(
+                    this.origin.offset(0, 24, 100)).is(Blocks.LODESTONE);
+            boolean valid = floor && wall && lake && pyramid && sun
+                    && lifts == 3 && bridge && observation;
+            ProjectSeele.LOGGER.info(
+                    "GeoFront visual evidence: floor={} wall={} lclLake={} "
+                            + "nervPyramid={} artificialSun={} lifts={}/3 "
+                            + "commandBridge={} observation={} valid={}",
+                    floor, wall, lake, pyramid, sun, lifts, bridge, observation, valid);
+            if (!valid)
+            {
+                ProjectSeele.LOGGER.error(
+                        "VISUAL GEOFRONT INVALID: one or more cavern landmarks are missing");
+            }
+        }
+
+        private void position(Minecraft minecraft)
+        {
+            minecraft.options.setCameraType(CameraType.FIRST_PERSON);
+            minecraft.options.hideGui = true;
+            minecraft.options.cloudStatus().set(CloudStatus.OFF);
+            if (this.camera == null)
+            {
+                this.camera = EntityType.ARMOR_STAND.create(minecraft.level);
+                if (this.camera == null)
+                {
+                    throw new IllegalStateException("GeoFront visual camera creation failed");
+                }
+                this.camera.setInvisible(true);
+                this.camera.setNoGravity(true);
+            }
+            this.maintainCamera(minecraft);
+            minecraft.setCameraEntity(this.camera);
+        }
+
+        private void maintainCamera(Minecraft minecraft)
+        {
+            Vec3 base = Vec3.atLowerCornerOf(this.origin);
+            Vec3 target;
+            Vec3 cameraPos;
+            switch (VIEWS[this.view])
+            {
+                case "nerv_pyramid" ->
+                {
+                    cameraPos = base.add(72.0D, 38.0D, 70.0D);
+                    target = base.add(0.0D, 14.0D, 0.0D);
+                }
+                case "lcl_lake" ->
+                {
+                    cameraPos = base.add(-82.0D, 17.0D, 12.0D);
+                    target = base.add(0.0D, 5.0D, 0.0D);
+                }
+                case "lift_terminals" ->
+                {
+                    cameraPos = base.add(0.0D, 34.0D, -108.0D);
+                    target = base.add(0.0D, 10.0D, -68.0D);
+                }
+                default ->
+                {
+                    cameraPos = base.add(0.0D, 62.0D, 104.0D);
+                    target = base.add(0.0D, 32.0D, 0.0D);
+                }
+            }
+            this.camera.setPos(cameraPos.x,
+                    cameraPos.y - this.camera.getEyeHeight(), cameraPos.z);
+            lookAt(this.camera, cameraPos, target);
+            this.camera.xo = this.camera.getX();
+            this.camera.yo = this.camera.getY();
+            this.camera.zo = this.camera.getZ();
+            this.camera.yRotO = this.camera.getYRot();
+            this.camera.xRotO = this.camera.getXRot();
+            minecraft.setCameraEntity(this.camera);
+        }
+
+        private void capture(Minecraft minecraft)
+        {
+            try
+            {
+                File batch = new File(minecraft.gameDirectory,
+                        "screenshots/projectseele_visual/" + CAPTURE_BATCH);
+                Files.createDirectories(batch.toPath());
+                String filename = "geofront_" + VIEWS[this.view] + ".png";
+                Screenshot.grab(minecraft.gameDirectory,
+                        "projectseele_visual/" + CAPTURE_BATCH + "/" + filename,
+                        minecraft.getMainRenderTarget(), message -> ProjectSeele.LOGGER.info(
+                                "GeoFront visual capture {}/{}: {}",
+                                CAPTURE_BATCH, filename, message.getString()));
+            }
+            catch (Exception exception)
+            {
+                ProjectSeele.LOGGER.error("GeoFront visual screenshot failed", exception);
+            }
+        }
+
+        void restore(Minecraft minecraft)
+        {
+            minecraft.setCameraEntity(
+                    this.originalCamera != null ? this.originalCamera : minecraft.player);
+            minecraft.options.setCameraType(this.originalCameraType);
+            minecraft.options.hideGui = this.originalHideGui;
+            minecraft.options.cloudStatus().set(this.originalCloudStatus);
         }
     }
 

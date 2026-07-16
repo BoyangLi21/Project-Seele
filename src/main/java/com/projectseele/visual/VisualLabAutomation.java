@@ -6,6 +6,7 @@ import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.projectseele.ProjectSeele;
 import com.projectseele.entity.EvaUnit01Entity;
 import com.projectseele.network.ClientboundSiloCapturePacket;
+import com.projectseele.network.ClientboundGeoFrontCapturePacket;
 import com.projectseele.network.ClientboundTokyo3CapturePacket;
 import com.projectseele.network.SeeleNetwork;
 import com.projectseele.world.Tokyo3RetractionDirector;
@@ -47,6 +48,7 @@ public final class VisualLabAutomation
     private static final boolean TOKYO3_CAPTURE = CAPTURE_UNIT.equals("tokyo3");
     private static final boolean TOKYO3_RETRACTION_CAPTURE =
             CAPTURE_UNIT.equals("tokyo3_retraction");
+    private static final boolean GEOFRONT_CAPTURE = CAPTURE_UNIT.equals("geofront");
     private static final String[] POSES = REQUESTED_POSE.equals("all")
             ? ALL_POSES : REQUESTED_POSE.split(",");
     private static final String[] MASS_POSES = REQUESTED_POSE.equals("all")
@@ -101,7 +103,11 @@ public final class VisualLabAutomation
         {
             if (ticks == 40)
             {
-                if (TOKYO3_CAPTURE || TOKYO3_RETRACTION_CAPTURE)
+                if (GEOFRONT_CAPTURE)
+                {
+                    GeoFrontCommands.setupVisualCapture(player.createCommandSourceStack());
+                }
+                else if (TOKYO3_CAPTURE || TOKYO3_RETRACTION_CAPTURE)
                 {
                     ThirdTokyoCommands.setupVisualCapture(player.createCommandSourceStack());
                 }
@@ -122,6 +128,19 @@ public final class VisualLabAutomation
                                 expectedUnit, subjectId);
                     }
                 }
+            }
+            if (GEOFRONT_CAPTURE)
+            {
+                if (ticks == 100)
+                {
+                    SeeleNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
+                            new ClientboundGeoFrontCapturePacket(GeoFrontCommands.ORIGIN));
+                    ProjectSeele.LOGGER.info(
+                            "Visual Lab armed GeoFront cavern capture at {}",
+                            GeoFrontCommands.ORIGIN);
+                    playerId = null;
+                }
+                return;
             }
             if (TOKYO3_RETRACTION_CAPTURE)
             {

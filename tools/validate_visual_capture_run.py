@@ -20,7 +20,7 @@ SNAPSHOT = REPO / "run/.projectseele_visual_before.json"
 # derivative and its shared first-/third-person skeleton.
 EXPECTED = {
     "unit01": 364, "unit00": 364, "unit02": 364,
-    "mass": 35, "tokyo3": 4, "tokyo3_retraction": 4,
+    "mass": 35, "tokyo3": 4, "tokyo3_retraction": 4, "geofront": 4,
     "silo": 6, "impact": 3,
 }
 VIEWS_PER_POSE = {"unit01": 13, "unit00": 13, "unit02": 13, "mass": 7}
@@ -36,6 +36,8 @@ FAILURE_PATTERNS = (
     r"Tokyo-3 visual screenshot failed",
     r"VISUAL TOKYO3 RETRACTION INVALID",
     r"Tokyo-3 retraction visual screenshot failed",
+    r"VISUAL GEOFRONT INVALID",
+    r"GeoFront visual screenshot failed",
     r"Visual Lab automation failed",
 )
 SILO_STAGES = (
@@ -137,7 +139,8 @@ def main() -> int:
                         help="comma-separated targeted capture list; begin records its exact PNG count")
     args = parser.parse_args()
     poses = normalise_poses(args.poses)
-    if poses and args.target in {"impact", "silo", "tokyo3", "tokyo3_retraction"}:
+    if poses and args.target in {
+            "impact", "silo", "tokyo3", "tokyo3_retraction", "geofront"}:
         parser.error(f"{args.target} capture has fixed stages and does not accept --poses")
     return begin(args.target, poses) if args.action == "begin" else verify(args.target)
 

@@ -166,6 +166,12 @@ if errorlevel 1 (
     pause
     exit /b 1
 )
+python tools\validate_geofront_contract.py
+if errorlevel 1 (
+    echo GeoFront dimension and map validation failed.
+    pause
+    exit /b 1
+)
 python tools\validate_weapon_systems.py
 if errorlevel 1 (
     echo EVA firearm, scope or strategic-explosion validation failed.
@@ -215,9 +221,9 @@ echo Starting Project SEELE test client (first launch takes a minute)...
 if /i "%~1"=="visual" (
     echo Automated Visual Lab mode enabled.
     if /i "%~2"=="all" (
-        echo Capturing Unit-01, Unit-00, Unit-02, Mass Production, Tokyo-3, retraction, silo and Third Impact.
+        echo Capturing Unit-01, Unit-00, Unit-02, Mass Production, Tokyo-3, retraction, GeoFront, silo and Third Impact.
         echo Each client closes automatically before the next target starts.
-        for %%U in (unit01 unit00 unit02 mass tokyo3 tokyo3_retraction silo impact) do (
+        for %%U in (unit01 unit00 unit02 mass tokyo3 tokyo3_retraction geofront silo impact) do (
             echo.
             echo === Visual suite target: %%U ===
             python tools\validate_visual_capture_run.py begin %%U
@@ -251,6 +257,15 @@ if /i "%~1"=="visual" (
         call gradlew.bat runClient -PquickPlayWorld=SEELE_VISUAL_TEST_2 -PvisualCapture=true -PvisualCaptureUnit=tokyo3_retraction
         if errorlevel 1 exit /b 1
         python tools\validate_visual_capture_run.py verify tokyo3_retraction
+        if errorlevel 1 exit /b 1
+    ) else if /i "%~2"=="geofront" (
+        echo Building and capturing the independent GeoFront development cavern.
+        echo Four audited views cover the cavern, NERV pyramid, LCL lake and lift terminals.
+        python tools\validate_visual_capture_run.py begin geofront
+        if errorlevel 1 exit /b 1
+        call gradlew.bat runClient -PquickPlayWorld=SEELE_VISUAL_TEST_2 -PvisualCapture=true -PvisualCaptureUnit=geofront
+        if errorlevel 1 exit /b 1
+        python tools\validate_visual_capture_run.py verify geofront
         if errorlevel 1 exit /b 1
     ) else if /i "%~2"=="silo" (
         echo Capturing the real entry-plug synchronization and launch-catapult sequence.
@@ -312,7 +327,7 @@ if /i "%~1"=="visual" (
         if errorlevel 1 exit /b 1
     ) else (
         echo Unknown visual target "%~2".
-        echo Use: visual all, unit01, unit00, unit02, mass, tokyo3, tokyo3_retraction, silo, or impact.
+        echo Use: visual all, unit01, unit00, unit02, mass, tokyo3, tokyo3_retraction, geofront, silo, or impact.
         pause
         exit /b 2
     )
