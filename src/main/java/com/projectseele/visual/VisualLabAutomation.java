@@ -6,7 +6,9 @@ import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.projectseele.ProjectSeele;
 import com.projectseele.entity.EvaUnit01Entity;
 import com.projectseele.network.ClientboundSiloCapturePacket;
+import com.projectseele.network.ClientboundTokyo3CapturePacket;
 import com.projectseele.network.SeeleNetwork;
+import net.minecraft.core.BlockPos;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.event.TickEvent;
@@ -41,6 +43,7 @@ public final class VisualLabAutomation
     private static final boolean IMPACT_CAPTURE = CAPTURE_UNIT.equals("impact");
     private static final boolean MASS_CAPTURE = CAPTURE_UNIT.equals("mass");
     private static final boolean SILO_CAPTURE = CAPTURE_UNIT.equals("silo");
+    private static final boolean TOKYO3_CAPTURE = CAPTURE_UNIT.equals("tokyo3");
     private static final String[] POSES = REQUESTED_POSE.equals("all")
             ? ALL_POSES : REQUESTED_POSE.split(",");
     private static final String[] MASS_POSES = REQUESTED_POSE.equals("all")
@@ -93,7 +96,11 @@ public final class VisualLabAutomation
         {
             if (ticks == 40)
             {
-                if (SILO_CAPTURE)
+                if (TOKYO3_CAPTURE)
+                {
+                    ThirdTokyoCommands.setupVisualCapture(player.createCommandSourceStack());
+                }
+                else if (SILO_CAPTURE)
                 {
                     LaunchSiloCommands.setupVisualCapture(player.createCommandSourceStack());
                 }
@@ -110,6 +117,19 @@ public final class VisualLabAutomation
                                 expectedUnit, subjectId);
                     }
                 }
+            }
+            if (TOKYO3_CAPTURE)
+            {
+                if (ticks == 80)
+                {
+                    BlockPos origin = ThirdTokyoCommands.fixedVisualOrigin(player.serverLevel());
+                    SeeleNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
+                            new ClientboundTokyo3CapturePacket(origin));
+                    ProjectSeele.LOGGER.info(
+                            "Visual Lab armed Tokyo-3 full-scene capture at {}", origin);
+                    playerId = null;
+                }
+                return;
             }
             if (SILO_CAPTURE)
             {
@@ -199,6 +219,12 @@ public final class VisualLabAutomation
                 // unattended game instead of leaving it parked in-world.
                 SeeleNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
                         new ClientboundSiloCapturePacket(-1));
+            }
+            if (TOKYO3_CAPTURE)
+            {
+                SeeleNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
+                        new ClientboundTokyo3CapturePacket(
+                                new BlockPos(0, -2048, 0)));
             }
             playerId = null;
         }

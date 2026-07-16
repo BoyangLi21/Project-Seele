@@ -179,6 +179,8 @@ if /i "%~1"=="offline" (
     if errorlevel 1 set "OFFLINE_FAILED=1"
     python tools\render_launch_silo_preview.py --strict
     if errorlevel 1 set "OFFLINE_FAILED=1"
+    python tools\render_tokyo3_preview.py --strict
+    if errorlevel 1 set "OFFLINE_FAILED=1"
     python tools\render_tree_of_life_preview.py --layout current --strict
     if errorlevel 1 set "OFFLINE_FAILED=1"
     python tools\render_eva_validation_matrix.py
@@ -200,14 +202,16 @@ echo   2. Run /seele silo setup once on an open surface.
 echo   3. Run /seele silo board from the high gantry.
 echo   4. Wait for insertion, synchronization and automatic surface launch.
 echo   /seele silo status reports the current interlock phase.
+echo   /seele tokyo3 setup builds the connected surface battle district.
+echo   /seele tokyo3 overview returns to the skyline observation deck.
 echo.
 echo Starting Project SEELE test client (first launch takes a minute)...
 if /i "%~1"=="visual" (
     echo Automated Visual Lab mode enabled.
     if /i "%~2"=="all" (
-        echo Capturing Unit-01, Unit-00, Unit-02, Mass Production and Third Impact.
+        echo Capturing Unit-01, Unit-00, Unit-02, Mass Production, Tokyo-3, silo and Third Impact.
         echo Each client closes automatically before the next target starts.
-        for %%U in (unit01 unit00 unit02 mass silo impact) do (
+        for %%U in (unit01 unit00 unit02 mass tokyo3 silo impact) do (
             echo.
             echo === Visual suite target: %%U ===
             python tools\validate_visual_capture_run.py begin %%U
@@ -224,6 +228,15 @@ if /i "%~1"=="visual" (
             )
         )
         echo Complete Visual Lab suite finished.
+    ) else if /i "%~2"=="tokyo3" (
+        echo Building and capturing the complete Tokyo-3 surface sortie district.
+        echo Four audited views cover the skyline, sortie road, power grid and Angel plaza.
+        python tools\validate_visual_capture_run.py begin tokyo3
+        if errorlevel 1 exit /b 1
+        call gradlew.bat runClient -PquickPlayWorld=SEELE_VISUAL_TEST_2 -PvisualCapture=true -PvisualCaptureUnit=tokyo3
+        if errorlevel 1 exit /b 1
+        python tools\validate_visual_capture_run.py verify tokyo3
+        if errorlevel 1 exit /b 1
     ) else if /i "%~2"=="silo" (
         echo Capturing the real entry-plug synchronization and launch-catapult sequence.
         echo Six frames are state-gated: gantry, plug travel, cockpit, hatch, ascent, surface.
@@ -284,7 +297,7 @@ if /i "%~1"=="visual" (
         if errorlevel 1 exit /b 1
     ) else (
         echo Unknown visual target "%~2".
-        echo Use: visual all, unit01, unit00, unit02, mass, silo, or impact.
+        echo Use: visual all, unit01, unit00, unit02, mass, tokyo3, silo, or impact.
         pause
         exit /b 2
     )

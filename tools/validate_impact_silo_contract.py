@@ -434,7 +434,7 @@ def validate_tree(gate: Gate) -> None:
     resync = all(token in packet for token in (
         "eventId", "buf.readUUID()", "buf.writeUUID(this.eventId)",
         "initialTreeAge", "buf.readVarInt()", "buf.writeVarInt(this.initialTreeAge)",
-    )) and 'PROTOCOL_VERSION = "6"' in network \
+    )) and 'PROTOCOL_VERSION = "7"' in network \
         and all(token in game_events for token in (
             "PlayerLoggedInEvent", "PlayerChangedDimensionEvent", "PlayerRespawnEvent",
             "ThirdImpactDirector.syncTo(player)",
@@ -442,7 +442,7 @@ def validate_tree(gate: Gate) -> None:
         and "tree.eventId.equals(packet.eventId)" in client_fx \
         and "Math.max(tree.age" in client_fx
     gate.require("impact.client_resync", resync,
-                 "protocol-v6 event-id sync resumes Tree age without replacement")
+                 "protocol-v7 event-id sync resumes Tree age without replacement")
 
 
 def number(source: str, name: str) -> float:
@@ -681,7 +681,7 @@ def validate_silo(gate: Gate) -> None:
         "VisualCaptureManager.startSilo", "buffer.readVarInt()",
         "buffer.writeVarInt(this.entityId)",
     )) and all(token in network for token in (
-        "ClientboundSiloCapturePacket.class", 'PROTOCOL_VERSION = "6"',
+        "ClientboundSiloCapturePacket.class", 'PROTOCOL_VERSION = "7"',
     )) and all(token in capture for token in (
         '"gantry_rear_socket"', '"plug_descent_external"',
         '"plug_descent_cockpit"', '"hatch_locked"', '"ascent_mid"',

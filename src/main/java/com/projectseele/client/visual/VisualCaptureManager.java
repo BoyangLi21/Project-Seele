@@ -20,11 +20,13 @@ import net.minecraft.client.CameraType;
 import net.minecraft.client.CloudStatus;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.Screenshot;
+import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.decoration.ArmorStand;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.api.distmarker.Dist;
@@ -61,6 +63,7 @@ public final class VisualCaptureManager
     private static Session session;
     private static ImpactSession impactSession;
     private static SiloSession siloSession;
+    private static Tokyo3Session tokyo3Session;
     private static int shutdownTicks = -1;
 
     private VisualCaptureManager() {}
@@ -104,6 +107,11 @@ public final class VisualCaptureManager
             siloSession.restore(minecraft);
             siloSession = null;
         }
+        if (tokyo3Session != null)
+        {
+            tokyo3Session.restore(minecraft);
+            tokyo3Session = null;
+        }
         shutdownTicks = -1;
         session = new Session(entityId, pose, minecraft);
         minecraft.player.displayClientMessage(Component.literal("Visual capture started"), false);
@@ -131,6 +139,11 @@ public final class VisualCaptureManager
         {
             siloSession.restore(minecraft);
             siloSession = null;
+        }
+        if (tokyo3Session != null)
+        {
+            tokyo3Session.restore(minecraft);
+            tokyo3Session = null;
         }
         shutdownTicks = -1;
         impactSession = new ImpactSession(origin, yaw, minecraft);
@@ -160,16 +173,62 @@ public final class VisualCaptureManager
         {
             siloSession.restore(minecraft);
         }
+        if (tokyo3Session != null)
+        {
+            tokyo3Session.restore(minecraft);
+            tokyo3Session = null;
+        }
         shutdownTicks = -1;
         siloSession = new SiloSession(entityId, minecraft);
         minecraft.player.displayClientMessage(
                 Component.literal("Launch-silo visual capture started"), false);
     }
 
+    /** Starts four fixed views of the complete Tokyo-3 surface sortie district. */
+    public static void startTokyo3(BlockPos origin)
+    {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft.level == null || minecraft.player == null)
+        {
+            return;
+        }
+        if (origin.getY() <= -2000)
+        {
+            ProjectSeele.LOGGER.error(
+                    "VISUAL TOKYO3 INVALID: server-side district setup failed");
+            shutdownTicks = 20;
+            return;
+        }
+        if (session != null)
+        {
+            session.restore(minecraft);
+            session = null;
+        }
+        if (impactSession != null)
+        {
+            impactSession.restore(minecraft);
+            impactSession = null;
+        }
+        if (siloSession != null)
+        {
+            siloSession.restore(minecraft);
+            siloSession = null;
+        }
+        if (tokyo3Session != null)
+        {
+            tokyo3Session.restore(minecraft);
+        }
+        shutdownTicks = -1;
+        tokyo3Session = new Tokyo3Session(origin, minecraft);
+        minecraft.player.displayClientMessage(
+                Component.literal("Tokyo-3 visual capture started"), false);
+    }
+
     /** Suppress GUI overlays while leaving the world-space EVA body visible. */
     public static boolean isSuppressingGui()
     {
-        return impactSession != null || session != null && session.isCleanFirstPerson();
+        return impactSession != null || tokyo3Session != null
+                || session != null && session.isCleanFirstPerson();
     }
 
     @SubscribeEvent
@@ -199,6 +258,15 @@ public final class VisualCaptureManager
             }
             return;
         }
+        if (tokyo3Session != null)
+        {
+            if (!tokyo3Session.tick(minecraft))
+            {
+                tokyo3Session.restore(minecraft);
+                tokyo3Session = null;
+            }
+            return;
+        }
         if (siloSession != null)
         {
             if (!siloSession.tick(minecraft))
@@ -216,6 +284,291 @@ public final class VisualCaptureManager
         {
             session.restore(minecraft);
             session = null;
+        }
+    }
+
+    /** Four audited views of the connected launch apron and surface city. */
+    private static final class Tokyo3Session
+    {
+        private static final int INITIAL_SETTLE_TICKS = 150;
+        private static final String[] VIEWS = {
+                "skyline_overview", "sortie_street", "power_grid", "battle_plaza"
+        };
+        private static final int[] LOT_CENTRES = {-80, -40, 0, 40, 80};
+        private static final int[][] ROAD_POINTS = {
+                {-100, -100}, {-100, 100}, {100, -100}, {100, 100},
+                {-60, -100}, {60, 100}, {-100, 60}, {100, -60},
+        };
+        private static final int[][] PYLONS = {
+                {-100, -80}, {-100, 0}, {-100, 80},
+                {100, -80}, {100, 0}, {100, 80},
+        };
+
+        private final BlockPos origin;
+        private final Entity originalCamera;
+        private final CameraType originalCameraType;
+        private final boolean originalHideGui;
+        private final CloudStatus originalCloudStatus;
+        private final LocalVisualAssetFingerprint.Fingerprint unit00Fingerprint;
+        private final LocalVisualAssetFingerprint.Fingerprint unit01Fingerprint;
+        private final LocalVisualAssetFingerprint.Fingerprint unit02Fingerprint;
+        private ArmorStand camera;
+        private int settleTicks = INITIAL_SETTLE_TICKS;
+        private int view;
+        private boolean positioned;
+        private boolean audited;
+
+        Tokyo3Session(BlockPos origin, Minecraft minecraft)
+        {
+            this.origin = origin.immutable();
+            this.originalCamera = minecraft.getCameraEntity();
+            this.originalCameraType = minecraft.options.getCameraType();
+            this.originalHideGui = minecraft.options.hideGui;
+            this.originalCloudStatus = minecraft.options.cloudStatus().get();
+            this.unit00Fingerprint = EvaUnit01Renderer.visualFingerprintForVariant(
+                    EvaUnit01Entity.UNIT_00);
+            this.unit01Fingerprint = EvaUnit01Renderer.visualFingerprintForVariant(
+                    EvaUnit01Entity.UNIT_01);
+            this.unit02Fingerprint = EvaUnit01Renderer.visualFingerprintForVariant(
+                    EvaUnit01Entity.UNIT_02);
+            ProjectSeele.LOGGER.info(
+                    "Tokyo-3 visual capture batch {} at {} uses unit00={} unit01={} unit02={}",
+                    CAPTURE_BATCH, this.origin,
+                    this.unit00Fingerprint.compactTag(),
+                    this.unit01Fingerprint.compactTag(),
+                    this.unit02Fingerprint.compactTag());
+        }
+
+        boolean tick(Minecraft minecraft)
+        {
+            if (minecraft.level == null || minecraft.player == null)
+            {
+                return false;
+            }
+            if (LocalVisualAssetFingerprint.isStrictMode()
+                    && (!this.unit00Fingerprint.valid()
+                    || !this.unit01Fingerprint.valid()
+                    || !this.unit02Fingerprint.valid()))
+            {
+                ProjectSeele.LOGGER.error(
+                        "Strict Tokyo-3 capture refused: unit00={} unit01={} unit02={}",
+                        this.unit00Fingerprint.description(),
+                        this.unit01Fingerprint.description(),
+                        this.unit02Fingerprint.description());
+                if (Boolean.getBoolean("projectseele.visualCapture"))
+                {
+                    shutdownTicks = 20;
+                }
+                return false;
+            }
+            if (!this.positioned)
+            {
+                this.position(minecraft);
+                this.positioned = true;
+                return true;
+            }
+            this.maintainCamera(minecraft);
+            if (this.settleTicks-- > 0)
+            {
+                return true;
+            }
+            if (!this.audited)
+            {
+                this.audit(minecraft);
+                this.audited = true;
+            }
+            this.capture(minecraft);
+            this.view++;
+            if (this.view >= VIEWS.length)
+            {
+                ProjectSeele.LOGGER.info(
+                        "Tokyo-3 visual matrix finished: four audited city views captured");
+                if (Boolean.getBoolean("projectseele.visualCapture"))
+                {
+                    shutdownTicks = 30;
+                }
+                return false;
+            }
+            this.positioned = false;
+            this.settleTicks = 16;
+            return true;
+        }
+
+        private void audit(Minecraft minecraft)
+        {
+            int roads = 0;
+            for (int[] point : ROAD_POINTS)
+            {
+                var state = minecraft.level.getBlockState(
+                        this.origin.offset(point[0], 0, point[1]));
+                if (state.is(Blocks.BLACK_CONCRETE) || state.is(Blocks.GRAY_CONCRETE)
+                        || state.is(Blocks.YELLOW_CONCRETE)
+                        || state.is(Blocks.LIGHT_GRAY_CONCRETE))
+                {
+                    roads++;
+                }
+            }
+
+            int towers = 0;
+            for (int x : LOT_CENTRES)
+            {
+                for (int z : LOT_CENTRES)
+                {
+                    if (Math.abs(x) <= 40 && Math.abs(z) <= 40
+                            || (x == 0 && z == -80)
+                            || (x == 80 && z == 0)
+                            || (x == 0 && z == 80))
+                    {
+                        continue;
+                    }
+                    if (minecraft.level.getBlockState(
+                            this.origin.offset(x, towerHeight(x, z) + 1, z))
+                            .is(Blocks.REDSTONE_LAMP))
+                    {
+                        towers++;
+                    }
+                }
+            }
+
+            int pylons = 0;
+            for (int[] pylon : PYLONS)
+            {
+                if (minecraft.level.getBlockState(
+                        this.origin.offset(pylon[0], 28, pylon[1]))
+                        .is(Blocks.IRON_BLOCK))
+                {
+                    pylons++;
+                }
+            }
+            AABB cages = new AABB(this.origin).inflate(80.0D, 64.0D, 80.0D);
+            var units = minecraft.level.getEntitiesOfClass(
+                    EvaUnit01Entity.class, cages, Entity::isAlive);
+            boolean variants = units.stream().anyMatch(
+                    unit -> unit.getUnitVariant() == EvaUnit01Entity.UNIT_00)
+                    && units.stream().anyMatch(
+                    unit -> unit.getUnitVariant() == EvaUnit01Entity.UNIT_01)
+                    && units.stream().anyMatch(
+                    unit -> unit.getUnitVariant() == EvaUnit01Entity.UNIT_02);
+            boolean battleBeacon = minecraft.level.getBlockState(
+                    this.origin.offset(0, 1, 80)).is(Blocks.BEACON);
+            boolean observation = minecraft.level.getBlockState(
+                    this.origin.offset(0, 38, 112)).is(Blocks.LODESTONE);
+            boolean foundation = minecraft.level.getBlockState(
+                    this.origin.offset(120, -4, 0)).is(Blocks.DEEPSLATE_BRICKS);
+            boolean valid = roads == 8 && towers == 13 && pylons == 6
+                    && units.size() == 3 && variants && battleBeacon && observation
+                    && foundation
+                    && this.unit00Fingerprint.valid()
+                    && this.unit01Fingerprint.valid()
+                    && this.unit02Fingerprint.valid();
+            ProjectSeele.LOGGER.info(
+                    "Tokyo-3 visual evidence: roads={}/8 towers={}/13 pylons={}/6 "
+                            + "units={} variants00/01/02={} battleBeacon={} "
+                            + "observation={} foundation={} valid={}",
+                    roads, towers, pylons, units.size(), variants,
+                    battleBeacon, observation, foundation, valid);
+            if (!valid)
+            {
+                ProjectSeele.LOGGER.error(
+                        "VISUAL TOKYO3 INVALID: city structure, three launch EVAs, "
+                                + "or required high-detail model fingerprints are incomplete");
+            }
+        }
+
+        private void position(Minecraft minecraft)
+        {
+            minecraft.options.setCameraType(CameraType.FIRST_PERSON);
+            minecraft.options.hideGui = true;
+            minecraft.options.cloudStatus().set(CloudStatus.OFF);
+            if (this.camera == null)
+            {
+                this.camera = EntityType.ARMOR_STAND.create(minecraft.level);
+                if (this.camera == null)
+                {
+                    throw new IllegalStateException(
+                            "Tokyo-3 visual camera creation failed");
+                }
+                this.camera.setInvisible(true);
+                this.camera.setNoGravity(true);
+            }
+            this.maintainCamera(minecraft);
+            minecraft.setCameraEntity(this.camera);
+        }
+
+        private void maintainCamera(Minecraft minecraft)
+        {
+            Vec3 base = Vec3.atLowerCornerOf(this.origin);
+            Vec3 target;
+            Vec3 cameraPos;
+            switch (VIEWS[this.view])
+            {
+                case "sortie_street" ->
+                {
+                    cameraPos = base.add(0.0D, 11.0D, 78.0D);
+                    target = base.add(0.0D, 12.0D, 6.0D);
+                }
+                case "power_grid" ->
+                {
+                    cameraPos = base.add(-138.0D, 44.0D, 35.0D);
+                    target = base.add(-88.0D, 18.0D, 0.0D);
+                }
+                case "battle_plaza" ->
+                {
+                    cameraPos = base.add(-22.0D, 52.0D, 128.0D);
+                    target = base.add(0.0D, 2.0D, 80.0D);
+                }
+                default ->
+                {
+                    cameraPos = base.add(0.0D, 70.0D, 145.0D);
+                    target = base.add(0.0D, 18.0D, 0.0D);
+                }
+            }
+            this.camera.setPos(cameraPos.x,
+                    cameraPos.y - this.camera.getEyeHeight(), cameraPos.z);
+            lookAt(this.camera, cameraPos, target);
+            this.camera.xo = this.camera.getX();
+            this.camera.yo = this.camera.getY();
+            this.camera.zo = this.camera.getZ();
+            this.camera.yRotO = this.camera.getYRot();
+            this.camera.xRotO = this.camera.getXRot();
+            minecraft.setCameraEntity(this.camera);
+        }
+
+        private void capture(Minecraft minecraft)
+        {
+            try
+            {
+                File batch = new File(minecraft.gameDirectory,
+                        "screenshots/projectseele_visual/" + CAPTURE_BATCH);
+                Files.createDirectories(batch.toPath());
+                String filename = "tokyo3_" + VIEWS[this.view] + ".png";
+                Screenshot.grab(minecraft.gameDirectory,
+                        "projectseele_visual/" + CAPTURE_BATCH + "/" + filename,
+                        minecraft.getMainRenderTarget(), message -> ProjectSeele.LOGGER.info(
+                                "Tokyo-3 visual capture {}/{}: {}",
+                                CAPTURE_BATCH, filename, message.getString()));
+            }
+            catch (Exception exception)
+            {
+                ProjectSeele.LOGGER.error(
+                        "Tokyo-3 visual screenshot failed", exception);
+            }
+        }
+
+        void restore(Minecraft minecraft)
+        {
+            minecraft.setCameraEntity(
+                    this.originalCamera != null ? this.originalCamera : minecraft.player);
+            minecraft.options.setCameraType(this.originalCameraType);
+            minecraft.options.hideGui = this.originalHideGui;
+            minecraft.options.cloudStatus().set(this.originalCloudStatus);
+        }
+
+        private static int towerHeight(int x, int z)
+        {
+            int gridX = x / 40;
+            int gridZ = z / 40;
+            return 22 + Math.floorMod(gridX * 31 + gridZ * 17, 6) * 4;
         }
     }
 
