@@ -31,16 +31,23 @@ director = read("src/main/java/com/projectseele/fx/StrategicExplosionDirector.ja
 network = read("src/main/java/com/projectseele/network/SeeleNetwork.java")
 control_packet = read("src/main/java/com/projectseele/network/ServerboundEvaControlPacket.java")
 config = read("src/main/java/com/projectseele/config/SeeleConfig.java")
+visual_capture = read(
+    "src/main/java/com/projectseele/client/visual/VisualCaptureManager.java")
+visual_automation = read(
+    "src/main/java/com/projectseele/visual/VisualLabAutomation.java")
 
 require("aim.bedrock_sign",
         'setRotX(-pitch)' in renderer and 'setRotX(pitch)' not in renderer,
         "visible Bedrock pitch negates Minecraft XRot")
 require("aim.shared_envelope",
         "player.setXRot(pitch)" in client
+        and "MIN_CANNON_AIM_PITCH" in client
         and "MAX_CANNON_AIM_PITCH" in client
+        and "MIN_CANNON_AIM_PITCH = -55.0F" in entity
+        and "MAX_CANNON_AIM_PITCH = 55.0F" in entity
         and entity.count("this.pilotAimDirection(pilot)") >= 2
         and "Vec3.directionFromRotation(pitch, pilot.getYRot())" in entity,
-        "camera, optical reticle and release-frame server ray share one elevation envelope")
+        "camera, optical reticle and release-frame server ray share one -55..+55 envelope")
 require("scope.optical_feed",
         'hideSubtree' in renderer and 'WEAPON_CANNON' in renderer
         and 'yashima_fire_control' in hud and hud.count("drawDiamond") >= 5,
@@ -57,12 +64,58 @@ require("rifle.networked_automatic",
         "ACTION_RIFLE_FIRE" in client and "ACTION_RIFLE_FIRE" in control_packet
         and "ClientboundRifleTracerPacket" in network,
         "held attack requests a server-authoritative automatic shot")
+require("rifle.triggered_recoil",
+        'this.triggerAnim("strike", this.isPilotProne()' in rifle_body
+        and '"prone_rifle_fire" : "rifle_fire"' in rifle_body
+        and '.triggerableAnim("rifle_fire", ANIM_RIFLE_FIRE)' in entity
+        and '.triggerableAnim("prone_rifle_fire", ANIM_PRONE_RIFLE_FIRE)' in entity,
+        "every accepted automatic shot triggers a stance-preserving recoil clip")
+require("attacks.trigger_controller",
+        "isPlayingTriggeredAnimation()" in entity
+        and "? PlayState.CONTINUE : PlayState.STOP" in entity
+        and ".receiveTriggeredAnimations()" in entity,
+        "triggered melee/knife/lance/fire clips survive the controller predicate")
+live_names = ("live_melee", "live_knife", "live_knife_heavy",
+              "live_lance", "live_rifle", "live_jump")
+require("attacks.live_visual_matrix",
+        all(name in visual_automation and name in visual_capture
+            for name in live_names)
+        and "ServerboundEvaControlPacket(action)" in visual_capture
+        and "LIVE_ATTACK_VIEWS" in visual_capture,
+        "full Visual Lab runs real player input in external and first-person views")
 require("rifle.visual_muzzle_socket",
         "rifleMuzzlePosition(dir)" in rifle_body
-        and "RIFLE_STANDING_MUZZLE_FORWARD = 17.7574D" in entity
+        and "RIFLE_STANDING_MUZZLE_FORWARD = 18.3308D" in entity
         and "RIFLE_PRONE_MUZZLE_FORWARD = 19.9715D" in entity
         and "pitchedUp.scale(muzzleUp)" in entity,
         "tracer and sound originate at the measured standing/prone visible muzzle")
+require("cannon.visual_muzzle_socket",
+        "cannonMuzzlePosition(dir)" in entity
+        and "CANNON_STANDING_MUZZLE_FORWARD = 22.4417D" in entity
+        and "CANNON_PRONE_MUZZLE_FORWARD = 23.9289D" in entity
+        and "new ClientboundCannonBeamPacket(muzzle.x, muzzle.y, muzzle.z" in entity,
+        "positron beam originates at the measured standing/prone barrel cap")
+require("melee.humanoid_claw",
+        'claw_strike("r")' in read("tools/make_tiger_unit01_pack.py")
+        and 'claw_strike("l")' in read("tools/make_tiger_unit01_pack.py")
+        and 'for attack_name in ("smash", "stomp")' in read(
+            "tools/make_tiger_unit01_pack.py"),
+        "bare attacks retain animated claw fingers instead of a static golem fist")
+require("knife.single_hand_heavy",
+        '"knife_heavy"' in entity
+        and '"prone_knife_heavy"' in entity
+        and '"crouch_knife_heavy"' in entity
+        and "knife ?" in entity,
+        "knife RMB selects a longer stance-safe one-handed reverse-grip slash")
+require("jump.takeoff",
+        "JUMP_VELOCITY = 5.40D" in entity
+        and 'this.triggerAnim("strike", "takeoff")' in entity
+        and '.triggerableAnim("takeoff", ANIM_TAKEOFF)' in entity,
+        "jump has a dedicated takeoff clip and the reviewed giant-scale impulse")
+require("unit02.longinus",
+        "return LONGINUS_MESH;" in renderer
+        and "return LONGINUS_TEXTURE;" in renderer,
+        "Unit-02 temporarily uses the common reviewed Longinus polearm")
 
 angel_files = [
     "RamielEntity.java", "SachielEntity.java", "ShamshelEntity.java",

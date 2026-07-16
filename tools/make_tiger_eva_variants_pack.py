@@ -230,7 +230,7 @@ def add_visual_poses(animation):
         "visual_idle": ("idle", 0.0),
         "visual_walk_contact": ("walk", 0.0),
         "visual_run_contact": ("run", 0.0),
-        "visual_jump": ("jump", 0.0),
+        "visual_jump": ("takeoff", 0.22),
         "visual_fall": ("fall", 0.0),
         "visual_crouch_walk": ("crouch_walk", 0.0),
         "visual_crawl": ("crawl", 0.0),
@@ -248,8 +248,12 @@ def add_visual_poses(animation):
         source_key = f"animation.eva_unit01.{source}"
         target_key = f"animation.eva_unit01.{target}"
         if source_key in animations:
-            animations[target_key] = tiger.static_pose(
-                animations[source_key], time)
+            # sync_shared_rig_animations has already copied every canonical
+            # Unit-01 pose.  Only synthesize a legacy/missing preview here;
+            # overwriting an existing visual clip makes Unit-00/02 silently
+            # diverge whenever Unit-01 review times change.
+            animations.setdefault(target_key, tiger.static_pose(
+                animations[source_key], time))
     return animation
 
 

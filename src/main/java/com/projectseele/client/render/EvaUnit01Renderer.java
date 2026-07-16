@@ -181,14 +181,12 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
                     hideSubtree(bone);
                 }
             });
-            // A positron cannon is longer than the EVA's entire upper body.
-            // Looking through the physical head socket therefore puts its
-            // receiver, both forearms and the barrel between the camera and
-            // the target. In the entry plug the pilot uses the optical fire-
-            // control feed instead: stow the shared aim subtree only for this
-            // local view. Third person still renders the very same animated
-            // bones, and EvaHud supplies the sight picture while RMB is held.
-            if (animatable.getWeapon() == EvaUnit01Entity.WEAPON_CANNON
+            // The long weapons only leave the physical camera feed while an
+            // optical sight is actually active. Keeping the aim subtree for
+            // the clean first-person pass lets visual regression captures
+            // inspect the same arms and weapon that third person renders;
+            // holding RMB switches to the entry-plug fire-control picture.
+            if (ClientForgeEvents.isCannonScopeActive(animatable)
                     || ClientForgeEvents.isRifleSightActive(animatable))
             {
                 model.getBone("aim_pitch").ifPresent(EvaUnit01Renderer::hideSubtree);
@@ -365,14 +363,16 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
 
     public static ResourceLocation lanceMeshResource(EvaUnit01Entity entity)
     {
-        return entity.getUnitVariant() == EvaUnit01Entity.UNIT_02
-                ? UNIT02_SPECIAL_WEAPON_MESH : LONGINUS_MESH;
+        // Until Unit-02's dedicated weapon has its own reviewed stance, all
+        // three pilotable EVAs use the same Longinus geometry and two-hand
+        // spear contract.  The old rebuild sword occupied this socket like a
+        // chest-mounted blade instead of a polearm.
+        return LONGINUS_MESH;
     }
 
     private static ResourceLocation lanceTextureResource(EvaUnit01Entity entity)
     {
-        return entity.getUnitVariant() == EvaUnit01Entity.UNIT_02
-                ? UNIT02_WEAPONS_TEXTURE : LONGINUS_TEXTURE;
+        return LONGINUS_TEXTURE;
     }
 
     public static LocalVisualAssetFingerprint.Fingerprint visualFingerprintForVariant(int variant)

@@ -28,7 +28,9 @@ public final class VisualLabAutomation
             "lance_ready", "lance_windup", "lance_contact", "lance_recovery", "cannon",
             "crouch_knife_contact", "prone_knife_contact",
             "crouch_lance_contact", "prone_lance_contact", "n2_ready",
-            "rifle_walk_contact", "crouch_rifle_contact", "prone_rifle", "rifle"
+            "rifle_walk_contact", "crouch_rifle_contact", "prone_rifle", "rifle",
+            "live_melee", "live_knife", "live_knife_heavy", "live_lance",
+            "live_rifle", "live_jump"
     };
     private static final String[] ALL_MASS_POSES = {
             "idle", "move", "attack", "revive", "ritual"
@@ -44,6 +46,7 @@ public final class VisualLabAutomation
     private static final String[] MASS_POSES = REQUESTED_POSE.equals("all")
             ? ALL_MASS_POSES : REQUESTED_POSE.split(",");
     private static UUID playerId;
+    private static UUID subjectId;
     private static int ticks;
     private static int nextPose;
 
@@ -55,6 +58,7 @@ public final class VisualLabAutomation
         if (ENABLED && event.getEntity() instanceof ServerPlayer player)
         {
             playerId = player.getUUID();
+            subjectId = null;
             ticks = 0;
             nextPose = 0;
             ProjectSeele.LOGGER.info("Visual Lab automation armed for {}", player.getGameProfile().getName());
@@ -67,6 +71,7 @@ public final class VisualLabAutomation
         if (playerId != null && playerId.equals(event.getEntity().getUUID()))
         {
             playerId = null;
+            subjectId = null;
         }
     }
 
@@ -96,6 +101,14 @@ public final class VisualLabAutomation
                 {
                     VisualLabCommands.setup(player.createCommandSourceStack(),
                             IMPACT_CAPTURE ? "unit01" : CAPTURE_UNIT);
+                    if (!MASS_CAPTURE)
+                    {
+                        String expectedUnit = IMPACT_CAPTURE ? "unit01" : CAPTURE_UNIT;
+                        subjectId = VisualLabCommands.findUnitId(player, expectedUnit);
+                        ProjectSeele.LOGGER.info(
+                                "Visual Lab pinned {} subject {} for this matrix",
+                                expectedUnit, subjectId);
+                    }
                 }
             }
             if (SILO_CAPTURE)
@@ -160,8 +173,14 @@ public final class VisualLabAutomation
             if (ticks >= 100 && nextPose < POSES.length && ticks == 100 + nextPose * 140)
             {
                 String pose = POSES[nextPose++];
-                VisualLabCommands.pose(player.createCommandSourceStack(), pose);
-                VisualLabCommands.capture(player.createCommandSourceStack());
+                if (subjectId == null)
+                {
+                    throw new IllegalStateException("Visual Lab EVA subject was not pinned");
+                }
+                VisualLabCommands.pose(player.createCommandSourceStack(), pose,
+                        subjectId, CAPTURE_UNIT);
+                VisualLabCommands.capture(player.createCommandSourceStack(),
+                        subjectId, CAPTURE_UNIT);
                 ProjectSeele.LOGGER.info("Visual Lab queued pose {} ({}/{})", pose, nextPose, POSES.length);
             }
             if (ticks == 100 + POSES.length * 140)

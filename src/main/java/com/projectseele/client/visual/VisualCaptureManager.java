@@ -14,6 +14,8 @@ import com.projectseele.client.render.LocalVisualAssetFingerprint;
 import com.projectseele.entity.EvaUnit01Entity;
 import com.projectseele.entity.MassProductionEvaEntity;
 import com.projectseele.fx.TreeOfLifeLayout;
+import com.projectseele.network.SeeleNetwork;
+import com.projectseele.network.ServerboundEvaControlPacket;
 import net.minecraft.client.CameraType;
 import net.minecraft.client.CloudStatus;
 import net.minecraft.client.Minecraft;
@@ -49,6 +51,12 @@ public final class VisualCaptureManager
     private static final String[] MASS_VIEWS = {
             "front", "side", "back", "front_close", "side_close",
             "side_opposite_close", "face_close"
+    };
+    private static final String[] LIVE_ATTACK_VIEWS = {
+            "front_close", "side_close", "first_person_clean"
+    };
+    private static final String[] LIVE_JUMP_VIEWS = {
+            "side_close"
     };
     private static Session session;
     private static ImpactSession impactSession;
@@ -720,6 +728,8 @@ public final class VisualCaptureManager
         private int settleTicks;
         private boolean positioned;
         private boolean poseAudited;
+        private boolean liveTriggerSent;
+        private double liveActionStartY = Double.NaN;
         private float referenceYaw = Float.NaN;
 
         Session(int entityId, int pose, Minecraft minecraft)
@@ -734,9 +744,11 @@ public final class VisualCaptureManager
             this.originalPitch = minecraft.player.getXRot();
             Entity visualEntity = minecraft.level == null ? null : minecraft.level.getEntity(entityId);
             this.massSubject = visualEntity instanceof MassProductionEvaEntity;
-            this.views = this.massSubject ? MASS_VIEWS : VIEWS;
             this.poseName = this.massSubject
                     ? MassProductionEvaEntity.visualPoseName(pose) : poseName(pose);
+            this.views = this.massSubject ? MASS_VIEWS
+                    : this.poseName.equals("live_jump") ? LIVE_JUMP_VIEWS
+                    : this.isLiveAttack() ? LIVE_ATTACK_VIEWS : VIEWS;
             int variant = visualEntity instanceof EvaUnit01Entity eva
                     ? eva.getUnitVariant() : EvaUnit01Entity.UNIT_01;
             this.unitName = this.massSubject ? "mass" : switch (variant)
@@ -839,15 +851,46 @@ public final class VisualCaptureManager
                 this.position(minecraft, entity);
                 this.positioned = true;
                 this.settleTicks = 8;
+                this.liveTriggerSent = false;
                 return true;
             }
             if (entity instanceof EvaUnit01Entity unit)
             {
                 this.maintainFirstPerson(minecraft, unit);
             }
+            if (this.isLiveAttack() && !this.liveTriggerSent)
+            {
+                if (this.settleTicks-- > 0)
+                {
+                    return true;
+                }
+                int action = this.liveAttackAction();
+                this.liveActionStartY = entity.getY();
+                SeeleNetwork.CHANNEL.sendToServer(new ServerboundEvaControlPacket(action));
+                this.liveTriggerSent = true;
+                this.settleTicks = this.liveAttackContactDelay();
+                ProjectSeele.LOGGER.info(
+                        "Visual live trigger {} action {} for view {}",
+                        this.poseName, action, this.views[this.view]);
+                return true;
+            }
+            if (this.poseName.equals("live_jump") && this.liveTriggerSent
+                    && this.camera != null)
+            {
+                // Track the real airframe instead of leaving the fixed lab
+                // camera sixty blocks below it during the ascent sample.
+                this.position(minecraft, entity);
+            }
             if (this.settleTicks-- > 0)
             {
                 return true;
+            }
+            if (this.poseName.equals("live_jump") && !Double.isNaN(this.liveActionStartY))
+            {
+                ProjectSeele.LOGGER.info(
+                        "Visual live jump sample: deltaY={} velocityY={}",
+                        String.format("%.3f", entity.getY() - this.liveActionStartY),
+                        String.format("%.3f", entity.getDeltaMovement().y));
             }
             if (this.massSubject && !this.poseAudited)
             {
@@ -876,10 +919,11 @@ public final class VisualCaptureManager
         private void position(Minecraft minecraft, Entity subject)
         {
             String name = this.views[this.view];
-            // The cockpit rifle frame is an end-to-end proof of the RMB
+            // The cockpit weapon frame is an end-to-end proof of the RMB
             // optical feed. Every other frame keeps the key released so the
             // clean first-person views still inspect the physical world mesh.
-            minecraft.options.keyUse.setDown(this.poseName.contains("rifle")
+            minecraft.options.keyUse.setDown((this.poseName.contains("rifle")
+                            || this.poseName.contains("cannon"))
                     && name.equals("first_person_cockpit"));
             minecraft.options.setCameraType(CameraType.FIRST_PERSON);
             if (name.startsWith("first_person"))
@@ -1085,7 +1129,46 @@ public final class VisualCaptureManager
                 case EvaUnit01Entity.VISUAL_RIFLE_WALK_CONTACT -> "rifle_walk_contact";
                 case EvaUnit01Entity.VISUAL_CROUCH_RIFLE_CONTACT -> "crouch_rifle_contact";
                 case EvaUnit01Entity.VISUAL_PRONE_RIFLE -> "prone_rifle";
+                case EvaUnit01Entity.VISUAL_LIVE_MELEE -> "live_melee";
+                case EvaUnit01Entity.VISUAL_LIVE_KNIFE -> "live_knife";
+                case EvaUnit01Entity.VISUAL_LIVE_LANCE -> "live_lance";
+                case EvaUnit01Entity.VISUAL_LIVE_RIFLE -> "live_rifle";
+                case EvaUnit01Entity.VISUAL_LIVE_KNIFE_HEAVY -> "live_knife_heavy";
+                case EvaUnit01Entity.VISUAL_LIVE_JUMP -> "live_jump";
                 default -> "normal";
+            };
+        }
+
+        private boolean isLiveAttack()
+        {
+            return this.poseName.startsWith("live_");
+        }
+
+        private int liveAttackAction()
+        {
+            return switch (this.poseName)
+            {
+                case "live_rifle" -> ServerboundEvaControlPacket.ACTION_RIFLE_FIRE;
+                case "live_knife_heavy" -> ServerboundEvaControlPacket.ACTION_SMASH;
+                case "live_jump" -> ServerboundEvaControlPacket.ACTION_JUMP;
+                default -> ServerboundEvaControlPacket.ACTION_MELEE;
+            };
+        }
+
+        private int liveAttackContactDelay()
+        {
+            return switch (this.poseName)
+            {
+                case "live_lance" -> 8;
+                case "live_knife" -> 9;
+                case "live_knife_heavy" -> 11;
+                case "live_melee" -> 4;
+                case "live_rifle" -> 1;
+                // Screenshot compression can stall the integrated server for
+                // forty ticks.  Wait long enough to observe synchronized
+                // server motion rather than photographing the send frame.
+                case "live_jump" -> 40;
+                default -> 1;
             };
         }
 
@@ -1101,10 +1184,8 @@ public final class VisualCaptureManager
             if (requested.equals("all"))
             {
                 // Keep this synchronized with VisualLabAutomation.ALL_POSES.
-                // Rifle was appended after cannon; retaining cannon here set
-                // shutdown, then the rifle session reset it to -1 and left an
-                // unattended client running forever after all screenshots.
-                return pose.equals(unitName.equals("mass") ? "ritual" : "rifle");
+                // The dynamic jump is the final end-to-end input frame.
+                return pose.equals(unitName.equals("mass") ? "ritual" : "live_jump");
             }
             String[] poses = requested.split(",");
             if (poses.length == 0)

@@ -551,14 +551,16 @@ def build_eud_lance(output, pivots):
         texture = Image.open(io.BytesIO(archive.read(EUD_LANCE_TEXTURE))).convert("RGBA")
 
     # The source is a vertical hand item: shaft tail y=-16, fork tip y=32.
-    # Put the front-hand socket at y=-6 so roughly 48 model pixels remain
-    # behind it for the rear hand.  The former y=-12 socket left only 17px of
-    # haft and forced both EVA hands to overlap.  Flip +Y into rig-local -Y
-    # (entity-forward). Length and cross-section are scaled independently:
+    # The lance socket belongs to the rear/right hand, not the forward guide
+    # hand. Put that grip at y=-15.5: only 1.8 model pixels remain behind the
+    # palm while 171.0 extend toward the target. The old y=-6 split left 36 pixels
+    # behind the hand and visibly drove the butt into the EVA's chest in first
+    # person. Flip +Y into rig-local -Y (entity-forward). Length and
+    # cross-section are scaled independently:
     # scaling the hand-item model uniformly made its fork wider than Unit-01's
     # torso and pushed the decorative coils down around the pilot's feet.
     centre_xz = (8.0, 8.0)
-    grip_y = -6.0
+    grip_y = -15.5
     length_scale = 3.6
     cross_scale = 1.4
     values = []

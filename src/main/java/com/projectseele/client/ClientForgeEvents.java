@@ -212,7 +212,7 @@ public final class ClientForgeEvents
                 // mechanical elevation envelope. Without this, the optical
                 // crosshair can look beyond the barrel's clamped hit ray.
                 float pitch = Mth.clamp(player.getXRot(),
-                        -EvaUnit01Entity.MAX_CANNON_AIM_PITCH,
+                        EvaUnit01Entity.MIN_CANNON_AIM_PITCH,
                         EvaUnit01Entity.MAX_CANNON_AIM_PITCH);
                 player.setXRot(pitch);
                 player.xRotO = pitch;

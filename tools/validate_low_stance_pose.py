@@ -55,6 +55,24 @@ def render(assets: Path, output: Path, label: str, animation: str,
     return json.loads(metrics_path.read_text(encoding="utf-8"))
 
 
+def render_first_person(assets: Path, output: Path, label: str,
+                        animation: str, time: float) -> dict:
+    target = output / f"{label}_first_person"
+    command = [
+        sys.executable, str(RENDERER),
+        str(assets / "mesh/eva_unit01.mesh.json"),
+        str(assets / "textures/entity/eva_unit01.png"), str(target),
+        "--geo", str(assets / "geo/eva_unit01.geo.json"),
+        "--animation-json", str(assets / "animations/eva_unit01.animation.json"),
+        "--animation", animation, "--time", str(time),
+        "--first-person-stance", "crouch",
+        "--first-person-views", "forward", "--no-skeleton",
+    ]
+    subprocess.run(command, cwd=REPO, check=True)
+    metrics_path = next(target.glob("*_metrics.json"))
+    return json.loads(metrics_path.read_text(encoding="utf-8"))
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--assets", type=Path, default=DEFAULT_ASSETS)
@@ -71,6 +89,16 @@ def main() -> int:
         samples[f"crouch_walk_{label}"] = render(
             args.assets, args.output, f"crouch_walk_{label}",
             "crouch_walk", time)
+    first_person_samples = {
+        "crouch": render_first_person(
+            args.assets, args.output, "crouch", "crouch", 0.0),
+        "crouch_walk_contact_a": render_first_person(
+            args.assets, args.output, "crouch_walk_contact_a",
+            "crouch_walk", 0.0),
+        "crouch_walk_contact_b": render_first_person(
+            args.assets, args.output, "crouch_walk_contact_b",
+            "crouch_walk", 0.5),
+    }
 
     static = samples["crouch"]
     static_pelvis = static["joint_world"]["torso_lower"][1]
@@ -88,6 +116,16 @@ def main() -> int:
     checks["crouch_walk_stride_swaps"] = (
         contact_a["foot_l"][2] <= contact_a["foot_r"][2] - 20.0
         and contact_b["foot_r"][2] <= contact_b["foot_l"][2] - 20.0)
+    for label, sample in first_person_samples.items():
+        view = sample["first_person"]["forward"]
+        left = view["left_arm"]["horizontal_centre"]
+        right = view["right_arm"]["horizontal_centre"]
+        checks[f"{label}_first_person_both_arms_visible"] = (
+            view["both_arm_regions_visible"])
+        checks[f"{label}_first_person_arms_keep_own_sides"] = (
+            view["arms_read_on_opposite_sides"]
+            and left is not None and right is not None
+            and left <= -0.30 and right >= 0.30)
     for label in ("passing_a", "passing_b"):
         bounds = samples[f"crouch_walk_{label}"]["bone_bounds"]
         lifted = "foot_l" if label == "passing_a" else "foot_r"
@@ -149,7 +187,9 @@ def main() -> int:
     checks["strike_controller_releases_pose"] = (
         'new AnimationController<>(this, "strike", 3,' in source
         and "state.getController().stop()" in source
-        and "return PlayState.STOP" in source)
+        and "isPlayingTriggeredAnimation()" in source
+        and "? PlayState.CONTINUE : PlayState.STOP" in source
+        and ".receiveTriggeredAnimations()" in source)
     checks["locomotion_speed_tracks_chassis"] = (
         "setAnimationSpeedHandler" in source
         and "blocksPerSecond * WALK_CYCLE_SECONDS / WALK_STRIDE_BLOCKS" in source
@@ -163,6 +203,7 @@ def main() -> int:
             "low attacks never own lower-body channels or stand the EVA up"),
         "checks": checks,
         "samples": samples,
+        "first_person_samples": first_person_samples,
         "passed": all(checks.values()),
     }
     args.output.mkdir(parents=True, exist_ok=True)

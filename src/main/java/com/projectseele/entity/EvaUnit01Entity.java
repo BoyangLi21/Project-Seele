@@ -106,6 +106,12 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     public static final int VISUAL_RIFLE_WALK_CONTACT = 26;
     public static final int VISUAL_CROUCH_RIFLE_CONTACT = 27;
     public static final int VISUAL_PRONE_RIFLE = 28;
+    public static final int VISUAL_LIVE_MELEE = 29;
+    public static final int VISUAL_LIVE_KNIFE = 30;
+    public static final int VISUAL_LIVE_LANCE = 31;
+    public static final int VISUAL_LIVE_RIFLE = 32;
+    public static final int VISUAL_LIVE_KNIFE_HEAVY = 33;
+    public static final int VISUAL_LIVE_JUMP = 34;
     public static final int LAUNCH_IDLE = 0;
     public static final int LAUNCH_LOCKED = 1;
     public static final int LAUNCH_ASCENT = 2;
@@ -143,7 +149,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     private static final float CROUCH_SPEED = 0.18F;
     private static final float PRONE_SPEED = 0.10F;
     private static final float SPRINT_SPEED = 0.62F;
-    private static final double JUMP_VELOCITY = 2.60D;
+    private static final double JUMP_VELOCITY = 5.40D;
     private static final int JUMP_COOLDOWN_TICKS = 10;
     private static final int LAUNCH_ASCENT_TICKS = 34;
     private static final int LAUNCH_CLEAR_TICKS = 18;
@@ -164,21 +170,37 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     private static final double ENTRY_PLUG_REAR_OFFSET = 1.25D;
     private static final int LAUNCH_PASSENGER_RESTORE_GRACE_TICKS = 40;
     private static final int NO_LAUNCH_CARRIER = Integer.MIN_VALUE;
-    /** Mechanical elevation limit of the shared cannon/body aim rig. */
-    public static final float MAX_CANNON_AIM_PITCH = 20.0F;
+    /** Mechanical elevation envelope of the shared cannon/body aim rig. */
+    public static final float MIN_CANNON_AIM_PITCH = -55.0F;
+    public static final float MAX_CANNON_AIM_PITCH = 55.0F;
     // Muzzle sockets measured from the reviewed 2.5x Tiger rig and the
     // locally installed TV Pallet Rifle. The ray still starts at the pilot's
     // eye for fair aiming; tracers and sound start at the visible muzzle.
     private static final double RIFLE_STANDING_PIVOT_HEIGHT = 24.2201D;
     private static final double RIFLE_STANDING_PIVOT_FORWARD = 0.0D;
-    private static final double RIFLE_STANDING_MUZZLE_FORWARD = 17.7574D;
-    private static final double RIFLE_STANDING_MUZZLE_UP = 0.2105D;
-    private static final double RIFLE_STANDING_MUZZLE_RIGHT = 1.3658D;
+    private static final double RIFLE_STANDING_MUZZLE_FORWARD = 18.3308D;
+    private static final double RIFLE_STANDING_MUZZLE_UP = 0.6153D;
+    private static final double RIFLE_STANDING_MUZZLE_RIGHT = 1.2752D;
     private static final double RIFLE_PRONE_PIVOT_HEIGHT = 3.9523D;
     private static final double RIFLE_PRONE_PIVOT_FORWARD = 9.9317D;
     private static final double RIFLE_PRONE_MUZZLE_FORWARD = 19.9715D;
     private static final double RIFLE_PRONE_MUZZLE_UP = -0.4405D;
     private static final double RIFLE_PRONE_MUZZLE_RIGHT = 0.7458D;
+    // Far-cap coordinates measured from the installed Kantrophe positron
+    // cannon after the final two-hand pose. The old 12.5-block approximation
+    // began the beam inside the receiver, visibly behind the barrel.
+    private static final double CANNON_STANDING_PIVOT_HEIGHT = 24.2201D;
+    private static final double CANNON_STANDING_PIVOT_FORWARD = 0.0D;
+    private static final double CANNON_STANDING_MUZZLE_FORWARD = 22.4417D;
+    private static final double CANNON_STANDING_MUZZLE_UP = 0.5960D;
+    private static final double CANNON_STANDING_MUZZLE_RIGHT = 1.2263D;
+    private static final double CANNON_PRONE_PIVOT_HEIGHT = 3.9523D;
+    private static final double CANNON_PRONE_PIVOT_FORWARD = 9.9317D;
+    private static final double CANNON_PRONE_MUZZLE_FORWARD = 23.9289D;
+    private static final double CANNON_PRONE_MUZZLE_UP = -0.3676D;
+    private static final double CANNON_PRONE_MUZZLE_RIGHT = 0.6284D;
+    /** Starts the visible tracer just beyond the barrel cap instead of inside it. */
+    private static final double MUZZLE_SURFACE_CLEARANCE = 0.25D;
     // Full-cycle travel measured from the real animated foot contacts after
     // the 2.5x model scale. Gecko's default 1x playback made the limbs cycle
     // several times faster than the chassis actually crossed the ground.
@@ -188,6 +210,11 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     private static final double CRAWL_STRIDE_BLOCKS = 5.0046D;
     private static final double WALK_CYCLE_SECONDS = 1.0D;
     private static final double RUN_CYCLE_SECONDS = 0.62D;
+    // The mathematically exact contact stride reads like slow motion on a
+    // thirty-block EVA. Preserve the foot-authored cycle while giving the
+    // sprint a deliberate giant-humanoid cadence rather than a walking beat.
+    private static final double WALK_CADENCE_GAIN = 1.45D;
+    private static final double RUN_CADENCE_GAIN = 2.35D;
     private static final double CROUCH_CYCLE_SECONDS = 1.0D;
     private static final double CRAWL_CYCLE_SECONDS = 1.4D;
 
@@ -220,6 +247,8 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             SynchedEntityData.defineId(EvaUnit01Entity.class, EntityDataSerializers.INT);
     private static final EntityDataAccessor<Integer> DATA_SMASH_SEQUENCE =
             SynchedEntityData.defineId(EvaUnit01Entity.class, EntityDataSerializers.INT);
+    private static final EntityDataAccessor<Integer> DATA_JUMP_SEQUENCE =
+            SynchedEntityData.defineId(EvaUnit01Entity.class, EntityDataSerializers.INT);
     private static final EntityDataAccessor<Integer> DATA_ACTIVATION_TICKS =
             SynchedEntityData.defineId(EvaUnit01Entity.class, EntityDataSerializers.INT);
     private static final EntityDataAccessor<Boolean> DATA_ENTRY_PLUG_INSERTED =
@@ -236,12 +265,14 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     private static final RawAnimation ANIM_RUN = RawAnimation.begin().thenLoop("animation.eva_unit01.run");
     private static final RawAnimation ANIM_CROUCH = RawAnimation.begin().thenLoop("animation.eva_unit01.crouch");
     private static final RawAnimation ANIM_CROUCH_WALK = RawAnimation.begin().thenLoop("animation.eva_unit01.crouch_walk");
+    private static final RawAnimation ANIM_TAKEOFF = RawAnimation.begin().thenPlay("animation.eva_unit01.takeoff");
     private static final RawAnimation ANIM_JUMP = RawAnimation.begin().thenLoop("animation.eva_unit01.jump");
     private static final RawAnimation ANIM_FALL = RawAnimation.begin().thenLoop("animation.eva_unit01.fall");
     private static final RawAnimation ANIM_PRONE = RawAnimation.begin().thenLoop("animation.eva_unit01.prone");
     private static final RawAnimation ANIM_CRUCIFIED = RawAnimation.begin().thenLoop("animation.eva_unit01.crucified");
     private static final RawAnimation ANIM_CRAWL = RawAnimation.begin().thenLoop("animation.eva_unit01.crawl");
     private static final RawAnimation ANIM_AIM = RawAnimation.begin().thenLoop("animation.eva_unit01.aim");
+    private static final RawAnimation ANIM_RIFLE_AIM = RawAnimation.begin().thenLoop("animation.eva_unit01.rifle_aim");
     private static final RawAnimation ANIM_PRONE_AIM = RawAnimation.begin().thenLoop("animation.eva_unit01.prone_aim");
     private static final RawAnimation ANIM_N2_READY = RawAnimation.begin().thenLoop("animation.eva_unit01.n2_ready");
     private static final RawAnimation ANIM_LANCE_READY = RawAnimation.begin().thenLoop("animation.eva_unit01.lance_ready");
@@ -252,15 +283,18 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     private static final RawAnimation ANIM_KNIFE_READY = RawAnimation.begin().thenLoop("animation.eva_unit01.knife_ready");
     private static final RawAnimation ANIM_KNIFE = RawAnimation.begin().thenPlay("animation.eva_unit01.knife");
     private static final RawAnimation ANIM_KNIFE_LEFT = RawAnimation.begin().thenPlay("animation.eva_unit01.knife_left");
+    private static final RawAnimation ANIM_KNIFE_HEAVY = RawAnimation.begin().thenPlay("animation.eva_unit01.knife_heavy");
     private static final RawAnimation ANIM_LANCE_THRUST = RawAnimation.begin().thenPlay("animation.eva_unit01.lance_thrust");
     private static final RawAnimation ANIM_PRONE_MELEE = RawAnimation.begin().thenPlay("animation.eva_unit01.prone_melee");
     private static final RawAnimation ANIM_PRONE_MELEE_LEFT = RawAnimation.begin().thenPlay("animation.eva_unit01.prone_melee_left");
     private static final RawAnimation ANIM_PRONE_KNIFE = RawAnimation.begin().thenPlay("animation.eva_unit01.prone_knife");
+    private static final RawAnimation ANIM_PRONE_KNIFE_HEAVY = RawAnimation.begin().thenPlay("animation.eva_unit01.prone_knife_heavy");
     private static final RawAnimation ANIM_PRONE_LANCE_THRUST = RawAnimation.begin().thenPlay("animation.eva_unit01.prone_lance_thrust");
     private static final RawAnimation ANIM_PRONE_SMASH = RawAnimation.begin().thenPlay("animation.eva_unit01.prone_smash");
     private static final RawAnimation ANIM_CROUCH_MELEE = RawAnimation.begin().thenPlay("animation.eva_unit01.crouch_melee");
     private static final RawAnimation ANIM_CROUCH_MELEE_LEFT = RawAnimation.begin().thenPlay("animation.eva_unit01.crouch_melee_left");
     private static final RawAnimation ANIM_CROUCH_KNIFE = RawAnimation.begin().thenPlay("animation.eva_unit01.crouch_knife");
+    private static final RawAnimation ANIM_CROUCH_KNIFE_HEAVY = RawAnimation.begin().thenPlay("animation.eva_unit01.crouch_knife_heavy");
     private static final RawAnimation ANIM_CROUCH_LANCE_THRUST = RawAnimation.begin().thenPlay("animation.eva_unit01.crouch_lance_thrust");
     private static final RawAnimation ANIM_CROUCH_SMASH = RawAnimation.begin().thenPlay("animation.eva_unit01.crouch_smash");
     private static final RawAnimation ANIM_PRONE_KNIFE_READY = RawAnimation.begin().thenLoop("animation.eva_unit01.prone_knife_ready");
@@ -268,6 +302,8 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     private static final RawAnimation ANIM_SMASH = RawAnimation.begin().thenPlay("animation.eva_unit01.smash");
     private static final RawAnimation ANIM_CANNON_FIRE = RawAnimation.begin().thenPlay("animation.eva_unit01.cannon_fire");
     private static final RawAnimation ANIM_PRONE_CANNON_FIRE = RawAnimation.begin().thenPlay("animation.eva_unit01.prone_cannon_fire");
+    private static final RawAnimation ANIM_RIFLE_FIRE = RawAnimation.begin().thenPlay("animation.eva_unit01.rifle_fire");
+    private static final RawAnimation ANIM_PRONE_RIFLE_FIRE = RawAnimation.begin().thenPlay("animation.eva_unit01.prone_rifle_fire");
     private static final RawAnimation ANIM_LAND = RawAnimation.begin().thenPlay("animation.eva_unit01.land");
     private static final RawAnimation ANIM_STOMP = RawAnimation.begin().thenPlay("animation.eva_unit01.stomp");
     private static final RawAnimation ANIM_ACTIVATION = RawAnimation.begin().thenPlay("animation.eva_unit01.activation");
@@ -283,10 +319,12 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     private static final RawAnimation ANIM_VISUAL_KNIFE_WINDUP = RawAnimation.begin().thenLoop("animation.eva_unit01.visual_knife_windup");
     private static final RawAnimation ANIM_VISUAL_KNIFE_CONTACT = RawAnimation.begin().thenLoop("animation.eva_unit01.visual_knife_contact");
     private static final RawAnimation ANIM_VISUAL_KNIFE_RECOVERY = RawAnimation.begin().thenLoop("animation.eva_unit01.visual_knife_recovery");
+    private static final RawAnimation ANIM_VISUAL_KNIFE_HEAVY_CONTACT = RawAnimation.begin().thenLoop("animation.eva_unit01.visual_knife_heavy_contact");
     private static final RawAnimation ANIM_VISUAL_LANCE_WINDUP = RawAnimation.begin().thenLoop("animation.eva_unit01.visual_lance_windup");
     private static final RawAnimation ANIM_VISUAL_LANCE_CONTACT = RawAnimation.begin().thenLoop("animation.eva_unit01.visual_lance_contact");
     private static final RawAnimation ANIM_VISUAL_LANCE_RECOVERY = RawAnimation.begin().thenLoop("animation.eva_unit01.visual_lance_recovery");
     private static final RawAnimation ANIM_VISUAL_CANNON = RawAnimation.begin().thenLoop("animation.eva_unit01.visual_cannon");
+    private static final RawAnimation ANIM_VISUAL_RIFLE = RawAnimation.begin().thenLoop("animation.eva_unit01.visual_rifle");
     private static final RawAnimation ANIM_VISUAL_CROUCH_KNIFE_CONTACT = RawAnimation.begin().thenLoop("animation.eva_unit01.visual_crouch_knife_contact");
     private static final RawAnimation ANIM_VISUAL_PRONE_KNIFE_CONTACT = RawAnimation.begin().thenLoop("animation.eva_unit01.visual_prone_knife_contact");
     private static final RawAnimation ANIM_VISUAL_CROUCH_LANCE_CONTACT = RawAnimation.begin().thenLoop("animation.eva_unit01.visual_crouch_lance_contact");
@@ -314,6 +352,8 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     private boolean clientMeleeLeft;
     private int clientSmashSequence;
     private int clientSmashStartTick = -1000;
+    private int clientJumpSequence;
+    private boolean clientJumpImpulsePending;
     @Nullable
     private BlockPos launchBedPos;
     private int launchCarrierY = NO_LAUNCH_CARRIER;
@@ -355,6 +395,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         this.entityData.define(DATA_MELEE_LEFT, false);
         this.entityData.define(DATA_MELEE_SEQUENCE, 0);
         this.entityData.define(DATA_SMASH_SEQUENCE, 0);
+        this.entityData.define(DATA_JUMP_SEQUENCE, 0);
         this.entityData.define(DATA_ACTIVATION_TICKS, 0);
         this.entityData.define(DATA_ENTRY_PLUG_INSERTED, false);
         this.entityData.define(DATA_VISUAL_POSE, VISUAL_NORMAL);
@@ -671,12 +712,14 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     /** Development-only fixed pose used by the screenshot Visual Lab. */
     public void setVisualPose(int pose)
     {
-        int safePose = Mth.clamp(pose, VISUAL_NORMAL, VISUAL_PRONE_RIFLE);
+        int safePose = Mth.clamp(pose, VISUAL_NORMAL, VISUAL_LIVE_JUMP);
         this.entityData.set(DATA_VISUAL_POSE, safePose);
         if (safePose == VISUAL_KNIFE_WINDUP || safePose == VISUAL_KNIFE_CONTACT
                 || safePose == VISUAL_KNIFE_RECOVERY || safePose == VISUAL_KNIFE_READY
                 || safePose == VISUAL_CROUCH_KNIFE_CONTACT
-                || safePose == VISUAL_PRONE_KNIFE_CONTACT)
+                || safePose == VISUAL_PRONE_KNIFE_CONTACT
+                || safePose == VISUAL_LIVE_KNIFE
+                || safePose == VISUAL_LIVE_KNIFE_HEAVY)
         {
             this.entityData.set(DATA_WEAPON, WEAPON_KNIFE);
         }
@@ -686,14 +729,16 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         }
         else if (safePose == VISUAL_RIFLE || safePose == VISUAL_RIFLE_WALK_CONTACT
                 || safePose == VISUAL_CROUCH_RIFLE_CONTACT
-                || safePose == VISUAL_PRONE_RIFLE)
+                || safePose == VISUAL_PRONE_RIFLE
+                || safePose == VISUAL_LIVE_RIFLE)
         {
             this.entityData.set(DATA_WEAPON, WEAPON_RIFLE);
         }
         else if (safePose == VISUAL_LANCE_WINDUP || safePose == VISUAL_LANCE_CONTACT
                 || safePose == VISUAL_LANCE_RECOVERY || safePose == VISUAL_LANCE_READY
                 || safePose == VISUAL_CROUCH_LANCE_CONTACT
-                || safePose == VISUAL_PRONE_LANCE_CONTACT)
+                || safePose == VISUAL_PRONE_LANCE_CONTACT
+                || safePose == VISUAL_LIVE_LANCE)
         {
             this.entityData.set(DATA_WEAPON, WEAPON_LANCE);
         }
@@ -895,11 +940,15 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         this.smashCooldown = SMASH_COOLDOWN_TICKS;
         this.entityData.set(DATA_SMASH_SEQUENCE,
                 (this.entityData.get(DATA_SMASH_SEQUENCE) + 1) & Integer.MAX_VALUE);
-        this.triggerAnim("strike", this.isPilotProne() ? "prone_smash"
-                : this.isPilotCrouching() ? "crouch_smash" : "smash");
 
         boolean knife = this.getWeapon() == WEAPON_KNIFE;
         boolean lance = this.getWeapon() == WEAPON_LANCE;
+        String animation = knife
+                ? this.isPilotProne() ? "prone_knife_heavy"
+                    : this.isPilotCrouching() ? "crouch_knife_heavy" : "knife_heavy"
+                : this.isPilotProne() ? "prone_smash"
+                    : this.isPilotCrouching() ? "crouch_smash" : "smash";
+        this.triggerAnim("strike", animation);
         float baseDamage = lance ? SMASH_LANCE_DAMAGE : knife ? SMASH_KNIFE_DAMAGE : SMASH_FIST_DAMAGE;
         float damage = baseDamage * this.getMeleeMultiplier();
         Vec3 forward = this.getForward().multiply(1.0D, 0.0D, 1.0D).normalize();
@@ -911,7 +960,8 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             serverLevel.sendParticles(ParticleTypes.EXPLOSION,
                     center.x, center.y - 2.0D, center.z, 10, 3.5D, 0.6D, 3.5D, 0.0D);
         }
-        this.playSound(SoundEvents.IRON_GOLEM_DEATH, 3.0F, 0.55F);
+        this.playSound(knife ? SoundEvents.PLAYER_ATTACK_SWEEP : SoundEvents.IRON_GOLEM_DEATH,
+                3.0F, knife ? 0.68F : 0.55F);
     }
 
     /** Heavy single-foot strike for targets beneath the Unit. */
@@ -1073,9 +1123,25 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
 
     public void pilotJump(ServerPlayer pilot)
     {
+        // Visual Lab stands a 24-block entity on a one-block fixture.  During
+        // an overloaded integrated-server screenshot tick the client can send
+        // jump while the server still reports the fixture's tiny -0.078
+        // settling velocity.  Permit that narrow development pose only; real
+        // driving still requires Minecraft's authoritative onGround flag.
+        boolean visualLabSettling = this.getVisualPose() == VISUAL_LIVE_JUMP
+                && Math.abs(this.getDeltaMovement().y) < 0.12D;
         if (this.getControllingPassenger() != pilot || this.isPilotControlLocked()
-                || !this.onGround() || this.jumpCooldown > 0 || this.getCannonCharge() > 0)
+                || !this.onGround() && !visualLabSettling
+                || this.jumpCooldown > 0 || this.getCannonCharge() > 0)
         {
+            if (this.getVisualPose() == VISUAL_LIVE_JUMP)
+            {
+                ProjectSeele.LOGGER.warn(
+                        "Visual live jump rejected controlling={} locked={} onGround={} settling={} cooldown={} charge={}",
+                        this.getControllingPassenger() == pilot, this.isPilotControlLocked(),
+                        this.onGround(), visualLabSettling, this.jumpCooldown,
+                        this.getCannonCharge());
+            }
             return;
         }
         if (this.isPilotCrouching())
@@ -1095,7 +1161,19 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             }
         }
         Vec3 motion = this.getDeltaMovement();
+        this.triggerAnim("strike", "takeoff");
+        // A ridden living entity is movement-authoritative on the pilot's
+        // client. Setting velocity only on the logical server is overwritten
+        // by the next ServerboundMoveVehiclePacket, which previously reduced
+        // every configured EVA jump to a one-block hop. The monotonically
+        // increasing sequence authorizes the same impulse on that client.
+        this.entityData.set(DATA_JUMP_SEQUENCE,
+                this.entityData.get(DATA_JUMP_SEQUENCE) + 1);
         this.setDeltaMovement(motion.x, JUMP_VELOCITY, motion.z);
+        if (this.getVisualPose() == VISUAL_LIVE_JUMP)
+        {
+            ProjectSeele.LOGGER.info("Visual live jump accepted velocityY={}", JUMP_VELOCITY);
+        }
         this.hasImpulse = true;
         this.jumpCooldown = JUMP_COOLDOWN_TICKS;
         this.playSound(SoundEvents.IRON_GOLEM_STEP, 2.2F, 0.65F);
@@ -1130,6 +1208,8 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             return;
         }
         this.rifleCooldown = SeeleConfig.EVA_RIFLE_INTERVAL_TICKS.get();
+        this.triggerAnim("strike", this.isPilotProne()
+                ? "prone_rifle_fire" : "rifle_fire");
         Vec3 dir = this.pilotAimDirection(pilot);
         Vec3 sight = pilot.getEyePosition();
         Vec3 farEnd = sight.add(dir.scale(SeeleConfig.EVA_RIFLE_RANGE.get()));
@@ -1177,7 +1257,32 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
                 : RIFLE_STANDING_MUZZLE_RIGHT;
         Vec3 pivot = this.position().add(0.0D, pivotHeight, 0.0D)
                 .add(horizontal.scale(pivotForward));
-        return pivot.add(aimDirection.scale(muzzleForward))
+        return pivot.add(aimDirection.scale(muzzleForward + MUZZLE_SURFACE_CLEARANCE))
+                .add(pitchedUp.scale(muzzleUp)).add(right.scale(muzzleRight));
+    }
+
+    private Vec3 cannonMuzzlePosition(Vec3 aimDirection)
+    {
+        Vec3 horizontal = aimDirection.multiply(1.0D, 0.0D, 1.0D).normalize();
+        Vec3 right = new Vec3(horizontal.z, 0.0D, -horizontal.x);
+        double horizontalLength = Math.sqrt(aimDirection.x * aimDirection.x
+                + aimDirection.z * aimDirection.z);
+        Vec3 pitchedUp = horizontal.scale(-aimDirection.y)
+                .add(0.0D, horizontalLength, 0.0D).normalize();
+        boolean prone = this.isPilotProne();
+        double pivotHeight = prone ? CANNON_PRONE_PIVOT_HEIGHT
+                : CANNON_STANDING_PIVOT_HEIGHT;
+        double pivotForward = prone ? CANNON_PRONE_PIVOT_FORWARD
+                : CANNON_STANDING_PIVOT_FORWARD;
+        double muzzleForward = prone ? CANNON_PRONE_MUZZLE_FORWARD
+                : CANNON_STANDING_MUZZLE_FORWARD;
+        double muzzleUp = prone ? CANNON_PRONE_MUZZLE_UP
+                : CANNON_STANDING_MUZZLE_UP;
+        double muzzleRight = prone ? CANNON_PRONE_MUZZLE_RIGHT
+                : CANNON_STANDING_MUZZLE_RIGHT;
+        Vec3 pivot = this.position().add(0.0D, pivotHeight, 0.0D)
+                .add(horizontal.scale(pivotForward));
+        return pivot.add(aimDirection.scale(muzzleForward + MUZZLE_SURFACE_CLEARANCE))
                 .add(pitchedUp.scale(muzzleUp)).add(right.scale(muzzleRight));
     }
 
@@ -1224,9 +1329,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         // Match the reviewed hand/receiver pivots of the authored standing and
         // prone cannon stances. A fixed standing-height muzzle would otherwise
         // fire more than sixteen blocks above the visible prone weapon.
-        double receiverHeight = this.isPilotProne() ? 2.55D : 22.35D;
-        Vec3 muzzle = this.position().add(0.0D, receiverHeight, 0.0D)
-                .add(dir.scale(12.5D));
+        Vec3 muzzle = this.cannonMuzzlePosition(dir);
         Vec3 from = muzzle;
         double range = SeeleConfig.CANNON_RANGE.get();
         Vec3 farEnd = from.add(dir.scale(range));
@@ -1282,7 +1385,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     /** Exact optical/fire ray shared by cannon and pallet SMG. */
     private Vec3 pilotAimDirection(Player pilot)
     {
-        float pitch = Mth.clamp(pilot.getXRot(), -MAX_CANNON_AIM_PITCH,
+        float pitch = Mth.clamp(pilot.getXRot(), MIN_CANNON_AIM_PITCH,
                 MAX_CANNON_AIM_PITCH);
         this.entityData.set(DATA_CANNON_AIM_PITCH, pitch);
         return Vec3.directionFromRotation(pitch, pilot.getYRot()).normalize();
@@ -2008,7 +2111,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             float aimPitch = !this.isCrucified()
                     && !this.isPilotControlLocked()
                     && (this.getWeapon() == WEAPON_CANNON || this.getWeapon() == WEAPON_RIFLE)
-                    ? Mth.clamp(player.getXRot(), -MAX_CANNON_AIM_PITCH, MAX_CANNON_AIM_PITCH)
+                    ? Mth.clamp(player.getXRot(), MIN_CANNON_AIM_PITCH, MAX_CANNON_AIM_PITCH)
                     : 0.0F;
             if (Math.abs(this.getCannonAimPitch() - aimPitch) > 0.01F)
             {
@@ -2102,6 +2205,23 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             return;
         }
         super.travel(input);
+        // LivingEntity calls this only after it has selected the local pilot
+        // as vehicle authority. Applying the synchronized impulse here avoids
+        // both the pre-travel friction pass and the non-authoritative branch
+        // that zeros remote ridden entities.
+        if (this.level().isClientSide && this.clientJumpImpulsePending)
+        {
+            Vec3 motion = this.getDeltaMovement();
+            this.setDeltaMovement(motion.x, JUMP_VELOCITY, motion.z);
+            this.hasImpulse = true;
+            this.clientJumpImpulsePending = false;
+            if (this.getVisualPose() == VISUAL_LIVE_JUMP)
+            {
+                ProjectSeele.LOGGER.info(
+                        "Visual live jump client travel impulse applied velocityY={} localAuthority={}",
+                        this.getDeltaMovement().y, this.isControlledByLocalInstance());
+            }
+        }
     }
 
     @Override
@@ -2180,6 +2300,20 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             {
                 this.clientSmashSequence = sequence;
                 this.clientSmashStartTick = this.tickCount;
+            }
+        }
+        if (DATA_JUMP_SEQUENCE.equals(key) && this.level().isClientSide)
+        {
+            int sequence = this.entityData.get(DATA_JUMP_SEQUENCE);
+            if (sequence != this.clientJumpSequence)
+            {
+                this.clientJumpSequence = sequence;
+                this.clientJumpImpulsePending = true;
+                if (this.getVisualPose() == VISUAL_LIVE_JUMP)
+                {
+                    ProjectSeele.LOGGER.info("Visual live jump client sequence received sequence={}",
+                            sequence);
+                }
             }
         }
     }
@@ -2303,11 +2437,13 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         }
         else if (this.isPilotSprinting())
         {
-            speed = blocksPerSecond * RUN_CYCLE_SECONDS / RUN_STRIDE_BLOCKS;
+            speed = blocksPerSecond * RUN_CYCLE_SECONDS / RUN_STRIDE_BLOCKS
+                    * RUN_CADENCE_GAIN;
         }
         else
         {
-            speed = blocksPerSecond * WALK_CYCLE_SECONDS / WALK_STRIDE_BLOCKS;
+            speed = blocksPerSecond * WALK_CYCLE_SECONDS / WALK_STRIDE_BLOCKS
+                    * WALK_CADENCE_GAIN;
         }
         return Mth.clamp(speed, 0.18D, 1.6D);
     }
@@ -2342,7 +2478,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
                 case VISUAL_LANCE_RECOVERY -> { return state.setAndContinue(ANIM_VISUAL_LANCE_RECOVERY); }
                 case VISUAL_CANNON -> { return state.setAndContinue(ANIM_VISUAL_CANNON); }
                 case VISUAL_PRONE_CANNON -> { return state.setAndContinue(ANIM_PRONE); }
-                case VISUAL_RIFLE -> { return state.setAndContinue(ANIM_VISUAL_CANNON); }
+                case VISUAL_RIFLE -> { return state.setAndContinue(ANIM_VISUAL_RIFLE); }
                 case VISUAL_CROUCH_KNIFE_CONTACT -> { return state.setAndContinue(ANIM_VISUAL_CROUCH_KNIFE_CONTACT); }
                 case VISUAL_PRONE_KNIFE_CONTACT -> { return state.setAndContinue(ANIM_VISUAL_PRONE_KNIFE_CONTACT); }
                 case VISUAL_CROUCH_LANCE_CONTACT -> { return state.setAndContinue(ANIM_VISUAL_CROUCH_LANCE_CONTACT); }
@@ -2351,6 +2487,12 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
                 case VISUAL_RIFLE_WALK_CONTACT -> { return state.setAndContinue(ANIM_VISUAL_RIFLE_WALK_CONTACT); }
                 case VISUAL_CROUCH_RIFLE_CONTACT -> { return state.setAndContinue(ANIM_VISUAL_CROUCH_RIFLE_CONTACT); }
                 case VISUAL_PRONE_RIFLE -> { return state.setAndContinue(ANIM_VISUAL_PRONE_RIFLE); }
+                case VISUAL_LIVE_MELEE -> { return state.setAndContinue(ANIM_VISUAL_IDLE); }
+                case VISUAL_LIVE_KNIFE -> { return state.setAndContinue(ANIM_VISUAL_KNIFE_READY); }
+                case VISUAL_LIVE_LANCE -> { return state.setAndContinue(ANIM_VISUAL_LANCE_READY); }
+                case VISUAL_LIVE_RIFLE -> { return state.setAndContinue(ANIM_VISUAL_RIFLE); }
+                case VISUAL_LIVE_KNIFE_HEAVY -> { return state.setAndContinue(ANIM_VISUAL_KNIFE_READY); }
+                case VISUAL_LIVE_JUMP -> { return state.setAndContinue(ANIM_JUMP); }
                 default -> { }
             }
             if (this.getActivationTicks() > 0)
@@ -2415,7 +2557,8 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
                     && !this.isPilotProne()
                     && this.getVisualPose() == VISUAL_NORMAL)
             {
-                return state.setAndContinue(ANIM_AIM);
+                return state.setAndContinue(this.getWeapon() == WEAPON_RIFLE
+                        ? ANIM_RIFLE_AIM : ANIM_AIM);
             }
             return PlayState.STOP;
         }));
@@ -2423,31 +2566,39 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         {
             if (this.isCrucified())
             {
-                // Triggered clips bypass a normal predicate while playing.
-                // Explicitly stop the controller so a strike that began on
-                // the ritual transition cannot bend the cross silhouette.
                 state.getController().stop();
+                return PlayState.STOP;
             }
-            return PlayState.STOP;
+            // receiveTriggeredAnimations asks GeckoLib to consult this
+            // predicate during a trigger. Returning STOP unconditionally
+            // cancelled every melee/knife/lance clip on its first frame.
+            return state.getController().isPlayingTriggeredAnimation()
+                    ? PlayState.CONTINUE : PlayState.STOP;
         })
                 .triggerableAnim("melee", ANIM_MELEE)
                 .triggerableAnim("melee_left", ANIM_MELEE_LEFT)
                 .triggerableAnim("knife", ANIM_KNIFE)
                 .triggerableAnim("knife_left", ANIM_KNIFE_LEFT)
+                .triggerableAnim("knife_heavy", ANIM_KNIFE_HEAVY)
                 .triggerableAnim("lance_thrust", ANIM_LANCE_THRUST)
                 .triggerableAnim("prone_melee", ANIM_PRONE_MELEE)
                 .triggerableAnim("prone_melee_left", ANIM_PRONE_MELEE_LEFT)
                 .triggerableAnim("prone_knife", ANIM_PRONE_KNIFE)
+                .triggerableAnim("prone_knife_heavy", ANIM_PRONE_KNIFE_HEAVY)
                 .triggerableAnim("prone_lance_thrust", ANIM_PRONE_LANCE_THRUST)
                 .triggerableAnim("prone_smash", ANIM_PRONE_SMASH)
                 .triggerableAnim("crouch_melee", ANIM_CROUCH_MELEE)
                 .triggerableAnim("crouch_melee_left", ANIM_CROUCH_MELEE_LEFT)
                 .triggerableAnim("crouch_knife", ANIM_CROUCH_KNIFE)
+                .triggerableAnim("crouch_knife_heavy", ANIM_CROUCH_KNIFE_HEAVY)
                 .triggerableAnim("crouch_lance_thrust", ANIM_CROUCH_LANCE_THRUST)
                 .triggerableAnim("crouch_smash", ANIM_CROUCH_SMASH)
                 .triggerableAnim("smash", ANIM_SMASH)
                 .triggerableAnim("cannon_fire", ANIM_CANNON_FIRE)
                 .triggerableAnim("prone_cannon_fire", ANIM_PRONE_CANNON_FIRE)
+                .triggerableAnim("rifle_fire", ANIM_RIFLE_FIRE)
+                .triggerableAnim("prone_rifle_fire", ANIM_PRONE_RIFLE_FIRE)
+                .triggerableAnim("takeoff", ANIM_TAKEOFF)
                 .triggerableAnim("land", ANIM_LAND)
                 .triggerableAnim("stomp", ANIM_STOMP)
                 .receiveTriggeredAnimations());

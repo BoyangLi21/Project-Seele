@@ -2,6 +2,7 @@ package com.projectseele.network;
 
 import java.util.function.Supplier;
 
+import com.projectseele.ProjectSeele;
 import com.projectseele.entity.EvaUnit01Entity;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
@@ -48,29 +49,54 @@ public class ServerboundEvaControlPacket
 
     public void handle(Supplier<NetworkEvent.Context> ctx)
     {
-        ServerPlayer sender = ctx.get().getSender();
-        if (sender != null && sender.getVehicle() instanceof EvaUnit01Entity eva)
+        NetworkEvent.Context context = ctx.get();
+        ServerPlayer sender = context.getSender();
+        // Entity data, animation triggers and movement all belong to the
+        // authoritative server thread. Running this switch directly on
+        // Netty made rapid weapon/attack/jump input race the entity tick:
+        // effects could appear while the corresponding animation or impulse
+        // was lost. Queue the complete validation + dispatch atomically.
+        context.enqueueWork(() ->
         {
-            switch (this.action)
+            if (sender != null && sender.getVehicle() instanceof EvaUnit01Entity eva)
             {
-                case ACTION_CYCLE_WEAPON -> eva.cycleWeapon(sender);
-                case ACTION_TOGGLE_AT_FIELD -> eva.toggleAtField(sender);
-                case ACTION_MELEE -> eva.meleeAttack(sender);
-                case ACTION_SMASH -> eva.smashAttack(sender);
-                case ACTION_CHARGE_START -> eva.setChargingHeld(true);
-                case ACTION_CHARGE_STOP -> eva.releaseCannon(sender);
-                case ACTION_CROUCH_START -> eva.setPilotCrouching(sender, true);
-                case ACTION_CROUCH_STOP -> eva.setPilotCrouching(sender, false);
-                case ACTION_SPRINT_START -> eva.setPilotSprinting(sender, true);
-                case ACTION_SPRINT_STOP -> eva.setPilotSprinting(sender, false);
-                case ACTION_JUMP -> eva.pilotJump(sender);
-                case ACTION_EXIT -> eva.exitEva(sender);
-                case ACTION_STOMP -> eva.stompAttack(sender);
-                case ACTION_TOGGLE_PRONE -> eva.toggleProne(sender);
-                case ACTION_RIFLE_FIRE -> eva.fireRifle(sender);
-                default -> { }
+                if (Boolean.getBoolean("projectseele.visualCapture"))
+                {
+                    ProjectSeele.LOGGER.info(
+                            "Visual live server dispatch action={} pose={} vehicle={} onGround={} velocityY={}",
+                            this.action, eva.getVisualPose(), eva.getStringUUID(),
+                            eva.onGround(), eva.getDeltaMovement().y);
+                }
+                switch (this.action)
+                {
+                    case ACTION_CYCLE_WEAPON -> eva.cycleWeapon(sender);
+                    case ACTION_TOGGLE_AT_FIELD -> eva.toggleAtField(sender);
+                    case ACTION_MELEE -> eva.meleeAttack(sender);
+                    case ACTION_SMASH -> eva.smashAttack(sender);
+                    case ACTION_CHARGE_START -> eva.setChargingHeld(true);
+                    case ACTION_CHARGE_STOP -> eva.releaseCannon(sender);
+                    case ACTION_CROUCH_START -> eva.setPilotCrouching(sender, true);
+                    case ACTION_CROUCH_STOP -> eva.setPilotCrouching(sender, false);
+                    case ACTION_SPRINT_START -> eva.setPilotSprinting(sender, true);
+                    case ACTION_SPRINT_STOP -> eva.setPilotSprinting(sender, false);
+                    case ACTION_JUMP -> eva.pilotJump(sender);
+                    case ACTION_EXIT -> eva.exitEva(sender);
+                    case ACTION_STOMP -> eva.stompAttack(sender);
+                    case ACTION_TOGGLE_PRONE -> eva.toggleProne(sender);
+                    case ACTION_RIFLE_FIRE -> eva.fireRifle(sender);
+                    default -> { }
+                }
             }
-        }
-        ctx.get().setPacketHandled(true);
+            else if (Boolean.getBoolean("projectseele.visualCapture"))
+            {
+                ProjectSeele.LOGGER.warn(
+                        "Visual live server rejected action={} sender={} vehicle={}",
+                        this.action,
+                        sender == null ? "null" : sender.getGameProfile().getName(),
+                        sender == null || sender.getVehicle() == null
+                                ? "null" : sender.getVehicle().getType().toString());
+            }
+        });
+        context.setPacketHandled(true);
     }
 }

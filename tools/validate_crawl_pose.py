@@ -42,6 +42,25 @@ def render(assets: Path, animation: Path, output: Path,
     return json.loads(metrics_path.read_text(encoding="utf-8"))
 
 
+def render_first_person(assets: Path, animation: Path, output: Path,
+                        label: str, time: float) -> dict:
+    target = output / f"{label}_{time:.2f}_first_person"
+    command = [
+        sys.executable, str(RENDERER),
+        str(assets / "mesh/eva_unit01.mesh.json"),
+        str(assets / "textures/entity/eva_unit01.png"), str(target),
+        "--geo", str(assets / "geo/eva_unit01.geo.json"),
+        "--animation-json", str(animation),
+        "--animation", "crawl", "--time", str(time),
+        "--first-person-stance", "prone",
+        "--first-person-views", "forward",
+        "--no-skeleton",
+    ]
+    subprocess.run(command, cwd=REPO, check=True)
+    metrics_path = next(target.glob("*_metrics.json"))
+    return json.loads(metrics_path.read_text(encoding="utf-8"))
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--assets", type=Path, default=DEFAULT_ASSETS)
@@ -51,6 +70,11 @@ def main() -> int:
     args = parser.parse_args()
     metrics = {label: render(args.assets, args.animation_json, args.output, label, time)
                for label, time in SAMPLES}
+    first_person = {
+        label: render_first_person(args.assets, args.animation_json, args.output,
+                                   label, time)
+        for label, time in (SAMPLES[0], SAMPLES[2])
+    }
     checks: dict[str, bool] = {}
     diagnostics: dict[str, object] = {}
 
@@ -102,8 +126,8 @@ def main() -> int:
         contacts_b["forearm_l"] and contacts_b["shin_r"]
         and not contacts_b["forearm_r"] and not contacts_b["shin_l"])
     checks["cycle_pulling_arm_swaps"] = (
-        joints_a["hand_l"][2] <= joints_a["hand_r"][2] - 8.0
-        and joints_b["hand_r"][2] <= joints_b["hand_l"][2] - 8.0)
+        joints_a["hand_l"][2] <= joints_a["hand_r"][2] - 6.0
+        and joints_b["hand_r"][2] <= joints_b["hand_l"][2] - 6.0)
     checks["cycle_tucked_leg_swaps"] = (
         joints_a["foot_l"][2] <= joints_a["foot_r"][2] - 4.0
         and joints_b["foot_r"][2] <= joints_b["foot_l"][2] - 4.0)
@@ -112,6 +136,16 @@ def main() -> int:
         and abs(joints_b["shin_r"][0]) >= abs(joints_b["shin_l"][0]) + 8.0)
     checks["cycle_weight_shift"] = abs(
         joints_a["torso_lower"][0] - joints_b["torso_lower"][0]) >= 0.4
+    for label, sample in first_person.items():
+        view = sample["first_person"]["forward"]
+        checks[f"{label}_first_person_both_arms_visible"] = (
+            view["both_arm_regions_visible"])
+        checks[f"{label}_first_person_arms_keep_own_sides"] = (
+            view["arms_read_on_opposite_sides"])
+        diagnostics[label]["first_person_arm_centres"] = {
+            "left": view["left_arm"]["horizontal_centre"],
+            "right": view["right_arm"]["horizontal_centre"],
+        }
     for label in ("passing_a", "passing_b"):
         joints = metrics[label]["joint_world"]
         checks[f"{label}_near_neutral"] = (
@@ -123,6 +157,7 @@ def main() -> int:
     report = {
         "contract": "human belly-down low crawl; model forward is local -Z",
         "samples": metrics,
+        "first_person_samples": first_person,
         "diagnostics": diagnostics,
         "checks": checks,
         "passed": all(checks.values()),

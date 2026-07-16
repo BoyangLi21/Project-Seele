@@ -687,6 +687,26 @@ def static_pose(animation, time):
     return {"loop": True, "animation_length": 1.0, "bones": bones}
 
 
+def retime_animation(animation, factor):
+    """Scale every numeric Bedrock key time without touching key values."""
+    result = copy.deepcopy(animation)
+    result["animation_length"] = round(
+        float(result.get("animation_length", 0.0)) * factor, 4)
+    for channels in result.get("bones", {}).values():
+        for channel_name, keyed in list(channels.items()):
+            if not isinstance(keyed, dict):
+                continue
+            remapped = {}
+            for key, value in keyed.items():
+                try:
+                    new_key = str(round(float(key) * factor, 4))
+                except (TypeError, ValueError):
+                    new_key = key
+                remapped[new_key] = value
+            channels[channel_name] = remapped
+    return result
+
+
 def _rotation(keys):
     return {"rotation": {time: value for time, value in keys.items()}}
 
@@ -700,19 +720,21 @@ def _set_hand_curl(bones, side, curl=22, thumb=17, tip_curl=12, thumb_tip=4):
 
     The geodesic hand partition keeps each continuous shaft on its distal
     bone, so the second joint can now contribute a real hook instead of
-    exposing loose triangle fragments.  OBJ X is mirrored between hands, but
-    their local flexion axis is not: the same positive X rotation closes both.
+    exposing loose triangle fragments. Runtime close-up comparison proved
+    both imported hands close on positive local X. Mirroring the left sign
+    opened its fingers and was the source of the flat weapon/punch hand.
     """
+    direction = 1
     for digit in FINGER_ORDER:
         angle = thumb if digit == "thumb" else curl
         bones[f"finger_{digit}_{side}"] = _rotation(
-            {"0.0": [angle, 0, 0]})
+            {"0.0": [angle * direction, 0, 0]})
         tip_angle = thumb_tip if digit == "thumb" else tip_curl
         bones[f"finger_{digit}_tip_{side}"] = _rotation(
-            {"0.0": [tip_angle, 0, 0]})
+            {"0.0": [tip_angle * direction, 0, 0]})
 
 
-def _set_finger_curl(bones, curl=48, thumb=30, tip_curl=30, thumb_tip=14):
+def _set_finger_curl(bones, curl=50, thumb=30, tip_curl=34, thumb_tip=14):
     """Close both hands with conservative angles that preserve the mesh."""
     for side in ("l", "r"):
         _set_hand_curl(bones, side, curl, thumb, tip_curl, thumb_tip)
@@ -720,14 +742,52 @@ def _set_finger_curl(bones, curl=48, thumb=30, tip_curl=30, thumb_tip=14):
 
 def _set_firearm_grip(bones):
     """Author a support-hand grip plus a distinct right trigger finger."""
-    _set_hand_curl(bones, "l", curl=44, thumb=29,
-                   tip_curl=28, thumb_tip=13)
-    _set_hand_curl(bones, "r", curl=52, thumb=32,
-                   tip_curl=34, thumb_tip=15)
+    # The imported fingers have two independently weighted joints.  Fifty
+    # degrees only touched the outside of the receiver in the real client;
+    # the distal segment still read as four straight claws.  This tighter
+    # two-joint wrap closes around the grip without reaching the 70/55
+    # self-intersection seen in the stress preview.
+    _set_hand_curl(bones, "l", curl=60, thumb=34,
+                   tip_curl=44, thumb_tip=16)
+    _set_hand_curl(bones, "r", curl=60, thumb=34,
+                   tip_curl=44, thumb_tip=16)
     # Keep the right index on the trigger instead of folding it into the
     # middle/ring/little-finger fist.
-    bones["finger_index_r"] = _rotation({"0.0": [16, 0, 0]})
-    bones["finger_index_tip_r"] = _rotation({"0.0": [8, 0, 0]})
+    bones["finger_index_r"] = _rotation({"0.0": [20, 0, 0]})
+    bones["finger_index_tip_r"] = _rotation({"0.0": [9, 0, 0]})
+
+
+def _set_knife_grip(bones):
+    """Close a real fist around the reverse-grip hilt."""
+    _set_hand_curl(bones, "r", curl=72, thumb=44,
+                   tip_curl=54, thumb_tip=22)
+    _set_hand_curl(bones, "l", curl=22, thumb=15,
+                   tip_curl=14, thumb_tip=6)
+
+
+def _set_claw_hand(bones, side):
+    """Animate a partially closed biological hand through one raking strike."""
+    for digit in FINGER_ORDER:
+        root_ready = 18 if digit != "thumb" else 14
+        root_windup = 36 if digit != "thumb" else 25
+        root_contact = 29 if digit != "thumb" else 22
+        tip_ready = 9 if digit != "thumb" else 5
+        tip_windup = 25 if digit != "thumb" else 11
+        tip_contact = 20 if digit != "thumb" else 9
+        bones[f"finger_{digit}_{side}"] = _rotation({
+            "0.0": [root_ready, 0, 0],
+            "0.14": [root_windup, 0, 0],
+            "0.34": [root_contact, 0, 0],
+            "0.54": [root_ready, 0, 0],
+            "0.68": [root_ready, 0, 0],
+        })
+        bones[f"finger_{digit}_tip_{side}"] = _rotation({
+            "0.0": [tip_ready, 0, 0],
+            "0.14": [tip_windup, 0, 0],
+            "0.34": [tip_contact, 0, 0],
+            "0.54": [tip_ready, 0, 0],
+            "0.68": [tip_ready, 0, 0],
+        })
 
 
 def repair_tiger_runtime_animations(data):
@@ -752,84 +812,212 @@ def repair_tiger_runtime_animations(data):
                                     "3.2": [4, 0, 0]})
     idle["forearm_r"] = copy.deepcopy(idle["forearm_l"])
 
+    def claw_strike(side):
+        """A shoulder-led human rake, not an iron-golem straight punch."""
+        other = "l" if side == "r" else "r"
+        sign = 1 if side == "r" else -1
+        bones = {
+            "root": _position({
+                "0.0": [0, 0, 0], "0.14": [0, 0.35, 0.6],
+                "0.34": [0, 0.8, -1.2], "0.54": [0, 0.25, -0.4],
+                "0.68": [0, 0, 0]}),
+            "torso_lower": _rotation({
+                "0.0": [0, 0, 0], "0.14": [1, 9 * sign, 0],
+                "0.34": [5, -14 * sign, 0], "0.54": [2, -5 * sign, 0],
+                "0.68": [0, 0, 0]}),
+            "torso_upper": _rotation({
+                "0.0": [0, 0, 0], "0.14": [-3, 21 * sign, 0],
+                "0.34": [7, -29 * sign, -3 * sign],
+                "0.54": [3, -10 * sign, 0], "0.68": [0, 0, 0]}),
+            f"arm_{side}": _rotation({
+                "0.0": [-5, 0, 5 * sign],
+                "0.14": [22, -14 * sign, 27 * sign],
+                "0.34": [-108, -18 * sign, 18 * sign],
+                "0.54": [-48, -7 * sign, 12 * sign],
+                "0.68": [-5, 0, 5 * sign]}),
+            f"forearm_{side}": _rotation({
+                "0.0": [4, 0, 0], "0.14": [-72, 0, -12 * sign],
+                "0.34": [-18, 0, 7 * sign],
+                "0.54": [-46, 0, 3 * sign], "0.68": [4, 0, 0]}),
+            f"hand_{side}": _rotation({
+                "0.0": [0, 0, 0], "0.14": [0, 0, -14 * sign],
+                "0.34": [0, 0, 12 * sign], "0.54": [0, 0, 4 * sign],
+                "0.68": [0, 0, 0]}),
+            # The free hand guards the face and ribs instead of dangling like
+            # the unused arm of a Minecraft mob attack.
+            f"arm_{other}": _rotation({
+                "0.0": [-5, 0, -5 * sign], "0.14": [-28, 8 * sign, -18 * sign],
+                "0.34": [-36, 12 * sign, -20 * sign],
+                "0.54": [-20, 5 * sign, -12 * sign],
+                "0.68": [-5, 0, -5 * sign]}),
+            f"forearm_{other}": _rotation({
+                "0.0": [4, 0, 0], "0.14": [-68, 5 * sign, 16 * sign],
+                "0.34": [-76, 8 * sign, 20 * sign],
+                "0.54": [-42, 3 * sign, 10 * sign],
+                "0.68": [4, 0, 0]}),
+        }
+        _set_claw_hand(bones, side)
+        _set_hand_curl(bones, other, curl=24, thumb=16,
+                       tip_curl=15, thumb_tip=6)
+        return {"animation_length": 0.68, "bones": bones}
+
+    animations[prefix + "melee"] = claw_strike("r")
+    animations[prefix + "melee_left"] = claw_strike("l")
+
     walk = animations[prefix + "walk"]["bones"]
     # Keep the gait inside a human range. The imported source used a very
     # large vertical bob and near-straight pendulum arms; at EVA scale that
     # read as skating between two extreme keyframes rather than transferring
     # weight through a planted foot.
     walk["root"] = _position({
-        "0.0": [0, -2.46, 0], "0.25": [0, 2.02, 0],
-        "0.5": [0, -2.46, 0], "0.75": [0, 2.02, 0],
-        "1.0": [0, -2.46, 0]})
+        "0.0": [0, 0.52, 0], "0.25": [0, 0.87, 0],
+        "0.5": [0, 0.52, 0], "0.75": [0, 0.87, 0],
+        "1.0": [0, 0.52, 0]})
     walk["leg_l"] = _rotation({
-        "0.0": [-27, 0, 0], "0.5": [27, 0, 0], "1.0": [-27, 0, 0]})
+        "0.0": [-23, 0, -1], "0.25": [-8, 0, -1],
+        "0.5": [23, 0, -1], "0.75": [10, 0, -1],
+        "1.0": [-23, 0, -1]})
     walk["leg_r"] = _rotation({
-        "0.0": [27, 0, 0], "0.5": [-27, 0, 0], "1.0": [27, 0, 0]})
+        "0.0": [23, 0, 1], "0.25": [10, 0, 1],
+        "0.5": [-23, 0, 1], "0.75": [-8, 0, 1],
+        "1.0": [23, 0, 1]})
     walk["shin_l"] = _rotation({
-        "0.0": [11, 0, 0], "0.25": [22, 0, 0], "0.5": [3, 0, 0],
-        "0.75": [8, 0, 0], "1.0": [11, 0, 0]})
+        "0.0": [7, 0, 0], "0.25": [27, 0, 0], "0.5": [4, 0, 0],
+        "0.75": [11, 0, 0], "1.0": [7, 0, 0]})
     walk["shin_r"] = _rotation({
-        "0.0": [3, 0, 0], "0.25": [8, 0, 0], "0.5": [11, 0, 0],
-        "0.75": [22, 0, 0], "1.0": [3, 0, 0]})
+        "0.0": [4, 0, 0], "0.25": [11, 0, 0], "0.5": [7, 0, 0],
+        "0.75": [27, 0, 0], "1.0": [4, 0, 0]})
+    walk["foot_l"] = _rotation({
+        "0.0": [-7, 0, 1], "0.25": [-17, 0, 1],
+        "0.5": [7, 0, 1], "0.75": [2, 0, 1],
+        "1.0": [-7, 0, 1]})
+    walk["foot_r"] = _rotation({
+        "0.0": [7, 0, -1], "0.25": [2, 0, -1],
+        "0.5": [-7, 0, -1], "0.75": [-17, 0, -1],
+        "1.0": [7, 0, -1]})
     walk["arm_l"] = _rotation({
-        "0.0": [18, 0, -3], "0.5": [-14, 0, -3], "1.0": [18, 0, -3]})
+        "0.0": [14, 0, -4], "0.5": [-11, 0, -4], "1.0": [14, 0, -4]})
     walk["arm_r"] = _rotation({
-        "0.0": [-14, 0, 3], "0.5": [18, 0, 3], "1.0": [-14, 0, 3]})
+        "0.0": [-11, 0, 4], "0.5": [14, 0, 4], "1.0": [-11, 0, 4]})
     # EVA is a biological humanoid, not a pair of rigid pendulums.  Flex the
     # elbows through the gait so neither straight arm disappears behind the
     # pilot camera at foot contact; the opposite phasing preserves a readable
     # human walk in third person and shows both real arms when looking down.
     walk["forearm_l"] = _rotation({
-        "0.0": [-43, 0, 0], "0.5": [-34, 0, 0], "1.0": [-43, 0, 0]})
+        "0.0": [-33, 0, 0], "0.5": [-24, 0, 0], "1.0": [-33, 0, 0]})
     walk["forearm_r"] = _rotation({
-        "0.0": [-34, 0, 0], "0.5": [-43, 0, 0], "1.0": [-34, 0, 0]})
+        "0.0": [-24, 0, 0], "0.5": [-33, 0, 0], "1.0": [-24, 0, 0]})
     walk["torso_lower"] = _rotation({
-        "0.0": [2, 2, 0], "0.5": [2, -2, 0], "1.0": [2, 2, 0]})
+        "0.0": [3, 1.5, 0], "0.5": [3, -1.5, 0], "1.0": [3, 1.5, 0]})
     walk["torso_upper"] = _rotation({
-        "0.0": [1, 3, 0], "0.5": [1, -3, 0], "1.0": [1, 3, 0]})
+        "0.0": [2, 2.5, 0], "0.5": [2, -2.5, 0], "1.0": [2, 2.5, 0]})
 
     run = animations[prefix + "run"]["bones"]
     run["leg_l"] = _rotation({
-        "0.0": [-37, 0, 0], "0.31": [37, 0, 0], "0.62": [-37, 0, 0]})
+        "0.0": [-32, 0, -2], "0.155": [4, 0, -2],
+        "0.31": [32, 0, -2], "0.465": [-4, 0, -2],
+        "0.62": [-32, 0, -2]})
     run["leg_r"] = _rotation({
-        "0.0": [37, 0, 0], "0.31": [-37, 0, 0], "0.62": [37, 0, 0]})
+        "0.0": [32, 0, 2], "0.155": [-4, 0, 2],
+        "0.31": [-32, 0, 2], "0.465": [4, 0, 2],
+        "0.62": [32, 0, 2]})
     run["shin_l"] = _rotation({
-        "0.0": [24, 0, 0], "0.16": [38, 0, 0],
-        "0.31": [5, 0, 0], "0.62": [24, 0, 0]})
+        "0.0": [18, 0, 0], "0.155": [44, 0, 0],
+        "0.31": [6, 0, 0], "0.465": [12, 0, 0],
+        "0.62": [18, 0, 0]})
     run["shin_r"] = _rotation({
-        "0.0": [5, 0, 0], "0.31": [24, 0, 0],
-        "0.47": [38, 0, 0], "0.62": [5, 0, 0]})
+        "0.0": [6, 0, 0], "0.155": [12, 0, 0],
+        "0.31": [18, 0, 0], "0.465": [44, 0, 0],
+        "0.62": [6, 0, 0]})
+    run["foot_l"] = _rotation({
+        "0.0": [-10, 0, 2], "0.155": [-25, 0, 2],
+        "0.31": [12, 0, 2], "0.465": [4, 0, 2],
+        "0.62": [-10, 0, 2]})
+    run["foot_r"] = _rotation({
+        "0.0": [12, 0, -2], "0.155": [4, 0, -2],
+        "0.31": [-10, 0, -2], "0.465": [-25, 0, -2],
+        "0.62": [12, 0, -2]})
     run["arm_l"] = _rotation({
-        "0.0": [28, 0, -5], "0.31": [-28, 0, -5], "0.62": [28, 0, -5]})
+        "0.0": [28, 0, -7], "0.31": [-28, 0, -7], "0.62": [28, 0, -7]})
     run["arm_r"] = _rotation({
-        "0.0": [-28, 0, 5], "0.31": [28, 0, 5], "0.62": [-28, 0, 5]})
+        "0.0": [-28, 0, 7], "0.31": [28, 0, 7], "0.62": [-28, 0, 7]})
     run["forearm_l"] = _rotation({
-        "0.0": [-52, 0, 0], "0.31": [-38, 0, 0], "0.62": [-52, 0, 0]})
+        "0.0": [-64, 0, 0], "0.31": [-50, 0, 0], "0.62": [-64, 0, 0]})
     run["forearm_r"] = _rotation({
-        "0.0": [-38, 0, 0], "0.31": [-52, 0, 0], "0.62": [-38, 0, 0]})
+        "0.0": [-50, 0, 0], "0.31": [-64, 0, 0], "0.62": [-50, 0, 0]})
     run["root"] = _position({
-        "0.0": [0, -4.98, 0], "0.155": [0, 1.58, 0],
-        "0.31": [0, -4.98, 0], "0.465": [0, 1.58, 0],
-        "0.62": [0, -4.98, 0]})
-    run["torso_lower"] = _rotation({"0.0": [8, 0, 0]})
+        "0.0": [0, 0.52, 0], "0.155": [0, 1.0, 0],
+        "0.31": [0, 0.52, 0], "0.465": [0, 1.0, 0],
+        "0.62": [0, 0.52, 0]})
+    run["torso_lower"] = _rotation({
+        "0.0": [8, 2, 0], "0.31": [8, -2, 0], "0.62": [8, 2, 0]})
     run["torso_upper"] = _rotation({
-        "0.0": [4, 5, 0], "0.31": [4, -5, 0], "0.62": [4, 5, 0]})
+        "0.0": [5, 4, 0], "0.31": [5, -4, 0], "0.62": [5, 4, 0]})
 
-    animations[prefix + "jump"]["bones"].update({
-        "torso_lower": _rotation({"0.0": [11, 0, 0]}),
-        "torso_upper": _rotation({"0.0": [6, 0, 0]}),
-        "arm_l": _rotation({"0.0": [-52, 0, -16]}),
-        "forearm_l": _rotation({"0.0": [-38, 0, 0]}),
-        "arm_r": _rotation({"0.0": [-52, 0, 16]}),
-        "forearm_r": _rotation({"0.0": [-38, 0, 0]}),
-        # Both legs leave the ground together. The asymmetric running stride
-        # previously made the frozen jump frame look like another walk step.
-        "leg_l": _rotation({"0.0": [-30, 0, -3]}),
-        "shin_l": _rotation({"0.0": [58, 0, 0]}),
-        "foot_l": _rotation({"0.0": [-28, 0, 3]}),
-        "leg_r": _rotation({"0.0": [-30, 0, 3]}),
-        "shin_r": _rotation({"0.0": [58, 0, 0]}),
-        "foot_r": _rotation({"0.0": [-28, 0, -3]}),
+    # Take-off is a one-shot strike layer fired on the exact server jump
+    # impulse.  The base airborne animation must not loop back through a deep
+    # crouch while the entity is already tens of blocks above the ground.
+    takeoff = {"animation_length": 0.38, "bones": {
+        "root": _position({
+            "0.0": [0, 0, 0], "0.08": [0, -2.0, 0],
+            "0.22": [0, 1.0, 0], "0.38": [0, 0, 0]}),
+        "torso_lower": _rotation({
+            "0.0": [8, 0, 0], "0.08": [16, 0, 0],
+            "0.22": [-5, 0, 0], "0.38": [1, 0, 0]}),
+        "torso_upper": _rotation({
+            "0.0": [4, 0, 0], "0.08": [10, 0, 0],
+            "0.22": [-8, 0, 0], "0.38": [-2, 0, 0]}),
+        "arm_l": _rotation({
+            "0.0": [-18, 0, -8], "0.08": [-10, 0, -13],
+            "0.22": [-108, 0, -11], "0.38": [-72, 0, -14]}),
+        "forearm_l": _rotation({
+            "0.0": [-28, 0, 0], "0.08": [-52, 0, 0],
+            "0.22": [-16, 0, 0], "0.38": [-30, 0, 0]}),
+        "arm_r": _rotation({
+            "0.0": [-18, 0, 8], "0.08": [-10, 0, 13],
+            "0.22": [-108, 0, 11], "0.38": [-72, 0, 14]}),
+        "forearm_r": _rotation({
+            "0.0": [-28, 0, 0], "0.08": [-52, 0, 0],
+            "0.22": [-16, 0, 0], "0.38": [-30, 0, 0]}),
+        "leg_l": _rotation({
+            "0.0": [-34, 0, -3], "0.08": [-48, 0, -3],
+            "0.22": [-4, 0, -3], "0.38": [-14, 0, -4]}),
+        "shin_l": _rotation({
+            "0.0": [58, 0, 0], "0.08": [74, 0, 0],
+            "0.22": [8, 0, 0], "0.38": [28, 0, 0]}),
+        "foot_l": _rotation({
+            "0.0": [-28, 0, 3], "0.08": [-38, 0, 3],
+            "0.22": [-4, 0, 3], "0.38": [-14, 0, 3]}),
+        "leg_r": _rotation({
+            "0.0": [-34, 0, 3], "0.08": [-48, 0, 3],
+            "0.22": [-4, 0, 3], "0.38": [-7, 0, 4]}),
+        "shin_r": _rotation({
+            "0.0": [58, 0, 0], "0.08": [74, 0, 0],
+            "0.22": [8, 0, 0], "0.38": [17, 0, 0]}),
+        "foot_r": _rotation({
+            "0.0": [-28, 0, -3], "0.08": [-38, 0, -3],
+            "0.22": [-4, 0, -3], "0.38": [-9, 0, -3]}),
+    }}
+    animations[prefix + "takeoff"] = takeoff
+
+    # Airborne hold: a long, slightly asymmetric biological silhouette with
+    # hands ahead of the shoulder plane and no repeated squat.
+    jump = animations[prefix + "jump"]
+    jump["loop"] = True
+    jump["animation_length"] = 1.2
+    jump["bones"].update({
+        "torso_lower": _rotation({"0.0": [1, 0, 0], "1.2": [1, 0, 0]}),
+        "torso_upper": _rotation({"0.0": [-2, 0, 0], "1.2": [-2, 0, 0]}),
+        "arm_l": _rotation({"0.0": [-60, 0, -14], "1.2": [-58, 0, -15]}),
+        "forearm_l": _rotation({"0.0": [-30, 0, 0], "1.2": [-32, 0, 0]}),
+        "arm_r": _rotation({"0.0": [-60, 0, 14], "1.2": [-62, 0, 15]}),
+        "forearm_r": _rotation({"0.0": [-30, 0, 0], "1.2": [-28, 0, 0]}),
+        "leg_l": _rotation({"0.0": [-14, 0, -4], "1.2": [-16, 0, -4]}),
+        "shin_l": _rotation({"0.0": [28, 0, 0], "1.2": [31, 0, 0]}),
+        "foot_l": _rotation({"0.0": [-14, 0, 3], "1.2": [-15, 0, 3]}),
+        "leg_r": _rotation({"0.0": [-7, 0, 4], "1.2": [-6, 0, 4]}),
+        "shin_r": _rotation({"0.0": [17, 0, 0], "1.2": [15, 0, 0]}),
+        "foot_r": _rotation({"0.0": [-9, 0, -3], "1.2": [-8, 0, -3]}),
     })
     animations[prefix + "fall"]["bones"].update({
         "torso_lower": _rotation({"0.0": [-3, 0, 0]}),
@@ -870,10 +1058,10 @@ def repair_tiger_runtime_animations(data):
         "foot_r": _rotation({"0.0": [-85.84, 0, 0]}),
         # Relaxed guard rather than two locked zombie arms. Elbows stay bent
         # and low enough to remain in the shared first-person periphery.
-        "arm_l": _rotation({"0.0": [-22, 0, -7]}),
-        "forearm_l": _rotation({"0.0": [-58, 0, 0]}),
-        "arm_r": _rotation({"0.0": [-22, 0, 7]}),
-        "forearm_r": _rotation({"0.0": [-58, 0, 0]}),
+        "arm_l": _rotation({"0.0": [-18, 0, -7]}),
+        "forearm_l": _rotation({"0.0": [-80, 0, 0]}),
+        "arm_r": _rotation({"0.0": [-18, 0, 7]}),
+        "forearm_r": _rotation({"0.0": [-80, 0, 0]}),
     }
     animations[prefix + "crouch"] = {
         "loop": True, "animation_length": 1.6, "bones": crouch_bones}
@@ -921,13 +1109,13 @@ def repair_tiger_runtime_animations(data):
         "0.5": [-44.67, 0, -3], "0.75": [-61.08, 0, -3],
         "1.0": [-69.15, 0, -3]})
     crouch_walk["bones"]["arm_l"] = _rotation({
-        "0.0": [-27, 0, -7], "0.5": [-19, 0, -7], "1.0": [-27, 0, -7]})
+        "0.0": [-21, 0, -7], "0.5": [-15, 0, -7], "1.0": [-21, 0, -7]})
     crouch_walk["bones"]["forearm_l"] = _rotation({
-        "0.0": [-52, 0, 0], "0.5": [-43, 0, 0], "1.0": [-52, 0, 0]})
+        "0.0": [-84, 0, 0], "0.5": [-76, 0, 0], "1.0": [-84, 0, 0]})
     crouch_walk["bones"]["arm_r"] = _rotation({
-        "0.0": [-19, 0, 7], "0.5": [-27, 0, 7], "1.0": [-19, 0, 7]})
+        "0.0": [-15, 0, 7], "0.5": [-21, 0, 7], "1.0": [-15, 0, 7]})
     crouch_walk["bones"]["forearm_r"] = _rotation({
-        "0.0": [-43, 0, 0], "0.5": [-52, 0, 0], "1.0": [-43, 0, 0]})
+        "0.0": [-76, 0, 0], "0.5": [-84, 0, 0], "1.0": [-76, 0, 0]})
     animations[prefix + "crouch_walk"] = crouch_walk
 
     prone_bones = {
@@ -945,11 +1133,14 @@ def repair_tiger_runtime_animations(data):
         "leg_r": _rotation({"0.0": [0, 0, 4]}),
         "shin_r": _rotation({"0.0": [0, 0, 0]}),
         "foot_r": _rotation({"0.0": [0, 0, -4]}),
-        "arm_l": _rotation({"0.0": [-158, 0, -14]}),
-        "forearm_l": _rotation({"0.0": [-25, 0, 8]}),
+        # Keep each elbow under its own shoulder. Large opposing local-Z
+        # angles made the world-space forearms cross directly in front of the
+        # head socket even though the third-person silhouette looked usable.
+        "arm_l": _rotation({"0.0": [-158, 0, -5]}),
+        "forearm_l": _rotation({"0.0": [-25, 0, 2]}),
         "hand_l": _rotation({"0.0": [0, 0, 0]}),
-        "arm_r": _rotation({"0.0": [-158, 0, 14]}),
-        "forearm_r": _rotation({"0.0": [-25, 0, -8]}),
+        "arm_r": _rotation({"0.0": [-158, 0, 5]}),
+        "forearm_r": _rotation({"0.0": [-25, 0, -2]}),
         "hand_r": _rotation({"0.0": [0, 0, 0]}),
     }
     animations[prefix + "prone"] = {
@@ -960,9 +1151,9 @@ def repair_tiger_runtime_animations(data):
         # Active low crawl rides a few pixels above the passive prone contact
         # envelope. This leaves room for the drawn knee and pulling forearm
         # without turning the pose into either swimming or ground clipping.
-        "0.0": [-0.25, -62.0, 0], "0.35": [0, -61.5, 0],
-        "0.7": [0.25, -62.0, 0], "1.05": [0, -61.5, 0],
-        "1.4": [-0.25, -62.0, 0]})
+        "0.0": [-0.25, -61.6, 0], "0.35": [0, -61.5, 0],
+        "0.7": [0.25, -61.6, 0], "1.05": [0, -61.5, 0],
+        "1.4": [-0.25, -61.6, 0]})
     crawl["bones"]["torso_lower"] = _rotation({
         "0.0": [90, 1.2, 0], "0.7": [90, -1.2, 0], "1.4": [90, 1.2, 0]})
     crawl["bones"]["torso_upper"] = _rotation({
@@ -989,21 +1180,21 @@ def repair_tiger_runtime_animations(data):
         "0.7": [10, 0, 0], "1.05": [5, 0, 0],
         "1.4": [0, 0, 0]})
     crawl["bones"]["arm_l"] = _rotation({
-        "0.0": [-160, 0, -14], "0.35": [-152, 0, -23],
-        "0.7": [-145, 0, -35], "1.05": [-152, 0, -23],
-        "1.4": [-160, 0, -14]})
+        "0.0": [-160, 0, -5], "0.35": [-152, 0, -5],
+        "0.7": [-145, 0, -5], "1.05": [-152, 0, -5],
+        "1.4": [-160, 0, -5]})
     crawl["bones"]["arm_r"] = _rotation({
-        "0.0": [-145, 0, 35], "0.35": [-152, 0, 23],
-        "0.7": [-160, 0, 14], "1.05": [-152, 0, 23],
-        "1.4": [-145, 0, 35]})
+        "0.0": [-145, 0, 5], "0.35": [-152, 0, 5],
+        "0.7": [-160, 0, 5], "1.05": [-152, 0, 5],
+        "1.4": [-145, 0, 5]})
     crawl["bones"]["forearm_l"] = _rotation({
-        "0.0": [-22, 0, 8], "0.35": [-38, 0, 16],
-        "0.7": [-55, 0, 25], "1.05": [-38, 0, 16],
-        "1.4": [-22, 0, 8]})
+        "0.0": [-22, 0, 2], "0.35": [-38, 0, 2],
+        "0.7": [-55, 0, 2], "1.05": [-38, 0, 2],
+        "1.4": [-22, 0, 2]})
     crawl["bones"]["forearm_r"] = _rotation({
-        "0.0": [-55, 0, -25], "0.35": [-38, 0, -16],
-        "0.7": [-22, 0, -8], "1.05": [-38, 0, -16],
-        "1.4": [-55, 0, -25]})
+        "0.0": [-55, 0, -2], "0.35": [-38, 0, -2],
+        "0.7": [-22, 0, -2], "1.05": [-38, 0, -2],
+        "1.4": [-55, 0, -2]})
     animations[prefix + "crawl"] = crawl
 
     animations[prefix + "aim"] = {
@@ -1017,9 +1208,13 @@ def repair_tiger_runtime_animations(data):
             # right/trigger hand stays close to the face while the left hand
             # reaches the fore-end, so the same world skeleton has a readable
             # first-person silhouette and a credible third-person firing line.
-            "arm_r": _rotation({"0.0": [-52, -18, 5], "0.6": [-53, -18, 5],
-                                  "1.2": [-52, -18, 5]}),
-            "forearm_r": _rotation({"0.0": [-81, 0, 0]}),
+            # Open the trigger elbow and keep it outside the rib armour.  The
+            # former -52/-81 chain folded the joint into an acute hook under
+            # both guns; this solved shoulder/forearm pair keeps the wrist on
+            # the receiver while reading as a human right-shoulder stance.
+            "arm_r": _rotation({"0.0": [-62, -10, 12], "0.6": [-63, -10, 12],
+                                  "1.2": [-62, -10, 12]}),
+            "forearm_r": _rotation({"0.0": [-68, -8, -8]}),
             "hand_r": _rotation({"0.0": [0, 0, 0]}),
             # Solve the support wrist into the receiver volume at roughly
             # (0.5,160,-58.6).  The lower target used before finger flexion
@@ -1034,9 +1229,18 @@ def repair_tiger_runtime_animations(data):
             # axis rather than pointing over the EVA's head.
             # Numerically solved against the actual Pallet Rifle muzzle cap:
             # the bore is parallel to model -Z instead of 18 degrees left.
-            "cannon": _rotation({"0.0": [40.97, -8.41, 16.72]}),
+            # Solved from the installed Kantrophe mesh after the elbow
+            # correction: far-cap vector [0.053, -0.059, -91.272].
+            "cannon": _rotation({"0.0": [40.24, -8.41, 20.45]}),
         }}
     _set_firearm_grip(animations[prefix + "aim"]["bones"])
+    # The TV Pallet Rifle uses the same semantic socket but its authored
+    # barrel axis differs by about two degrees.  Give it an independent
+    # attachment correction instead of compromising both weapon muzzles.
+    rifle_aim = copy.deepcopy(animations[prefix + "aim"])
+    rifle_aim["bones"]["cannon"] = _rotation({
+        "0.0": [38.32, -8.41, 20.30]})
+    animations[prefix + "rifle_aim"] = rifle_aim
     animations[prefix + "prone_aim"] = {
         "loop": True, "animation_length": 1.2, "bones": {
             # A separate elbows-braced firing pose.  Reusing the standing aim
@@ -1107,10 +1311,7 @@ def repair_tiger_runtime_animations(data):
     }
     animations[prefix + "knife_ready"] = {
         "loop": True, "animation_length": 1.2, "bones": knife_ready_bones}
-    _set_hand_curl(knife_ready_bones, "r", curl=55, thumb=34,
-                   tip_curl=36, thumb_tip=17)
-    _set_hand_curl(knife_ready_bones, "l", curl=10, thumb=8,
-                   tip_curl=4, thumb_tip=2)
+    _set_knife_grip(knife_ready_bones)
 
     # One anatomically readable reverse-grip slash. The knife always remains
     # in the right hand; alternating a left-hand clip while the attachment
@@ -1160,12 +1361,29 @@ def repair_tiger_runtime_animations(data):
         "0.48": [-76.73, 29.12, 30.96],
         "0.62": [-74.23, 29.94, 30.51]})
     bones["knife"] = _rotation({"0.0": [90, 0, 12]})
-    _set_hand_curl(bones, "r", curl=55, thumb=34,
-                   tip_curl=36, thumb_tip=17)
-    _set_hand_curl(bones, "l", curl=10, thumb=8,
-                   tip_curl=4, thumb_tip=2)
+    _set_knife_grip(bones)
+    knife_attack = retime_animation(knife_attack, 0.86 / 0.62)
     animations[prefix + "knife"] = knife_attack
     animations[prefix + "knife_left"] = copy.deepcopy(knife_attack)
+
+    # RMB uses a deliberate single-hand power slash.  It retains the reverse
+    # grip and the free-hand guard; only the right arm owns the blade.  This
+    # replaces the generic two-handed smash that made the knife jump between
+    # both palms.
+    knife_heavy = retime_animation(knife_attack, 1.10 / 0.86)
+    knife_heavy["bones"]["root"] = _position({
+        "0.0": [0, 0, 0], "0.25": [0, 0.7, 1.3],
+        "0.57": [0, 1.7, -4.0], "0.86": [0, 0.7, -1.4],
+        "1.1": [0, 0, 0]})
+    knife_heavy["bones"]["torso_lower"] = _rotation({
+        "0.0": [0, 0, 0], "0.25": [3, 12, 0],
+        "0.57": [10, -19, 0], "0.86": [4, -6, 0],
+        "1.1": [0, 0, 0]})
+    knife_heavy["bones"]["torso_upper"] = _rotation({
+        "0.0": [1, 3, 0], "0.25": [-4, 18, 0],
+        "0.57": [11, -24, 0], "0.86": [5, -7, 0],
+        "1.1": [1, 3, 0]})
+    animations[prefix + "knife_heavy"] = knife_heavy
 
     lance_ready = {
         # A braced, staggered human spear stance. The right hand owns the
@@ -1195,7 +1413,13 @@ def repair_tiger_runtime_animations(data):
         "hand_l": _rotation({"0.0": [0, 0, -4]}),
         # Three degrees converges the shaft toward the target centre without
         # the old upper-left aim error.
-        "lance": _rotation({"0.0": [22.45, 0.05, 61.56]}),
+        "lance": {
+            "rotation": {"0.0": [22.45, 0.05, 61.56]},
+            # Move the haft to the EVA's anatomical right without changing the
+            # reviewed two-hand orientation.  This is a socket correction, not
+            # another arm-axis guess.
+            "position": {"0.0": [-1.75, 0, 0]},
+        },
     }
     lance_ready["arm_r"] = _rotation({
         "0.0": [-17.27, -13.33, 22.44],
@@ -1275,6 +1499,13 @@ def repair_tiger_runtime_animations(data):
         "0.42": [27.43, -0.55, 61.89],
         "0.6": [27.96, 1.13, 59.75],
         "0.72": [22.45, 0.05, 61.56]})
+    lance_thrust["bones"]["lance"]["position"] = {
+        "0.0": [-1.75, 0, 0],
+        "0.2": [-1.0, 0, 0],
+        "0.42": [-1.75, 0, 0],
+        "0.6": [-1.75, 0, 0],
+        "0.72": [-1.75, 0, 0],
+    }
     animations[prefix + "lance_thrust"] = lance_thrust
     _set_finger_curl(animations[prefix + "lance_thrust"]["bones"])
 
@@ -1297,10 +1528,10 @@ def repair_tiger_runtime_animations(data):
         # The bracing arm stays planted under the shoulder.
         bones[f"arm_{other}"] = copy.deepcopy(prone_bones[f"arm_{other}"])
         bones[f"forearm_{other}"] = copy.deepcopy(prone_bones[f"forearm_{other}"])
-        _set_hand_curl(bones, side, curl=29, thumb=23,
-                       tip_curl=17, thumb_tip=6)
-        _set_hand_curl(bones, other, curl=12, thumb=9,
-                       tip_curl=5, thumb_tip=2)
+        _set_hand_curl(bones, side, curl=35, thumb=23,
+                       tip_curl=24, thumb_tip=10)
+        _set_hand_curl(bones, other, curl=18, thumb=12,
+                       tip_curl=10, thumb_tip=4)
         return {"animation_length": 0.58, "bones": bones}
 
     animations[prefix + "prone_melee"] = prone_punch("r")
@@ -1334,11 +1565,10 @@ def repair_tiger_runtime_animations(data):
         "0.34": [134.14, 108.80, -41.87],
         "0.50": [127.05, 112.78, -23.75],
         "0.64": [144.70, 114.12, -5.15]})
-    _set_hand_curl(bones, "r", curl=55, thumb=34,
-                   tip_curl=36, thumb_tip=17)
-    _set_hand_curl(bones, "l", curl=10, thumb=8,
-                   tip_curl=4, thumb_tip=2)
+    _set_knife_grip(bones)
     animations[prefix + "prone_knife"] = prone_knife
+    animations[prefix + "prone_knife_heavy"] = retime_animation(
+        prone_knife, 1.10 / 0.64)
 
     prone_lance = {"animation_length": 0.72,
                    "bones": copy.deepcopy(prone_bones)}
@@ -1373,6 +1603,8 @@ def repair_tiger_runtime_animations(data):
         "0.42": [14.62, 29.02, 21.61],
         "0.60": [34.63, 14.83, 40.60],
         "0.72": [27.31, 8.28, 49.92]})
+    bones["lance"]["position"] = {
+        key: [-1.75, 0, 0] for key in ("0.0", "0.20", "0.42", "0.60", "0.72")}
     _set_finger_curl(bones, curl=48, thumb=30,
                      tip_curl=30, thumb_tip=14)
     animations[prefix + "prone_lance_thrust"] = prone_lance
@@ -1389,8 +1621,8 @@ def repair_tiger_runtime_animations(data):
             "0.0": [-25, 0, -8 * sign], "0.18": [-62, 0, -14 * sign],
             "0.40": [-4, 0, -2 * sign], "0.58": [-14, 0, -5 * sign],
             "0.72": [-25, 0, -8 * sign]})
-    _set_finger_curl(bones, curl=28, thumb=22,
-                     tip_curl=16, thumb_tip=6)
+    _set_finger_curl(bones, curl=50, thumb=30,
+                     tip_curl=34, thumb_tip=14)
     animations[prefix + "prone_smash"] = prone_smash
 
     cannon_fire = animations[prefix + "cannon_fire"]["bones"]
@@ -1401,16 +1633,16 @@ def repair_tiger_runtime_animations(data):
                  "leg_l", "leg_r", "shin_l", "shin_r", "foot_l", "foot_r"):
         cannon_fire.pop(bone, None)
     cannon_fire["arm_r"] = _rotation({
-        "0.0": [-52, -18, 5], "0.06": [-48, -18, 7],
-        "0.2": [-55, -18, 4], "0.55": [-52, -18, 5]})
-    cannon_fire["forearm_r"] = _rotation({"0.0": [-81, 0, 0]})
+        "0.0": [-62, -10, 12], "0.06": [-58, -10, 14],
+        "0.2": [-65, -10, 10], "0.55": [-62, -10, 12]})
+    cannon_fire["forearm_r"] = _rotation({"0.0": [-68, -8, -8]})
     cannon_fire["hand_r"] = _rotation({"0.0": [0, 0, 0]})
     cannon_fire["arm_l"] = _rotation({
         "0.0": [-97.41, 26.22, -1.84], "0.06": [-93.5, 26.2, 0],
         "0.2": [-100.0, 26.5, -3.0], "0.55": [-97.41, 26.22, -1.84]})
     cannon_fire["forearm_l"] = _rotation({"0.0": [2.83, -8.18, -6.28]})
     cannon_fire["hand_l"] = _rotation({"0.0": [0, 0, 0]})
-    cannon_fire["cannon"] = _rotation({"0.0": [40.97, -8.41, 16.72]})
+    cannon_fire["cannon"] = _rotation({"0.0": [40.24, -8.41, 20.45]})
     _set_firearm_grip(cannon_fire)
 
     # Triggered attacks run on the highest-priority controller.  Crouch clips
@@ -1435,6 +1667,8 @@ def repair_tiger_runtime_animations(data):
         animations[prefix + "melee_left"])
     animations[prefix + "crouch_knife"] = upper_body_clip(
         animations[prefix + "knife"])
+    animations[prefix + "crouch_knife_heavy"] = upper_body_clip(
+        animations[prefix + "knife_heavy"])
     animations[prefix + "crouch_lance_thrust"] = upper_body_clip(
         animations[prefix + "lance_thrust"])
     animations[prefix + "crouch_smash"] = upper_body_clip(
@@ -1464,10 +1698,41 @@ def repair_tiger_runtime_animations(data):
     _set_firearm_grip(prone_cannon_fire["bones"])
     animations[prefix + "prone_cannon_fire"] = prone_cannon_fire
 
-    for attack_name in ("melee", "melee_left", "smash", "stomp"):
+    # The pallet rifle is automatic, so its recoil is shorter and lighter
+    # than the Yashima cannon discharge while still visibly reacting on every
+    # accepted server shot. Both clips are upper-body overlays and preserve
+    # the user-approved crouch/prone lower-body silhouettes.
+    rifle_fire = upper_body_clip(
+        static_pose(animations[prefix + "rifle_aim"], 0.0))
+    rifle_fire["animation_length"] = 0.18
+    rifle_fire["bones"]["arm_r"] = _rotation({
+        "0.0": [-62, -10, 12], "0.04": [-58.5, -10, 14],
+        "0.11": [-64, -10, 10], "0.18": [-62, -10, 12]})
+    rifle_fire["bones"]["arm_l"] = _rotation({
+        "0.0": [-97.41, 26.22, -1.84], "0.04": [-94, 26.2, 0],
+        "0.11": [-99, 26.4, -2.7], "0.18": [-97.41, 26.22, -1.84]})
+    _set_firearm_grip(rifle_fire["bones"])
+    animations[prefix + "rifle_fire"] = rifle_fire
+
+    prone_rifle_fire = upper_body_clip(
+        static_pose(animations[prefix + "prone_aim"], 0.0))
+    prone_rifle_fire["animation_length"] = 0.18
+    prone_rifle_fire["bones"]["arm_r"] = _rotation({
+        "0.0": [-158, 0, 14], "0.04": [-154.5, 0, 16],
+        "0.11": [-160, 0, 12], "0.18": [-158, 0, 14]})
+    prone_rifle_fire["bones"]["arm_l"] = _rotation({
+        "0.0": [-158, 0, -14], "0.04": [-154.5, 0, -16],
+        "0.11": [-160, 0, -12], "0.18": [-158, 0, -14]})
+    _set_firearm_grip(prone_rifle_fire["bones"])
+    animations[prefix + "prone_rifle_fire"] = prone_rifle_fire
+
+    # Bare-hand melee owns animated claw fingers; do not overwrite those
+    # channels with the old static iron-golem fist.
+    for attack_name in ("smash", "stomp"):
         if prefix + attack_name in animations:
             _set_finger_curl(animations[prefix + attack_name]["bones"],
-                             curl=55, thumb=36)
+                             curl=62, thumb=36,
+                             tip_curl=46, thumb_tip=17)
 
     crucified = animations[prefix + "crucified"]["bones"]
     crucified["arm_l"] = _rotation({
@@ -1510,7 +1775,7 @@ def build_animations():
     animations["animation.eva_unit01.visual_run_contact"] = static_pose(
         animations["animation.eva_unit01.run"], 0.0)
     animations["animation.eva_unit01.visual_jump"] = static_pose(
-        animations["animation.eva_unit01.jump"], 0.0)
+        animations["animation.eva_unit01.takeoff"], 0.22)
     animations["animation.eva_unit01.visual_fall"] = static_pose(
         animations["animation.eva_unit01.fall"], 0.0)
     animations["animation.eva_unit01.visual_crouch_walk"] = static_pose(
@@ -1522,11 +1787,13 @@ def build_animations():
     animations["animation.eva_unit01.visual_lance_ready"] = static_pose(
         animations["animation.eva_unit01.lance_ready"], 0.0)
     animations["animation.eva_unit01.visual_knife_windup"] = static_pose(
-        animations["animation.eva_unit01.knife"], 0.12)
+        animations["animation.eva_unit01.knife"], 0.20)
     animations["animation.eva_unit01.visual_knife_contact"] = static_pose(
-        animations["animation.eva_unit01.knife"], 0.28)
+        animations["animation.eva_unit01.knife"], 0.45)
     animations["animation.eva_unit01.visual_knife_recovery"] = static_pose(
-        animations["animation.eva_unit01.knife"], 0.50)
+        animations["animation.eva_unit01.knife"], 0.70)
+    animations["animation.eva_unit01.visual_knife_heavy_contact"] = static_pose(
+        animations["animation.eva_unit01.knife_heavy"], 0.57)
     animations["animation.eva_unit01.visual_lance_windup"] = static_pose(
         animations["animation.eva_unit01.lance_thrust"], 0.20)
     animations["animation.eva_unit01.visual_lance_contact"] = static_pose(
@@ -1535,9 +1802,11 @@ def build_animations():
         animations["animation.eva_unit01.lance_thrust"], 0.70)
     animations["animation.eva_unit01.visual_cannon"] = static_pose(
         animations["animation.eva_unit01.aim"], 0.0)
+    animations["animation.eva_unit01.visual_rifle"] = static_pose(
+        animations["animation.eva_unit01.rifle_aim"], 0.0)
     animations["animation.eva_unit01.visual_crouch_knife_contact"] = composed_pose(
         "animation.eva_unit01.crouch", 0.0,
-        "animation.eva_unit01.crouch_knife", 0.32)
+        "animation.eva_unit01.crouch_knife", 0.45)
     animations["animation.eva_unit01.visual_prone_knife_contact"] = static_pose(
         animations["animation.eva_unit01.prone_knife"], 0.34)
     animations["animation.eva_unit01.visual_crouch_lance_contact"] = composed_pose(
@@ -1549,10 +1818,10 @@ def build_animations():
         animations["animation.eva_unit01.n2_ready"], 0.0)
     animations["animation.eva_unit01.visual_rifle_walk_contact"] = composed_pose(
         "animation.eva_unit01.walk", 0.0,
-        "animation.eva_unit01.aim", 0.0)
+        "animation.eva_unit01.rifle_aim", 0.0)
     animations["animation.eva_unit01.visual_crouch_rifle_contact"] = composed_pose(
         "animation.eva_unit01.crouch_walk", 0.0,
-        "animation.eva_unit01.aim", 0.0)
+        "animation.eva_unit01.rifle_aim", 0.0)
     animations["animation.eva_unit01.visual_prone_rifle"] = composed_pose(
         "animation.eva_unit01.prone", 0.0,
         "animation.eva_unit01.prone_aim", 0.0)

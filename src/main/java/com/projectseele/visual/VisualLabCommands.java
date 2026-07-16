@@ -1,5 +1,7 @@
 package com.projectseele.visual;
 
+import java.util.UUID;
+
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
@@ -38,7 +40,9 @@ public final class VisualLabCommands
             "normal", "idle", "walk_contact", "run_contact", "jump", "fall",
             "crouch", "crouch_walk", "prone", "crawl", "prone_cannon",
             "knife_ready", "knife_windup", "knife_contact", "knife_recovery",
-            "lance_ready", "lance_windup", "lance_contact", "lance_recovery", "cannon", "rifle"
+            "lance_ready", "lance_windup", "lance_contact", "lance_recovery", "cannon", "rifle",
+            "live_melee", "live_knife", "live_knife_heavy", "live_lance",
+            "live_rifle", "live_jump"
     };
     private static final String[] MASS_POSES = {
             "normal", "idle", "move", "attack", "revive", "ritual"
@@ -96,6 +100,10 @@ public final class VisualLabCommands
     {
         ServerPlayer player = source.getPlayerOrException();
         ServerLevel level = player.serverLevel();
+        // Persistent Visual Lab saves can reopen with the player still riding
+        // a subject from the previous matrix. Detach before cleanup/teleport so
+        // that old vehicle cannot follow the player into the new capture.
+        player.stopRiding();
         // This command is for the dedicated Visual Lab world. A fixed isolated
         // origin keeps captures independent from the player's previous
         // position, old high-altitude lab platforms, terrain and cloud height.
@@ -138,7 +146,11 @@ public final class VisualLabCommands
                         Blocks.AIR.defaultBlockState(), 3);
             }
         }
-        level.setBlock(centre.above(), Blocks.LODESTONE.defaultBlockState(), 3);
+        // Keep the centre marker flush with the floor. The old lodestone lived
+        // in the subject's feet volume, pushed every EVA up by one block and
+        // also masqueraded as a launch-silo bed during manual interaction.
+        level.setBlock(centre, Blocks.YELLOW_CONCRETE.defaultBlockState(), 3);
+        level.setBlock(centre.above(), Blocks.AIR.defaultBlockState(), 3);
         removeLabEntities(level, centre);
         Entity subject = "mass".equals(unitName)
                 ? createMass(level, centre.above())
@@ -279,8 +291,37 @@ public final class VisualLabCommands
     static int pose(CommandSourceStack source, String name) throws CommandSyntaxException
     {
         ServerPlayer player = source.getPlayerOrException();
-        EvaUnit01Entity unit = nearestUnit(player);
+        return pose(source, name, nearestUnit(player));
+    }
+
+    static int pose(CommandSourceStack source, String name, UUID subjectId,
+                    String expectedUnit) throws CommandSyntaxException
+    {
+        ServerPlayer player = source.getPlayerOrException();
+        return pose(source, name, pinnedUnit(player, subjectId, expectedUnit));
+    }
+
+    private static int pose(CommandSourceStack source, String name, EvaUnit01Entity unit)
+            throws CommandSyntaxException
+    {
+        ServerPlayer player = source.getPlayerOrException();
         removeVisualTargets(player.serverLevel(), unit.blockPosition());
+        // End-to-end poses must use the same server-authoritative pilot path
+        // as gameplay.  The old matrix sent control packets while the tester
+        // stood forty blocks away, so damage/animation/jump requests were
+        // correctly rejected and screenshots merely captured weapon-ready
+        // idles. Force-mount only the explicit development live_* catalogue.
+        if (name.startsWith("live_") && player.getVehicle() != unit)
+        {
+            if (!player.startRiding(unit, true))
+            {
+                throw new IllegalStateException(
+                        "Visual live pose could not mount its pinned EVA subject");
+            }
+            ProjectSeele.LOGGER.info(
+                    "Visual Lab mounted {} for authoritative {} input",
+                    player.getGameProfile().getName(), name);
+        }
         int visualPose = switch (name)
         {
             case "normal" -> EvaUnit01Entity.VISUAL_NORMAL;
@@ -312,6 +353,12 @@ public final class VisualLabCommands
             case "rifle_walk_contact" -> EvaUnit01Entity.VISUAL_RIFLE_WALK_CONTACT;
             case "crouch_rifle_contact" -> EvaUnit01Entity.VISUAL_CROUCH_RIFLE_CONTACT;
             case "prone_rifle" -> EvaUnit01Entity.VISUAL_PRONE_RIFLE;
+            case "live_melee" -> EvaUnit01Entity.VISUAL_LIVE_MELEE;
+            case "live_knife" -> EvaUnit01Entity.VISUAL_LIVE_KNIFE;
+            case "live_lance" -> EvaUnit01Entity.VISUAL_LIVE_LANCE;
+            case "live_rifle" -> EvaUnit01Entity.VISUAL_LIVE_RIFLE;
+            case "live_knife_heavy" -> EvaUnit01Entity.VISUAL_LIVE_KNIFE_HEAVY;
+            case "live_jump" -> EvaUnit01Entity.VISUAL_LIVE_JUMP;
             default -> throw new IllegalArgumentException("Unknown visual pose: " + name);
         };
         unit.setVisualPose(visualPose);
@@ -330,7 +377,20 @@ public final class VisualLabCommands
     static int capture(CommandSourceStack source) throws CommandSyntaxException
     {
         ServerPlayer player = source.getPlayerOrException();
-        EvaUnit01Entity unit = nearestUnit(player);
+        return capture(source, nearestUnit(player));
+    }
+
+    static int capture(CommandSourceStack source, UUID subjectId,
+                       String expectedUnit) throws CommandSyntaxException
+    {
+        ServerPlayer player = source.getPlayerOrException();
+        return capture(source, pinnedUnit(player, subjectId, expectedUnit));
+    }
+
+    private static int capture(CommandSourceStack source, EvaUnit01Entity unit)
+            throws CommandSyntaxException
+    {
+        ServerPlayer player = source.getPlayerOrException();
         removeVisualTargets(player.serverLevel(), unit.blockPosition());
         if (player.getVehicle() != unit)
         {
@@ -341,7 +401,8 @@ public final class VisualLabCommands
         player.setXRot(0.0F);
         SeeleNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
                 new ClientboundVisualCapturePacket(unit.getId(), unit.getVisualPose()));
-        source.sendSuccess(() -> Component.literal("Visual capture queued for Unit-01"), false);
+        source.sendSuccess(() -> Component.literal(
+                "Visual capture queued for " + unitName(unit)), false);
         return 1;
     }
 
@@ -390,6 +451,46 @@ public final class VisualLabCommands
                         player.getBoundingBox().inflate(192.0D), Entity::isAlive).stream()
                 .min((left, right) -> Double.compare(left.distanceToSqr(player), right.distanceToSqr(player)))
                 .orElseThrow(() -> new IllegalStateException("No EVA within 192 blocks"));
+    }
+
+    static UUID findUnitId(ServerPlayer player, String expectedUnit)
+    {
+        return player.serverLevel().getEntitiesOfClass(EvaUnit01Entity.class,
+                        player.getBoundingBox().inflate(192.0D), Entity::isAlive).stream()
+                .filter(unit -> expectedUnit.equals(unitName(unit)))
+                .min((left, right) -> Double.compare(
+                        left.distanceToSqr(player), right.distanceToSqr(player)))
+                .map(Entity::getUUID)
+                .orElseThrow(() -> new IllegalStateException(
+                        "No " + expectedUnit + " within 192 blocks"));
+    }
+
+    private static EvaUnit01Entity pinnedUnit(ServerPlayer player, UUID subjectId,
+                                              String expectedUnit)
+    {
+        Entity entity = player.serverLevel().getEntity(subjectId);
+        if (!(entity instanceof EvaUnit01Entity unit) || !unit.isAlive())
+        {
+            throw new IllegalStateException(
+                    "Pinned Visual Lab EVA is missing: " + subjectId);
+        }
+        String actualUnit = unitName(unit);
+        if (!expectedUnit.equals(actualUnit))
+        {
+            throw new IllegalStateException("Pinned Visual Lab EVA changed from "
+                    + expectedUnit + " to " + actualUnit + ": " + subjectId);
+        }
+        return unit;
+    }
+
+    private static String unitName(EvaUnit01Entity unit)
+    {
+        return switch (unit.getUnitVariant())
+        {
+            case EvaUnit01Entity.UNIT_00 -> "unit00";
+            case EvaUnit01Entity.UNIT_02 -> "unit02";
+            default -> "unit01";
+        };
     }
 
     private static MassProductionEvaEntity nearestMass(ServerPlayer player)

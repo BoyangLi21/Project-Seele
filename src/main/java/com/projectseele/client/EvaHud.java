@@ -485,7 +485,7 @@ public final class EvaHud
         // release. The synchronized skeleton pitch can trail local mouse input
         // by one network frame and must not move the optical rangefinder left.
         Vec3 dir = Vec3.directionFromRotation(
-                Mth.clamp(player.getXRot(), -EvaUnit01Entity.MAX_CANNON_AIM_PITCH,
+                Mth.clamp(player.getXRot(), EvaUnit01Entity.MIN_CANNON_AIM_PITCH,
                         EvaUnit01Entity.MAX_CANNON_AIM_PITCH),
                 player.getYRot());
         Vec3 farEnd = from.add(dir.scale(range));

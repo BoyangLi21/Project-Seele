@@ -13,7 +13,7 @@ import math
 import zipfile
 from pathlib import Path
 
-from PIL import Image, ImageChops
+from PIL import Image, ImageChops, ImageOps
 
 
 REPO = Path(__file__).resolve().parent.parent
@@ -125,9 +125,10 @@ def build_mesh(positions, texcoords, normals, triangles, args):
         material_lower = material.lower()
         if "support" in material_lower or material_lower == "material.010":
             tile_x, tile_y = 1, 0
-        elif ("visor" in material_lower or "eye" in material_lower
-              or material_lower == "material.016"):
+        elif "visor" in material_lower or material_lower == "material.016":
             tile_x, tile_y = 0, 1
+        elif "eye" in material_lower:
+            tile_x, tile_y = 1, 1
         else:
             tile_x, tile_y = 0, 0
         if tile_x == 1 and tile_y == 0 and not args.include_supports:
@@ -186,13 +187,25 @@ def build_atlases():
                                archive_image(archive, "Supports_Alpha.png"))
         emission = tile(archive_image(archive, "Rifle_Emission.png", "RGBA"))
         visor = tile(archive_image(archive, "VisorView.png", "RGBA"))
+    # The .blend references a missing Visoralt.png for EyeEmssion.002.  The
+    # old converter silently mapped both optical materials to the magenta
+    # VisorView tile, producing the giant pink EMERGENCY panels seen in game.
+    # Preserve the authored line detail but colour the two material contracts
+    # as separate dark NERV optics.
+    visor_luma = ImageOps.grayscale(visor)
+    optic = ImageOps.colorize(
+        visor_luma, black=(2, 7, 11), white=(22, 112, 132)).convert("RGBA")
+    eye = ImageOps.colorize(
+        visor_luma, black=(10, 4, 1), white=(225, 112, 20)).convert("RGBA")
     colour = Image.new("RGBA", (ATLAS_SIZE, ATLAS_SIZE), (0, 0, 0, 0))
     colour.paste(rifle, (0, 0))
     colour.paste(supports, (TEXTURE_TILE, 0))
     emissive = Image.new("RGBA", colour.size, (0, 0, 0, 0))
-    colour.paste(visor, (0, TEXTURE_TILE))
+    colour.paste(optic, (0, TEXTURE_TILE))
+    colour.paste(eye, (TEXTURE_TILE, TEXTURE_TILE))
     emissive.paste(ImageChops.multiply(emission, rifle), (0, 0))
-    emissive.paste(visor, (0, TEXTURE_TILE))
+    emissive.paste(optic, (0, TEXTURE_TILE))
+    emissive.paste(eye, (TEXTURE_TILE, TEXTURE_TILE))
     return colour, emissive
 
 
