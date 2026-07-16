@@ -16,6 +16,8 @@ import com.projectseele.entity.MassProductionEvaEntity;
 import com.projectseele.fx.TreeOfLifeLayout;
 import com.projectseele.network.SeeleNetwork;
 import com.projectseele.network.ServerboundEvaControlPacket;
+import com.projectseele.registry.ModBlocks;
+import com.projectseele.world.RetractableBuildingCoreBlock;
 import net.minecraft.client.CameraType;
 import net.minecraft.client.CloudStatus;
 import net.minecraft.client.Minecraft;
@@ -64,6 +66,7 @@ public final class VisualCaptureManager
     private static ImpactSession impactSession;
     private static SiloSession siloSession;
     private static Tokyo3Session tokyo3Session;
+    private static Tokyo3RetractionSession tokyo3RetractionSession;
     private static int shutdownTicks = -1;
 
     private VisualCaptureManager() {}
@@ -112,6 +115,11 @@ public final class VisualCaptureManager
             tokyo3Session.restore(minecraft);
             tokyo3Session = null;
         }
+        if (tokyo3RetractionSession != null)
+        {
+            tokyo3RetractionSession.restore(minecraft);
+            tokyo3RetractionSession = null;
+        }
         shutdownTicks = -1;
         session = new Session(entityId, pose, minecraft);
         minecraft.player.displayClientMessage(Component.literal("Visual capture started"), false);
@@ -145,6 +153,11 @@ public final class VisualCaptureManager
             tokyo3Session.restore(minecraft);
             tokyo3Session = null;
         }
+        if (tokyo3RetractionSession != null)
+        {
+            tokyo3RetractionSession.restore(minecraft);
+            tokyo3RetractionSession = null;
+        }
         shutdownTicks = -1;
         impactSession = new ImpactSession(origin, yaw, minecraft);
         minecraft.player.displayClientMessage(
@@ -177,6 +190,11 @@ public final class VisualCaptureManager
         {
             tokyo3Session.restore(minecraft);
             tokyo3Session = null;
+        }
+        if (tokyo3RetractionSession != null)
+        {
+            tokyo3RetractionSession.restore(minecraft);
+            tokyo3RetractionSession = null;
         }
         shutdownTicks = -1;
         siloSession = new SiloSession(entityId, minecraft);
@@ -217,6 +235,12 @@ public final class VisualCaptureManager
         if (tokyo3Session != null)
         {
             tokyo3Session.restore(minecraft);
+            tokyo3Session = null;
+        }
+        if (tokyo3RetractionSession != null)
+        {
+            tokyo3RetractionSession.restore(minecraft);
+            tokyo3RetractionSession = null;
         }
         shutdownTicks = -1;
         tokyo3Session = new Tokyo3Session(origin, minecraft);
@@ -224,10 +248,56 @@ public final class VisualCaptureManager
                 Component.literal("Tokyo-3 visual capture started"), false);
     }
 
+    /** Starts a direct before/mid/down/restored comparison of armour towers. */
+    public static void startTokyo3Retraction(BlockPos origin)
+    {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft.level == null || minecraft.player == null)
+        {
+            return;
+        }
+        if (origin.getY() <= -2000)
+        {
+            ProjectSeele.LOGGER.error(
+                    "VISUAL TOKYO3 RETRACTION INVALID: server-side district setup failed");
+            shutdownTicks = 20;
+            return;
+        }
+        if (session != null)
+        {
+            session.restore(minecraft);
+            session = null;
+        }
+        if (impactSession != null)
+        {
+            impactSession.restore(minecraft);
+            impactSession = null;
+        }
+        if (siloSession != null)
+        {
+            siloSession.restore(minecraft);
+            siloSession = null;
+        }
+        if (tokyo3Session != null)
+        {
+            tokyo3Session.restore(minecraft);
+            tokyo3Session = null;
+        }
+        if (tokyo3RetractionSession != null)
+        {
+            tokyo3RetractionSession.restore(minecraft);
+        }
+        shutdownTicks = -1;
+        tokyo3RetractionSession = new Tokyo3RetractionSession(origin, minecraft);
+        minecraft.player.displayClientMessage(
+                Component.literal("Tokyo-3 retraction visual capture started"), false);
+    }
+
     /** Suppress GUI overlays while leaving the world-space EVA body visible. */
     public static boolean isSuppressingGui()
     {
         return impactSession != null || tokyo3Session != null
+                || tokyo3RetractionSession != null
                 || session != null && session.isCleanFirstPerson();
     }
 
@@ -255,6 +325,15 @@ public final class VisualCaptureManager
             {
                 impactSession.restore(minecraft);
                 impactSession = null;
+            }
+            return;
+        }
+        if (tokyo3RetractionSession != null)
+        {
+            if (!tokyo3RetractionSession.tick(minecraft))
+            {
+                tokyo3RetractionSession.restore(minecraft);
+                tokyo3RetractionSession = null;
             }
             return;
         }
@@ -570,6 +649,218 @@ public final class VisualCaptureManager
             int gridZ = z / 40;
             return 22 + Math.floorMod(gridX * 31 + gridZ * 17, 6) * 4;
         }
+    }
+
+    /** Four synchronized skyline frames proving the complete tower travel cycle. */
+    private static final class Tokyo3RetractionSession
+    {
+        private static final int MAX_DEPTH = 42;
+        private static final int MID_DEPTH = MAX_DEPTH / 2;
+        private static final int REQUIRED_STABLE_TICKS = 12;
+        private static final int TIMEOUT_TICKS = 2600;
+        private static final int[] LOT_CENTRES = {-80, -40, 0, 40, 80};
+        private static final String[] STAGES = {
+                "deployed", "mid_descent", "fully_retracted", "restored"
+        };
+        private static final int[] DEPTHS = {0, MID_DEPTH, MAX_DEPTH, 0};
+        private static final boolean[] EXPECT_ARMED = {false, true, true, false};
+
+        private final BlockPos origin;
+        private final Entity originalCamera;
+        private final CameraType originalCameraType;
+        private final boolean originalHideGui;
+        private final CloudStatus originalCloudStatus;
+        private ArmorStand camera;
+        private int stage;
+        private int stableTicks;
+        private int totalTicks;
+
+        Tokyo3RetractionSession(BlockPos origin, Minecraft minecraft)
+        {
+            this.origin = origin.immutable();
+            this.originalCamera = minecraft.getCameraEntity();
+            this.originalCameraType = minecraft.options.getCameraType();
+            this.originalHideGui = minecraft.options.hideGui;
+            this.originalCloudStatus = minecraft.options.cloudStatus().get();
+            this.position(minecraft);
+            ProjectSeele.LOGGER.info(
+                    "Tokyo-3 retraction visual batch {} at {}", CAPTURE_BATCH, this.origin);
+        }
+
+        boolean tick(Minecraft minecraft)
+        {
+            if (minecraft.level == null || minecraft.player == null)
+            {
+                return false;
+            }
+            this.totalTicks++;
+            if (this.totalTicks > TIMEOUT_TICKS)
+            {
+                ProjectSeele.LOGGER.error(
+                        "VISUAL TOKYO3 RETRACTION INVALID: client sequence exceeded {} ticks",
+                        TIMEOUT_TICKS);
+                if (Boolean.getBoolean("projectseele.visualCapture"))
+                {
+                    shutdownTicks = 20;
+                }
+                return false;
+            }
+            this.maintainCamera(minecraft);
+            Audit audit = this.audit(minecraft, DEPTHS[this.stage],
+                    EXPECT_ARMED[this.stage]);
+            if (!audit.valid())
+            {
+                this.stableTicks = 0;
+                return true;
+            }
+            if (++this.stableTicks < REQUIRED_STABLE_TICKS)
+            {
+                return true;
+            }
+
+            ProjectSeele.LOGGER.info(
+                    "Tokyo-3 retraction visual evidence: stage={} depth={} "
+                            + "towerStates={}/13 cores={}/13 armed={}/13 valid={}",
+                    STAGES[this.stage], DEPTHS[this.stage], audit.towers(),
+                    audit.cores(), audit.armed(), audit.valid());
+            this.capture(minecraft, STAGES[this.stage]);
+            this.stage++;
+            this.stableTicks = 0;
+            if (this.stage >= STAGES.length)
+            {
+                ProjectSeele.LOGGER.info(
+                        "Tokyo-3 retraction visual matrix finished: deployed, "
+                                + "mid-descent, fully retracted and restored captured");
+                if (Boolean.getBoolean("projectseele.visualCapture"))
+                {
+                    shutdownTicks = 30;
+                }
+                return false;
+            }
+            return true;
+        }
+
+        private Audit audit(Minecraft minecraft, int depth, boolean expectedArmed)
+        {
+            int towers = 0;
+            int cores = 0;
+            int armed = 0;
+            for (int x : LOT_CENTRES)
+            {
+                for (int z : LOT_CENTRES)
+                {
+                    if (Math.abs(x) <= 40 && Math.abs(z) <= 40
+                            || (x == 0 && z == -80)
+                            || (x == 80 && z == 0)
+                            || (x == 0 && z == 80))
+                    {
+                        continue;
+                    }
+                    int visibleHeight = Math.max(0, towerHeight(x, z) - depth);
+                    var signature = minecraft.level.getBlockState(
+                            this.origin.offset(x,
+                                    visibleHeight > 0 ? visibleHeight + 1 : 0, z));
+                    boolean shellClear = minecraft.level.getBlockState(
+                            this.origin.offset(x - 12, 1, z)).isAir()
+                            && minecraft.level.getBlockState(
+                            this.origin.offset(x + 12, 1, z)).isAir()
+                            && minecraft.level.getBlockState(
+                            this.origin.offset(x, 1, z - 12)).isAir()
+                            && minecraft.level.getBlockState(
+                            this.origin.offset(x, 1, z + 12)).isAir();
+                    if (visibleHeight > 0 ? signature.is(Blocks.REDSTONE_LAMP)
+                            : signature.is(ModBlocks.RETRACTABLE_BUILDING_CORE.get())
+                            && shellClear)
+                    {
+                        towers++;
+                    }
+                    var core = minecraft.level.getBlockState(this.origin.offset(x, 0, z));
+                    if (core.is(ModBlocks.RETRACTABLE_BUILDING_CORE.get()))
+                    {
+                        cores++;
+                        if (core.getValue(RetractableBuildingCoreBlock.ARMED))
+                        {
+                            armed++;
+                        }
+                    }
+                }
+            }
+            int expectedArmedCount = expectedArmed ? 13 : 0;
+            return new Audit(towers, cores, armed,
+                    towers == 13 && cores == 13 && armed == expectedArmedCount);
+        }
+
+        private void position(Minecraft minecraft)
+        {
+            minecraft.options.setCameraType(CameraType.FIRST_PERSON);
+            minecraft.options.hideGui = true;
+            minecraft.options.cloudStatus().set(CloudStatus.OFF);
+            this.camera = EntityType.ARMOR_STAND.create(minecraft.level);
+            if (this.camera == null)
+            {
+                throw new IllegalStateException(
+                        "Tokyo-3 retraction camera creation failed");
+            }
+            this.camera.setInvisible(true);
+            this.camera.setNoGravity(true);
+            this.maintainCamera(minecraft);
+            minecraft.setCameraEntity(this.camera);
+        }
+
+        private void maintainCamera(Minecraft minecraft)
+        {
+            Vec3 base = Vec3.atLowerCornerOf(this.origin);
+            Vec3 cameraPos = base.add(0.0D, 62.0D, 148.0D);
+            Vec3 target = base.add(0.0D, 15.0D, 0.0D);
+            this.camera.setPos(cameraPos.x,
+                    cameraPos.y - this.camera.getEyeHeight(), cameraPos.z);
+            lookAt(this.camera, cameraPos, target);
+            this.camera.xo = this.camera.getX();
+            this.camera.yo = this.camera.getY();
+            this.camera.zo = this.camera.getZ();
+            this.camera.yRotO = this.camera.getYRot();
+            this.camera.xRotO = this.camera.getXRot();
+            minecraft.setCameraEntity(this.camera);
+        }
+
+        private void capture(Minecraft minecraft, String name)
+        {
+            try
+            {
+                File batch = new File(minecraft.gameDirectory,
+                        "screenshots/projectseele_visual/" + CAPTURE_BATCH);
+                Files.createDirectories(batch.toPath());
+                String filename = "tokyo3_retraction_" + name + ".png";
+                Screenshot.grab(minecraft.gameDirectory,
+                        "projectseele_visual/" + CAPTURE_BATCH + "/" + filename,
+                        minecraft.getMainRenderTarget(), message -> ProjectSeele.LOGGER.info(
+                                "Tokyo-3 retraction visual capture {}/{}: {}",
+                                CAPTURE_BATCH, filename, message.getString()));
+            }
+            catch (Exception exception)
+            {
+                ProjectSeele.LOGGER.error(
+                        "Tokyo-3 retraction visual screenshot failed", exception);
+            }
+        }
+
+        void restore(Minecraft minecraft)
+        {
+            minecraft.setCameraEntity(
+                    this.originalCamera != null ? this.originalCamera : minecraft.player);
+            minecraft.options.setCameraType(this.originalCameraType);
+            minecraft.options.hideGui = this.originalHideGui;
+            minecraft.options.cloudStatus().set(this.originalCloudStatus);
+        }
+
+        private static int towerHeight(int x, int z)
+        {
+            int gridX = x / 40;
+            int gridZ = z / 40;
+            return 22 + Math.floorMod(gridX * 31 + gridZ * 17, 6) * 4;
+        }
+
+        private record Audit(int towers, int cores, int armed, boolean valid) {}
     }
 
     /** Fixed multi-angle capture of the complete Tree, rather than one entity. */

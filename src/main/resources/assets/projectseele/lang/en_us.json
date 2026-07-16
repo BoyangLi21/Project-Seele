@@ -1,4 +1,5 @@
 {
+  "block.projectseele.retractable_building_core": "Retractable Building Core",
   "itemGroup.projectseele": "Project SEELE",
   "message.projectseele.use_entry_gantry": "Board from the upper dorsal entry-plug gantry",
   "message.projectseele.aim_entry_plug": "Aim directly at the dorsal entry-plug socket",

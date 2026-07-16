@@ -1,7 +1,10 @@
 package com.projectseele.world;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 
+import com.projectseele.registry.ModBlocks;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.Block;
@@ -19,12 +22,13 @@ public final class ThirdTokyoSurfaceBuilder
     public static final int FOUNDATION_HALF_SIZE = 120;
     public static final int OBSERVATION_Z = 112;
     public static final int OBSERVATION_Y = 38;
+    public static final int ARMOURED_LOT_HALF_SIZE = 12;
 
     private static final int ROAD_SPACING = 40;
     private static final int ROAD_OFFSET = 20;
     private static final int ROAD_HALF_WIDTH = 4;
     private static final int SIDEWALK_HALF_WIDTH = 7;
-    private static final int LOT_HALF_SIZE = 12;
+    private static final int LOT_HALF_SIZE = ARMOURED_LOT_HALF_SIZE;
     private static final int[] LOT_CENTRES = {-80, -40, 0, 40, 80};
     private static final int[][] PYLONS = {
             {-100, -80}, {-100, 0}, {-100, 80},
@@ -34,7 +38,10 @@ public final class ThirdTokyoSurfaceBuilder
             {-100, -100}, {-100, 100}, {100, -100}, {100, 100},
             {-60, -100}, {60, 100}, {-100, 60}, {100, -60},
     };
-    private static final int EXPECTED_TOWERS = 13;
+    private static final List<TowerSpec> ARMOURED_TOWERS = createArmouredTowers();
+    private static final int EXPECTED_TOWERS = ARMOURED_TOWERS.size();
+    private static final int MAX_RETRACTION_DEPTH = ARMOURED_TOWERS.stream()
+            .mapToInt(TowerSpec::height).max().orElse(0);
     private static final int UPDATE_CLIENTS = Block.UPDATE_CLIENTS;
 
     private ThirdTokyoSurfaceBuilder() {}
@@ -80,6 +87,13 @@ public final class ThirdTokyoSurfaceBuilder
 
     public static DistrictAudit inspect(ServerLevel level, BlockPos origin)
     {
+        return inspect(level, origin, 0);
+    }
+
+    public static DistrictAudit inspect(ServerLevel level, BlockPos origin,
+                                        int retractionDepth)
+    {
+        int depth = Math.max(0, Math.min(MAX_RETRACTION_DEPTH, retractionDepth));
         int roads = 0;
         for (int[] point : ROAD_AUDIT_POINTS)
         {
@@ -101,9 +115,14 @@ public final class ThirdTokyoSurfaceBuilder
                 {
                     continue;
                 }
-                int height = towerHeight(x, z);
-                if (level.getBlockState(origin.offset(x, height + 1, z))
-                        .is(Blocks.REDSTONE_LAMP))
+                int visibleHeight = Math.max(0, towerHeight(x, z) - depth);
+                boolean signature = visibleHeight > 0
+                        ? level.getBlockState(origin.offset(x, visibleHeight + 1, z))
+                                .is(Blocks.REDSTONE_LAMP)
+                        : level.getBlockState(origin.offset(x, 0, z))
+                                .is(ModBlocks.RETRACTABLE_BUILDING_CORE.get())
+                                && towerShellClear(level, origin.offset(x, 0, z));
+                if (signature)
                 {
                     towers++;
                 }
@@ -143,6 +162,50 @@ public final class ThirdTokyoSurfaceBuilder
                 && sortieLane && observationDeck && foundation;
         return new DistrictAudit(valid, roads, towers, substations, pylons,
                 battleBeacon, sortieLane, observationDeck, foundation);
+    }
+
+    public static List<TowerSpec> armouredTowers()
+    {
+        return ARMOURED_TOWERS;
+    }
+
+    public static int maximumRetractionDepth()
+    {
+        return MAX_RETRACTION_DEPTH;
+    }
+
+    /** Applies exactly one globally synchronized layer of tower travel. */
+    public static void applyRetractionDepth(ServerLevel level, BlockPos origin,
+                                            int oldDepth, int newDepth)
+    {
+        if (Math.abs(newDepth - oldDepth) != 1
+                || oldDepth < 0 || oldDepth > MAX_RETRACTION_DEPTH
+                || newDepth < 0 || newDepth > MAX_RETRACTION_DEPTH)
+        {
+            throw new IllegalArgumentException(
+                    "Tokyo-3 retraction depth must move by one layer");
+        }
+        boolean retracting = newDepth > oldDepth;
+        for (TowerSpec tower : ARMOURED_TOWERS)
+        {
+            int oldVisible = Math.max(0, tower.height() - oldDepth);
+            int newVisible = Math.max(0, tower.height() - newDepth);
+            if (oldVisible == newVisible)
+            {
+                continue;
+            }
+            BlockPos centre = origin.offset(tower.x(), 0, tower.z());
+            clearTowerRoof(level, centre, oldVisible);
+            if (retracting)
+            {
+                clearTowerWallLayer(level, centre, oldVisible);
+            }
+            else
+            {
+                buildTowerWallLayer(level, centre, newVisible, tower.x(), tower.z());
+            }
+            buildTowerRoof(level, centre, newVisible);
+        }
     }
 
     private static void buildFoundation(ServerLevel level, BlockPos origin)
@@ -233,6 +296,8 @@ public final class ThirdTokyoSurfaceBuilder
         BlockState nervStripe = Blocks.ORANGE_CONCRETE.defaultBlockState();
 
         fillSquare(level, centre, 0, LOT_HALF_SIZE, Blocks.POLISHED_DEEPSLATE.defaultBlockState());
+        set(level, centre, ModBlocks.RETRACTABLE_BUILDING_CORE.get()
+                .defaultBlockState().setValue(RetractableBuildingCoreBlock.ARMED, false));
         for (int y = 1; y <= height; y++)
         {
             for (int i = -LOT_HALF_SIZE; i <= LOT_HALF_SIZE; i++)
@@ -294,6 +359,93 @@ public final class ThirdTokyoSurfaceBuilder
                 BlockPos door = doorOnX ? centre.offset(wall, y, side)
                         : centre.offset(side, y, wall);
                 set(level, door, Blocks.AIR.defaultBlockState());
+            }
+        }
+    }
+
+    private static void clearTowerRoof(ServerLevel level, BlockPos centre,
+                                       int visibleHeight)
+    {
+        if (visibleHeight <= 0)
+        {
+            return;
+        }
+        fillSquare(level, centre, visibleHeight + 1, LOT_HALF_SIZE,
+                Blocks.AIR.defaultBlockState());
+        set(level, centre.offset(0, visibleHeight, 0), Blocks.AIR.defaultBlockState());
+        for (int x : new int[] {-8, 8})
+        {
+            for (int z : new int[] {-8, 8})
+            {
+                set(level, centre.offset(x, visibleHeight + 2, z),
+                        Blocks.AIR.defaultBlockState());
+            }
+        }
+    }
+
+    private static void clearTowerWallLayer(ServerLevel level, BlockPos centre,
+                                            int visibleHeight)
+    {
+        if (visibleHeight <= 0)
+        {
+            return;
+        }
+        BlockState air = Blocks.AIR.defaultBlockState();
+        for (int i = -LOT_HALF_SIZE; i <= LOT_HALF_SIZE; i++)
+        {
+            set(level, centre.offset(-LOT_HALF_SIZE, visibleHeight, i), air);
+            set(level, centre.offset(LOT_HALF_SIZE, visibleHeight, i), air);
+            set(level, centre.offset(i, visibleHeight, -LOT_HALF_SIZE), air);
+            set(level, centre.offset(i, visibleHeight, LOT_HALF_SIZE), air);
+        }
+    }
+
+    private static void buildTowerWallLayer(ServerLevel level, BlockPos centre,
+                                            int visibleHeight, int gridX, int gridZ)
+    {
+        if (visibleHeight <= 0)
+        {
+            return;
+        }
+        BlockState armor = Blocks.GRAY_CONCRETE.defaultBlockState();
+        BlockState dark = Blocks.DEEPSLATE_TILES.defaultBlockState();
+        BlockState glass = Math.floorMod(gridX + gridZ, 80) == 0
+                ? Blocks.LIGHT_BLUE_STAINED_GLASS.defaultBlockState()
+                : Blocks.CYAN_STAINED_GLASS.defaultBlockState();
+        BlockState nervStripe = Blocks.ORANGE_CONCRETE.defaultBlockState();
+        for (int i = -LOT_HALF_SIZE; i <= LOT_HALF_SIZE; i++)
+        {
+            set(level, centre.offset(-LOT_HALF_SIZE, visibleHeight, i),
+                    towerWall(visibleHeight, i, armor, dark, glass, nervStripe));
+            set(level, centre.offset(LOT_HALF_SIZE, visibleHeight, i),
+                    towerWall(visibleHeight, i, armor, dark, glass, nervStripe));
+            set(level, centre.offset(i, visibleHeight, -LOT_HALF_SIZE),
+                    towerWall(visibleHeight, i, armor, dark, glass, nervStripe));
+            set(level, centre.offset(i, visibleHeight, LOT_HALF_SIZE),
+                    towerWall(visibleHeight, i, armor, dark, glass, nervStripe));
+        }
+        cutInnerDoor(level, centre, gridX, gridZ);
+    }
+
+    private static void buildTowerRoof(ServerLevel level, BlockPos centre,
+                                       int visibleHeight)
+    {
+        if (visibleHeight <= 0)
+        {
+            return;
+        }
+        fillSquare(level, centre, visibleHeight + 1, LOT_HALF_SIZE,
+                Blocks.SMOOTH_STONE.defaultBlockState());
+        set(level, centre.offset(0, visibleHeight, 0),
+                Blocks.REDSTONE_BLOCK.defaultBlockState());
+        set(level, centre.offset(0, visibleHeight + 1, 0),
+                Blocks.REDSTONE_LAMP.defaultBlockState());
+        for (int x : new int[] {-8, 8})
+        {
+            for (int z : new int[] {-8, 8})
+            {
+                set(level, centre.offset(x, visibleHeight + 2, z),
+                        Blocks.LIGHTNING_ROD.defaultBlockState());
             }
         }
     }
@@ -433,6 +585,26 @@ public final class ThirdTokyoSurfaceBuilder
         return 22 + Math.floorMod(gridX * 31 + gridZ * 17, 6) * 4;
     }
 
+    private static List<TowerSpec> createArmouredTowers()
+    {
+        List<TowerSpec> towers = new ArrayList<>();
+        for (int x : LOT_CENTRES)
+        {
+            for (int z : LOT_CENTRES)
+            {
+                if (Math.abs(x) <= 40 && Math.abs(z) <= 40
+                        || (x == 0 && z == -80)
+                        || (x == 80 && z == 0)
+                        || (x == 0 && z == 80))
+                {
+                    continue;
+                }
+                towers.add(new TowerSpec(x, z, towerHeight(x, z)));
+            }
+        }
+        return List.copyOf(towers);
+    }
+
     private static int distanceToRoadAxis(int value)
     {
         int phase = Math.floorMod(value + ROAD_OFFSET, ROAD_SPACING);
@@ -449,6 +621,14 @@ public final class ThirdTokyoSurfaceBuilder
         return state.is(Blocks.BLACK_CONCRETE) || state.is(Blocks.GRAY_CONCRETE)
                 || state.is(Blocks.YELLOW_CONCRETE)
                 || state.is(Blocks.LIGHT_GRAY_CONCRETE);
+    }
+
+    private static boolean towerShellClear(ServerLevel level, BlockPos centre)
+    {
+        return level.getBlockState(centre.offset(-LOT_HALF_SIZE, 1, 0)).isAir()
+                && level.getBlockState(centre.offset(LOT_HALF_SIZE, 1, 0)).isAir()
+                && level.getBlockState(centre.offset(0, 1, -LOT_HALF_SIZE)).isAir()
+                && level.getBlockState(centre.offset(0, 1, LOT_HALF_SIZE)).isAir();
     }
 
     private static void clearHeadroom(ServerLevel level, BlockPos floor, int height)
@@ -479,6 +659,8 @@ public final class ThirdTokyoSurfaceBuilder
     {
         level.setBlock(position, state, UPDATE_CLIENTS);
     }
+
+    public record TowerSpec(int x, int z, int height) {}
 
     public record DistrictAudit(boolean valid, int roads, int towers,
                                 int substations, int pylons, boolean battleBeacon,

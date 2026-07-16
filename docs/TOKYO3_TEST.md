@@ -22,6 +22,18 @@ city asset.
    the city surface.
 6. Run `/seele tokyo3 overview` at any time to return to the skyline deck.
 
+### Armour-tower controls
+
+- `/seele tokyo3 retract` begins the emergency configuration. All 13 towers
+  descend one layer every 20 ticks.
+- `/seele tokyo3 restore` reverses the persisted sequence and returns the
+  towers to their exact source heights.
+- `/seele tokyo3 status` reports `DEPLOYED`, `DESCENDING`, `RETRACTED`, or
+  `RISING`, together with current and target depth.
+- Right-clicking any embedded retractable-building core toggles the same
+  district-wide sequence. Rising layers wait if a player or EVA occupies the
+  volume that would be rebuilt; ambient mobs cannot deadlock the whole city.
+
 ## Automated visual evidence
 
 From a terminal in the repository:
@@ -39,6 +51,15 @@ high-detail Unit-00/01/02 fingerprints, then writes exactly four PNG files:
 The unattended client closes only after all four screenshots have been queued.
 `tools/validate_visual_capture_run.py` rejects a missing view or any
 `VISUAL TOKYO3 INVALID` log marker.
+
+The full before/after motion matrix is:
+
+`tools\start_test.bat visual tokyo3_retraction`
+
+This longer unattended target captures the same skyline in four authoritative
+states: deployed, depth 21, fully retracted at depth 42, and fully restored.
+Each frame requires all 13 tower roof/core signatures and all 13 core armed
+states to match before the screenshot is accepted.
 
 The fast offline layout gate is:
 
@@ -64,7 +85,7 @@ It writes the plan/isometric review image and JSON report under
 ## Deliberate limitations
 
 This is the first Phase 4 surface slice, not a claim that Tokyo-3 is finished.
-The buildings are static original shells; actual layer-by-layer retraction,
-Jigsaw variation, the GeoFront dimension, NERV interior modules, traffic and
+The buildings are original procedural shells with working layer-by-layer
+retraction. Jigsaw variation, the GeoFront dimension, NERV interior modules, traffic and
 licensed campaign maps remain separate work. The current acceptance target is
 the connected loop: cage -> entry plug -> catapult -> surface district.

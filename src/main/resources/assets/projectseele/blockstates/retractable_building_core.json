@@ -1,0 +1,10 @@
+{
+  "variants": {
+    "armed=false": {
+      "model": "projectseele:block/retractable_building_core"
+    },
+    "armed=true": {
+      "model": "projectseele:block/retractable_building_core_armed"
+    }
+  }
+}

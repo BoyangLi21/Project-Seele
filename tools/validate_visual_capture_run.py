@@ -20,7 +20,8 @@ SNAPSHOT = REPO / "run/.projectseele_visual_before.json"
 # derivative and its shared first-/third-person skeleton.
 EXPECTED = {
     "unit01": 364, "unit00": 364, "unit02": 364,
-    "mass": 35, "tokyo3": 4, "silo": 6, "impact": 3,
+    "mass": 35, "tokyo3": 4, "tokyo3_retraction": 4,
+    "silo": 6, "impact": 3,
 }
 VIEWS_PER_POSE = {"unit01": 13, "unit00": 13, "unit02": 13, "mass": 7}
 FAILURE_PATTERNS = (
@@ -33,11 +34,16 @@ FAILURE_PATTERNS = (
     r"VISUAL TOKYO3 INVALID",
     r"Strict Tokyo-3 capture refused",
     r"Tokyo-3 visual screenshot failed",
+    r"VISUAL TOKYO3 RETRACTION INVALID",
+    r"Tokyo-3 retraction visual screenshot failed",
     r"Visual Lab automation failed",
 )
 SILO_STAGES = (
     "gantry_rear_socket", "plug_descent_external", "plug_descent_cockpit",
     "hatch_locked", "ascent_mid", "surface_clear",
+)
+TOKYO3_RETRACTION_STAGES = (
+    "deployed", "mid_descent", "fully_retracted", "restored",
 )
 
 
@@ -97,6 +103,13 @@ def verify(target: str) -> int:
         if missing:
             print(f"VISUAL RUN INVALID: silo stages missing: {missing}", file=sys.stderr)
             return 1
+    if target == "tokyo3_retraction":
+        missing = [stage for stage in TOKYO3_RETRACTION_STAGES
+                   if not any(path.name.endswith(f"_{stage}.png") for path in pngs)]
+        if missing:
+            print(f"VISUAL RUN INVALID: Tokyo-3 retraction stages missing: {missing}",
+                  file=sys.stderr)
+            return 1
     try:
         log = LATEST_LOG.read_text(encoding="utf-8", errors="replace")
     except OSError as exc:
@@ -124,7 +137,7 @@ def main() -> int:
                         help="comma-separated targeted capture list; begin records its exact PNG count")
     args = parser.parse_args()
     poses = normalise_poses(args.poses)
-    if poses and args.target in {"impact", "silo", "tokyo3"}:
+    if poses and args.target in {"impact", "silo", "tokyo3", "tokyo3_retraction"}:
         parser.error(f"{args.target} capture has fixed stages and does not accept --poses")
     return begin(args.target, poses) if args.action == "begin" else verify(args.target)
 

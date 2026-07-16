@@ -215,7 +215,9 @@ def validate_source():
     source = JAVA_BUILDER.read_text(encoding="utf-8")
     required = {
         "district_size": "DISTRICT_HALF_SIZE = 104",
-        "tower_count": "EXPECTED_TOWERS = 13",
+        "tower_catalog": "ARMOURED_TOWERS = createArmouredTowers()",
+        "tower_count": "EXPECTED_TOWERS = ARMOURED_TOWERS.size()",
+        "retraction": "applyRetractionDepth",
         "road_grid": "buildRoadGrid(level, origin)",
         "foundation": "buildFoundation(level, origin)",
         "substations": "buildSubstation(level, centre)",

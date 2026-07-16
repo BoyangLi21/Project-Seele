@@ -6,6 +6,7 @@ import com.projectseele.item.SeeleScenarioItem;
 import com.projectseele.item.NervConstructionKitItem;
 import com.projectseele.item.NervBeaconItem;
 import net.minecraft.world.item.Item;
+import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.SwordItem;
 import net.minecraft.world.item.Tiers;
 import net.minecraftforge.common.ForgeSpawnEggItem;
@@ -21,6 +22,10 @@ public class ModItems
             () -> new Item(new Item.Properties()));
     public static final RegistryObject<Item> S2_ENGINE_FRAGMENT = ITEMS.register("s2_engine_fragment",
             () -> new Item(new Item.Properties().fireResistant()));
+    public static final RegistryObject<Item> RETRACTABLE_BUILDING_CORE = ITEMS.register(
+            "retractable_building_core",
+            () -> new BlockItem(ModBlocks.RETRACTABLE_BUILDING_CORE.get(),
+                    new Item.Properties().fireResistant()));
 
     public static final RegistryObject<Item> POSITRON_RIFLE = ITEMS.register("positron_rifle",
             () -> new PositronRifleItem(new Item.Properties().stacksTo(1)));

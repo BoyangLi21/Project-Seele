@@ -1,4 +1,5 @@
 {
+  "block.projectseele.retractable_building_core": "装甲楼收纳核心",
   "itemGroup.projectseele": "Project SEELE",
   "message.projectseele.use_entry_gantry": "\u8bf7\u4ece\u80cc\u90e8\u9ad8\u4f4d\u63d2\u5165\u6813\u6808\u6865\u767b\u4e58",
   "message.projectseele.aim_entry_plug": "\u8bf7\u5c06\u51c6\u661f\u5bf9\u51c6 EVA \u80cc\u90e8\u7684\u63d2\u5165\u6813\u63a5\u53e3",

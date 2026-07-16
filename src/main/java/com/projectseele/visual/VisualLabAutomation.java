@@ -8,6 +8,7 @@ import com.projectseele.entity.EvaUnit01Entity;
 import com.projectseele.network.ClientboundSiloCapturePacket;
 import com.projectseele.network.ClientboundTokyo3CapturePacket;
 import com.projectseele.network.SeeleNetwork;
+import com.projectseele.world.Tokyo3RetractionDirector;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
@@ -44,6 +45,8 @@ public final class VisualLabAutomation
     private static final boolean MASS_CAPTURE = CAPTURE_UNIT.equals("mass");
     private static final boolean SILO_CAPTURE = CAPTURE_UNIT.equals("silo");
     private static final boolean TOKYO3_CAPTURE = CAPTURE_UNIT.equals("tokyo3");
+    private static final boolean TOKYO3_RETRACTION_CAPTURE =
+            CAPTURE_UNIT.equals("tokyo3_retraction");
     private static final String[] POSES = REQUESTED_POSE.equals("all")
             ? ALL_POSES : REQUESTED_POSE.split(",");
     private static final String[] MASS_POSES = REQUESTED_POSE.equals("all")
@@ -52,6 +55,7 @@ public final class VisualLabAutomation
     private static UUID subjectId;
     private static int ticks;
     private static int nextPose;
+    private static int tokyo3RestoreAt;
 
     private VisualLabAutomation() {}
 
@@ -64,6 +68,7 @@ public final class VisualLabAutomation
             subjectId = null;
             ticks = 0;
             nextPose = 0;
+            tokyo3RestoreAt = -1;
             ProjectSeele.LOGGER.info("Visual Lab automation armed for {}", player.getGameProfile().getName());
         }
     }
@@ -96,7 +101,7 @@ public final class VisualLabAutomation
         {
             if (ticks == 40)
             {
-                if (TOKYO3_CAPTURE)
+                if (TOKYO3_CAPTURE || TOKYO3_RETRACTION_CAPTURE)
                 {
                     ThirdTokyoCommands.setupVisualCapture(player.createCommandSourceStack());
                 }
@@ -117,6 +122,45 @@ public final class VisualLabAutomation
                                 expectedUnit, subjectId);
                     }
                 }
+            }
+            if (TOKYO3_RETRACTION_CAPTURE)
+            {
+                BlockPos origin = ThirdTokyoCommands.fixedVisualOrigin(player.serverLevel());
+                if (ticks == 80)
+                {
+                    SeeleNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
+                            new ClientboundTokyo3CapturePacket(origin, true));
+                    ProjectSeele.LOGGER.info(
+                            "Visual Lab armed Tokyo-3 retraction capture at {}", origin);
+                }
+                if (ticks == 160)
+                {
+                    Tokyo3RetractionDirector.request(player.serverLevel(), origin, true);
+                    ProjectSeele.LOGGER.info(
+                            "Visual Lab started Tokyo-3 emergency tower descent");
+                }
+                Tokyo3RetractionDirector.Status status =
+                        Tokyo3RetractionDirector.status(player.serverLevel(), origin);
+                if (ticks > 160 && tokyo3RestoreAt < 0
+                        && status.phase().equals("RETRACTED"))
+                {
+                    tokyo3RestoreAt = ticks + 80;
+                    ProjectSeele.LOGGER.info(
+                            "Visual Lab observed fully retracted Tokyo-3; restoration queued");
+                }
+                if (ticks == tokyo3RestoreAt)
+                {
+                    Tokyo3RetractionDirector.request(player.serverLevel(), origin, false);
+                    ProjectSeele.LOGGER.info(
+                            "Visual Lab started Tokyo-3 all-clear tower restoration");
+                }
+                if (ticks > 2500)
+                {
+                    ProjectSeele.LOGGER.error(
+                            "VISUAL TOKYO3 RETRACTION INVALID: sequence exceeded 2500 ticks");
+                    playerId = null;
+                }
+                return;
             }
             if (TOKYO3_CAPTURE)
             {

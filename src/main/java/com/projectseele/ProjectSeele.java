@@ -4,6 +4,7 @@ import com.mojang.logging.LogUtils;
 import com.projectseele.config.SeeleConfig;
 import com.projectseele.network.SeeleNetwork;
 import com.projectseele.registry.ModCreativeTabs;
+import com.projectseele.registry.ModBlocks;
 import com.projectseele.registry.ModEntities;
 import com.projectseele.registry.ModItems;
 import com.projectseele.registry.ModSounds;
@@ -27,6 +28,7 @@ public class ProjectSeele
     {
         IEventBus modEventBus = context.getModEventBus();
 
+        ModBlocks.BLOCKS.register(modEventBus);
         ModItems.ITEMS.register(modEventBus);
         ModEntities.ENTITY_TYPES.register(modEventBus);
         ModCreativeTabs.TABS.register(modEventBus);

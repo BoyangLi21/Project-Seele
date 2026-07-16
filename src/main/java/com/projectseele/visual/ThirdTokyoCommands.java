@@ -10,6 +10,9 @@ import com.projectseele.entity.EvaUnit01Entity;
 import com.projectseele.item.NervConstructionKitItem;
 import com.projectseele.world.ThirdTokyoSurfaceBuilder;
 import com.projectseele.world.ThirdTokyoSurfaceBuilder.DistrictAudit;
+import com.projectseele.world.Tokyo3RetractionDirector;
+import com.projectseele.world.Tokyo3RetractionDirector.RequestResult;
+import com.projectseele.world.Tokyo3RetractionDirector.Status;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.core.BlockPos;
@@ -39,6 +42,14 @@ public final class ThirdTokyoCommands
                                 .executes(context -> setup(context.getSource())))
                         .then(Commands.literal("audit")
                                 .executes(context -> audit(context.getSource())))
+                        .then(Commands.literal("retract")
+                                .executes(context -> setRetraction(
+                                        context.getSource(), true)))
+                        .then(Commands.literal("restore")
+                                .executes(context -> setRetraction(
+                                        context.getSource(), false)))
+                        .then(Commands.literal("status")
+                                .executes(context -> status(context.getSource())))
                         .then(Commands.literal("overview")
                                 .executes(context -> overview(context.getSource())))));
     }
@@ -79,7 +90,8 @@ public final class ThirdTokyoCommands
 
         ThirdTokyoSurfaceBuilder.buildDistrict(level, origin);
         NervConstructionKitItem.buildComplex(level, origin);
-        TokyoAudit result = inspect(level, origin);
+        Tokyo3RetractionDirector.register(level, origin);
+        TokyoAudit result = inspect(level, origin, 0);
         logAudit("setup", result);
         if (!result.valid())
         {
@@ -107,7 +119,8 @@ public final class ThirdTokyoCommands
         level.getEntitiesOfClass(EvaUnit01Entity.class, cleanup).forEach(Entity::discard);
         ThirdTokyoSurfaceBuilder.buildDistrict(level, origin);
         NervConstructionKitItem.buildComplex(level, origin);
-        TokyoAudit result = inspect(level, origin);
+        Tokyo3RetractionDirector.register(level, origin);
+        TokyoAudit result = inspect(level, origin, 0);
         logAudit("visual-setup", result);
         if (!result.valid())
         {
@@ -134,7 +147,8 @@ public final class ThirdTokyoCommands
     {
         ServerPlayer player = source.getPlayerOrException();
         BlockPos origin = findOrigin(player);
-        TokyoAudit result = inspect(player.serverLevel(), origin);
+        int depth = Tokyo3RetractionDirector.depth(player.serverLevel(), origin);
+        TokyoAudit result = inspect(player.serverLevel(), origin, depth);
         logAudit("command", result);
         Component report = Component.literal(result.summary());
         if (result.valid())
@@ -144,6 +158,29 @@ public final class ThirdTokyoCommands
         }
         source.sendFailure(report);
         return 0;
+    }
+
+    private static int setRetraction(CommandSourceStack source, boolean retract)
+            throws CommandSyntaxException
+    {
+        ServerPlayer player = source.getPlayerOrException();
+        BlockPos origin = findOrigin(player);
+        RequestResult result = Tokyo3RetractionDirector.request(
+                player.serverLevel(), origin, retract);
+        source.sendSuccess(() -> Component.literal(result.message()), false);
+        return result.accepted() ? 1 : 0;
+    }
+
+    private static int status(CommandSourceStack source) throws CommandSyntaxException
+    {
+        ServerPlayer player = source.getPlayerOrException();
+        BlockPos origin = findOrigin(player);
+        Status status = Tokyo3RetractionDirector.status(player.serverLevel(), origin);
+        source.sendSuccess(() -> Component.literal(String.format(Locale.ROOT,
+                "Tokyo-3 towers: %s depth=%d/%d target=%d",
+                status.phase(), status.depth(), status.maximumDepth(),
+                status.targetDepth())), false);
+        return 1;
     }
 
     private static int overview(CommandSourceStack source) throws CommandSyntaxException
@@ -181,9 +218,9 @@ public final class ThirdTokyoCommands
         return centreUnit.findLaunchBed().above(30);
     }
 
-    private static TokyoAudit inspect(ServerLevel level, BlockPos origin)
+    private static TokyoAudit inspect(ServerLevel level, BlockPos origin, int depth)
     {
-        DistrictAudit district = ThirdTokyoSurfaceBuilder.inspect(level, origin);
+        DistrictAudit district = ThirdTokyoSurfaceBuilder.inspect(level, origin, depth);
         List<EvaUnit01Entity> units = level.getEntitiesOfClass(EvaUnit01Entity.class,
                 new AABB(origin).inflate(80.0D, 64.0D, 80.0D),
                 unit -> unit.isAlive() && unit.findLaunchBed() != null);
