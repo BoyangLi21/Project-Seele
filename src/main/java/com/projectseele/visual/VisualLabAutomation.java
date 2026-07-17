@@ -11,6 +11,7 @@ import com.projectseele.network.ClientboundGeoFrontCapturePacket;
 import com.projectseele.network.ClientboundTokyo3CapturePacket;
 import com.projectseele.network.SeeleNetwork;
 import com.projectseele.world.Tokyo3RetractionDirector;
+import com.projectseele.world.IntegratedNervMapBuilder;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
@@ -113,7 +114,6 @@ public final class VisualLabAutomation
                     player.stopRiding();
                     player.teleportTo(server.overworld(), 0.5D, 97.0D, 0.5D,
                             180.0F, 0.0F);
-                    ThirdTokyoCommands.setupVisualCapture(player.createCommandSourceStack());
                 }
                 else if (GEOFRONT_CAPTURE)
                 {
@@ -186,20 +186,24 @@ public final class VisualLabAutomation
                     ProjectSeele.LOGGER.info(
                             "Visual Lab started linked GeoFront catapult sequence");
                 }
-                if (!geoFrontSortieSurfaceAudited && ticks > 260
-                        && player.serverLevel() == server.overworld()
+                if (!geoFrontSortieSurfaceAudited && ticks > 300
+                        && player.serverLevel().dimension().equals(GeoFrontCommands.GEOFRONT)
                         && player.getVehicle() instanceof EvaUnit01Entity unit
+                        && unit.getY() >= IntegratedNervMapBuilder.surfaceLiftBed(1).getY() + 1.0D
                         && !unit.isLaunchSequenceActive())
                 {
-                    if (ThirdTokyoCommands.auditVisualCapture(
-                            player.createCommandSourceStack()) != 1)
+                    IntegratedNervMapBuilder.IntegratedAudit audit =
+                            IntegratedNervMapBuilder.inspect(player.serverLevel());
+                    if (!audit.valid())
                     {
                         throw new IllegalStateException(
-                                "Tokyo-3 post-sortie persistent audit failed");
+                                "Tokyo-3 post-sortie continuous-map audit failed: "
+                                        + audit.summary());
                     }
                     geoFrontSortieSurfaceAudited = true;
                     ProjectSeele.LOGGER.info(
-                            "Visual Lab verified Tokyo-3 commands after GeoFront deployment");
+                            "Visual Lab verified same-dimension Tokyo-3 arrival after {} blocks",
+                            IntegratedNervMapBuilder.ascentDistance());
                 }
                 if (ticks > 600)
                 {

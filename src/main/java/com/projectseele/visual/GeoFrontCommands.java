@@ -1,6 +1,5 @@
 package com.projectseele.visual;
 
-import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -11,8 +10,14 @@ import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.projectseele.ProjectSeele;
 import com.projectseele.entity.EvaUnit01Entity;
+import com.projectseele.registry.ModEntities;
 import com.projectseele.world.GeoFrontBuilder;
 import com.projectseele.world.GeoFrontBuilder.GeoFrontAudit;
+import com.projectseele.world.IntegratedNervMapBuilder;
+import com.projectseele.world.IntegratedNervMapBuilder.IntegratedAudit;
+import com.projectseele.world.IntegratedNervMapBuilder.LiftLink;
+import com.projectseele.world.ThirdTokyoSurfaceBuilder;
+import com.projectseele.world.Tokyo3RetractionDirector;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.core.BlockPos;
@@ -25,19 +30,19 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
-import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.event.RegisterCommandsEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 
-/** Builds, enters and audits the standalone GeoFront development dimension. */
+/** Builds and operates the physically continuous Tokyo-3 / GeoFront world. */
 @Mod.EventBusSubscriber(modid = ProjectSeele.MODID, bus = Mod.EventBusSubscriber.Bus.FORGE)
 public final class GeoFrontCommands
 {
     public static final ResourceKey<Level> GEOFRONT = ResourceKey.create(
             Registries.DIMENSION,
             new ResourceLocation(ProjectSeele.MODID, "geofront"));
-    public static final BlockPos ORIGIN = new BlockPos(0, 32, 0);
+    public static final BlockPos ORIGIN = IntegratedNervMapBuilder.GEOFRONT_ORIGIN;
+    public static final BlockPos TOKYO3_ORIGIN = IntegratedNervMapBuilder.TOKYO3_ORIGIN;
 
     private static final String RETURN_DIMENSION = "SeeleGeoFrontReturnDimension";
     private static final String RETURN_X = "SeeleGeoFrontReturnX";
@@ -65,6 +70,8 @@ public final class GeoFrontCommands
                                 .executes(context -> sortieAudit(context.getSource())))
                         .then(Commands.literal("surface")
                                 .executes(context -> surface(context.getSource())))
+                        .then(Commands.literal("exit")
+                                .executes(context -> exit(context.getSource())))
                         .then(Commands.literal("audit")
                                 .executes(context -> audit(context.getSource())))
                         .then(Commands.literal("operations")
@@ -73,7 +80,7 @@ public final class GeoFrontCommands
                                 .executes(context -> overview(context.getSource())))));
     }
 
-    private static int setup(CommandSourceStack source) throws CommandSyntaxException
+    static int setup(CommandSourceStack source) throws CommandSyntaxException
     {
         ServerPlayer player = source.getPlayerOrException();
         ServerLevel level = geoFront(player);
@@ -84,18 +91,20 @@ public final class GeoFrontCommands
             return 0;
         }
         saveReturn(player);
-        GeoFrontBuilder.build(level, ORIGIN);
-        GeoFrontAudit result = GeoFrontBuilder.inspect(level, ORIGIN);
-        logAudit("setup", result);
+        IntegratedAudit result = IntegratedNervMapBuilder.ensure(level);
+        Tokyo3RetractionDirector.register(level, TOKYO3_ORIGIN);
+        logIntegratedAudit("setup", result);
         if (!result.valid())
         {
             source.sendFailure(Component.literal(
-                    "GeoFront was built but failed audit: " + result.summary()));
+                    "The connected Tokyo-3 / GeoFront map failed audit: "
+                            + result.summary()));
             return 0;
         }
         teleportOverview(player, level);
         source.sendSuccess(() -> Component.literal(
-                "GeoFront development sector ready. /seele geofront surface returns above."),
+                "Connected Tokyo-3 / GeoFront map ready: three physical 286-block shafts. "
+                        + "Run /seele geofront link to prepare Unit-00/01/02."),
                 false);
         return 1;
     }
@@ -111,15 +120,14 @@ public final class GeoFrontCommands
         }
         level.setDayTime(6000L);
         level.setWeatherParameters(12000, 0, false, false);
-        GeoFrontBuilder.build(level, ORIGIN);
-        GeoFrontAudit result = GeoFrontBuilder.inspect(level, ORIGIN);
-        logAudit("visual-setup", result);
+        IntegratedAudit result = IntegratedNervMapBuilder.ensure(level);
+        logIntegratedAudit("visual-setup", result);
         if (!result.valid())
         {
             throw new IllegalStateException(
-                    "GeoFront visual setup failed audit: " + result.summary());
+                    "Integrated GeoFront visual setup failed audit: " + result.summary());
         }
-        BlockPos hiddenPlatform = ORIGIN.offset(0, -31, 0);
+        BlockPos hiddenPlatform = ORIGIN.offset(0, 3, 0);
         level.setBlock(hiddenPlatform, net.minecraft.world.level.block.Blocks.BARRIER
                 .defaultBlockState(), net.minecraft.world.level.block.Block.UPDATE_CLIENTS);
         player.stopRiding();
@@ -138,11 +146,12 @@ public final class GeoFrontCommands
             source.sendFailure(Component.literal("GeoFront dimension is unavailable."));
             return 0;
         }
-        GeoFrontAudit result = GeoFrontBuilder.inspect(level, ORIGIN);
+        IntegratedAudit result = IntegratedNervMapBuilder.inspect(level);
         if (!result.valid())
         {
             source.sendFailure(Component.literal(
-                    "GeoFront has not passed setup. Run /seele geofront setup first."));
+                    "The continuous map has not passed setup. "
+                            + "Run /seele geofront setup first."));
             return 0;
         }
         saveReturn(player);
@@ -150,11 +159,7 @@ public final class GeoFrontCommands
         return 1;
     }
 
-    /**
-     * Moves the three parked EVAs from one audited surface complex onto the
-     * matching GeoFront terminals and preserves each exact surface bed as its
-     * next sortie destination.
-     */
+    /** Prepares three EVAs at the physical lower stations; no transfer occurs. */
     static int link(CommandSourceStack source) throws CommandSyntaxException
     {
         ServerPlayer player = source.getPlayerOrException();
@@ -164,114 +169,148 @@ public final class GeoFrontCommands
                     "Dismount before linking the GeoFront sortie terminals."));
             return 0;
         }
-        if (player.serverLevel().dimension().equals(GEOFRONT))
-        {
-            source.sendFailure(Component.literal(
-                    "Run /seele geofront link beside the surface launch complex."));
-            return 0;
-        }
-
-        ServerLevel surface = player.serverLevel();
         ServerLevel geoFront = geoFront(player);
         if (geoFront == null)
         {
             source.sendFailure(Component.literal("GeoFront dimension is unavailable."));
             return 0;
         }
-        GeoFrontBuilder.build(geoFront, ORIGIN);
-        GeoFrontAudit mapAudit = GeoFrontBuilder.inspect(geoFront, ORIGIN);
+        IntegratedAudit mapAudit = IntegratedNervMapBuilder.ensure(geoFront);
+        Tokyo3RetractionDirector.register(geoFront, TOKYO3_ORIGIN);
         if (!mapAudit.valid())
         {
             source.sendFailure(Component.literal(
-                    "GeoFront failed its map audit: " + mapAudit.summary()));
+                    "Connected map failed its audit: " + mapAudit.summary()));
             return 0;
         }
-
-        EvaUnit01Entity centreUnit = surface.getEntitiesOfClass(EvaUnit01Entity.class,
-                player.getBoundingBox().inflate(240.0D, 128.0D, 240.0D),
-                unit -> unit.isAlive()
-                        && unit.getUnitVariant() == EvaUnit01Entity.UNIT_01
-                        && unit.findLaunchBed() != null).stream()
-                .min((left, right) -> Double.compare(
-                        left.distanceToSqr(player), right.distanceToSqr(player)))
-                .orElse(null);
-        if (centreUnit == null || centreUnit.findLaunchBed() == null)
+        List<EvaUnit01Entity> linked;
+        try
         {
-            source.sendFailure(Component.literal(
-                    "No parked Unit-01 launch bay found within 240 blocks."));
-            return 0;
+            linked = ensureContinuousSortieUnits(geoFront);
         }
-        BlockPos centreBed = centreUnit.findLaunchBed();
-        List<EvaUnit01Entity> surfaceUnits = surface.getEntitiesOfClass(
-                EvaUnit01Entity.class, new AABB(centreBed).inflate(48.0D, 40.0D, 48.0D),
-                unit -> unit.isAlive() && unit.findLaunchBed() != null
-                        && !unit.isVehicle() && !unit.isLaunchSequenceActive());
-        if (!hasAllVariants(surfaceUnits) || surfaceUnits.size() != 3)
+        catch (IllegalStateException exception)
         {
-            source.sendFailure(Component.literal(
-                    "Surface complex must contain exactly one parked Unit-00, 01 and 02."));
+            source.sendFailure(Component.literal(exception.getMessage()));
             return 0;
-        }
-
-        AABB terminalArea = new AABB(ORIGIN)
-                .inflate(GeoFrontBuilder.CAVERN_RADIUS, 96.0D,
-                        GeoFrontBuilder.CAVERN_RADIUS);
-        if (!geoFront.getEntitiesOfClass(EvaUnit01Entity.class, terminalArea,
-                unit -> unit.isAlive()).isEmpty())
-        {
-            source.sendFailure(Component.literal(
-                    "GeoFront terminals are already occupied; audit the existing sortie first."));
-            return 0;
-        }
-
-        saveReturn(player);
-        List<LinkedUnit> moved = new ArrayList<>();
-        for (EvaUnit01Entity unit : surfaceUnits)
-        {
-            BlockPos surfaceBed = unit.findLaunchBed();
-            int liftX = liftX(unit.getUnitVariant());
-            BlockPos terminalBed = ORIGIN.offset(liftX, 1, -76);
-            unit.setSortieDestination(surface.dimension(), surfaceBed);
-            EvaUnit01Entity relocated = unit.transferUnpilotedTo(geoFront,
-                    Vec3.atBottomCenterOf(terminalBed.above()),
-                    EvaUnit01Entity.SILO_BAY_YAW);
-            if (relocated == null)
-            {
-                unit.clearSortieDestination();
-                rollbackLinks(surface, moved);
-                source.sendFailure(Component.literal(
-                        "A dimension-transfer hook rejected the EVA link; previous moves were rolled back."));
-                return 0;
-            }
-            relocated.setSortieParkingBed(terminalBed);
-            moved.add(new LinkedUnit(relocated, surfaceBed));
         }
 
         if (visualLinkInProgress)
         {
             VISUAL_SORTIE_UNITS.clear();
-            moved.forEach(link -> VISUAL_SORTIE_UNITS.add(link.unit().getUUID()));
+            linked.forEach(unit -> VISUAL_SORTIE_UNITS.add(unit.getUUID()));
         }
 
         SortieAudit result = inspectLinkedUnits(player.getServer(), geoFront,
-                moved.stream().map(LinkedUnit::unit).toList());
+                linked);
         logSortieAudit("link", result);
         if (!result.valid())
         {
-            rollbackLinks(surface, moved);
             source.sendFailure(Component.literal(
-                    "GeoFront sortie link failed audit and was rolled back: " + result.summary()));
+                    "Physical sortie link failed audit: " + result.summary()));
             return 0;
         }
 
-        BlockPos centralTerminal = ORIGIN.offset(0, 1, -76);
+        if (!player.serverLevel().dimension().equals(GEOFRONT))
+        {
+            saveReturn(player);
+        }
+        BlockPos centralTerminal = IntegratedNervMapBuilder.lowerLiftBed(1);
         player.teleportTo(geoFront, centralTerminal.getX() + 0.5D,
                 centralTerminal.getY() + 27.0D,
                 centralTerminal.getZ() + 6.5D, 180.0F, -8.0F);
         source.sendSuccess(() -> Component.literal(
-                "GeoFront sortie linked: Unit-00/01/02 are underground. "
-                        + "Use the dorsal plug or /seele silo board; launch exits at Tokyo-3."), false);
+                "Physical sortie ready: Unit-00/01/02 are frozen at the lower stations. "
+                        + "Launch travels the same 286-block shaft into Tokyo-3; no portal or EVA teleport."), false);
         return 1;
+    }
+
+    private static List<EvaUnit01Entity> ensureContinuousSortieUnits(ServerLevel level)
+    {
+        int lowerY = IntegratedNervMapBuilder.lowerLiftBed(1).getY();
+        int surfaceY = IntegratedNervMapBuilder.surfaceLiftBed(1).getY();
+        AABB mapArea = new AABB(-256.0D, lowerY - 32.0D, -256.0D,
+                256.0D, surfaceY + 72.0D, 256.0D);
+        List<EvaUnit01Entity> all = new java.util.ArrayList<>(
+                level.getEntitiesOfClass(
+                        EvaUnit01Entity.class, mapArea, EvaUnit01Entity::isAlive));
+        List<EvaUnit01Entity> linked = new java.util.ArrayList<>(3);
+        for (LiftLink lift : IntegratedNervMapBuilder.liftLinks())
+        {
+            int variant = lift.index();
+            List<EvaUnit01Entity> lowerUnits = all.stream()
+                    .filter(unit -> unit.getUnitVariant() == variant)
+                    .filter(unit -> unit.distanceToSqr(
+                            lift.lowerBed().getX() + 0.5D,
+                            lift.lowerBed().getY() + 1.0D,
+                            lift.lowerBed().getZ() + 0.5D) < 196.0D)
+                    .toList();
+            if (lowerUnits.size() > 1)
+            {
+                throw new IllegalStateException(
+                        "Lower station contains duplicate Unit-0" + variant + " entities.");
+            }
+            EvaUnit01Entity unit = lowerUnits.isEmpty() ? null : lowerUnits.get(0);
+            if (unit == null)
+            {
+                EvaUnit01Entity existing = all.stream()
+                        .filter(candidate -> candidate.getUnitVariant() == variant)
+                        .findFirst().orElse(null);
+                if (existing != null)
+                {
+                    throw new IllegalStateException(
+                            "Unit-0" + variant + " already exists in the connected map at "
+                                    + existing.blockPosition().toShortString() + ".");
+                }
+                unit = createUnit(level, variant);
+                if (unit == null)
+                {
+                    throw new IllegalStateException(
+                            "Failed to create Unit-0" + variant + " for its lower station.");
+                }
+                unit.moveTo(lift.lowerBed().getX() + 0.5D,
+                        lift.lowerBed().getY() + 1.0D,
+                        lift.lowerBed().getZ() + 0.5D,
+                        EvaUnit01Entity.SILO_BAY_YAW, 0.0F);
+                unit.setPersistenceRequired();
+                if (!level.addFreshEntity(unit))
+                {
+                    throw new IllegalStateException(
+                            "Server rejected Unit-0" + variant + " deployment.");
+                }
+                all.add(unit);
+            }
+            if (unit.isVehicle() || unit.isPassenger() || unit.isLaunchSequenceActive())
+            {
+                throw new IllegalStateException(
+                        "Unit-0" + variant + " is occupied or already launching.");
+            }
+            unit.moveTo(lift.lowerBed().getX() + 0.5D,
+                    lift.lowerBed().getY() + 1.0D,
+                    lift.lowerBed().getZ() + 0.5D,
+                    EvaUnit01Entity.SILO_BAY_YAW, 0.0F);
+            unit.setYRot(EvaUnit01Entity.SILO_BAY_YAW);
+            unit.setYBodyRot(EvaUnit01Entity.SILO_BAY_YAW);
+            unit.setYHeadRot(EvaUnit01Entity.SILO_BAY_YAW);
+            unit.yRotO = EvaUnit01Entity.SILO_BAY_YAW;
+            unit.yBodyRotO = EvaUnit01Entity.SILO_BAY_YAW;
+            unit.yHeadRotO = EvaUnit01Entity.SILO_BAY_YAW;
+            unit.setDeltaMovement(net.minecraft.world.phys.Vec3.ZERO);
+            unit.setNoGravity(true);
+            unit.setSortieDestination(level.dimension(), lift.surfaceBed());
+            unit.setSortieParkingBed(lift.lowerBed());
+            linked.add(unit);
+        }
+        return linked;
+    }
+
+    private static EvaUnit01Entity createUnit(ServerLevel level, int variant)
+    {
+        return switch (variant)
+        {
+            case EvaUnit01Entity.UNIT_00 -> ModEntities.EVA_UNIT00.get().create(level);
+            case EvaUnit01Entity.UNIT_02 -> ModEntities.EVA_UNIT02.get().create(level);
+            default -> ModEntities.EVA_UNIT01.get().create(level);
+        };
     }
 
     /** Dedicated-world reset before the unattended cross-dimension sortie. */
@@ -282,7 +321,12 @@ public final class GeoFrontCommands
         {
             throw new IllegalStateException("GeoFront visual sortie dimension is unavailable");
         }
-        GeoFrontBuilder.build(geoFront, ORIGIN);
+        IntegratedAudit audit = IntegratedNervMapBuilder.ensure(geoFront);
+        if (!audit.valid())
+        {
+            throw new IllegalStateException(
+                    "GeoFront visual sortie preload failed: " + audit.summary());
+        }
         loadCavernChunks(geoFront);
         player.stopRiding();
         player.teleportTo(geoFront,
@@ -334,7 +378,7 @@ public final class GeoFrontCommands
         List<EvaUnit01Entity> stale = geoFront.getEntitiesOfClass(
                 EvaUnit01Entity.class,
                 new AABB(ORIGIN).inflate(GeoFrontBuilder.CAVERN_RADIUS + 32.0D,
-                        192.0D, GeoFrontBuilder.CAVERN_RADIUS + 32.0D));
+                        384.0D, GeoFrontBuilder.CAVERN_RADIUS + 32.0D));
         stale.forEach(EvaUnit01Entity::discard);
         return stale.size();
     }
@@ -426,7 +470,7 @@ public final class GeoFrontCommands
         List<EvaUnit01Entity> loaded = geoFront.getEntitiesOfClass(
                 EvaUnit01Entity.class,
                 new AABB(ORIGIN).inflate(GeoFrontBuilder.CAVERN_RADIUS + 32.0D,
-                        192.0D, GeoFrontBuilder.CAVERN_RADIUS + 32.0D));
+                        384.0D, GeoFrontBuilder.CAVERN_RADIUS + 32.0D));
         int removed = 0;
         for (EvaUnit01Entity unit : loaded)
         {
@@ -453,33 +497,6 @@ public final class GeoFrontCommands
         return has00 && has01 && has02;
     }
 
-    private static int liftX(int variant)
-    {
-        return switch (variant)
-        {
-            case EvaUnit01Entity.UNIT_00 -> -28;
-            case EvaUnit01Entity.UNIT_02 -> 28;
-            default -> 0;
-        };
-    }
-
-    private static void rollbackLinks(ServerLevel surface, List<LinkedUnit> moved)
-    {
-        for (LinkedUnit link : moved)
-        {
-            link.unit().clearSortieDestination();
-            EvaUnit01Entity restored = link.unit().transferUnpilotedTo(surface,
-                    Vec3.atBottomCenterOf(link.surfaceBed().above()),
-                    EvaUnit01Entity.SILO_BAY_YAW);
-            if (restored == null)
-            {
-                ProjectSeele.LOGGER.error(
-                        "NERV sortie rollback failed: eva={} bed={}",
-                        link.unit().getStringUUID(), link.surfaceBed().toShortString());
-            }
-        }
-    }
-
     private static void logSortieAudit(String stage, SortieAudit result)
     {
         if (result.valid())
@@ -492,8 +509,6 @@ public final class GeoFrontCommands
                     result.summary());
         }
     }
-
-    private record LinkedUnit(EvaUnit01Entity unit, BlockPos surfaceBed) {}
 
     static record SortieAudit(boolean valid, int units, int linked,
                               int destinations, boolean variants, boolean gantries)
@@ -509,6 +524,38 @@ public final class GeoFrontCommands
     }
 
     private static int surface(CommandSourceStack source) throws CommandSyntaxException
+    {
+        ServerPlayer player = source.getPlayerOrException();
+        ServerLevel destination = geoFront(player);
+        if (destination == null)
+        {
+            source.sendFailure(Component.literal("GeoFront dimension is unavailable."));
+            return 0;
+        }
+        IntegratedAudit audit = IntegratedNervMapBuilder.inspect(destination);
+        if (!audit.valid())
+        {
+            source.sendFailure(Component.literal(
+                    "Connected map is incomplete. Run /seele geofront setup first."));
+            return 0;
+        }
+        if (!player.serverLevel().dimension().equals(GEOFRONT))
+        {
+            saveReturn(player);
+        }
+        player.stopRiding();
+        player.teleportTo(destination,
+                TOKYO3_ORIGIN.getX() + 0.5D,
+                TOKYO3_ORIGIN.getY() + ThirdTokyoSurfaceBuilder.OBSERVATION_Y + 1.0D,
+                TOKYO3_ORIGIN.getZ() + ThirdTokyoSurfaceBuilder.OBSERVATION_Z + 0.5D,
+                180.0F, 18.0F);
+        source.sendSuccess(() -> Component.literal(
+                "Tokyo-3 skyline deck. Normal EVA sorties reach this surface through "
+                        + "the physical shaft; this command is only a developer camera shortcut."), false);
+        return 1;
+    }
+
+    private static int exit(CommandSourceStack source) throws CommandSyntaxException
     {
         ServerPlayer player = source.getPlayerOrException();
         CompoundTag data = player.getPersistentData();
@@ -535,7 +582,8 @@ public final class GeoFrontCommands
         }
         player.stopRiding();
         player.teleportTo(destination, x, y, z, player.getYRot(), player.getXRot());
-        source.sendSuccess(() -> Component.literal("Returned from GeoFront."), false);
+        source.sendSuccess(() -> Component.literal(
+                "Exited the combined Tokyo-3 / GeoFront development world."), false);
         return 1;
     }
 
@@ -548,8 +596,8 @@ public final class GeoFrontCommands
             source.sendFailure(Component.literal("GeoFront dimension is unavailable."));
             return 0;
         }
-        GeoFrontAudit result = GeoFrontBuilder.inspect(level, ORIGIN);
-        logAudit("command", result);
+        IntegratedAudit result = IntegratedNervMapBuilder.inspect(level);
+        logIntegratedAudit("command", result);
         if (!result.valid())
         {
             source.sendFailure(Component.literal(result.summary()));
@@ -643,6 +691,20 @@ public final class GeoFrontCommands
         else
         {
             ProjectSeele.LOGGER.error("GEOFRONT INVALID [{}]: {}", stage, result.summary());
+        }
+    }
+
+    private static void logIntegratedAudit(String stage, IntegratedAudit result)
+    {
+        if (result.valid())
+        {
+            ProjectSeele.LOGGER.info("Integrated NERV map audit [{}]: {}",
+                    stage, result.summary());
+        }
+        else
+        {
+            ProjectSeele.LOGGER.error("INTEGRATED NERV MAP INVALID [{}]: {}",
+                    stage, result.summary());
         }
     }
 }

@@ -10,6 +10,7 @@ import com.projectseele.entity.EvaUnit01Entity;
 import com.projectseele.item.NervConstructionKitItem;
 import com.projectseele.world.ThirdTokyoSurfaceBuilder;
 import com.projectseele.world.ThirdTokyoSurfaceBuilder.DistrictAudit;
+import com.projectseele.world.IntegratedNervMapBuilder;
 import com.projectseele.world.Tokyo3RetractionDirector;
 import com.projectseele.world.Tokyo3RetractionDirector.RequestResult;
 import com.projectseele.world.Tokyo3RetractionDirector.Status;
@@ -58,52 +59,20 @@ public final class ThirdTokyoCommands
     static int setup(CommandSourceStack source) throws CommandSyntaxException
     {
         ServerPlayer player = source.getPlayerOrException();
-        ServerLevel level = player.serverLevel();
         if (player.isPassenger())
         {
             source.sendFailure(Component.literal(
                     "Dismount before constructing the Tokyo-3 sortie district."));
             return 0;
         }
-
-        int minSurface = level.getMinBuildHeight() + 36;
-        int maxSurface = level.getMaxBuildHeight() - 48;
-        if (maxSurface < minSurface)
+        if (GeoFrontCommands.setup(source) != 1)
         {
-            source.sendFailure(Component.literal(
-                    "This dimension is too shallow for Tokyo-3 and its launch shafts."));
             return 0;
         }
-        int surfaceY = Math.max(minSurface,
-                Math.min(maxSurface, player.blockPosition().getY() - 1));
-        BlockPos origin = new BlockPos(player.blockPosition().getX(), surfaceY,
-                player.blockPosition().getZ());
-        AABB area = new AABB(origin).inflate(150.0D, 72.0D, 150.0D);
-        boolean existingComplex = !level.getEntitiesOfClass(EvaUnit01Entity.class, area,
-                unit -> unit.isAlive() && unit.findLaunchBed() != null).isEmpty();
-        if (existingComplex)
-        {
-            source.sendFailure(Component.literal(
-                    "A NERV/Tokyo-3 complex already occupies this area. "
-                            + "Use /seele tokyo3 audit or move at least 170 blocks."));
-            return 0;
-        }
-
-        ThirdTokyoSurfaceBuilder.buildDistrict(level, origin);
-        NervConstructionKitItem.buildComplex(level, origin);
-        Tokyo3RetractionDirector.register(level, origin);
-        TokyoAudit result = inspect(level, origin, 0, true);
-        logAudit("setup", result);
-        if (!result.valid())
-        {
-            source.sendFailure(Component.literal(
-                    "Tokyo-3 was built but failed structural audit: " + result.summary()));
-            return 0;
-        }
-        teleportOverview(player, origin);
+        teleportOverview(player, IntegratedNervMapBuilder.TOKYO3_ORIGIN);
         source.sendSuccess(() -> Component.literal(
-                "Tokyo-3 sortie district ready. /seele silo board enters Unit-01; "
-                        + "/seele tokyo3 overview returns to the skyline deck."), false);
+                "Tokyo-3 skyline ready above the same GeoFront dimension. "
+                        + "Run /seele geofront link, then board from the lower gantry."), false);
         return 1;
     }
 
@@ -120,7 +89,7 @@ public final class ThirdTokyoCommands
         level.getEntitiesOfClass(EvaUnit01Entity.class, cleanup).forEach(Entity::discard);
         ThirdTokyoSurfaceBuilder.buildDistrict(level, origin);
         NervConstructionKitItem.buildComplex(level, origin);
-        Tokyo3RetractionDirector.register(level, origin);
+        Tokyo3RetractionDirector.reset(level, origin);
         TokyoAudit result = inspect(level, origin, 0, true);
         logAudit("visual-setup", result);
         if (!result.valid())
@@ -212,6 +181,11 @@ public final class ThirdTokyoCommands
 
     private static BlockPos findOrigin(ServerPlayer player)
     {
+        if (player.serverLevel().dimension().equals(GeoFrontCommands.GEOFRONT)
+                && IntegratedNervMapBuilder.inspect(player.serverLevel()).tokyo3().valid())
+        {
+            return IntegratedNervMapBuilder.TOKYO3_ORIGIN;
+        }
         AABB area = player.getBoundingBox().inflate(220.0D, 128.0D, 220.0D);
         EvaUnit01Entity centreUnit = player.serverLevel()
                 .getEntitiesOfClass(EvaUnit01Entity.class, area,

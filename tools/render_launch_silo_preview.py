@@ -23,6 +23,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 ROOT = Path(__file__).resolve().parents[1]
 KIT_SOURCE = ROOT / "src/main/java/com/projectseele/item/NervConstructionKitItem.java"
+INTEGRATED_SOURCE = ROOT / "src/main/java/com/projectseele/world/IntegratedNervMapBuilder.java"
 COMMAND_SOURCE = ROOT / "src/main/java/com/projectseele/visual/LaunchSiloCommands.java"
 ENTITY_SOURCE = ROOT / "src/main/java/com/projectseele/entity/EvaUnit01Entity.java"
 RENDERER_SOURCE = ROOT / "src/main/java/com/projectseele/client/render/EvaUnit01Renderer.java"
@@ -145,6 +146,11 @@ class SiloContract:
     runtime_plug_height: float
     plug_animation_start_y: float
     plug_animation_end_y: float
+    geo_origin_y: int
+    tokyo_origin_y: int
+    legacy_launch_target: float
+    legacy_ascent_ticks: int
+    same_dimension_primary: bool
 
     @property
     def bed_y(self) -> float:
@@ -185,6 +191,7 @@ class SiloContract:
 
 def parse_contract() -> SiloContract:
     kit = source_text(KIT_SOURCE)
+    integrated = source_text(INTEGRATED_SOURCE)
     command = source_text(COMMAND_SOURCE)
     entity = source_text(ENTITY_SOURCE)
     renderer = source_text(RENDERER_SOURCE)
@@ -192,7 +199,7 @@ def parse_contract() -> SiloContract:
     gantry = method_body(kit, "private static void buildEntryGantry")
     deploy = method_body(kit, "private static void deployUnit")
     audit = method_body(command, "private static SiloAudit inspectComplex")
-    board = method_body(command, "private static int board")
+    board = method_body(command, "static int board")
     moving_carrier = method_body(entity, "private void setMovingCarrierLayer")
 
     bay_matches = re.findall(
@@ -201,15 +208,41 @@ def parse_contract() -> SiloContract:
     )
     if len(bay_matches) != 3:
         raise fail(f"expected three bay declarations, found {len(bay_matches)}")
-    bays = tuple((variant, int(x or 0), int(z or 0)) for variant, x, z in bay_matches)
+    legacy_bays = tuple((variant, int(x or 0), int(z or 0))
+                        for variant, x, z in bay_matches)
 
     deploy_calls = re.findall(r"deployUnit\(level,\s*unit(\d\d)Bay,\s*ModEntities\.EVA_UNIT(\d\d)", kit)
     if len(deploy_calls) != 3 or any(bay != entity_id for bay, entity_id in deploy_calls):
         raise fail("bay-to-variant deploy mapping")
 
-    shaft_y_match = one(r"for\s*\(int y = (-?\d+); y <= (-?\d+); y\+\+\)", shaft, "shaft y loop")
-    shaft_y = (int(shaft_y_match.group(1)), int(shaft_y_match.group(2)))
-    outer = int(one(r"boolean outer = Math\.abs\(x\) == (\d+) \|\| Math\.abs\(z\) == \1", shaft, "shaft outer radius").group(1))
+    # The standalone construction kit remains a compact entry-plug test rig.
+    # The release-facing preview is driven by the real, vertically integrated
+    # Tokyo-3/GeoFront station markers instead.
+    geo_match = one(
+        r"GEOFRONT_ORIGIN\s*=\s*new BlockPos\((-?\d+),\s*(-?\d+),\s*(-?\d+)\)",
+        integrated, "GeoFront origin")
+    tokyo_match = one(
+        r"TOKYO3_ORIGIN\s*=\s*new BlockPos\((-?\d+),\s*(-?\d+),\s*(-?\d+)\)",
+        integrated, "Tokyo-3 origin")
+    geo_origin = tuple(int(geo_match.group(index)) for index in range(1, 4))
+    tokyo_origin = tuple(int(tokyo_match.group(index)) for index in range(1, 4))
+    lift_initializer = one(r"LIFT_X\s*=\s*\{([^}]+)\}", integrated,
+                           "integrated lift X").group(1)
+    lift_values = tuple(int(value) for value in re.findall(
+        r"-?\d+", lift_initializer))
+    if len(lift_values) != 3:
+        raise fail(f"expected three integrated lift X positions, found {lift_values}")
+    lower_z = int(java_number(integrated, "LOWER_TERMINAL_Z"))
+    lower_above = int(java_number(integrated, "LOWER_BED_ABOVE_ORIGIN"))
+    surface_below = int(java_number(integrated, "SURFACE_BED_BELOW_ORIGIN"))
+    lower_bed_y = geo_origin[1] + lower_above
+    surface_bed_y = tokyo_origin[1] - surface_below
+    ascent_distance = surface_bed_y - lower_bed_y
+    bays = tuple((variant, x, geo_origin[2] + lower_z)
+                 for (variant, _, _), x in zip(legacy_bays, lift_values))
+    shaft_y = (lower_bed_y + 1, surface_bed_y)
+    outer = int(java_number(integrated, "SHAFT_OUTER_RADIUS"))
+    clear_half = int(java_number(integrated, "SHAFT_CLEAR_RADIUS"))
     carrier_loop = one(
         r"for\s*\(int x = (-?\d+); x <= (-?\d+); x\+\+\)\s*\{\s*"
         r"for\s*\(int z = (-?\d+); z <= (-?\d+); z\+\+\)\s*\{\s*"
@@ -241,13 +274,17 @@ def parse_contract() -> SiloContract:
     gantry_z = (int(gantry_path.group(1)), int(gantry_path.group(2)))
     gantry_x = (int(gantry_path.group(3)), int(gantry_path.group(4)))
 
-    audit_y_match = one(r"for\s*\(int y = (\d+); y <= (\d+) && clear; y\+\+\)", audit, "audit y")
-    audit_x_match = one(r"for\s*\(int x = (-?\d+); x <= (-?\d+) && clear; x\+\+\)", audit, "audit x")
-    audit_z_match = one(r"for\s*\(int z = (-?\d+); z <= (-?\d+); z\+\+\)", audit, "audit z")
+    # Parse the old audit as a compatibility assertion, but expose the 11x11
+    # continuous envelope in the report.
+    one(r"for\s*\(int y = (\d+); y <= (\d+) && clear; y\+\+\)", audit, "legacy audit y")
+    one(r"for\s*\(int x = (-?\d+); x <= (-?\d+) && clear; x\+\+\)", audit, "legacy audit x")
+    one(r"for\s*\(int z = (-?\d+); z <= (-?\d+); z\+\+\)", audit, "legacy audit z")
 
-    move = one(r"unit\.moveTo\(bay\.getX\(\) \+ 0\.5D, bay\.getY\(\) ([+-]) (\d+(?:\.\d+)?)D, bay\.getZ\(\) \+ 0\.5D, (\d+(?:\.\d+)?)F", deploy, "deployed Unit pose")
+    move = one(r"unit\.moveTo\(bay\.getX\(\) \+ 0\.5D, bay\.getY\(\) ([+-]) (\d+(?:\.\d+)?)D, bay\.getZ\(\) \+ 0\.5D,\s*launchYaw", deploy, "deployed Unit pose", re.S)
+    launch_yaw = one(r"float\s+launchYaw\s*=\s*(\d+(?:\.\d+)?)F", deploy,
+                     "deployed Unit yaw")
     deploy_y = float(move.group(2)) * (-1.0 if move.group(1) == "-" else 1.0)
-    deploy_yaw = float(move.group(3))
+    deploy_yaw = float(launch_yaw.group(1))
     board_match = one(r"bed\.getY\(\) \+ (\d+(?:\.\d+)?)D,\s*bed\.getZ\(\) \+ (\d+(?:\.\d+)?)D", board, "board teleport", re.S)
 
     scale = float(one(r"this\.withScale\((\d+(?:\.\d+)?)F\)", renderer, "renderer scale").group(1))
@@ -266,6 +303,19 @@ def parse_contract() -> SiloContract:
     if any(not isinstance(value, list) or len(value) != 3 for _, value in ordered):
         raise fail("entry_plug activation position vector")
 
+    legacy_target = java_number(entity, "LAUNCH_TARGET_ABOVE_BED")
+    legacy_ticks = int(java_number(entity, "LAUNCH_ASCENT_TICKS"))
+    ascent_speed = java_number(entity, "CONTINUOUS_ASCENT_BLOCKS_PER_TICK")
+    dynamic_ticks = max(legacy_ticks, math.ceil(ascent_distance / ascent_speed))
+    complete = method_body(entity, "private boolean completeLinkedSortie()")
+    same_start = complete.find("if (destination == sourceLevel)")
+    legacy_start = complete.find("this.changeDimension(destination", same_start)
+    same_branch = complete[same_start:legacy_start] \
+        if 0 <= same_start < legacy_start else ""
+    same_dimension_primary = bool(same_branch) \
+        and "changeDimension" not in same_branch \
+        and "this.setPos(arrival.x, arrival.y, arrival.z)" in same_branch
+
     return SiloContract(
         bays=bays,
         shaft_y=shaft_y,
@@ -273,16 +323,16 @@ def parse_contract() -> SiloContract:
         permanent_bed_half=permanent_bed_half,
         moving_carrier_half=moving_carrier_half,
         bed_origin_offset=bed_offset,
-        surface_origin_offset=0,
-        shutter_origin_offset=shutter_offset,
+        surface_origin_offset=bed_offset + ascent_distance,
+        shutter_origin_offset=bed_offset + ascent_distance,
         gantry_origin_offset=gantry_origin,
         gantry_x=gantry_x,
         gantry_z=gantry_z,
         ladder_origin_y=ladder_y,
         ladder_z=ladder_z,
-        audit_y=(int(audit_y_match.group(1)), int(audit_y_match.group(2))),
-        audit_x=(int(audit_x_match.group(1)), int(audit_x_match.group(2))),
-        audit_z=(int(audit_z_match.group(1)), int(audit_z_match.group(2))),
+        audit_y=(1, ascent_distance),
+        audit_x=(-clear_half, clear_half),
+        audit_z=(-clear_half, clear_half),
         deploy_origin_y=deploy_y,
         deploy_yaw=deploy_yaw,
         board_bed_y=float(board_match.group(1)),
@@ -294,14 +344,19 @@ def parse_contract() -> SiloContract:
         entry_min_distance=java_number(entity, "SILO_ENTRY_MIN_DISTANCE"),
         entry_max_distance=java_number(entity, "SILO_ENTRY_MAX_DISTANCE"),
         entry_min_rear_dot=java_number(entity, "SILO_ENTRY_MIN_REAR_DOT"),
-        launch_target=java_number(entity, "LAUNCH_TARGET_ABOVE_BED"),
-        ascent_ticks=int(java_number(entity, "LAUNCH_ASCENT_TICKS")),
+        launch_target=float(ascent_distance + 1),
+        ascent_ticks=dynamic_ticks,
         clear_ticks=int(java_number(entity, "LAUNCH_CLEAR_TICKS")),
         renderer_scale=scale,
         plug_pivot_y=float(pivot[1]),
         runtime_plug_height=java_number(entity, "ENTRY_PLUG_HEIGHT_01"),
         plug_animation_start_y=float(ordered[0][1][1]),
         plug_animation_end_y=float(ordered[-1][1][1]),
+        geo_origin_y=geo_origin[1],
+        tokyo_origin_y=tokyo_origin[1],
+        legacy_launch_target=legacy_target,
+        legacy_ascent_ticks=legacy_ticks,
+        same_dimension_primary=same_dimension_primary,
     )
 
 
@@ -330,10 +385,11 @@ def audit_contract(contract: SiloContract) -> dict[str, Any]:
     checks = [
         check("three_variants", variants == ["00", "01", "02"], variants, ["00", "01", "02"]),
         check("three_unique_beds", len(set(bay_positions)) == 3, bay_positions, "three unique bay centres"),
-        check("bay_spacing", sorted(x for x, _ in bay_positions) == [-22, 0, 22], bay_positions, "x=-22,0,22"),
-        check("shaft_shell", contract.shaft_outer_half == 7 and contract.shaft_y == (-31, 7), {"half": contract.shaft_outer_half, "origin_y": contract.shaft_y}, {"half": 7, "origin_y": [-31, 7]}),
+        check("bay_spacing", sorted(x for x, _ in bay_positions) == [-28, 0, 28], bay_positions, "x=-28,0,28"),
+        check("integrated_world_heights", contract.geo_origin_y == -40 and contract.tokyo_origin_y == 248, {"geofront_origin_y": contract.geo_origin_y, "tokyo3_origin_y": contract.tokyo_origin_y}, {"geofront_origin_y": -40, "tokyo3_origin_y": 248}),
+        check("shaft_shell", contract.shaft_outer_half == 7 and contract.shaft_y == (-38, 247), {"half": contract.shaft_outer_half, "world_y": contract.shaft_y}, {"half": 7, "world_y": [-38, 247]}),
         check("clearance_11x11", clear_width == 11 and clear_depth == 11, [clear_width, clear_depth], [11, 11]),
-        check("clearance_31_high", clear_height == 31 and contract.audit_y == (1, 31), {"height": clear_height, "bed_relative_y": contract.audit_y}, {"height": 31, "bed_relative_y": [1, 31]}),
+        check("clearance_286_high", clear_height == 286 and contract.audit_y == (1, 286), {"height": clear_height, "bed_relative_y": contract.audit_y}, {"height": 286, "bed_relative_y": [1, 286]}),
         check("eva_fits_clearance", contract.unit_width <= clear_width, contract.unit_width, f"<= {clear_width}"),
         check("permanent_bed_13x13", permanent_bed_width == 13, permanent_bed_width, 13),
         check("moving_carrier_11x11", moving_carrier_width == 11, moving_carrier_width, 11),
@@ -344,12 +400,14 @@ def audit_contract(contract: SiloContract) -> dict[str, Any]:
         check("entry_socket_matches_gantry", 0.4 <= contract.plug_socket_world_y - contract.board_bed_y <= 2.2, {"socket_y": round(contract.plug_socket_world_y, 3), "boarding_feet_y": contract.board_bed_y}, "socket 0.4..2.2 blocks above boarding feet"),
         check("plug_descends_from_above", contract.plug_animation_start_y > contract.plug_animation_end_y and contract.plug_start_world_y > contract.plug_end_world_y, {"animation_y": [contract.plug_animation_start_y, contract.plug_animation_end_y], "world_y": [round(contract.plug_start_world_y, 3), round(contract.plug_end_world_y, 3)]}, "start above end"),
         check("plug_starts_above_gantry", contract.plug_start_world_y > contract.board_bed_y, round(contract.plug_start_world_y, 3), f"> {contract.board_bed_y}"),
-        check("carrier_travel_31", abs(carrier_travel - 31.0) < 1.0e-6, carrier_travel, 31.0),
-        check("launch_endpoint", contract.launch_target == 32.0 and contract.launch_target > contract.shutter_y, {"eva_base_y": contract.launch_target, "shutter_y": contract.shutter_y}, {"eva_base_y": 32.0, "above_shutter": True}),
-        check("ascent_state_timed", contract.ascent_ticks > 0 and contract.clear_ticks > 0, {"ascent_ticks": contract.ascent_ticks, "clear_ticks": contract.clear_ticks}, "both positive"),
+        check("carrier_travel_286", abs(carrier_travel - 286.0) < 1.0e-6, carrier_travel, 286.0),
+        check("launch_endpoint", contract.launch_target == 287.0 and contract.shutter_y == 286.0 and contract.launch_target > contract.shutter_y, {"eva_base_y": contract.launch_target, "surface_y": contract.surface_y, "shutter_y": contract.shutter_y}, {"eva_base_y": 287.0, "surface_y": 286.0, "above_shutter": True}),
+        check("dynamic_ascent_143_ticks", contract.ascent_ticks == 143 and contract.legacy_ascent_ticks == 34, {"continuous_ticks": contract.ascent_ticks, "legacy_ticks": contract.legacy_ascent_ticks}, {"continuous_ticks": 143, "legacy_ticks": 34}),
+        check("same_dimension_primary", contract.same_dimension_primary, contract.same_dimension_primary, True),
+        check("surface_clear_timed", contract.clear_ticks > 0, contract.clear_ticks, "> 0"),
     ]
     return {
-        "schema": 1,
+        "schema": 2,
         "status": "PASS" if all(item["pass"] for item in checks) else "FAIL",
         "contract": {
             "bays": [{"variant": variant, "x": x, "z": z} for variant, x, z in contract.bays],
@@ -385,14 +443,19 @@ def audit_contract(contract: SiloContract) -> dict[str, Any]:
             },
             "launch": {
                 "carrier_travel": carrier_travel,
-                "ascent_ticks": contract.ascent_ticks,
+                "continuous_ascent_ticks": contract.ascent_ticks,
+                "legacy_target": contract.legacy_launch_target,
+                "legacy_ascent_ticks": contract.legacy_ascent_ticks,
+                "same_dimension_primary": contract.same_dimension_primary,
                 "surface_clear_ticks": contract.clear_ticks,
             },
         },
         "checks": checks,
         "sources": {
             str(path.relative_to(ROOT)).replace("\\", "/"): file_hash(path)
-            for path in (KIT_SOURCE, COMMAND_SOURCE, ENTITY_SOURCE, RENDERER_SOURCE, GEO_SOURCE, ANIMATION_SOURCE)
+            for path in (KIT_SOURCE, INTEGRATED_SOURCE, COMMAND_SOURCE,
+                         ENTITY_SOURCE, RENDERER_SOURCE, GEO_SOURCE,
+                         ANIMATION_SOURCE)
         },
         "limitations": [
             "Schematic geometry verifies authored coordinates and state-machine contracts, not Minecraft block rendering.",
@@ -436,11 +499,11 @@ def render_preview(contract: SiloContract, report: dict[str, Any], output: Path)
     small = font(15)
     tiny = font(13)
 
-    draw.text((42, 28), "NERV THREE-BAY LAUNCH SILO / OFFLINE CONTRACT PREVIEW", font=title, fill=INK)
+    draw.text((42, 28), "NERV CONTINUOUS THREE-SHAFT / OFFLINE CONTRACT PREVIEW", font=title, fill=INK)
     status_color = PASS if report["status"] == "PASS" else FAIL
     draw.rounded_rectangle((1330, 27, 1555, 75), 10, outline=status_color, width=3)
     draw.text((1398, 36), report["status"], font=heading, fill=status_color)
-    draw.text((44, 78), "Coordinates are parsed from Java and the shipped Unit-01 entry-plug animation.", font=small, fill=MUTED)
+    draw.text((44, 78), "Tokyo-3 Y=248 and GeoFront Y=-40 share one dimension; coordinates are parsed from Java.", font=small, fill=MUTED)
 
     # Top view: the three actual bay centres and full shaft/clearance/gantry footprints.
     top_box = (40, 120, 940, 570)
@@ -482,9 +545,10 @@ def render_preview(contract: SiloContract, report: dict[str, Any], output: Path)
     # Section view normalized to bed Y=0.  It shows both the carrier and the actual plug bone path.
     sec_box = (970, 120, 1560, 830)
     draw.rounded_rectangle(sec_box, 10, fill=(9, 20, 28, 255), outline=GRID, width=2)
-    draw.text((994, 140), "UNIT-01 SECTION — BED Y = 0", font=heading, fill=INK)
-    y_min, y_max = -1.0, max(38.0, contract.plug_start_world_y + 2.0)
-    px_per_y = 15.6
+    draw.text((994, 140), "UNIT-01 CONTINUOUS SECTION — LOWER BED = 0", font=heading, fill=INK)
+    y_min = -1.0
+    y_max = max(contract.surface_y + 3.0, contract.plug_start_world_y + 2.0)
+    px_per_y = 570.0 / (y_max - y_min)
     origin_y = 770.0
 
     def section(z: float, y: float) -> tuple[float, float]:
@@ -525,8 +589,10 @@ def render_preview(contract: SiloContract, report: dict[str, Any], output: Path)
     # Carrier launch path.
     carrier_x = section(-5.6, 0)[0]
     line_arrow(draw, [(carrier_x, section(0, 0)[1] - 6), (carrier_x, section(0, contract.launch_target - 1)[1])], (94, 221, 227, 255), 5)
-    draw.text((carrier_x - 92, section(0, 16)[1] - 8), "31 BLOCK\nCARRIER TRAVEL", font=small, fill=(94, 221, 227, 255), align="center")
-    carrier_probe_y = 15.0
+    draw.text((carrier_x - 105, section(0, contract.surface_y * 0.5)[1] - 18),
+              f"{contract.surface_y:.0f} BLOCK\nCARRIER TRAVEL\n{contract.ascent_ticks} TICKS",
+              font=small, fill=(94, 221, 227, 255), align="center")
+    carrier_probe_y = contract.surface_y * 0.5
     carrier_l = section(-contract.moving_carrier_half, carrier_probe_y)
     carrier_r = section(contract.moving_carrier_half, carrier_probe_y)
     draw.line((carrier_l[0], carrier_l[1], carrier_r[0], carrier_r[1]), fill=(94, 221, 227, 255), width=6)
@@ -562,10 +628,10 @@ def render_preview(contract: SiloContract, report: dict[str, Any], output: Path)
     draw.rounded_rectangle((40, 600, 940, 950), 10, fill=(9, 20, 28, 255), outline=GRID, width=2)
     draw.text((64, 620), f"STRICT CONTRACT GATES — {passed}/{total}", font=heading, fill=status_color)
     for index, item in enumerate(report["checks"]):
-        column = index // 9
-        row = index % 9
-        x = 66 + column * 430
-        y = 667 + row * 29
+        column = index // 8
+        row = index % 8
+        x = 66 + column * 290
+        y = 667 + row * 34
         color = PASS if item["pass"] else FAIL
         draw.text((x, y), "PASS" if item["pass"] else "FAIL", font=tiny, fill=color)
         draw.text((x + 48, y), item["name"], font=small, fill=INK)

@@ -208,14 +208,15 @@ if /i "%~1"=="offline" (
     exit /b 0
 )
 echo.
-echo Launch-silo test flow:
-echo   1. Enter a creative world.
-echo   2. Run /seele silo setup once on an open surface.
-echo   3. Run /seele silo board from the high gantry.
-echo   4. Wait for insertion, synchronization and automatic surface launch.
-echo   /seele silo status reports the current interlock phase.
-echo   /seele tokyo3 setup builds the connected surface battle district.
-echo   /seele tokyo3 overview returns to the skyline observation deck.
+echo Continuous Tokyo-3 / GeoFront test flow:
+echo   1. Enter any creative world.
+echo   2. Run /seele geofront setup once. The first full build is intentionally heavy.
+echo   3. Run /seele geofront link to freeze Unit-00/01/02 at the lower stations.
+echo   4. Run /seele silo board from Unit-01's high rear gantry.
+echo   5. Wait for insertion and the real 286-block physical shaft ascent.
+echo   /seele geofront surface is a developer camera shortcut only.
+echo   /seele geofront exit returns to the original world.
+echo   /seele geofront audit and sortie_audit report both map and EVA links.
 echo.
 echo Starting Project SEELE test client (first launch takes a minute)...
 if /i "%~1"=="visual" (
@@ -259,8 +260,8 @@ if /i "%~1"=="visual" (
         python tools\validate_visual_capture_run.py verify tokyo3_retraction
         if errorlevel 1 exit /b 1
     ) else if /i "%~2"=="geofront" (
-        echo Building and capturing the independent GeoFront development cavern.
-        echo Four audited views cover the cavern, NERV pyramid, LCL lake and lift terminals.
+        echo Building and capturing the sealed GeoFront below the connected Tokyo-3 world.
+        echo Audited views cover the cavern, NERV pyramid, real LCL lake and lift terminals.
         python tools\validate_visual_capture_run.py begin geofront
         if errorlevel 1 exit /b 1
         call gradlew.bat runClient -PquickPlayWorld=SEELE_VISUAL_TEST_2 -PvisualCapture=true -PvisualCaptureUnit=geofront
@@ -268,8 +269,8 @@ if /i "%~1"=="visual" (
         python tools\validate_visual_capture_run.py verify geofront
         if errorlevel 1 exit /b 1
     ) else if /i "%~2"=="geofront_sortie" (
-        echo Capturing the real linked launch from GeoFront into the Tokyo-3 surface district.
-        echo Four state-gated frames cover three-unit readiness, plug lock, ascent and arrival.
+        echo Capturing one EVA entity through the real GeoFront-to-Tokyo-3 shaft.
+        echo Four state-gated frames prove readiness, plug lock, mid-shaft height and same-dimension arrival.
         python tools\validate_visual_capture_run.py begin geofront_sortie
         if errorlevel 1 exit /b 1
         call gradlew.bat runClient -PquickPlayWorld=SEELE_VISUAL_TEST_2 -PvisualCapture=true -PvisualCaptureUnit=geofront_sortie

@@ -7,6 +7,7 @@ import com.projectseele.registry.ModCreativeTabs;
 import com.projectseele.registry.ModBlocks;
 import com.projectseele.registry.ModEntities;
 import com.projectseele.registry.ModItems;
+import com.projectseele.registry.ModFluids;
 import com.projectseele.registry.ModSounds;
 import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.fml.ModLoadingContext;
@@ -28,6 +29,8 @@ public class ProjectSeele
     {
         IEventBus modEventBus = context.getModEventBus();
 
+        ModFluids.FLUID_TYPES.register(modEventBus);
+        ModFluids.FLUIDS.register(modEventBus);
         ModBlocks.BLOCKS.register(modEventBus);
         ModItems.ITEMS.register(modEventBus);
         ModEntities.ENTITY_TYPES.register(modEventBus);

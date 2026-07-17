@@ -657,7 +657,10 @@ public final class ThirdTokyoSurfaceBuilder
 
     private static void set(ServerLevel level, BlockPos position, BlockState state)
     {
-        level.setBlock(position, state, UPDATE_CLIENTS);
+        if (!level.getBlockState(position).equals(state))
+        {
+            level.setBlock(position, state, UPDATE_CLIENTS);
+        }
     }
 
     public record TowerSpec(int x, int z, int height) {}

@@ -31,20 +31,28 @@ public class ServerboundEvaControlPacket
     public static final int ACTION_RIFLE_FIRE = 14;
 
     public final int action;
+    public final int requestId;
 
     public ServerboundEvaControlPacket(int action)
     {
+        this(action, -1);
+    }
+
+    public ServerboundEvaControlPacket(int action, int requestId)
+    {
         this.action = action;
+        this.requestId = requestId;
     }
 
     public ServerboundEvaControlPacket(FriendlyByteBuf buf)
     {
-        this(buf.readVarInt());
+        this(buf.readVarInt(), buf.readVarInt());
     }
 
     public void encode(FriendlyByteBuf buf)
     {
         buf.writeVarInt(this.action);
+        buf.writeVarInt(this.requestId);
     }
 
     public void handle(Supplier<NetworkEvent.Context> ctx)
@@ -79,7 +87,16 @@ public class ServerboundEvaControlPacket
                     case ACTION_CROUCH_STOP -> eva.setPilotCrouching(sender, false);
                     case ACTION_SPRINT_START -> eva.setPilotSprinting(sender, true);
                     case ACTION_SPRINT_STOP -> eva.setPilotSprinting(sender, false);
-                    case ACTION_JUMP -> eva.pilotJump(sender);
+                    case ACTION_JUMP -> {
+                        if (this.requestId >= 0)
+                        {
+                            eva.pilotJump(sender, this.requestId);
+                        }
+                        else
+                        {
+                            eva.pilotJump(sender);
+                        }
+                    }
                     case ACTION_EXIT -> eva.exitEva(sender);
                     case ACTION_STOMP -> eva.stompAttack(sender);
                     case ACTION_TOGGLE_PRONE -> eva.toggleProne(sender);

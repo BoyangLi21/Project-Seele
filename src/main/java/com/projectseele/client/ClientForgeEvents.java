@@ -40,6 +40,14 @@ public final class ClientForgeEvents
     private static boolean crouchHeld;
     private static boolean sprintHeld;
     private static boolean jumpHeld;
+    /** A held jump stays pending until the EVA's synchronized sequence acknowledges it. */
+    private static boolean jumpRequestPending;
+    private static int jumpRequestSequence;
+    private static int jumpRequestId;
+    private static int jumpRequestIdCounter;
+    private static int jumpRequestRetryTicks;
+    private static int jumpRequestEvaId = -1;
+    private static final int JUMP_REQUEST_RETRY_INTERVAL = 4;
     /** Entry-plug insertion cinematic: counts down after boarding. */
     private static final int INSERTION_LENGTH = 120;
     private static int insertionTicks;
@@ -232,11 +240,7 @@ public final class ClientForgeEvents
                 send(rawSprint ? ServerboundEvaControlPacket.ACTION_SPRINT_START
                         : ServerboundEvaControlPacket.ACTION_SPRINT_STOP);
             }
-            if (rawJump && !jumpHeld)
-            {
-                send(ServerboundEvaControlPacket.ACTION_JUMP);
-            }
-            jumpHeld = rawJump;
+            handleJumpInput(eva, rawJump);
             minecraft.options.keyShift.setDown(false);
             player.setShiftKeyDown(false);
         }
@@ -259,7 +263,7 @@ public final class ClientForgeEvents
             }
             crouchHeld = false;
             sprintHeld = false;
-            jumpHeld = false;
+            clearJumpRequest();
         }
 
         // Hold-to-use: cannon optical charge and N2 arming share one validated
@@ -391,6 +395,69 @@ public final class ClientForgeEvents
         {
             event.setCanceled(true);
         }
+    }
+
+    /**
+     * Do not consume a jump press merely because activation, launch interlock,
+     * or a transient server ground check prevents it on the first tick. The
+     * synchronized jump sequence is the acknowledgement; until it changes a
+     * held key retries at a low rate once local control is available.
+     */
+    private static void handleJumpInput(EvaUnit01Entity eva, boolean rawJump)
+    {
+        if (!rawJump)
+        {
+            clearJumpRequest();
+            return;
+        }
+
+        if (!jumpHeld || jumpRequestEvaId != eva.getId())
+        {
+            jumpHeld = true;
+            jumpRequestPending = true;
+            jumpRequestSequence = eva.getJumpSequence();
+            jumpRequestId = ++jumpRequestIdCounter;
+            jumpRequestRetryTicks = 0;
+            jumpRequestEvaId = eva.getId();
+        }
+
+        if (!jumpRequestPending)
+        {
+            return;
+        }
+        if (eva.getJumpSequence() != jumpRequestSequence)
+        {
+            jumpRequestPending = false;
+            return;
+        }
+
+        boolean locallyUnlocked = eva.getActivationTicks() <= 20
+                && !eva.isLaunchSequenceActive() && eva.getCannonCharge() <= 0;
+        if (!locallyUnlocked)
+        {
+            // Leave the request armed. A key held through entry-plug startup
+            // is sent on the first unlocked client tick instead of vanishing.
+            jumpRequestRetryTicks = 0;
+            return;
+        }
+        if (jumpRequestRetryTicks > 0)
+        {
+            jumpRequestRetryTicks--;
+            return;
+        }
+
+        SeeleNetwork.CHANNEL.sendToServer(new ServerboundEvaControlPacket(
+                ServerboundEvaControlPacket.ACTION_JUMP, jumpRequestId));
+        jumpRequestRetryTicks = JUMP_REQUEST_RETRY_INTERVAL - 1;
+    }
+
+    private static void clearJumpRequest()
+    {
+        jumpHeld = false;
+        jumpRequestPending = false;
+        jumpRequestRetryTicks = 0;
+        jumpRequestEvaId = -1;
+        jumpRequestId = -1;
     }
 
     private static EvaUnit01Entity findEntryPlugTarget(LocalPlayer player)

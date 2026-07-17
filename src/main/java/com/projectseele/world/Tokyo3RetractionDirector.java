@@ -29,6 +29,14 @@ public final class Tokyo3RetractionDirector
 
     public static void register(ServerLevel level, BlockPos origin)
     {
+        StoredDistrict district = ensure(level, origin);
+        updateCoreStates(level, origin,
+                district.depth() > 0 || district.targetDepth() > 0);
+    }
+
+    /** Deterministic reset reserved for isolated unattended visual fixtures. */
+    public static void reset(ServerLevel level, BlockPos origin)
+    {
         Tokyo3RetractionSavedData.get(level).put(new StoredDistrict(
                 origin, 0, 0, level.getGameTime()));
         updateCoreStates(level, origin, false);

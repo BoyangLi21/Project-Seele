@@ -8,6 +8,9 @@ import com.projectseele.client.render.RamielRenderer;
 import com.projectseele.client.render.ColossalHumanoidRenderer;
 import com.projectseele.client.render.HybridAddonRenderer;
 import com.projectseele.registry.ModEntities;
+import com.projectseele.registry.ModFluids;
+import net.minecraft.client.renderer.ItemBlockRenderTypes;
+import net.minecraft.client.renderer.RenderType;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.EntityRenderersEvent;
 import net.minecraftforge.client.event.RegisterGuiOverlaysEvent;
@@ -16,10 +19,23 @@ import net.minecraftforge.client.event.RegisterClientReloadListenersEvent;
 import net.minecraft.server.packs.resources.ResourceManagerReloadListener;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
 
 @Mod.EventBusSubscriber(modid = ProjectSeele.MODID, bus = Mod.EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
 public class ClientEvents
 {
+    @SubscribeEvent
+    public static void onClientSetup(FMLClientSetupEvent event)
+    {
+        event.enqueueWork(() ->
+        {
+            ItemBlockRenderTypes.setRenderLayer(ModFluids.LCL_SOURCE.get(),
+                    RenderType.translucent());
+            ItemBlockRenderTypes.setRenderLayer(ModFluids.FLOWING_LCL.get(),
+                    RenderType.translucent());
+        });
+    }
+
     @SubscribeEvent
     public static void onRegisterRenderers(EntityRenderersEvent.RegisterRenderers event)
     {

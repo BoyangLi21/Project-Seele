@@ -519,7 +519,7 @@ public final class VisualCaptureManager
         }
     }
 
-    /** Four state-gated frames spanning a real dimension-changing EVA launch. */
+    /** Four state-gated frames spanning one real continuous-shaft EVA launch. */
     private static final class GeoFrontSortieSession
     {
         private static final String[] STAGES = {
@@ -588,6 +588,18 @@ public final class VisualCaptureManager
                 // authoritative instead of treating that expected gap as a failure.
                 return true;
             }
+            if (this.stage == 3 && this.elapsedTicks % 40 == 0)
+            {
+                ProjectSeele.LOGGER.info(
+                        "GeoFront sortie arrival client gate: dimension={} phase={} y={} "
+                                + "riding={} vehicleId={} trackedId={}",
+                        minecraft.level.dimension().location(), unit.getLaunchPhase(),
+                        String.format(java.util.Locale.ROOT, "%.3f", unit.getY()),
+                        minecraft.player.getVehicle() == unit,
+                        minecraft.player.getVehicle() == null ? -1
+                                : minecraft.player.getVehicle().getId(),
+                        unit.getId());
+            }
             if (!this.stageReady(minecraft, unit))
             {
                 return true;
@@ -598,7 +610,7 @@ public final class VisualCaptureManager
                 this.settleTicks = switch (this.stage)
                 {
                     case 0 -> 20;
-                    case 3 -> 70;
+                    case 3 -> 15;
                     case 2 -> 1;
                     default -> 5;
                 };
@@ -653,10 +665,13 @@ public final class VisualCaptureManager
                 case 1 -> inGeoFront && unit.getLaunchPhase() == EvaUnit01Entity.LAUNCH_LOCKED
                         && unit.getActivationTicks() > 65 && riding;
                 case 2 -> inGeoFront && unit.getLaunchPhase() == EvaUnit01Entity.LAUNCH_ASCENT
-                        && unit.getLaunchTicks() >= 4 && unit.getLaunchTicks() <= 20
-                        && unit.getY() >= this.origin.getY() + 10.0D && riding;
-                case 3 -> !inGeoFront && unit.getLaunchPhase() == EvaUnit01Entity.LAUNCH_IDLE
-                        && riding;
+                        && unit.getLaunchTicks() >= 45 && unit.getLaunchTicks() <= 100
+                        && unit.getY() >= this.origin.getY() + 100.0D
+                        && unit.getY() <= this.origin.getY() + 240.0D && riding;
+                case 3 -> inGeoFront
+                        && (unit.getLaunchPhase() == EvaUnit01Entity.LAUNCH_CLEAR
+                            || unit.getLaunchPhase() == EvaUnit01Entity.LAUNCH_IDLE)
+                        && unit.getY() >= this.origin.getY() + 286.0D && riding;
                 default -> false;
             };
         }
@@ -837,8 +852,9 @@ public final class VisualCaptureManager
             boolean wall = wallState.is(Blocks.DEEPSLATE)
                     || wallState.is(Blocks.CALCITE)
                     || wallState.is(Blocks.POLISHED_BASALT);
-            boolean lake = minecraft.level.getBlockState(
-                    this.origin.offset(48, 1, 0)).is(Blocks.ORANGE_STAINED_GLASS);
+            boolean lake = minecraft.level.getFluidState(
+                    this.origin.offset(48, 1, 0)).getFluidType()
+                    == com.projectseele.registry.ModFluids.LCL_TYPE.get();
             boolean pyramid = minecraft.level.getBlockState(
                     this.origin.offset(0, 29, 0)).is(Blocks.BEACON);
             boolean sun = minecraft.level.getBlockState(

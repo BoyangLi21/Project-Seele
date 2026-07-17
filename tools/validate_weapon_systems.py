@@ -112,6 +112,14 @@ require("jump.takeoff",
         and 'this.triggerAnim("strike", "takeoff")' in entity
         and '.triggerableAnim("takeoff", ANIM_TAKEOFF)' in entity,
         "jump has a dedicated takeoff clip and the reviewed giant-scale impulse")
+require("jump.request_deduplication",
+        "public final int requestId" in control_packet
+        and "buf.writeVarInt(this.requestId)" in control_packet
+        and "eva.pilotJump(sender, this.requestId)" in control_packet
+        and "jumpRequestId = ++jumpRequestIdCounter" in client
+        and "requestId == this.lastJumpRequestId" in entity
+        and "this.clientJumpImpulsePending = this.isControlledByLocalInstance()" in entity,
+        "each physical key press has one server request ID and only the local pilot applies its impulse")
 require("unit02.longinus",
         "return LONGINUS_MESH;" in renderer
         and "return LONGINUS_TEXTURE;" in renderer,

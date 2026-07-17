@@ -2,6 +2,7 @@ package com.projectseele.world;
 
 import java.util.Locale;
 
+import com.projectseele.registry.ModFluids;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
@@ -14,7 +15,8 @@ import net.minecraft.world.level.block.state.BlockState;
 public final class GeoFrontBuilder
 {
     public static final int CAVERN_RADIUS = 112;
-    public static final int CAVERN_HEIGHT = 72;
+    public static final int CAVERN_HEIGHT = 104;
+    private static final int CAVERN_DOME_SPRING_Y = 48;
     public static final int ARTIFICIAL_SUN_Y = 88;
     public static final int OBSERVATION_Z = 100;
     public static final int OBSERVATION_Y = 24;
@@ -45,8 +47,8 @@ public final class GeoFrontBuilder
                 .is(Blocks.DEEPSLATE_TILES);
         boolean wall = isCavernStone(level.getBlockState(
                 origin.offset(CAVERN_RADIUS, 32, 0)));
-        boolean lake = level.getBlockState(origin.offset(48, 1, 0))
-                .is(Blocks.ORANGE_STAINED_GLASS);
+        boolean lake = level.getFluidState(origin.offset(48, 1, 0))
+                .getFluidType() == ModFluids.LCL_TYPE.get();
         boolean pyramid = level.getBlockState(origin.offset(0, 29, 0))
                 .is(Blocks.BEACON);
         boolean sun = level.getBlockState(origin.offset(0, ARTIFICIAL_SUN_Y, 0))
@@ -105,24 +107,62 @@ public final class GeoFrontBuilder
 
     private static void buildCavernWall(ServerLevel level, BlockPos origin)
     {
-        final int samples = 1440;
-        for (int y = 1; y <= CAVERN_HEIGHT; y++)
+        // The combined Tokyo-3/GeoFront world has a real daylight sky above
+        // the city.  The underground space therefore needs a genuinely
+        // closed shell: a decorative open cylinder would leak skylight all
+        // the way down and make the GeoFront look like a surface arena.
+        // Radius 112 has a circumference of about 704 blocks; 720 angular
+        // samples cover every rounded perimeter cell without doubling almost
+        // every write during the expensive first integrated-map build.
+        final int samples = 720;
+        for (int y = 1; y <= CAVERN_DOME_SPRING_Y; y++)
         {
-            int inset = Math.max(0, y - 48) / 3;
-            int radius = CAVERN_RADIUS - inset;
             for (int sample = 0; sample < samples; sample++)
             {
                 double angle = Math.PI * 2.0D * sample / samples;
                 for (int thickness = 0; thickness <= 2; thickness++)
                 {
-                    int x = (int) Math.round(Math.cos(angle) * (radius - thickness));
-                    int z = (int) Math.round(Math.sin(angle) * (radius - thickness));
+                    int x = (int) Math.round(Math.cos(angle)
+                            * (CAVERN_RADIUS - thickness));
+                    int z = (int) Math.round(Math.sin(angle)
+                            * (CAVERN_RADIUS - thickness));
                     BlockState wall = Math.floorMod(sample + y * 3, 29) < 3
                             ? Blocks.CALCITE.defaultBlockState()
                             : (y % 11 == 0
                             ? Blocks.POLISHED_BASALT.defaultBlockState()
                             : Blocks.DEEPSLATE.defaultBlockState());
                     set(level, origin.offset(x, y, z), wall);
+                }
+            }
+        }
+
+        // One calculated roof point for every horizontal cavern column makes
+        // the ellipsoid watertight even after integer rounding.  Three layers
+        // provide enough thickness for later shaft cutting and prevent tiny
+        // skylight pinholes between adjacent rings.
+        int domeRise = CAVERN_HEIGHT - CAVERN_DOME_SPRING_Y;
+        int radiusSqr = CAVERN_RADIUS * CAVERN_RADIUS;
+        for (int x = -CAVERN_RADIUS; x <= CAVERN_RADIUS; x++)
+        {
+            for (int z = -CAVERN_RADIUS; z <= CAVERN_RADIUS; z++)
+            {
+                int distanceSqr = x * x + z * z;
+                if (distanceSqr > radiusSqr)
+                {
+                    continue;
+                }
+                double radial = Math.sqrt(distanceSqr) / CAVERN_RADIUS;
+                int roofY = CAVERN_DOME_SPRING_Y + (int) Math.round(
+                        domeRise * Math.sqrt(Math.max(0.0D, 1.0D - radial * radial)));
+                for (int thickness = 0; thickness <= 2; thickness++)
+                {
+                    int y = roofY + thickness;
+                    BlockState roof = Math.floorMod(x * 17 + z * 31 + y, 43) < 3
+                            ? Blocks.CALCITE.defaultBlockState()
+                            : (Math.floorMod(y, 11) == 0
+                            ? Blocks.POLISHED_BASALT.defaultBlockState()
+                            : Blocks.DEEPSLATE.defaultBlockState());
+                    set(level, origin.offset(x, y, z), roof);
                 }
             }
         }
@@ -162,9 +202,13 @@ public final class GeoFrontBuilder
                 BlockState bed = Math.floorMod(x * 17 + z * 31, 37) == 0
                         ? Blocks.SEA_LANTERN.defaultBlockState()
                         : Blocks.ORANGE_CONCRETE.defaultBlockState();
-                set(level, origin.offset(x, 0, z), bed);
-                set(level, origin.offset(x, 1, z),
-                        Blocks.ORANGE_STAINED_GLASS.defaultBlockState());
+                set(level, origin.offset(x, -4, z), bed);
+                for (int y = -3; y <= 1; y++)
+                {
+                    set(level, origin.offset(x, y, z),
+                            ModFluids.LCL_SOURCE.get().defaultFluidState()
+                                    .createLegacyBlock());
+                }
             }
         }
     }
@@ -428,7 +472,10 @@ public final class GeoFrontBuilder
 
     private static void set(ServerLevel level, BlockPos position, BlockState state)
     {
-        level.setBlock(position, state, UPDATE_CLIENTS);
+        if (!level.getBlockState(position).equals(state))
+        {
+            level.setBlock(position, state, UPDATE_CLIENTS);
+        }
     }
 
     public record GeoFrontAudit(boolean valid, boolean floor, boolean wall,
