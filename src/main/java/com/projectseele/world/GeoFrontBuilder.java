@@ -31,6 +31,7 @@ public final class GeoFrontBuilder
         buildCeilingRibs(level, origin);
         buildLclLake(level, origin);
         buildNervPyramid(level, origin);
+        NervOperationsCentreBuilder.build(level, origin);
         buildEvaLiftTerminals(level, origin);
         buildCommandBridge(level, origin);
         buildArtificialSun(level, origin);
@@ -68,11 +69,13 @@ public final class GeoFrontBuilder
                 .is(Blocks.IRON_BLOCK);
         boolean observation = level.getBlockState(
                 origin.offset(0, OBSERVATION_Y, OBSERVATION_Z)).is(Blocks.LODESTONE);
+        NervOperationsCentreBuilder.OperationsAudit operations =
+                NervOperationsCentreBuilder.inspect(level, origin);
         boolean valid = floor && wall && lake && pyramid && sun && lifts == 3
                 && gantries == 3
-                && bridge && observation;
+                && bridge && observation && operations.valid();
         return new GeoFrontAudit(valid, floor, wall, lake, pyramid, sun,
-                lifts, gantries, bridge, observation);
+                lifts, gantries, bridge, observation, operations);
     }
 
     private static void buildCavernFloor(ServerLevel level, BlockPos origin)
@@ -431,16 +434,18 @@ public final class GeoFrontBuilder
     public record GeoFrontAudit(boolean valid, boolean floor, boolean wall,
                                 boolean lake, boolean pyramid, boolean sun,
                                 int lifts, int gantries, boolean bridge,
-                                boolean observation)
+                                boolean observation,
+                                NervOperationsCentreBuilder.OperationsAudit operations)
     {
         public String summary()
         {
             return String.format(Locale.ROOT,
                     "valid=%s floor=%s wall=%s lclLake=%s nervPyramid=%s "
                             + "artificialSun=%s lifts=%d/3 gantries=%d/3 "
-                            + "commandBridge=%s observation=%s",
+                            + "commandBridge=%s observation=%s operations={%s}",
                     this.valid, this.floor, this.wall, this.lake, this.pyramid,
-                    this.sun, this.lifts, this.gantries, this.bridge, this.observation);
+                    this.sun, this.lifts, this.gantries, this.bridge,
+                    this.observation, this.operations.summary());
         }
     }
 }

@@ -20,7 +20,7 @@ SNAPSHOT = REPO / "run/.projectseele_visual_before.json"
 # derivative and its shared first-/third-person skeleton.
 EXPECTED = {
     "unit01": 364, "unit00": 364, "unit02": 364,
-    "mass": 35, "tokyo3": 4, "tokyo3_retraction": 4, "geofront": 4,
+    "mass": 35, "tokyo3": 4, "tokyo3_retraction": 4, "geofront": 5,
     "geofront_sortie": 4,
     "silo": 6, "impact": 3,
 }
@@ -53,6 +53,10 @@ TOKYO3_RETRACTION_STAGES = (
 GEOFRONT_SORTIE_STAGES = (
     "three_units_ready", "entry_plug_locked", "ascent_mid",
     "tokyo3_surface_arrival",
+)
+GEOFRONT_VIEWS = (
+    "cavern_overview", "nerv_pyramid", "nerv_operations", "lcl_lake",
+    "lift_terminals",
 )
 
 
@@ -124,6 +128,13 @@ def verify(target: str) -> int:
                    if not any(path.name.endswith(f"_{stage}.png") for path in pngs)]
         if missing:
             print(f"VISUAL RUN INVALID: GeoFront sortie stages missing: {missing}",
+                  file=sys.stderr)
+            return 1
+    if target == "geofront":
+        missing = [view for view in GEOFRONT_VIEWS
+                   if not any(path.name.endswith(f"_{view}.png") for path in pngs)]
+        if missing:
+            print(f"VISUAL RUN INVALID: GeoFront views missing: {missing}",
                   file=sys.stderr)
             return 1
     try:

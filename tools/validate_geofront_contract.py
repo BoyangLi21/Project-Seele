@@ -26,6 +26,8 @@ def main() -> int:
     dimension = json.loads(text(
         "src/main/resources/data/projectseele/dimension/geofront.json"))
     builder = text("src/main/java/com/projectseele/world/GeoFrontBuilder.java")
+    operations = text(
+        "src/main/java/com/projectseele/world/NervOperationsCentreBuilder.java")
     commands = text("src/main/java/com/projectseele/visual/GeoFrontCommands.java")
     automation = text("src/main/java/com/projectseele/visual/VisualLabAutomation.java")
     capture = text(
@@ -67,9 +69,17 @@ def main() -> int:
                  "floor", "wall", "lake", "pyramid", "sun", "lifts == 3",
                  "gantries == 3", "bridge", "observation")),
              "all critical landmarks have server-side block evidence"),
+        gate("map.nerv_operations",
+             "NervOperationsCentreBuilder.build" in builder
+             and all(token in operations for token in (
+                 "buildLowerConcourse", "buildOperationsHall",
+                 "buildAccessStairs", "buildLiftTransit", "OperationsAudit",
+                 "consoles == 3", "transitLinks == 3",
+                 "hasConnectedLowerRoutes", "walkable")),
+             "playable entrance, tactical hall, stairs, consoles and three lift corridors are audited"),
         gate("commands.round_trip",
              all(f'literal("{name}")' in commands for name in
-                 ("setup", "enter", "surface", "audit", "overview"))
+                 ("setup", "enter", "surface", "audit", "operations", "overview"))
              and all(token in commands for token in
                      ("RETURN_DIMENSION", "RETURN_X", "RETURN_Y", "RETURN_Z")),
              "entry saves an exact cross-dimension return position"),
@@ -92,12 +102,13 @@ def main() -> int:
                  "clearMovingCarrierBelowSurface"))
              and "setSortieParkingBed" in commands,
              "destination and frozen underground parking survive saves; shaft, carrier and pilot hand-off are gated"),
-        gate("visual.four_views",
+        gate("visual.five_views",
              all(token in capture for token in (
                  "cavern_overview", "nerv_pyramid", "lcl_lake",
-                 "lift_terminals", "GeoFront visual evidence"))
+                 "lift_terminals", "nerv_operations",
+                 "GeoFront visual evidence"))
              and 'CAPTURE_UNIT.equals("geofront")' in automation,
-             "real client captures and audits four cavern views"),
+             "real client captures and audits four cavern views plus the NERV operations hall"),
         gate("visual.cross_dimension_sortie",
              all(token in capture for token in (
                  "three_units_ready", "entry_plug_locked", "ascent_mid",

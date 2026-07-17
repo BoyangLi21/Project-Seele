@@ -14,13 +14,17 @@ texture, audio, or redistributed third-party structure.
 3. The player arrives on the south observation deck. Run
    `/seele geofront audit`; a valid sector reports:
 
-   `floor=true wall=true lclLake=true nervPyramid=true artificialSun=true lifts=3/3 commandBridge=true observation=true`
+   `floor=true wall=true lclLake=true nervPyramid=true artificialSun=true lifts=3/3 gantries=3/3 commandBridge=true observation=true operations={valid=true ... connectedRoutes=true}`
 
 4. Walk across the illuminated command bridge toward the central NERV
    pyramid. The orange glass lake is a visual stand-in until the dedicated LCL
    fluid lands in Phase 5.
 5. `/seele geofront surface` returns to the exact dimension and coordinates
    saved before entry. `/seele geofront enter` revisits an already-built sector.
+6. `/seele geofront operations` enters the upper tactical command hall. Walk
+   down the quartz stair to the lower concourse: the southern pressure gate
+   reaches the observation bridge, while the northern gallery branches into
+   three enclosed colour-coded corridors for Unit-00, Unit-01 and Unit-02.
 
 ## Linked Tokyo-3 sortie
 
@@ -43,9 +47,9 @@ texture, audio, or redistributed third-party structure.
 
 Run `tools\start_test.bat visual geofront` (or pass `visual geofront` to the
 desktop launcher). The dedicated client rebuilds the sector, performs both
-server and client landmark audits, captures four fixed PNG views, verifies the
+server and client landmark audits, captures five fixed PNG views, verifies the
 new batch, and closes itself. A passing run names `cavern_overview`,
-`nerv_pyramid`, `lcl_lake`, and `lift_terminals`.
+`nerv_pyramid`, `nerv_operations`, `lcl_lake`, and `lift_terminals`.
 
 Run `tools\start_test.bat visual geofront_sortie` for the connected flow. It
 must capture exactly four state-gated frames: `three_units_ready`,
@@ -56,7 +60,10 @@ blocks, and the arrival frame requires the same piloted EVA in the Overworld.
 ## Current scope
 
 This is the first bounded GeoFront slice: cavern, artificial sun, lake,
-headquarters silhouette and three working EVA lift terminals. The audited
+an enterable two-level headquarters command centre and three working EVA lift
+terminals. Its internal route audit requires continuous floor and two-block
+clearance from the southern bridge through the concourse to all three lifts.
+The audited
 GeoFront-to-Tokyo-3 catapult route is complete for this slice. Full NERV
 interiors, final shaft art, Terminal Dogma, LCL fluid and the final ~400-block
 cavern remain later work and are not claimed complete here.

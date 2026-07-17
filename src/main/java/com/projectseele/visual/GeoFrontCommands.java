@@ -67,6 +67,8 @@ public final class GeoFrontCommands
                                 .executes(context -> surface(context.getSource())))
                         .then(Commands.literal("audit")
                                 .executes(context -> audit(context.getSource())))
+                        .then(Commands.literal("operations")
+                                .executes(context -> operations(context.getSource())))
                         .then(Commands.literal("overview")
                                 .executes(context -> overview(context.getSource())))));
     }
@@ -570,6 +572,36 @@ public final class GeoFrontCommands
             saveReturn(player);
         }
         teleportOverview(player, level);
+        return 1;
+    }
+
+    private static int operations(CommandSourceStack source) throws CommandSyntaxException
+    {
+        ServerPlayer player = source.getPlayerOrException();
+        ServerLevel level = geoFront(player);
+        if (level == null)
+        {
+            source.sendFailure(Component.literal("GeoFront dimension is unavailable."));
+            return 0;
+        }
+        GeoFrontAudit result = GeoFrontBuilder.inspect(level, ORIGIN);
+        if (!result.operations().valid())
+        {
+            source.sendFailure(Component.literal(
+                    "NERV operations centre failed its structural audit: "
+                            + result.operations().summary()));
+            return 0;
+        }
+        if (!player.serverLevel().dimension().equals(GEOFRONT))
+        {
+            saveReturn(player);
+        }
+        player.stopRiding();
+        player.teleportTo(level, ORIGIN.getX() + 0.5D,
+                ORIGIN.getY() + 8.0D,
+                ORIGIN.getZ() + 18.5D, 180.0F, 0.0F);
+        source.sendSuccess(() -> Component.literal(
+                "NERV operations centre: tactical command level."), false);
         return 1;
     }
 

@@ -757,12 +757,13 @@ public final class VisualCaptureManager
         }
     }
 
-    /** Four audited views of the independent GeoFront development cavern. */
+    /** Five audited views of the GeoFront cavern and NERV command interior. */
     private static final class GeoFrontSession
     {
         private static final int INITIAL_SETTLE_TICKS = 180;
         private static final String[] VIEWS = {
-                "cavern_overview", "nerv_pyramid", "lcl_lake", "lift_terminals"
+                "cavern_overview", "nerv_pyramid", "nerv_operations",
+                "lcl_lake", "lift_terminals"
         };
         private static final int[] LIFT_X = {-28, 0, 28};
 
@@ -815,7 +816,7 @@ public final class VisualCaptureManager
             if (this.view >= VIEWS.length)
             {
                 ProjectSeele.LOGGER.info(
-                        "GeoFront visual matrix finished: four audited cavern views captured");
+                        "GeoFront visual matrix finished: five audited map views captured");
                 if (Boolean.getBoolean("projectseele.visualCapture"))
                 {
                     shutdownTicks = 30;
@@ -863,14 +864,35 @@ public final class VisualCaptureManager
                     this.origin.offset(0, 2, 70)).is(Blocks.IRON_BLOCK);
             boolean observation = minecraft.level.getBlockState(
                     this.origin.offset(0, 24, 100)).is(Blocks.LODESTONE);
+            boolean operations = minecraft.level.getBlockState(
+                    this.origin.offset(0, 8, 0)).is(Blocks.BEACON);
+            boolean tacticalDisplay = minecraft.level.getBlockState(
+                    this.origin.offset(0, 11, -20)).is(Blocks.RED_STAINED_GLASS);
+            boolean accessStairs = minecraft.level.getBlockState(
+                    this.origin.offset(-13, 2, 22)).is(Blocks.SMOOTH_QUARTZ_STAIRS);
+            int transitLinks = 0;
+            for (int x : LIFT_X)
+            {
+                if (!minecraft.level.getBlockState(
+                        this.origin.offset(x, 1, -50)).isAir()
+                        && minecraft.level.getBlockState(
+                                this.origin.offset(x, 6, -50)).is(Blocks.IRON_BLOCK))
+                {
+                    transitLinks++;
+                }
+            }
             boolean valid = floor && wall && lake && pyramid && sun
-                    && lifts == 3 && gantries == 3 && bridge && observation;
+                    && lifts == 3 && gantries == 3 && bridge && observation
+                    && operations && tacticalDisplay && accessStairs
+                    && transitLinks == 3;
             ProjectSeele.LOGGER.info(
                     "GeoFront visual evidence: floor={} wall={} lclLake={} "
                             + "nervPyramid={} artificialSun={} lifts={}/3 gantries={}/3 "
-                            + "commandBridge={} observation={} valid={}",
+                            + "commandBridge={} observation={} operations={} display={} "
+                            + "stairs={} transit={}/3 valid={}",
                     floor, wall, lake, pyramid, sun, lifts, gantries,
-                    bridge, observation, valid);
+                    bridge, observation, operations, tacticalDisplay,
+                    accessStairs, transitLinks, valid);
             if (!valid)
             {
                 ProjectSeele.LOGGER.error(
@@ -908,6 +930,11 @@ public final class VisualCaptureManager
                 {
                     cameraPos = base.add(72.0D, 38.0D, 70.0D);
                     target = base.add(0.0D, 14.0D, 0.0D);
+                }
+                case "nerv_operations" ->
+                {
+                    cameraPos = base.add(0.0D, 11.0D, 18.0D);
+                    target = base.add(0.0D, 10.5D, -19.0D);
                 }
                 case "lcl_lake" ->
                 {
