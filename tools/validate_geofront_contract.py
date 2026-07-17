@@ -30,7 +30,12 @@ def main() -> int:
     automation = text("src/main/java/com/projectseele/visual/VisualLabAutomation.java")
     capture = text(
         "src/main/java/com/projectseele/client/visual/VisualCaptureManager.java")
+    entity = text("src/main/java/com/projectseele/entity/EvaUnit01Entity.java")
+    sortie_packet = text(
+        "src/main/java/com/projectseele/network/ClientboundGeoFrontSortieCapturePacket.java")
     network = text("src/main/java/com/projectseele/network/SeeleNetwork.java")
+    tokyo_commands = text(
+        "src/main/java/com/projectseele/visual/ThirdTokyoCommands.java")
 
     minimum = dimension_type.get("min_y")
     height = dimension_type.get("height")
@@ -60,7 +65,7 @@ def main() -> int:
         gate("map.runtime_audit",
              all(token in builder for token in (
                  "floor", "wall", "lake", "pyramid", "sun", "lifts == 3",
-                 "bridge", "observation")),
+                 "gantries == 3", "bridge", "observation")),
              "all critical landmarks have server-side block evidence"),
         gate("commands.round_trip",
              all(f'literal("{name}")' in commands for name in
@@ -68,16 +73,49 @@ def main() -> int:
              and all(token in commands for token in
                      ("RETURN_DIMENSION", "RETURN_X", "RETURN_Y", "RETURN_Z")),
              "entry saves an exact cross-dimension return position"),
+        gate("sortie.three_way_link",
+             all(token in commands for token in (
+                 'literal("link")', 'literal("sortie_audit")',
+                 "setSortieDestination", "transferUnpilotedTo",
+                 "rollbackLinks", "linked == 3", "validDestinations == 3"))
+             and all(token in builder for token in (
+                 "buildLiftGantry", "clearLiftCorridor", "LIFT_X")),
+             "Unit-00/01/02 map to reachable terminals with rollback and audits"),
+        gate("sortie.persistent_safe_transfer",
+             all(token in entity for token in (
+                 "SeeleSortieDimension", "SeeleSortieBed",
+                 "SeeleSortieParkingBed", "tickSortieParkingLock",
+                 "completeLinkedSortie", "isSortieShaftClear",
+                 "directTeleporter", "pilot.stopRiding()",
+                 "pilot.startRiding(relocated, true)",
+                 "setSurfaceCarrierAt(destination, destinationBed, true)",
+                 "clearMovingCarrierBelowSurface"))
+             and "setSortieParkingBed" in commands,
+             "destination and frozen underground parking survive saves; shaft, carrier and pilot hand-off are gated"),
         gate("visual.four_views",
              all(token in capture for token in (
                  "cavern_overview", "nerv_pyramid", "lcl_lake",
                  "lift_terminals", "GeoFront visual evidence"))
              and 'CAPTURE_UNIT.equals("geofront")' in automation,
              "real client captures and audits four cavern views"),
+        gate("visual.cross_dimension_sortie",
+             all(token in capture for token in (
+                 "three_units_ready", "entry_plug_locked", "ascent_mid",
+                 "tokyo3_surface_arrival", "GeoFrontSortieSession"))
+             and 'CAPTURE_UNIT.equals("geofront_sortie")' in automation
+             and all(token in sortie_packet for token in (
+                 "startGeoFrontSortie", "readVarInt", "readBlockPos"))
+             and all(token in commands for token in (
+                 "VISUAL_SORTIE_UNITS", "pruneVisualSortieDuplicates"))
+             and "this.origin.getY() + 10.0D" in capture
+             and "auditVisualCapture" in tokyo_commands
+             and "geoFrontSortieSurfaceAudited" in automation,
+             "four height-gated frames follow the same UUID-audited piloted EVA into Tokyo-3"),
         gate("network.protocol",
-             'PROTOCOL_VERSION = "9"' in network
-             and "ClientboundGeoFrontCapturePacket.class" in network,
-             "GeoFront capture is registered on protocol v9"),
+             'PROTOCOL_VERSION = "10"' in network
+             and "ClientboundGeoFrontCapturePacket.class" in network
+             and "ClientboundGeoFrontSortieCapturePacket.class" in network,
+             "GeoFront map and sortie capture are registered on protocol v10"),
     ]
     if all(checks):
         print("GeoFront contract: PASS")

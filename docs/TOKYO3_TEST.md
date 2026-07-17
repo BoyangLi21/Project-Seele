@@ -21,6 +21,10 @@ city asset.
    gantry. The existing synchronization and catapult sequence must finish on
    the city surface.
 6. Run `/seele tokyo3 overview` at any time to return to the skyline deck.
+7. For the cross-dimensional route, run `/seele geofront link` beside the
+   district before boarding. After Unit-01 returns from GeoFront,
+   `/seele tokyo3 audit`, `status`, `retract`, `restore`, and `overview` locate
+   the persisted district even though the original parked formation is away.
 
 ### Armour-tower controls
 
@@ -86,6 +90,7 @@ It writes the plan/isometric review image and JSON report under
 
 This is the first Phase 4 surface slice, not a claim that Tokyo-3 is finished.
 The buildings are original procedural shells with working layer-by-layer
-retraction. Jigsaw variation, the GeoFront dimension, NERV interior modules, traffic and
-licensed campaign maps remain separate work. The current acceptance target is
-the connected loop: cage -> entry plug -> catapult -> surface district.
+retraction. Jigsaw variation, full NERV interior modules, traffic and licensed
+campaign maps remain separate work. The current connected acceptance loop is
+audited: GeoFront cage -> entry plug -> carrier ascent -> cross-dimensional
+Tokyo-3 surface arrival.

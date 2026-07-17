@@ -21,6 +21,7 @@ SNAPSHOT = REPO / "run/.projectseele_visual_before.json"
 EXPECTED = {
     "unit01": 364, "unit00": 364, "unit02": 364,
     "mass": 35, "tokyo3": 4, "tokyo3_retraction": 4, "geofront": 4,
+    "geofront_sortie": 4,
     "silo": 6, "impact": 3,
 }
 VIEWS_PER_POSE = {"unit01": 13, "unit00": 13, "unit02": 13, "mass": 7}
@@ -38,6 +39,8 @@ FAILURE_PATTERNS = (
     r"Tokyo-3 retraction visual screenshot failed",
     r"VISUAL GEOFRONT INVALID",
     r"GeoFront visual screenshot failed",
+    r"VISUAL GEOFRONT SORTIE INVALID",
+    r"GeoFront sortie visual screenshot failed",
     r"Visual Lab automation failed",
 )
 SILO_STAGES = (
@@ -46,6 +49,10 @@ SILO_STAGES = (
 )
 TOKYO3_RETRACTION_STAGES = (
     "deployed", "mid_descent", "fully_retracted", "restored",
+)
+GEOFRONT_SORTIE_STAGES = (
+    "three_units_ready", "entry_plug_locked", "ascent_mid",
+    "tokyo3_surface_arrival",
 )
 
 
@@ -112,6 +119,13 @@ def verify(target: str) -> int:
             print(f"VISUAL RUN INVALID: Tokyo-3 retraction stages missing: {missing}",
                   file=sys.stderr)
             return 1
+    if target == "geofront_sortie":
+        missing = [stage for stage in GEOFRONT_SORTIE_STAGES
+                   if not any(path.name.endswith(f"_{stage}.png") for path in pngs)]
+        if missing:
+            print(f"VISUAL RUN INVALID: GeoFront sortie stages missing: {missing}",
+                  file=sys.stderr)
+            return 1
     try:
         log = LATEST_LOG.read_text(encoding="utf-8", errors="replace")
     except OSError as exc:
@@ -140,7 +154,8 @@ def main() -> int:
     args = parser.parse_args()
     poses = normalise_poses(args.poses)
     if poses and args.target in {
-            "impact", "silo", "tokyo3", "tokyo3_retraction", "geofront"}:
+            "impact", "silo", "tokyo3", "tokyo3_retraction", "geofront",
+            "geofront_sortie"}:
         parser.error(f"{args.target} capture has fixed stages and does not accept --poses")
     return begin(args.target, poses) if args.action == "begin" else verify(args.target)
 

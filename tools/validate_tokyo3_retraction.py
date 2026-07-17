@@ -89,6 +89,12 @@ def main() -> int:
                 all(f'literal("{name}")' in commands
                     for name in ("retract", "restore", "status")),
                 "/seele tokyo3 exposes retract, restore and status"),
+        require("commands.post_sortie_origin",
+                "Tokyo3RetractionSavedData.get" in commands
+                and ".nearest(player.blockPosition(), 320.0D)" in commands
+                and "parkedFormationRequired" in commands
+                and "DEPLOYED_OR_AWAY" in commands,
+                "persisted district commands remain available after the EVAs deploy"),
         require("visual.four_state_matrix",
                 all(token in capture for token in
                     ("deployed", "mid_descent", "fully_retracted", "restored",

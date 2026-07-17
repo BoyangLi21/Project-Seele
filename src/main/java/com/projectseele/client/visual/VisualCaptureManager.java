@@ -35,6 +35,7 @@ import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
+import org.jetbrains.annotations.Nullable;
 
 /** Deterministic multi-angle PNG capture for Visual Lab regression checks. */
 @Mod.EventBusSubscriber(modid = ProjectSeele.MODID, bus = Mod.EventBusSubscriber.Bus.FORGE, value = Dist.CLIENT)
@@ -68,6 +69,7 @@ public final class VisualCaptureManager
     private static Tokyo3Session tokyo3Session;
     private static Tokyo3RetractionSession tokyo3RetractionSession;
     private static GeoFrontSession geoFrontSession;
+    private static GeoFrontSortieSession geoFrontSortieSession;
     private static int shutdownTicks = -1;
 
     private VisualCaptureManager() {}
@@ -369,12 +371,68 @@ public final class VisualCaptureManager
                 Component.literal("GeoFront visual capture started"), false);
     }
 
+    /** Starts a synchronized GeoFront-to-Tokyo-3 cross-dimension sortie capture. */
+    public static void startGeoFrontSortie(int entityId, BlockPos origin)
+    {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft.level == null || minecraft.player == null)
+        {
+            return;
+        }
+        if (entityId < 0 || origin.getY() <= -2000)
+        {
+            ProjectSeele.LOGGER.error(
+                    "VISUAL GEOFRONT SORTIE INVALID: server-side setup failed");
+            shutdownTicks = 20;
+            return;
+        }
+        if (session != null)
+        {
+            session.restore(minecraft);
+            session = null;
+        }
+        if (impactSession != null)
+        {
+            impactSession.restore(minecraft);
+            impactSession = null;
+        }
+        if (siloSession != null)
+        {
+            siloSession.restore(minecraft);
+            siloSession = null;
+        }
+        if (tokyo3Session != null)
+        {
+            tokyo3Session.restore(minecraft);
+            tokyo3Session = null;
+        }
+        if (tokyo3RetractionSession != null)
+        {
+            tokyo3RetractionSession.restore(minecraft);
+            tokyo3RetractionSession = null;
+        }
+        if (geoFrontSession != null)
+        {
+            geoFrontSession.restore(minecraft);
+            geoFrontSession = null;
+        }
+        if (geoFrontSortieSession != null)
+        {
+            geoFrontSortieSession.restore(minecraft);
+        }
+        shutdownTicks = -1;
+        geoFrontSortieSession = new GeoFrontSortieSession(entityId, origin, minecraft);
+        minecraft.player.displayClientMessage(
+                Component.literal("GeoFront sortie visual capture started"), false);
+    }
+
     /** Suppress GUI overlays while leaving the world-space EVA body visible. */
     public static boolean isSuppressingGui()
     {
         return impactSession != null || tokyo3Session != null
                 || tokyo3RetractionSession != null
                 || geoFrontSession != null
+                || geoFrontSortieSession != null
                 || session != null && session.isCleanFirstPerson();
     }
 
@@ -402,6 +460,15 @@ public final class VisualCaptureManager
             {
                 impactSession.restore(minecraft);
                 impactSession = null;
+            }
+            return;
+        }
+        if (geoFrontSortieSession != null)
+        {
+            if (!geoFrontSortieSession.tick(minecraft))
+            {
+                geoFrontSortieSession.restore(minecraft);
+                geoFrontSortieSession = null;
             }
             return;
         }
@@ -449,6 +516,244 @@ public final class VisualCaptureManager
         {
             session.restore(minecraft);
             session = null;
+        }
+    }
+
+    /** Four state-gated frames spanning a real dimension-changing EVA launch. */
+    private static final class GeoFrontSortieSession
+    {
+        private static final String[] STAGES = {
+                "three_units_ready", "entry_plug_locked", "ascent_mid",
+                "tokyo3_surface_arrival"
+        };
+        private static final int TIMEOUT_TICKS = 520;
+
+        private int entityId;
+        private final BlockPos origin;
+        private final CameraType originalCameraType;
+        private final boolean originalHideGui;
+        private final CloudStatus originalCloudStatus;
+        private final LocalVisualAssetFingerprint.Fingerprint bodyFingerprint;
+        private final String modelTag;
+        private ArmorStand camera;
+        private int stage;
+        private int settleTicks;
+        private int elapsedTicks;
+        private boolean positioned;
+
+        GeoFrontSortieSession(int entityId, BlockPos origin, Minecraft minecraft)
+        {
+            this.entityId = entityId;
+            this.origin = origin.immutable();
+            this.originalCameraType = minecraft.options.getCameraType();
+            this.originalHideGui = minecraft.options.hideGui;
+            this.originalCloudStatus = minecraft.options.cloudStatus().get();
+            Entity entity = minecraft.level.getEntity(entityId);
+            int variant = entity instanceof EvaUnit01Entity unit
+                    ? unit.getUnitVariant() : EvaUnit01Entity.UNIT_01;
+            this.bodyFingerprint = EvaUnit01Renderer.visualFingerprintForVariant(variant);
+            this.modelTag = this.bodyFingerprint.compactTag();
+            ProjectSeele.LOGGER.info(
+                    "GeoFront sortie capture batch {} uses {}", CAPTURE_BATCH, this.modelTag);
+        }
+
+        boolean tick(Minecraft minecraft)
+        {
+            if (minecraft.level == null || minecraft.player == null)
+            {
+                return false;
+            }
+            this.elapsedTicks++;
+            if (this.elapsedTicks > TIMEOUT_TICKS)
+            {
+                ProjectSeele.LOGGER.error(
+                        "VISUAL GEOFRONT SORTIE INVALID: timed out before stage {}",
+                        this.stage < STAGES.length ? STAGES[this.stage] : "complete");
+                shutdownTicks = 20;
+                return false;
+            }
+            if (LocalVisualAssetFingerprint.isStrictMode() && !this.bodyFingerprint.valid())
+            {
+                ProjectSeele.LOGGER.error(
+                        "VISUAL GEOFRONT SORTIE INVALID: high-detail EVA unavailable: {}",
+                        this.bodyFingerprint.description());
+                shutdownTicks = 20;
+                return false;
+            }
+            EvaUnit01Entity unit = this.resolveUnit(minecraft);
+            if (unit == null || !unit.isAlive())
+            {
+                // The old client entity disappears briefly while the new
+                // dimension entity is installed. The overall timeout remains
+                // authoritative instead of treating that expected gap as a failure.
+                return true;
+            }
+            if (!this.stageReady(minecraft, unit))
+            {
+                return true;
+            }
+            if (!this.positioned)
+            {
+                this.positioned = true;
+                this.settleTicks = switch (this.stage)
+                {
+                    case 0 -> 20;
+                    case 3 -> 70;
+                    case 2 -> 1;
+                    default -> 5;
+                };
+            }
+            this.position(minecraft, unit);
+            if (this.settleTicks-- > 0)
+            {
+                return true;
+            }
+            if (!this.stageReady(minecraft, unit))
+            {
+                ProjectSeele.LOGGER.error(
+                        "VISUAL GEOFRONT SORTIE INVALID: state changed while settling {}",
+                        STAGES[this.stage]);
+                shutdownTicks = 20;
+                return false;
+            }
+            this.capture(minecraft, unit);
+            this.stage++;
+            this.positioned = false;
+            if (this.stage >= STAGES.length)
+            {
+                ProjectSeele.LOGGER.info(
+                        "GeoFront sortie visual matrix finished: four synchronized stages captured");
+                shutdownTicks = 20;
+                return false;
+            }
+            return true;
+        }
+
+        @Nullable
+        private EvaUnit01Entity resolveUnit(Minecraft minecraft)
+        {
+            if (minecraft.player.getVehicle() instanceof EvaUnit01Entity ridden)
+            {
+                this.entityId = ridden.getId();
+                return ridden;
+            }
+            Entity entity = minecraft.level.getEntity(this.entityId);
+            return entity instanceof EvaUnit01Entity unit ? unit : null;
+        }
+
+        private boolean stageReady(Minecraft minecraft, EvaUnit01Entity unit)
+        {
+            boolean inGeoFront = minecraft.level.dimension().location().toString()
+                    .equals("projectseele:geofront");
+            boolean riding = minecraft.player.getVehicle() == unit;
+            return switch (this.stage)
+            {
+                case 0 -> inGeoFront && unit.getLaunchPhase() == EvaUnit01Entity.LAUNCH_IDLE
+                        && !riding;
+                case 1 -> inGeoFront && unit.getLaunchPhase() == EvaUnit01Entity.LAUNCH_LOCKED
+                        && unit.getActivationTicks() > 65 && riding;
+                case 2 -> inGeoFront && unit.getLaunchPhase() == EvaUnit01Entity.LAUNCH_ASCENT
+                        && unit.getLaunchTicks() >= 4 && unit.getLaunchTicks() <= 20
+                        && unit.getY() >= this.origin.getY() + 10.0D && riding;
+                case 3 -> !inGeoFront && unit.getLaunchPhase() == EvaUnit01Entity.LAUNCH_IDLE
+                        && riding;
+                default -> false;
+            };
+        }
+
+        private void position(Minecraft minecraft, EvaUnit01Entity unit)
+        {
+            minecraft.options.setCameraType(CameraType.FIRST_PERSON);
+            minecraft.options.hideGui = true;
+            minecraft.options.cloudStatus().set(CloudStatus.OFF);
+            if (this.camera == null || this.camera.level() != minecraft.level)
+            {
+                this.camera = EntityType.ARMOR_STAND.create(minecraft.level);
+                if (this.camera == null)
+                {
+                    throw new IllegalStateException(
+                            "GeoFront sortie visual camera creation failed");
+                }
+                this.camera.setInvisible(true);
+                this.camera.setNoGravity(true);
+            }
+            float yaw = unit.getYRot() * Mth.DEG_TO_RAD;
+            Vec3 forward = new Vec3(-Mth.sin(yaw), 0.0D, Mth.cos(yaw));
+            Vec3 right = new Vec3(-forward.z, 0.0D, forward.x);
+            Vec3 rear = forward.scale(-1.0D);
+            Vec3 target;
+            Vec3 cameraPos;
+            switch (this.stage)
+            {
+                case 0 ->
+                {
+                    target = Vec3.atCenterOf(this.origin.offset(0, 17, -76));
+                    cameraPos = Vec3.atCenterOf(this.origin.offset(0, 60, -28));
+                }
+                case 1 ->
+                {
+                    target = unit.getEntryPlugSocketPosition().add(0.0D, 1.2D, 0.0D);
+                    cameraPos = target.add(rear.scale(4.0D))
+                            .add(right.scale(5.25D)).add(0.0D, 3.8D, 0.0D);
+                }
+                case 2 ->
+                {
+                    target = unit.position().add(0.0D, 15.0D, 0.0D);
+                    cameraPos = target.add(right.scale(20.0D))
+                            .add(rear.scale(16.0D)).add(0.0D, 28.0D, 0.0D);
+                }
+                default ->
+                {
+                    target = unit.position().add(0.0D, 14.0D, 0.0D);
+                    cameraPos = target.add(forward.scale(52.0D))
+                            .add(right.scale(28.0D)).add(0.0D, 18.0D, 0.0D);
+                }
+            }
+            this.camera.setPos(cameraPos.x, cameraPos.y - this.camera.getEyeHeight(), cameraPos.z);
+            lookAt(this.camera, cameraPos, target);
+            this.camera.xo = this.camera.getX();
+            this.camera.yo = this.camera.getY();
+            this.camera.zo = this.camera.getZ();
+            this.camera.yRotO = this.camera.getYRot();
+            this.camera.xRotO = this.camera.getXRot();
+            minecraft.setCameraEntity(this.camera);
+        }
+
+        private void capture(Minecraft minecraft, EvaUnit01Entity unit)
+        {
+            String stageName = STAGES[this.stage];
+            ProjectSeele.LOGGER.info(
+                    "GeoFront sortie visual stage {}: dimension={} phase={} activation={} "
+                            + "launchTicks={} y={}",
+                    stageName, minecraft.level.dimension().location(),
+                    unit.getLaunchPhase(), unit.getActivationTicks(), unit.getLaunchTicks(),
+                    String.format(java.util.Locale.ROOT, "%.3f", unit.getY()));
+            try
+            {
+                File batch = new File(minecraft.gameDirectory,
+                        "screenshots/projectseele_visual/" + CAPTURE_BATCH);
+                Files.createDirectories(batch.toPath());
+                String filename = "geofront_sortie_" + this.modelTag
+                        + "_" + stageName + ".png";
+                Screenshot.grab(minecraft.gameDirectory,
+                        "projectseele_visual/" + CAPTURE_BATCH + "/" + filename,
+                        minecraft.getMainRenderTarget(), message -> ProjectSeele.LOGGER.info(
+                                "GeoFront sortie visual capture {}/{}: {}",
+                                CAPTURE_BATCH, filename, message.getString()));
+            }
+            catch (Exception exception)
+            {
+                ProjectSeele.LOGGER.error(
+                        "GeoFront sortie visual screenshot failed", exception);
+            }
+        }
+
+        void restore(Minecraft minecraft)
+        {
+            minecraft.setCameraEntity(minecraft.player);
+            minecraft.options.setCameraType(this.originalCameraType);
+            minecraft.options.hideGui = this.originalHideGui;
+            minecraft.options.cloudStatus().set(this.originalCloudStatus);
         }
     }
 
@@ -538,6 +843,7 @@ public final class VisualCaptureManager
             boolean sun = minecraft.level.getBlockState(
                     this.origin.offset(0, 88, 0)).is(Blocks.SEA_LANTERN);
             int lifts = 0;
+            int gantries = 0;
             for (int x : LIFT_X)
             {
                 if (minecraft.level.getBlockState(
@@ -545,18 +851,26 @@ public final class VisualCaptureManager
                 {
                     lifts++;
                 }
+                if (minecraft.level.getBlockState(
+                        this.origin.offset(x, 27, -63)).is(Blocks.LADDER)
+                        && !minecraft.level.getBlockState(
+                                this.origin.offset(x, 27, -70)).isAir())
+                {
+                    gantries++;
+                }
             }
             boolean bridge = minecraft.level.getBlockState(
                     this.origin.offset(0, 2, 70)).is(Blocks.IRON_BLOCK);
             boolean observation = minecraft.level.getBlockState(
                     this.origin.offset(0, 24, 100)).is(Blocks.LODESTONE);
             boolean valid = floor && wall && lake && pyramid && sun
-                    && lifts == 3 && bridge && observation;
+                    && lifts == 3 && gantries == 3 && bridge && observation;
             ProjectSeele.LOGGER.info(
                     "GeoFront visual evidence: floor={} wall={} lclLake={} "
-                            + "nervPyramid={} artificialSun={} lifts={}/3 "
+                            + "nervPyramid={} artificialSun={} lifts={}/3 gantries={}/3 "
                             + "commandBridge={} observation={} valid={}",
-                    floor, wall, lake, pyramid, sun, lifts, bridge, observation, valid);
+                    floor, wall, lake, pyramid, sun, lifts, gantries,
+                    bridge, observation, valid);
             if (!valid)
             {
                 ProjectSeele.LOGGER.error(

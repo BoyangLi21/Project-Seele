@@ -3,9 +3,11 @@ package com.projectseele.world;
 import java.util.Locale;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.LadderBlock;
 import net.minecraft.world.level.block.state.BlockState;
 
 /** Deterministic clean-room GeoFront development cavern and NERV command pyramid. */
@@ -49,11 +51,17 @@ public final class GeoFrontBuilder
         boolean sun = level.getBlockState(origin.offset(0, ARTIFICIAL_SUN_Y, 0))
                 .is(Blocks.SEA_LANTERN);
         int lifts = 0;
+        int gantries = 0;
         for (int x : LIFT_X)
         {
             if (level.getBlockState(origin.offset(x, 1, -76)).is(Blocks.LODESTONE))
             {
                 lifts++;
+            }
+            if (level.getBlockState(origin.offset(x, 27, -63)).is(Blocks.LADDER)
+                    && !level.getBlockState(origin.offset(x, 27, -70)).isAir())
+            {
+                gantries++;
             }
         }
         boolean bridge = level.getBlockState(origin.offset(0, 2, 70))
@@ -61,9 +69,10 @@ public final class GeoFrontBuilder
         boolean observation = level.getBlockState(
                 origin.offset(0, OBSERVATION_Y, OBSERVATION_Z)).is(Blocks.LODESTONE);
         boolean valid = floor && wall && lake && pyramid && sun && lifts == 3
+                && gantries == 3
                 && bridge && observation;
         return new GeoFrontAudit(valid, floor, wall, lake, pyramid, sun,
-                lifts, bridge, observation);
+                lifts, gantries, bridge, observation);
     }
 
     private static void buildCavernFloor(ServerLevel level, BlockPos origin)
@@ -193,6 +202,10 @@ public final class GeoFrontBuilder
         for (int x : LIFT_X)
         {
             BlockPos centre = origin.offset(x, 0, -76);
+            clearLiftCorridor(level, centre);
+            BlockState accent = x < 0 ? Blocks.ORANGE_CONCRETE.defaultBlockState()
+                    : x > 0 ? Blocks.RED_CONCRETE.defaultBlockState()
+                    : Blocks.PURPLE_CONCRETE.defaultBlockState();
             fillSquare(level, centre, 0, 7,
                     Blocks.POLISHED_DEEPSLATE.defaultBlockState());
             set(level, centre.above(), Blocks.LODESTONE.defaultBlockState());
@@ -217,6 +230,61 @@ public final class GeoFrontBuilder
                                     : Blocks.GRAY_CONCRETE.defaultBlockState());
                 }
             }
+            buildLiftGantry(level, centre, accent);
+        }
+    }
+
+    /** Removes only carrier residue inside the three audited 11x11 lift paths. */
+    private static void clearLiftCorridor(ServerLevel level, BlockPos centre)
+    {
+        for (int y = 2; y <= 32; y++)
+        {
+            for (int x = -5; x <= 5; x++)
+            {
+                for (int z = -5; z <= 5; z++)
+                {
+                    set(level, centre.offset(x, y, z), Blocks.AIR.defaultBlockState());
+                }
+            }
+        }
+    }
+
+    /** Reachable rear service deck aligned with the real EVA entry-plug socket. */
+    private static void buildLiftGantry(ServerLevel level, BlockPos centre,
+                                         BlockState accent)
+    {
+        BlockState frame = Blocks.IRON_BLOCK.defaultBlockState();
+        BlockState dark = Blocks.BLACK_CONCRETE.defaultBlockState();
+        BlockState light = Blocks.SEA_LANTERN.defaultBlockState();
+        BlockState ladder = Blocks.LADDER.defaultBlockState()
+                .setValue(LadderBlock.FACING, Direction.NORTH);
+        int gantryY = 27;
+
+        for (int y = 2; y <= gantryY; y++)
+        {
+            set(level, centre.offset(0, y, 14), frame);
+            set(level, centre.offset(0, y, 13), ladder);
+            if (y % 4 == 0)
+            {
+                set(level, centre.offset(1, y, 14), light);
+            }
+        }
+        for (int z = 6; z <= 14; z++)
+        {
+            for (int x = -3; x <= 3; x++)
+            {
+                BlockState deck = x == 0 && z == 13
+                        ? ladder : (x == 0 && z % 3 == 0 ? accent : dark);
+                set(level, centre.offset(x, gantryY, z), deck);
+                if (Math.abs(x) == 3)
+                {
+                    set(level, centre.offset(x, gantryY + 1, z),
+                            Blocks.IRON_BARS.defaultBlockState());
+                    set(level, centre.offset(x, gantryY + 3, z), frame);
+                }
+            }
+            set(level, centre.offset(0, gantryY + 4, z),
+                    z % 3 == 0 ? light : frame);
         }
     }
 
@@ -362,15 +430,17 @@ public final class GeoFrontBuilder
 
     public record GeoFrontAudit(boolean valid, boolean floor, boolean wall,
                                 boolean lake, boolean pyramid, boolean sun,
-                                int lifts, boolean bridge, boolean observation)
+                                int lifts, int gantries, boolean bridge,
+                                boolean observation)
     {
         public String summary()
         {
             return String.format(Locale.ROOT,
                     "valid=%s floor=%s wall=%s lclLake=%s nervPyramid=%s "
-                            + "artificialSun=%s lifts=%d/3 commandBridge=%s observation=%s",
+                            + "artificialSun=%s lifts=%d/3 gantries=%d/3 "
+                            + "commandBridge=%s observation=%s",
                     this.valid, this.floor, this.wall, this.lake, this.pyramid,
-                    this.sun, this.lifts, this.bridge, this.observation);
+                    this.sun, this.lifts, this.gantries, this.bridge, this.observation);
         }
     }
 }

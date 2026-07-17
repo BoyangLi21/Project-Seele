@@ -1,5 +1,7 @@
 package com.projectseele.entity;
 
+import java.util.function.Function;
+
 import com.projectseele.ProjectSeele;
 import com.projectseele.config.SeeleConfig;
 import com.projectseele.combat.AtFieldRules;
@@ -12,12 +14,15 @@ import com.projectseele.network.SeeleNetwork;
 import com.projectseele.registry.ModSounds;
 import com.projectseele.registry.ModEntities;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvent;
@@ -45,11 +50,13 @@ import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.ServerLevelAccessor;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.portal.PortalInfo;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.common.ForgeMod;
+import net.minecraftforge.common.util.ITeleporter;
 import net.minecraftforge.network.PacketDistributor;
 import org.jetbrains.annotations.Nullable;
 import software.bernie.geckolib.animatable.GeoEntity;
@@ -360,6 +367,12 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     private boolean launchRecoveryPending;
     private int launchPassengerRestoreGraceTicks;
     private float launchLockedYaw;
+    @Nullable
+    private ResourceKey<Level> sortieDestinationDimension;
+    @Nullable
+    private BlockPos sortieDestinationBed;
+    @Nullable
+    private BlockPos sortieParkingBed;
 
     public EvaUnit01Entity(EntityType<? extends EvaUnit01Entity> type, Level level)
     {
@@ -423,6 +436,16 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         super.addAdditionalSaveData(tag);
         tag.putBoolean("SeeleCrucified", this.isCrucified());
         tag.putBoolean("SeeleEntryPlugInserted", this.isEntryPlugInserted());
+        if (this.sortieDestinationDimension != null && this.sortieDestinationBed != null)
+        {
+            tag.putString("SeeleSortieDimension",
+                    this.sortieDestinationDimension.location().toString());
+            tag.putLong("SeeleSortieBed", this.sortieDestinationBed.asLong());
+            if (this.sortieParkingBed != null)
+            {
+                tag.putLong("SeeleSortieParkingBed", this.sortieParkingBed.asLong());
+            }
+        }
         if (this.isLaunchSequenceActive() && this.launchBedPos != null)
         {
             tag.putInt("SeeleLaunchPhase", this.getLaunchPhase());
@@ -444,6 +467,16 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         boolean crucified = tag.getBoolean("SeeleCrucified");
         this.entityData.set(DATA_CRUCIFIED, crucified);
         this.entityData.set(DATA_ENTRY_PLUG_INSERTED, tag.getBoolean("SeeleEntryPlugInserted"));
+        ResourceLocation sortieLocation = tag.contains("SeeleSortieDimension")
+                ? ResourceLocation.tryParse(tag.getString("SeeleSortieDimension")) : null;
+        this.sortieDestinationDimension = sortieLocation == null ? null
+                : ResourceKey.create(Registries.DIMENSION, sortieLocation);
+        this.sortieDestinationBed = this.sortieDestinationDimension != null
+                && tag.contains("SeeleSortieBed")
+                ? BlockPos.of(tag.getLong("SeeleSortieBed")) : null;
+        this.sortieParkingBed = this.sortieDestinationDimension != null
+                && tag.contains("SeeleSortieParkingBed")
+                ? BlockPos.of(tag.getLong("SeeleSortieParkingBed")) : null;
         int phase = tag.getInt("SeeleLaunchPhase");
         if (phase >= LAUNCH_LOCKED && phase <= LAUNCH_CLEAR && tag.contains("SeeleLaunchBed"))
         {
@@ -654,6 +687,68 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     public boolean isLaunchSequenceActive()
     {
         return this.getLaunchPhase() != LAUNCH_IDLE;
+    }
+
+    public boolean hasSortieDestination()
+    {
+        return this.sortieDestinationDimension != null && this.sortieDestinationBed != null;
+    }
+
+    @Nullable
+    public ResourceKey<Level> getSortieDestinationDimension()
+    {
+        return this.sortieDestinationDimension;
+    }
+
+    @Nullable
+    public BlockPos getSortieDestinationBed()
+    {
+        return this.sortieDestinationBed;
+    }
+
+    /** Arms one exact surface shaft for the next completed launch. */
+    public void setSortieDestination(ResourceKey<Level> dimension, BlockPos bed)
+    {
+        this.sortieDestinationDimension = dimension;
+        this.sortieDestinationBed = bed.immutable();
+    }
+
+    /** Keeps an unpiloted linked EVA frozen on its assigned underground carrier. */
+    public void setSortieParkingBed(BlockPos bed)
+    {
+        this.sortieParkingBed = bed.immutable();
+    }
+
+    public void clearSortieDestination()
+    {
+        this.sortieDestinationDimension = null;
+        this.sortieDestinationBed = null;
+        this.sortieParkingBed = null;
+    }
+
+    /** Moves an unoccupied parked EVA between audited launch facilities. */
+    @Nullable
+    public EvaUnit01Entity transferUnpilotedTo(ServerLevel destination, Vec3 position,
+                                                float yaw)
+    {
+        if (this.isVehicle() || this.isPassenger() || this.isLaunchSequenceActive()
+                || this.level() == destination)
+        {
+            return null;
+        }
+        Entity moved = this.changeDimension(destination,
+                directTeleporter(position, Vec3.ZERO, yaw, 0.0F));
+        if (!(moved instanceof EvaUnit01Entity relocated))
+        {
+            return null;
+        }
+        relocated.setRot(yaw, 0.0F);
+        relocated.yRotO = relocated.yBodyRot = relocated.yHeadRot = yaw;
+        relocated.setYBodyRot(yaw);
+        relocated.setYHeadRot(yaw);
+        relocated.setDeltaMovement(Vec3.ZERO);
+        relocated.setNoGravity(false);
+        return relocated;
     }
 
     /** A NERV launch bed is identified by the lodestone directly under the carrier. */
@@ -1431,6 +1526,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         {
             this.entityData.set(DATA_ACTIVATION_TICKS, this.getActivationTicks() - 1);
         }
+        this.tickSortieParkingLock();
         this.tickLaunchSequence();
         if (!this.onGround())
         {
@@ -1523,6 +1619,35 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         this.enforceLaunchLock();
         ProjectSeele.LOGGER.info("NERV launch locked: eva={} bed={} targetY={}",
                 this.getStringUUID(), bed.toShortString(), bed.getY() + LAUNCH_TARGET_ABOVE_BED);
+    }
+
+    private void tickSortieParkingLock()
+    {
+        if (this.sortieParkingBed == null || !this.hasSortieDestination()
+                || this.isLaunchSequenceActive() || this.getControllingPassenger() != null)
+        {
+            return;
+        }
+        if (!this.level().getBlockState(this.sortieParkingBed).is(Blocks.LODESTONE))
+        {
+            ProjectSeele.LOGGER.error(
+                    "NERV sortie parking lock lost its bed: eva={} bed={}",
+                    this.getStringUUID(), this.sortieParkingBed.toShortString());
+            this.clearSortieDestination();
+            this.setNoGravity(false);
+            return;
+        }
+        this.getNavigation().stop();
+        this.setTarget(null);
+        this.setPos(this.sortieParkingBed.getX() + 0.5D,
+                this.sortieParkingBed.getY() + 1.0D,
+                this.sortieParkingBed.getZ() + 0.5D);
+        this.setDeltaMovement(Vec3.ZERO);
+        this.setRot(SILO_BAY_YAW, 0.0F);
+        this.yRotO = this.yBodyRot = this.yHeadRot = SILO_BAY_YAW;
+        this.fallDistance = 0.0F;
+        this.setNoGravity(true);
+        this.hasImpulse = true;
     }
 
     /** Hold the complete airframe on its audited bed until catapult release. */
@@ -1652,6 +1777,10 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             if (remainingTicks <= 0)
             {
                 this.clearMovingCarrierBelowSurface();
+                if (this.completeLinkedSortie())
+                {
+                    return;
+                }
                 this.launchCarrierY = this.launchBedPos.getY()
                         + (int) LAUNCH_TARGET_ABOVE_BED - 1;
                 this.setPos(this.launchBedPos.getX() + 0.5D, targetY, this.launchBedPos.getZ() + 0.5D);
@@ -1836,30 +1965,153 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         {
             return;
         }
-        int deckY = this.launchBedPos.getY() + (int) LAUNCH_TARGET_ABOVE_BED - 1;
+        setSurfaceCarrierAt(serverLevel, this.launchBedPos, closed);
+    }
+
+    private static void setSurfaceCarrierAt(ServerLevel level, BlockPos bed, boolean closed)
+    {
+        int deckY = bed.getY() + (int) LAUNCH_TARGET_ABOVE_BED - 1;
         for (int x = -5; x <= 5; x++)
         {
             for (int z = -5; z <= 5; z++)
             {
-                BlockPos deck = new BlockPos(this.launchBedPos.getX() + x, deckY,
-                        this.launchBedPos.getZ() + z);
+                BlockPos deck = new BlockPos(bed.getX() + x, deckY, bed.getZ() + z);
                 if (closed)
                 {
                     var desired = (Math.abs(x) == 5 || Math.abs(z) == 5)
                             ? Blocks.IRON_BLOCK.defaultBlockState()
                             : Blocks.LIGHT_GRAY_CONCRETE.defaultBlockState();
-                    if (!serverLevel.getBlockState(deck).equals(desired))
+                    if (!level.getBlockState(deck).equals(desired))
                     {
-                        serverLevel.setBlock(deck, desired, 2);
+                        level.setBlock(deck, desired, 2);
                     }
                 }
-                else if (serverLevel.getBlockState(deck).is(Blocks.IRON_BLOCK)
-                        || serverLevel.getBlockState(deck).is(Blocks.LIGHT_GRAY_CONCRETE))
+                else if (level.getBlockState(deck).is(Blocks.IRON_BLOCK)
+                        || level.getBlockState(deck).is(Blocks.LIGHT_GRAY_CONCRETE))
                 {
-                    serverLevel.setBlock(deck, Blocks.AIR.defaultBlockState(), 2);
+                    level.setBlock(deck, Blocks.AIR.defaultBlockState(), 2);
                 }
             }
         }
+    }
+
+    /** Completes a linked GeoFront launch without exposing portal mechanics to the pilot. */
+    private boolean completeLinkedSortie()
+    {
+        if (this.sortieDestinationDimension == null || this.sortieDestinationBed == null
+                || !(this.level() instanceof ServerLevel sourceLevel)
+                || !(this.getControllingPassenger() instanceof ServerPlayer pilot))
+        {
+            return false;
+        }
+        ServerLevel destination = sourceLevel.getServer().getLevel(
+                this.sortieDestinationDimension);
+        BlockPos destinationBed = this.sortieDestinationBed;
+        if (destination == null || destination == sourceLevel
+                || !destination.getBlockState(destinationBed).is(Blocks.LODESTONE)
+                || !isSortieShaftClear(destination, destinationBed))
+        {
+            pilot.displayClientMessage(Component.literal(
+                    "NERV sortie link unavailable; completing launch inside GeoFront."), true);
+            ProjectSeele.LOGGER.error(
+                    "NERV cross-dimension sortie refused: eva={} dimension={} bed={}",
+                    this.getStringUUID(), this.sortieDestinationDimension.location(),
+                    destinationBed.toShortString());
+            return false;
+        }
+
+        destination.getChunkAt(destinationBed);
+        Vec3 arrival = new Vec3(destinationBed.getX() + 0.5D,
+                destinationBed.getY() + LAUNCH_TARGET_ABOVE_BED,
+                destinationBed.getZ() + 0.5D);
+        float arrivalYaw = this.launchLockedYaw;
+        pilot.stopRiding();
+        Entity moved = this.changeDimension(destination,
+                directTeleporter(arrival, new Vec3(0.0D, 0.12D, 0.0D),
+                        arrivalYaw, 0.0F));
+        if (!(moved instanceof EvaUnit01Entity relocated))
+        {
+            if (!this.isRemoved())
+            {
+                pilot.startRiding(this, true);
+            }
+            ProjectSeele.LOGGER.error(
+                    "NERV cross-dimension sortie transfer failed: eva={} destination={}",
+                    this.getStringUUID(), destination.dimension().location());
+            return false;
+        }
+
+        relocated.finishTransferredSortie(arrivalYaw);
+        setSurfaceCarrierAt(destination, destinationBed, true);
+        pilot.teleportTo(destination, arrival.x, arrival.y + 1.0D, arrival.z,
+                arrivalYaw, 0.0F);
+        if (!pilot.startRiding(relocated, true))
+        {
+            ProjectSeele.LOGGER.error(
+                    "NERV sortie arrived but pilot remount failed: eva={} pilot={}",
+                    relocated.getStringUUID(), pilot.getGameProfile().getName());
+        }
+        pilot.displayClientMessage(Component.literal(
+                "TOKYO-3 SURFACE CLEAR — EVA sortie complete"), true);
+        destination.sendParticles(ParticleTypes.CLOUD, arrival.x, arrival.y, arrival.z,
+                90, 5.0D, 0.8D, 5.0D, 0.14D);
+        destination.sendParticles(ParticleTypes.ELECTRIC_SPARK,
+                arrival.x, arrival.y + 3.0D, arrival.z,
+                48, 4.0D, 4.0D, 4.0D, 0.08D);
+        ProjectSeele.LOGGER.info(
+                "NERV cross-dimension sortie complete: eva={} source={} destination={} bed={}",
+                relocated.getStringUUID(), sourceLevel.dimension().location(),
+                destination.dimension().location(), destinationBed.toShortString());
+        return true;
+    }
+
+    private void finishTransferredSortie(float yaw)
+    {
+        this.entityData.set(DATA_LAUNCH_PHASE, LAUNCH_IDLE);
+        this.entityData.set(DATA_LAUNCH_TICKS, 0);
+        this.entityData.set(DATA_ACTIVATION_TICKS, 0);
+        this.launchBedPos = null;
+        this.launchCarrierY = NO_LAUNCH_CARRIER;
+        this.launchRecoveryPending = false;
+        this.launchPassengerRestoreGraceTicks = 0;
+        this.launchLockedYaw = yaw;
+        this.clearSortieDestination();
+        this.setNoGravity(false);
+        this.setDeltaMovement(0.0D, 0.12D, 0.0D);
+        this.setRot(yaw, 0.0F);
+        this.yRotO = this.yBodyRot = this.yHeadRot = yaw;
+    }
+
+    private static boolean isSortieShaftClear(ServerLevel level, BlockPos bed)
+    {
+        for (int y = 1; y <= (int) LAUNCH_TARGET_ABOVE_BED - 1; y++)
+        {
+            for (int x = -5; x <= 5; x++)
+            {
+                for (int z = -5; z <= 5; z++)
+                {
+                    if (!level.getBlockState(bed.offset(x, y, z)).isAir())
+                    {
+                        return false;
+                    }
+                }
+            }
+        }
+        return true;
+    }
+
+    private static ITeleporter directTeleporter(Vec3 position, Vec3 velocity,
+                                                 float yaw, float pitch)
+    {
+        return new ITeleporter()
+        {
+            @Override
+            public PortalInfo getPortalInfo(Entity entity, ServerLevel destination,
+                                            Function<ServerLevel, PortalInfo> defaultPortalInfo)
+            {
+                return new PortalInfo(position, velocity, yaw, pitch);
+            }
+        };
     }
 
     private void resetLaunchSequence()

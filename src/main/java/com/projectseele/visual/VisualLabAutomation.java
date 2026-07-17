@@ -5,6 +5,7 @@ import java.util.UUID;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.projectseele.ProjectSeele;
 import com.projectseele.entity.EvaUnit01Entity;
+import com.projectseele.network.ClientboundGeoFrontSortieCapturePacket;
 import com.projectseele.network.ClientboundSiloCapturePacket;
 import com.projectseele.network.ClientboundGeoFrontCapturePacket;
 import com.projectseele.network.ClientboundTokyo3CapturePacket;
@@ -49,6 +50,8 @@ public final class VisualLabAutomation
     private static final boolean TOKYO3_RETRACTION_CAPTURE =
             CAPTURE_UNIT.equals("tokyo3_retraction");
     private static final boolean GEOFRONT_CAPTURE = CAPTURE_UNIT.equals("geofront");
+    private static final boolean GEOFRONT_SORTIE_CAPTURE =
+            CAPTURE_UNIT.equals("geofront_sortie");
     private static final String[] POSES = REQUESTED_POSE.equals("all")
             ? ALL_POSES : REQUESTED_POSE.split(",");
     private static final String[] MASS_POSES = REQUESTED_POSE.equals("all")
@@ -58,6 +61,7 @@ public final class VisualLabAutomation
     private static int ticks;
     private static int nextPose;
     private static int tokyo3RestoreAt;
+    private static boolean geoFrontSortieSurfaceAudited;
 
     private VisualLabAutomation() {}
 
@@ -71,6 +75,7 @@ public final class VisualLabAutomation
             ticks = 0;
             nextPose = 0;
             tokyo3RestoreAt = -1;
+            geoFrontSortieSurfaceAudited = false;
             ProjectSeele.LOGGER.info("Visual Lab automation armed for {}", player.getGameProfile().getName());
         }
     }
@@ -103,7 +108,14 @@ public final class VisualLabAutomation
         {
             if (ticks == 40)
             {
-                if (GEOFRONT_CAPTURE)
+                if (GEOFRONT_SORTIE_CAPTURE)
+                {
+                    player.stopRiding();
+                    player.teleportTo(server.overworld(), 0.5D, 97.0D, 0.5D,
+                            180.0F, 0.0F);
+                    ThirdTokyoCommands.setupVisualCapture(player.createCommandSourceStack());
+                }
+                else if (GEOFRONT_CAPTURE)
                 {
                     GeoFrontCommands.setupVisualCapture(player.createCommandSourceStack());
                 }
@@ -128,6 +140,74 @@ public final class VisualLabAutomation
                                 expectedUnit, subjectId);
                     }
                 }
+            }
+            if (GEOFRONT_SORTIE_CAPTURE)
+            {
+                if (ticks == 50)
+                {
+                    GeoFrontCommands.preloadVisualSortie(player);
+                }
+                if (ticks == 65)
+                {
+                    if (GeoFrontCommands.linkVisualCapture(
+                            player.createCommandSourceStack()) != 1)
+                    {
+                        throw new IllegalStateException(
+                                "Visual GeoFront sortie link command failed");
+                    }
+                    ProjectSeele.LOGGER.info(
+                            "Visual Lab linked the three GeoFront terminals to Tokyo-3");
+                }
+                if (ticks == 100)
+                {
+                    GeoFrontCommands.pruneVisualSortieDuplicates(player.serverLevel());
+                    GeoFrontCommands.SortieAudit audit = GeoFrontCommands.inspectSortie(
+                            server, player.serverLevel());
+                    if (!audit.valid())
+                    {
+                        throw new IllegalStateException(
+                                "Visual GeoFront sortie audit failed: " + audit.summary());
+                    }
+                    EvaUnit01Entity unit = LaunchSiloCommands.nearestCagedUnit(player);
+                    SeeleNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
+                            new ClientboundGeoFrontSortieCapturePacket(
+                                    unit.getId(), GeoFrontCommands.ORIGIN));
+                    ProjectSeele.LOGGER.info(
+                            "Visual Lab armed GeoFront-to-Tokyo-3 sortie capture for {}",
+                            unit.getStringUUID());
+                }
+                if (ticks == 160)
+                {
+                    if (LaunchSiloCommands.board(player.createCommandSourceStack()) != 1)
+                    {
+                        throw new IllegalStateException(
+                                "Visual GeoFront sortie boarding command failed");
+                    }
+                    ProjectSeele.LOGGER.info(
+                            "Visual Lab started linked GeoFront catapult sequence");
+                }
+                if (!geoFrontSortieSurfaceAudited && ticks > 260
+                        && player.serverLevel() == server.overworld()
+                        && player.getVehicle() instanceof EvaUnit01Entity unit
+                        && !unit.isLaunchSequenceActive())
+                {
+                    if (ThirdTokyoCommands.auditVisualCapture(
+                            player.createCommandSourceStack()) != 1)
+                    {
+                        throw new IllegalStateException(
+                                "Tokyo-3 post-sortie persistent audit failed");
+                    }
+                    geoFrontSortieSurfaceAudited = true;
+                    ProjectSeele.LOGGER.info(
+                            "Visual Lab verified Tokyo-3 commands after GeoFront deployment");
+                }
+                if (ticks > 600)
+                {
+                    ProjectSeele.LOGGER.error(
+                            "VISUAL GEOFRONT SORTIE INVALID: sequence exceeded 600 ticks");
+                    playerId = null;
+                }
+                return;
             }
             if (GEOFRONT_CAPTURE)
             {
@@ -288,6 +368,12 @@ public final class VisualLabAutomation
                 SeeleNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
                         new ClientboundTokyo3CapturePacket(
                                 new BlockPos(0, -2048, 0)));
+            }
+            if (GEOFRONT_SORTIE_CAPTURE)
+            {
+                SeeleNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
+                        new ClientboundGeoFrontSortieCapturePacket(
+                                -1, new BlockPos(0, -2048, 0)));
             }
             playerId = null;
         }

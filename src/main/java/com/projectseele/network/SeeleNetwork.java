@@ -12,7 +12,7 @@ import net.minecraftforge.network.simple.SimpleChannel;
  */
 public final class SeeleNetwork
 {
-    private static final String PROTOCOL_VERSION = "9";
+    private static final String PROTOCOL_VERSION = "10";
 
     public static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(
             new ResourceLocation(ProjectSeele.MODID, "main"),
@@ -77,6 +77,11 @@ public final class SeeleNetwork
                 .encoder(ClientboundGeoFrontCapturePacket::encode)
                 .decoder(ClientboundGeoFrontCapturePacket::new)
                 .consumerMainThread(ClientboundGeoFrontCapturePacket::handle)
+                .add();
+        CHANNEL.messageBuilder(ClientboundGeoFrontSortieCapturePacket.class, id++, NetworkDirection.PLAY_TO_CLIENT)
+                .encoder(ClientboundGeoFrontSortieCapturePacket::encode)
+                .decoder(ClientboundGeoFrontSortieCapturePacket::new)
+                .consumerMainThread(ClientboundGeoFrontSortieCapturePacket::handle)
                 .add();
         CHANNEL.messageBuilder(ServerboundEvaControlPacket.class, id++, NetworkDirection.PLAY_TO_SERVER)
                 .encoder(ServerboundEvaControlPacket::encode)

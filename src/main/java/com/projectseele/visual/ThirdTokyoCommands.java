@@ -13,6 +13,7 @@ import com.projectseele.world.ThirdTokyoSurfaceBuilder.DistrictAudit;
 import com.projectseele.world.Tokyo3RetractionDirector;
 import com.projectseele.world.Tokyo3RetractionDirector.RequestResult;
 import com.projectseele.world.Tokyo3RetractionDirector.Status;
+import com.projectseele.world.Tokyo3RetractionSavedData;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.core.BlockPos;
@@ -91,7 +92,7 @@ public final class ThirdTokyoCommands
         ThirdTokyoSurfaceBuilder.buildDistrict(level, origin);
         NervConstructionKitItem.buildComplex(level, origin);
         Tokyo3RetractionDirector.register(level, origin);
-        TokyoAudit result = inspect(level, origin, 0);
+        TokyoAudit result = inspect(level, origin, 0, true);
         logAudit("setup", result);
         if (!result.valid())
         {
@@ -120,7 +121,7 @@ public final class ThirdTokyoCommands
         ThirdTokyoSurfaceBuilder.buildDistrict(level, origin);
         NervConstructionKitItem.buildComplex(level, origin);
         Tokyo3RetractionDirector.register(level, origin);
-        TokyoAudit result = inspect(level, origin, 0);
+        TokyoAudit result = inspect(level, origin, 0, true);
         logAudit("visual-setup", result);
         if (!result.valid())
         {
@@ -148,7 +149,7 @@ public final class ThirdTokyoCommands
         ServerPlayer player = source.getPlayerOrException();
         BlockPos origin = findOrigin(player);
         int depth = Tokyo3RetractionDirector.depth(player.serverLevel(), origin);
-        TokyoAudit result = inspect(player.serverLevel(), origin, depth);
+        TokyoAudit result = inspect(player.serverLevel(), origin, depth, false);
         logAudit("command", result);
         Component report = Component.literal(result.summary());
         if (result.valid())
@@ -158,6 +159,12 @@ public final class ThirdTokyoCommands
         }
         source.sendFailure(report);
         return 0;
+    }
+
+    /** Runtime gate used after the unattended GeoFront sortie reaches Tokyo-3. */
+    static int auditVisualCapture(CommandSourceStack source) throws CommandSyntaxException
+    {
+        return audit(source);
     }
 
     private static int setRetraction(CommandSourceStack source, boolean retract)
@@ -213,12 +220,20 @@ public final class ThirdTokyoCommands
                                 && unit.findLaunchBed() != null).stream()
                 .min((left, right) -> Double.compare(
                         left.distanceToSqr(player), right.distanceToSqr(player)))
+                .orElse(null);
+        if (centreUnit != null)
+        {
+            return centreUnit.findLaunchBed().above(30);
+        }
+        return Tokyo3RetractionSavedData.get(player.serverLevel())
+                .nearest(player.blockPosition(), 320.0D)
+                .map(Tokyo3RetractionSavedData.StoredDistrict::origin)
                 .orElseThrow(() -> new IllegalStateException(
-                        "No central Unit-01 launch bay within 220 blocks."));
-        return centreUnit.findLaunchBed().above(30);
+                        "No registered Tokyo-3 district within 320 blocks."));
     }
 
-    private static TokyoAudit inspect(ServerLevel level, BlockPos origin, int depth)
+    private static TokyoAudit inspect(ServerLevel level, BlockPos origin, int depth,
+                                      boolean requireParkedFormation)
     {
         DistrictAudit district = ThirdTokyoSurfaceBuilder.inspect(level, origin, depth);
         List<EvaUnit01Entity> units = level.getEntitiesOfClass(EvaUnit01Entity.class,
@@ -231,8 +246,11 @@ public final class ThirdTokyoCommands
         boolean has02 = units.stream().anyMatch(
                 unit -> unit.getUnitVariant() == EvaUnit01Entity.UNIT_02);
         boolean variants = has00 && has01 && has02;
-        return new TokyoAudit(district.valid() && units.size() == 3 && variants,
-                district, units.size(), variants);
+        boolean parkedFormation = units.size() == 3 && variants;
+        return new TokyoAudit(district.valid()
+                        && (!requireParkedFormation || parkedFormation),
+                district, units.size(), variants, parkedFormation,
+                requireParkedFormation);
     }
 
     private static void logAudit(String stage, TokyoAudit result)
@@ -250,13 +268,18 @@ public final class ThirdTokyoCommands
     }
 
     private record TokyoAudit(boolean valid, DistrictAudit district,
-                              int units, boolean variants)
+                              int units, boolean variants,
+                              boolean parkedFormation,
+                              boolean parkedFormationRequired)
     {
         String summary()
         {
             return String.format(Locale.ROOT,
-                    "valid=%s units=%d variants00/01/02=%s | %s",
-                    this.valid, this.units, this.variants, this.district.summary());
+                    "valid=%s sortie=%s units=%d variants00/01/02=%s "
+                            + "parkedRequired=%s | %s",
+                    this.valid, this.parkedFormation ? "PARKED" : "DEPLOYED_OR_AWAY",
+                    this.units, this.variants, this.parkedFormationRequired,
+                    this.district.summary());
         }
     }
 }
