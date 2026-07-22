@@ -74,3 +74,6 @@ external-assets/private-test-bundle/
 ## 问题回报最低信息
 
 每个问题至少附带：客户端日志 `logs/latest.log`、服务端日志、发生时命令、玩家角色、截图或录像、是否启用 Ars Nouveau，以及 `/seele geofront audit` 与 `/seele tokyo3 status` 的完整输出。不得把包含第三方素材的私有 ZIP 上传到公开 issue。
+## NERV 多人席位与服务器状态
+
+普通玩家可使用 `/nerv crew claim <commander|operations|magi|unit00|unit01|unit02>` 认领一个持久席位，再用 `/nerv crew ready`、`/nerv crew standby`、`/nerv crew release` 和 `/nerv crew status` 协调测试。管理员开测前执行 `/nerv server status`，再执行只修复运行门禁、不会重建整张地图的 `/nerv server audit`。完整步骤见 `docs/MULTIPLAYER_OPERATIONS_TEST.md`。

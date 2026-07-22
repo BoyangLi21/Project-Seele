@@ -390,6 +390,14 @@ public final class NervCommandTelemetry
         result.append(Component.literal("\n"
                         + NervOperationsConsole.statusLine(level))
                 .withStyle(ChatFormatting.GOLD));
+        NervCrewSavedData.CrewOverview crew = NervCrewSavedData
+                .get(level.getServer()).overview(level.getServer());
+        result.append(Component.literal(String.format(Locale.ROOT,
+                        "\nCREW %d/6  ONLINE %d  READY %d/%d",
+                        crew.assigned(), crew.online(), crew.onlineReady(),
+                        crew.assigned()))
+                .withStyle(crew.allAssignedOnlineReady()
+                        ? ChatFormatting.GREEN : ChatFormatting.YELLOW));
         return result;
     }
 

@@ -94,6 +94,12 @@ def write_install_note(destination: Path, includes_world: bool) -> None:
 8. 专用服务器直接使用包内 server-template；它带 8G 参数、白名单和人工 EULA 门禁。
 9. 完整说明见仓库 docs/FRIEND_TEST_PACK.md。
 """
+    note += (
+        "\nNERV multiplayer commands: /nerv crew status, "
+        "/nerv crew claim <station>, /nerv crew ready, "
+        "/nerv server status. Operators should run /nerv server audit "
+        "before a sortie.\n"
+    )
     destination.write_text(note, encoding="utf-8")
 
 def write_server_template(pack_root: Path, includes_world: bool) -> None:
@@ -203,6 +209,11 @@ call run.bat --nogui
 7. 默认 JVM 为 2G 起步、8G 上限；如果物理内存不足 12G，请不要同时在主机上启动高精度客户端。
 8. server-template 与整个私测包都不得公开上传。
 """
+    note += (
+        "\nAfter login: claim roles with /nerv crew claim <station>, "
+        "then run /nerv server status and the operator-only "
+        "/nerv server audit. The audit is bounded and never rebuilds the map.\n"
+    )
     (template / "README-服务器部署.txt").write_text(note, encoding="utf-8")
 
 def make_manifest(pack_root: Path, includes_world: bool) -> None:

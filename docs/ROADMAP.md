@@ -152,7 +152,7 @@
 
 - 6.1 Valkyrien Skies 联动（**可选附属模块**，独立 jar）：VTOL 运输机吊运 EVA、战自舰船
 - 6.2 性能：粒子预算系统、使徒 AI 距离节流、spark 剖析过一遍
-- 6.3 专用服务器全流程验证（runServer + 双客户端联机打完整 Boss 流程）
+- 6.3 🟨 专用服务器全流程验证：服务端类加载已在不接受 EULA 的边界通过；私测包含 8G/白名单/EULA 门禁模板，新增跨重启 NERV 六席位、READY 状态、战略屏幕统计以及轻量 `/nerv server status` 与有界 `/nerv server audit`。仍待真实双客户端完成发射、驾驶视频和 Boss 全流程验收
 - 6.4 CI：GitHub Actions（push→gradle build→artifact），PR 门禁
 - 6.5 发布：CurseForge + Modrinth + GitHub Release（tag `v0.x.y`）；MineBBS/B站中文发布帖；招募模型师/建筑师的 CONTRIBUTING.md
 - 6.6 清理：`ResourceLocation` 过时调用统一迁移、TODO 清零、双语文案校对

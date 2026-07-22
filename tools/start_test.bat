@@ -253,6 +253,12 @@ if errorlevel 1 (
     pause
     exit /b 1
 )
+python tools\validate_multiplayer_operations_contract.py
+if errorlevel 1 (
+    echo NERV multiplayer crew and dedicated-server validation failed.
+    pause
+    exit /b 1
+)
 if /i "%~1"=="offline" (
     set "OFFLINE_FAILED=0"
     echo Running the fail-closed offline visual recovery suite...
