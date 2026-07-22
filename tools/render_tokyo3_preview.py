@@ -214,7 +214,8 @@ def draw_isometric(draw, fonts):
 def validate_source():
     source = JAVA_BUILDER.read_text(encoding="utf-8")
     required = {
-        "district_size": "DISTRICT_HALF_SIZE = 104",
+        "district_size": "DISTRICT_HALF_SIZE = 144",
+        "outer_wards": "buildOuterWardTower",
         "tower_catalog": "ARMOURED_TOWERS = createArmouredTowers()",
         "tower_count": "EXPECTED_TOWERS = ARMOURED_TOWERS.size()",
         "retraction": "applyRetractionDepth",

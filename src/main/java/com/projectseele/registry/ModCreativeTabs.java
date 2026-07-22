@@ -21,6 +21,12 @@ public class ModCreativeTabs
                         output.accept(ModItems.CORE_FRAGMENT.get());
                         output.accept(ModItems.S2_ENGINE_FRAGMENT.get());
                         output.accept(ModItems.RETRACTABLE_BUILDING_CORE.get());
+                        output.accept(ModItems.UMBILICAL_PYLON.get());
+                        output.accept(ModItems.EVA_ARMAMENT_RACK.get());
+                        output.accept(ModItems.EVA_PROGRESSIVE_KNIFE.get());
+                        output.accept(ModItems.EVA_PALLET_RIFLE.get());
+                        output.accept(ModItems.EVA_POSITRON_CANNON.get());
+                        output.accept(ModItems.EVA_N2_DEVICE.get());
                         output.accept(ModItems.RAMIEL_SPAWN_EGG.get());
                         output.accept(ModItems.EVA_UNIT01_SPAWN_EGG.get());
                         output.accept(ModItems.EVA_UNIT00_SPAWN_EGG.get());

@@ -73,6 +73,16 @@ description='''${mod_description}'''
     ordering="AFTER"
     side="BOTH"
 
+# Optional local integration. When Ars Nouveau is present, the GeoFront's
+# 512-block underground shell uses Skyweave to display the real overworld
+# skybox. Project SEELE retains a safe vanilla fallback for clean installations.
+[[dependencies.${mod_id}]]
+    modId="ars_nouveau"
+    mandatory=false
+    versionRange="[4.12,)"
+    ordering="AFTER"
+    side="BOTH"
+
 # Features are specific properties of the game environment, that you may want to declare you require. This example declares
 # that your mod requires GL version 3.2 or higher. Other features will be added. They are side aware so declaring this won't
 # stop your mod loading on the server for example.

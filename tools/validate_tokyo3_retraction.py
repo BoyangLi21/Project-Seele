@@ -33,34 +33,65 @@ def main() -> int:
         "src/main/resources/assets/projectseele/blockstates/"
         "retractable_building_core.json"))
 
-    centres = (-80, -40, 0, 40, 80)
-    excluded = {(0, -80), (80, 0), (0, 80)}
-    towers = []
+    centres = tuple(range(-160, 161, 40))
+    private_lots = {(-120, -80), (120, -80), (120, 80)}
+    fixed_lots = {(0, -80), (80, 0), (0, 80)}
+    inner = []
     for x in centres:
         for z in centres:
-            if abs(x) <= 40 and abs(z) <= 40 or (x, z) in excluded:
+            if (abs(x) <= 40 and abs(z) <= 40
+                    or (x, z) in fixed_lots
+                    or (x, z) in private_lots):
                 continue
             height = 22 + ((x // 40 * 31 + z // 40 * 17) % 6) * 4
-            towers.append((x, z, height))
-    maximum = max(height for _, _, height in towers)
-    depths = range(maximum + 1)
-    down = [[max(0, height - depth) for _, _, height in towers]
-            for depth in depths]
-    up = list(reversed(down))
-    monotonic_down = all(
-        all(after <= before for before, after in zip(down[i], down[i + 1]))
-        for i in range(len(down) - 1))
-    monotonic_up = all(
-        all(after >= before for before, after in zip(up[i], up[i + 1]))
-        for i in range(len(up) - 1))
+            inner.append((x, z, height))
 
+    outer = []
+    for x in range(-200, 201, 40):
+        for z in range(-200, 201, 40):
+            if max(abs(x), abs(z)) != 200 or x == 200:
+                continue
+            height = 18 + ((x * 13 + z * 29) % 5) * 5
+            outer.append((x, z, height))
+    buildings = inner + outer
+
+    def ceiling_roof(x: int, z: int) -> int:
+        rise = int((320 * 320 - x * x - z * z) ** 0.5)
+        return -416 + rise
+
+    travel = [max(height, -ceiling_roof(x, z))
+              for x, z, height in buildings]
+    maximum = max(start + height
+                  for start, (_, _, height) in zip(travel, buildings))
+    depths = range(maximum + 1)
+    surface = [[max(0, height - depth) for _, _, height in buildings]
+               for depth in depths]
+    ceiling = [[max(0, min(height, depth - start))
+                for start, (_, _, height) in zip(travel, buildings)]
+               for depth in depths]
+    monotonic_surface = all(
+        all(after <= before
+            for before, after in zip(surface[index], surface[index + 1]))
+        for index in range(len(surface) - 1))
+    monotonic_ceiling = all(
+        all(after >= before
+            for before, after in zip(ceiling[index], ceiling[index + 1]))
+        for index in range(len(ceiling) - 1))
     checks = [
-        require("layout.tower_catalog", len(towers) == 13 and maximum == 42,
-                f"towers={len(towers)} maximumDepth={maximum}"),
-        require("motion.monotonic_cycle", monotonic_down and monotonic_up
-                and all(value == 0 for value in down[-1])
-                and up[-1] == down[0],
-                "all towers descend to zero and restore to exact source heights"),
+        require("layout.complete_catalog",
+                len(inner) == 66 and len(outer) == 29
+                and len(buildings) == 95 and maximum == 285
+                and all(token in builder for token in (
+                    "OUTER_WARD_TOWERS", "MOVABLE_BUILDINGS",
+                    "createOuterWardTowers", "ceilingRoofRelativeY")),
+                f"inner={len(inner)} outer={len(outer)} "
+                f"movable={len(buildings)} maximumDepth={maximum}"),
+        require("motion.physical_cycle",
+                monotonic_surface and monotonic_ceiling
+                and all(value == 0 for value in surface[-1])
+                and ceiling[-1] == [height for _, _, height in buildings],
+                "surface skyline descends to zero while all 95 buildings "
+                "materialise below the curved GeoFront ceiling"),
         require("motion.one_layer_per_second",
                 "TICKS_PER_LAYER = 20" in director
                 and "applyRetractionDepth" in director
@@ -70,21 +101,37 @@ def main() -> int:
                 "restorationOccupied" in director
                 and "LivingEntity.class" in director
                 and "instanceof EvaUnit01Entity" in director
-                and "entity.player.Player" in director,
-                "rising layers protect players/EVAs without ambient-mob deadlock"),
-        require("motion.full_retraction_evidence",
-                "towerShellClear" in builder and "shellClear" in capture,
-                "a visible first-floor wall prevents a false fully-retracted pass"),
+                and "entity.player.Player" in director
+                and "tower.halfSize()" in director,
+                "rising inner and outer lots protect players and EVAs"),
+        require("motion.ceiling_evidence",
+                all(token in builder for token in (
+                    "emergeCeilingLayer", "withdrawCeilingLayer",
+                    "ceilingStateMatches", "ceilingBuildings",
+                    "Blocks.SEA_LANTERN")),
+                "the audit rejects a vanished city and requires moving "
+                "undersides plus real ceiling-city walls"),
+        require("motion.private_skyscrapers",
+                all(token in source(
+                    "src/main/java/com/projectseele/world/LocalMapAssetLoader.java")
+                    for token in (
+                        "applyTokyo3RetractionDepth",
+                        "SKYSCRAPER_MOVE_QUANTUM = 12",
+                        "skyscraperDrop", "NETHERITE_BLOCK")),
+                "three local NBT high-rises move as whole structures in "
+                "bounded twelve-block steps"),
         require("persistence.versioned",
                 "extends SavedData" in saved
-                and "DATA_VERSION = 1" in saved
+                and "DATA_VERSION = 2" in saved
+                and "version == 1 && targetDepth >= 42" in saved
                 and all(token in saved for token in
-                        ("Depth", "TargetDepth", "NextStepAt")),
-                "depth, target and next tick survive save/reload"),
+                        ("Depth", "TargetDepth", "NextStepAt", "Cursor")),
+                "v2 persists the complete route and resumes old v1 "
+                "surface-only emergency orders"),
         require("core.registered_visual_states",
                 set(blockstates["variants"]) == {"armed=false", "armed=true"}
                 and "RETRACTABLE_BUILDING_CORE" in builder,
-                "each armour tower owns an off/on operator core"),
+                "each inner armour tower owns an off/on operator core"),
         require("commands.complete",
                 all(f'literal("{name}")' in commands
                     for name in ("retract", "restore", "status")),
@@ -94,13 +141,16 @@ def main() -> int:
                 and ".nearest(player.blockPosition(), 320.0D)" in commands
                 and "parkedFormationRequired" in commands
                 and "DEPLOYED_OR_AWAY" in commands,
-                "persisted district commands remain available after the EVAs deploy"),
-        require("visual.four_state_matrix",
-                all(token in capture for token in
-                    ("deployed", "mid_descent", "fully_retracted", "restored",
-                     "towerStates={}/13", "cores={}/13", "armed={}/13"))
-                and 'CAPTURE_UNIT.equals("tokyo3_retraction")' in automation,
-                "real client gates four skyline frames on authoritative block states"),
+                "persisted district commands remain available after sortie"),
+        require("visual.complete_cycle",
+                all(token in capture for token in (
+                    "deployed", "mid_descent", "fully_retracted", "restored",
+                    "towerStates={}/66", "ceilingStates={}/66",
+                    "ThirdTokyoSurfaceBuilder.maximumRetractionDepth()",
+                    "cameraPos = base.add(0.0D, -250.0D, 260.0D)"))
+                and 'CAPTURE_UNIT.equals("tokyo3_retraction")' in automation
+                and "ticks > 15000" in automation,
+                "surface and GeoFront cameras gate a complete 285-layer cycle"),
     ]
     if all(checks):
         print("Tokyo-3 retraction contract: PASS")

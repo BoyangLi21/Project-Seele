@@ -1,0 +1,66 @@
+{
+  "format_version": "1.12.0",
+  "minecraft:geometry": [
+    {
+      "description": {
+        "identifier": "geometry.projectseele.lilith",
+        "texture_width": 16,
+        "texture_height": 16,
+        "visible_bounds_width": 52,
+        "visible_bounds_height": 38,
+        "visible_bounds_offset": [0, 17, 12]
+      },
+      "bones": [
+        {
+          "name": "root",
+          "pivot": [0, 0, 0]
+        },
+        {
+          "name": "legs",
+          "parent": "root",
+          "pivot": [0, 190, 0],
+          "cubes": [
+            {"origin": [-51, 0, -23], "size": [42, 198, 46], "uv": [0, 0]},
+            {"origin": [9, 0, -23], "size": [42, 198, 46], "uv": [0, 0]}
+          ]
+        },
+        {
+          "name": "body",
+          "parent": "root",
+          "pivot": [0, 205, 0],
+          "cubes": [
+            {"origin": [-62, 178, -28], "size": [124, 214, 56], "uv": [0, 0]},
+            {"origin": [-48, 150, -25], "size": [96, 58, 50], "uv": [0, 0]}
+          ]
+        },
+        {
+          "name": "head",
+          "parent": "root",
+          "pivot": [0, 400, 0],
+          "cubes": [
+            {"origin": [-43, 386, -34], "size": [86, 112, 68], "uv": [0, 0]},
+            {"origin": [-34, 412, -39], "size": [68, 58, 6], "uv": [0, 0]}
+          ]
+        },
+        {
+          "name": "arm_l",
+          "parent": "root",
+          "pivot": [-62, 332, 0],
+          "cubes": [
+            {"origin": [-286, 310, -22], "size": [224, 44, 44], "uv": [0, 0]},
+            {"origin": [-338, 305, -25], "size": [52, 54, 50], "uv": [0, 0]}
+          ]
+        },
+        {
+          "name": "arm_r",
+          "parent": "root",
+          "pivot": [62, 332, 0],
+          "cubes": [
+            {"origin": [62, 310, -22], "size": [224, 44, 44], "uv": [0, 0]},
+            {"origin": [286, 305, -25], "size": [52, 54, 50], "uv": [0, 0]}
+          ]
+        }
+      ]
+    }
+  ]
+}

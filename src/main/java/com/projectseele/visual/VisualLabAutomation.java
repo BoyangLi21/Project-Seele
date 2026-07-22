@@ -5,6 +5,7 @@ import java.util.UUID;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.projectseele.ProjectSeele;
 import com.projectseele.entity.EvaUnit01Entity;
+import com.projectseele.event.Tokyo3RamielBattleDirector;
 import com.projectseele.network.ClientboundGeoFrontSortieCapturePacket;
 import com.projectseele.network.ClientboundSiloCapturePacket;
 import com.projectseele.network.ClientboundGeoFrontCapturePacket;
@@ -50,6 +51,8 @@ public final class VisualLabAutomation
     private static final boolean TOKYO3_CAPTURE = CAPTURE_UNIT.equals("tokyo3");
     private static final boolean TOKYO3_RETRACTION_CAPTURE =
             CAPTURE_UNIT.equals("tokyo3_retraction");
+    private static final boolean TOKYO3_RAMIEL_CAPTURE =
+            CAPTURE_UNIT.equals("tokyo3_battle");
     private static final boolean GEOFRONT_CAPTURE = CAPTURE_UNIT.equals("geofront");
     private static final boolean GEOFRONT_SORTIE_CAPTURE =
             CAPTURE_UNIT.equals("geofront_sortie");
@@ -71,6 +74,22 @@ public final class VisualLabAutomation
     {
         if (ENABLED && event.getEntity() instanceof ServerPlayer player)
         {
+            // A previous unattended run may have closed while its client-only
+            // camera was below the cavern. Always begin automation from a
+            // vanilla-safe location before any capture-specific setup runs.
+            if (!player.isAlive())
+            {
+                player.setHealth(player.getMaxHealth());
+            }
+            player.setNoGravity(false);
+            player.setDeltaMovement(0.0D, 0.0D, 0.0D);
+            player.fallDistance = 0.0F;
+            MinecraftServer server = player.getServer();
+            if (server != null)
+            {
+                player.teleportTo(server.overworld(), 0.5D, 97.0D, 0.5D,
+                        180.0F, 0.0F);
+            }
             playerId = player.getUUID();
             subjectId = null;
             ticks = 0;
@@ -84,6 +103,13 @@ public final class VisualLabAutomation
     @SubscribeEvent
     public static void onLogout(PlayerEvent.PlayerLoggedOutEvent event)
     {
+        if (TOKYO3_RAMIEL_CAPTURE
+                && event.getEntity() instanceof ServerPlayer player
+                && player.serverLevel().dimension().equals(GeoFrontCommands.GEOFRONT))
+        {
+            Tokyo3RamielBattleDirector.abort(player.serverLevel(),
+                    IntegratedNervMapBuilder.TOKYO3_ORIGIN);
+        }
         if (playerId != null && playerId.equals(event.getEntity().getUUID()))
         {
             playerId = null;
@@ -118,8 +144,15 @@ public final class VisualLabAutomation
                 else if (GEOFRONT_CAPTURE)
                 {
                     GeoFrontCommands.setupVisualCapture(player.createCommandSourceStack());
+                    SeeleNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
+                            new ClientboundGeoFrontCapturePacket(GeoFrontCommands.ORIGIN));
+                    ProjectSeele.LOGGER.info(
+                            "Visual Lab armed GeoFront cavern capture at {} immediately after audit",
+                            GeoFrontCommands.ORIGIN);
+                    playerId = null;
                 }
-                else if (TOKYO3_CAPTURE || TOKYO3_RETRACTION_CAPTURE)
+                else if (TOKYO3_CAPTURE || TOKYO3_RETRACTION_CAPTURE
+                        || TOKYO3_RAMIEL_CAPTURE)
                 {
                     ThirdTokyoCommands.setupVisualCapture(player.createCommandSourceStack());
                 }
@@ -215,15 +248,6 @@ public final class VisualLabAutomation
             }
             if (GEOFRONT_CAPTURE)
             {
-                if (ticks == 100)
-                {
-                    SeeleNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
-                            new ClientboundGeoFrontCapturePacket(GeoFrontCommands.ORIGIN));
-                    ProjectSeele.LOGGER.info(
-                            "Visual Lab armed GeoFront cavern capture at {}",
-                            GeoFrontCommands.ORIGIN);
-                    playerId = null;
-                }
                 return;
             }
             if (TOKYO3_RETRACTION_CAPTURE)
@@ -257,10 +281,43 @@ public final class VisualLabAutomation
                     ProjectSeele.LOGGER.info(
                             "Visual Lab started Tokyo-3 all-clear tower restoration");
                 }
-                if (ticks > 2500)
+                if (ticks > 15000)
                 {
                     ProjectSeele.LOGGER.error(
-                            "VISUAL TOKYO3 RETRACTION INVALID: sequence exceeded 2500 ticks");
+                            "VISUAL TOKYO3 RETRACTION INVALID: sequence exceeded 15000 ticks");
+                    playerId = null;
+                }
+                return;
+            }
+            if (TOKYO3_RAMIEL_CAPTURE)
+            {
+                BlockPos origin = ThirdTokyoCommands.fixedVisualOrigin(
+                        player.serverLevel());
+                if (ticks == 80)
+                {
+                    var result = Tokyo3RamielBattleDirector.start(
+                            player.serverLevel(), origin, player);
+                    if (!result.accepted())
+                    {
+                        throw new IllegalStateException(
+                                "Visual Operation Yashima start failed: "
+                                        + result.message());
+                    }
+                    ProjectSeele.LOGGER.info(
+                            "Visual Lab started Operation Yashima at {}", origin);
+                }
+                if (ticks == 110)
+                {
+                    SeeleNetwork.CHANNEL.send(
+                            PacketDistributor.PLAYER.with(() -> player),
+                            new ClientboundTokyo3CapturePacket(
+                                    origin, false, true));
+                    ProjectSeele.LOGGER.info(
+                            "Visual Lab armed Tokyo-3 Ramiel battle capture at {} status={}",
+                            origin, Tokyo3RamielBattleDirector.status(
+                                    player.serverLevel(), origin).summary());
+                    // Client capture owns shutdown. onLogout aborts the
+                    // fixture and restores Tokyo-3 before the save closes.
                     playerId = null;
                 }
                 return;
@@ -371,6 +428,12 @@ public final class VisualLabAutomation
             {
                 SeeleNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
                         new ClientboundTokyo3CapturePacket(
+                                new BlockPos(0, -2048, 0)));
+            }
+            if (GEOFRONT_CAPTURE)
+            {
+                SeeleNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
+                        new ClientboundGeoFrontCapturePacket(
                                 new BlockPos(0, -2048, 0)));
             }
             if (GEOFRONT_SORTIE_CAPTURE)

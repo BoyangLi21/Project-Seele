@@ -41,6 +41,9 @@
 | Rei Chikita / EUD 本地参考文件 | 用户手动下载 | 已被 `.gitignore` 的 `/*.jar` 规则拦截，永不提交。Rei Chikita 只作为 SmOd 缺失时的本机 fallback/参考；EUD 1.1.0 清单标注 **CC BY-NC 4.0**，含驾驶服、LCL、三枪与 EVA 遗迹结构，但无可驾驶 EVA 模型；公开改用前仍联系作者确认署名方式 |
 | 朗基努斯之枪本机附件（`tools/make_downloaded_eva_accessories_pack.py`） | EUD 1.1.0 的 Blockbench 方块模型与贴图 | 转换为 384 三角、独立 `longinus_lance` 附件，初号机/零号机使用双手前后握持；生成到本机资源包。公开发行前确认 EUD 作者署名，并遵守其清单所列 CC BY-NC 4.0 |
 | 零号机本机头部模型（`tools/make_eud_eva00_pack.py`） | EUD 1.1.0 的 `eva00structure.nbt` 零号机头部雕塑 | 与 Project SEELE 原创可动画身体组合，仅本机测试；公开发行前确认 EUD 作者署名，并遵守 CC BY-NC 4.0 |
+| EVA-X / GeoFront 球体世界（用户下载的 `EVA.rar`） | Bilibili 分享存档；当前缺少可核验作者与再发布许可 | `prepare_local_map_assets.py` 只把该存档作为测量参考；新的 `SEELE_TOKYO3_REBUILT` 使用普通噪声地表与原创深埋球体。源文件、转换结构和存档全部 gitignored，作者身份与许可确认前绝不发布 |
+| `Nerv Comand Module` 世界 | Planet Minecraft `nerv-comand-module`，用户手动下载；作者/许可信息待登记 | 本机转换为 NERV 指挥区并叠加原创四屏实时遥测；不进入 jar。发布前必须补齐项目链接、作者署名与明确授权 |
+| `tokyo-3-type-skyscrapper1-converted.schem` | 用户手动下载的 Tokyo-3 高楼 schematic；作者/许可信息待登记 | 本机在东京-3 战区放置三座实例；结构和拼接存档均不提交。未获得授权时发布版使用原创回退楼群 |
 
 `run/` 已 gitignore，上表资产不会进入版本库与发行物。
 
@@ -80,6 +83,25 @@ source licence and is outside the repository's MIT code licence.
 | Positron rifle | [Kantrophe Positron Rifle](https://sketchfab.com/3d-models/positron-rifle-neon-genesis-evangelion-523e4d5b344543aa97b21e885f9dc064), CC Attribution | Download contains Blender 3.04 source and 4K PBR textures only. Portable Blender 3.6 exported and decimated 56,614 source triangles to 20,381; the 5,990-triangle ground cradles are excluded, leaving a 14,391-triangle local cannon. The axis/pivot correction passed an in-game Tigerar1 attachment capture; the two-hand support pose remains under Visual Lab review. |
 | Pallet Rifle | [Oni Anniversary Edition community conversion](https://wiki.oni2.net/AE_talk%3ANew_weapons), provenance/redistribution permission not yet confirmed | Exact TV-style 167-vertex / 292-triangle OBJ and 1024x512 BMP are installed only under ignored external-assets/. tools/make_downloaded_pallet_rifle_pack.py is fingerprint-locked to that pair and emits a local-only runtime derivative. It must not ship until explicit author/licensor approval is recorded; the original 240-triangle MIT procedural rifle remains the distributable fallback. |
 
+
+## Local Kiki260100 Lilith evaluation (2026-07-19)
+
+- Source: [Kiki260100 `Lilith - Evangelion`](https://sketchfab.com/3d-models/lilith-evangelion-8203459ac3dc48e18bad7b2a6b46995f), downloaded manually by the user.
+- Local archive: `external-assets/incoming/lilith-kiki260100.zip.zip`; GLB SHA-256 `6693b5ca325d6fa5c355152962e75cf50162266320a4519aab3130c2ecfef06c`.
+- The downloaded archive contains only the GLB and two textures. No licence
+  document is bundled, so this project treats the model as local evaluation
+  material and will obtain explicit author approval before any release.
+- `tools/make_lilith_model_pack.py` converts the GLB into six material layers
+  inside the Git-ignored `run/resourcepacks/eva_real_model/` pack: body 11,814,
+  eyes 1,540, face 322, mask 1,082, nails 448 and sealing spear 4,524
+  triangles. The source cross material is deliberately excluded; Project
+  SEELE retains its own pure-red block crucifix.
+- Runtime height is 32 blocks and wrist span is approximately 42 blocks. The
+  source body's front/side visual audit confirms the cross remains behind the
+  body and the sealing spear extends toward the observation gallery.
+- Converter, entity integration and clean-room fallback geometry may ship as
+  code. The generated Kiki mesh/textures and source archive must never be
+  committed or redistributed without permission.
 `tools/make_tiger_eva_variants_pack.py` writes each EVA target incrementally
 and never clears the active resource pack. During development its `--output`
 must point at an ignored staging pack until the matching renderer and Visual

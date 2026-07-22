@@ -47,6 +47,8 @@ public final class ClientForgeEvents
     private static int jumpRequestIdCounter;
     private static int jumpRequestRetryTicks;
     private static int jumpRequestEvaId = -1;
+    /** A held key may create one new request only after leaving and re-touching ground. */
+    private static boolean jumpRepeatArmed;
     private static final int JUMP_REQUEST_RETRY_INTERVAL = 4;
     /** Entry-plug insertion cinematic: counts down after boarding. */
     private static final int INSERTION_LENGTH = 120;
@@ -419,11 +421,27 @@ public final class ClientForgeEvents
             jumpRequestId = ++jumpRequestIdCounter;
             jumpRequestRetryTicks = 0;
             jumpRequestEvaId = eva.getId();
+            jumpRepeatArmed = false;
         }
 
         if (!jumpRequestPending)
         {
-            return;
+            if (!eva.onGround())
+            {
+                jumpRepeatArmed = true;
+                return;
+            }
+            if (!jumpRepeatArmed)
+            {
+                return;
+            }
+            // Minecraft's normal held-space behaviour repeats only after the
+            // previous jump has actually left the ground and landed again.
+            jumpRequestPending = true;
+            jumpRequestSequence = eva.getJumpSequence();
+            jumpRequestId = ++jumpRequestIdCounter;
+            jumpRequestRetryTicks = 0;
+            jumpRepeatArmed = false;
         }
         if (eva.getJumpSequence() != jumpRequestSequence)
         {
@@ -458,6 +476,7 @@ public final class ClientForgeEvents
         jumpRequestRetryTicks = 0;
         jumpRequestEvaId = -1;
         jumpRequestId = -1;
+        jumpRepeatArmed = false;
     }
 
     private static EvaUnit01Entity findEntryPlugTarget(LocalPlayer player)

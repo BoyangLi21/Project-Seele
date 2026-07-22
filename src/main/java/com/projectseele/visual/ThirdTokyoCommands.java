@@ -7,7 +7,10 @@ import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.projectseele.ProjectSeele;
 import com.projectseele.entity.EvaUnit01Entity;
-import com.projectseele.item.NervConstructionKitItem;
+import com.projectseele.event.AngelSiegeDirector;
+import com.projectseele.event.Tokyo3RamielBattleDirector;
+import com.projectseele.event.Tokyo3RamielBattleDirector.BattleResult;
+import com.projectseele.event.Tokyo3RamielBattleDirector.BattleStatus;
 import com.projectseele.world.ThirdTokyoSurfaceBuilder;
 import com.projectseele.world.ThirdTokyoSurfaceBuilder.DistrictAudit;
 import com.projectseele.world.IntegratedNervMapBuilder;
@@ -52,8 +55,26 @@ public final class ThirdTokyoCommands
                                         context.getSource(), false)))
                         .then(Commands.literal("status")
                                 .executes(context -> status(context.getSource())))
+                        .then(Commands.literal("ramiel")
+                                .executes(context -> ramielStart(context.getSource()))
+                                .then(Commands.literal("start")
+                                        .executes(context -> ramielStart(
+                                                context.getSource())))
+                                .then(Commands.literal("status")
+                                        .executes(context -> ramielStatus(
+                                                context.getSource())))
+                                .then(Commands.literal("abort")
+                                        .executes(context -> ramielAbort(
+                                                context.getSource()))))
                         .then(Commands.literal("overview")
-                                .executes(context -> overview(context.getSource())))));
+                                .executes(context -> overview(context.getSource()))))
+                .then(Commands.literal("siege")
+                        .then(Commands.literal("status")
+                                .executes(context -> siegeStatus(
+                                        context.getSource())))
+                        .then(Commands.literal("abort")
+                                .executes(context -> siegeAbort(
+                                        context.getSource())))));
     }
 
     static int setup(CommandSourceStack source) throws CommandSyntaxException
@@ -80,33 +101,61 @@ public final class ThirdTokyoCommands
     static int setupVisualCapture(CommandSourceStack source) throws CommandSyntaxException
     {
         ServerPlayer player = source.getPlayerOrException();
-        ServerLevel level = player.serverLevel();
+        ServerLevel level = player.getServer().getLevel(GeoFrontCommands.GEOFRONT);
+        if (level == null)
+        {
+            throw new IllegalStateException("GeoFront dimension is unavailable");
+        }
         player.stopRiding();
-        BlockPos origin = fixedVisualOrigin(level);
+        BlockPos origin = IntegratedNervMapBuilder.TOKYO3_ORIGIN;
         level.setDayTime(6000L);
         level.setWeatherParameters(12000, 0, false, false);
-        AABB cleanup = new AABB(origin).inflate(160.0D, 96.0D, 160.0D);
-        level.getEntitiesOfClass(EvaUnit01Entity.class, cleanup).forEach(Entity::discard);
-        ThirdTokyoSurfaceBuilder.buildDistrict(level, origin);
-        NervConstructionKitItem.buildComplex(level, origin);
+        // Do not let a prior manual CITY ARMOUR toggle make this fixed
+        // visual fixture audit a different skyline on the next run.
         Tokyo3RetractionDirector.reset(level, origin);
-        TokyoAudit result = inspect(level, origin, 0, true);
-        logAudit("visual-setup", result);
-        if (!result.valid())
+        IntegratedNervMapBuilder.IntegratedAudit mapAudit =
+                IntegratedNervMapBuilder.ensure(level);
+        if (!mapAudit.valid())
         {
             throw new IllegalStateException(
-                    "Tokyo-3 visual setup failed structural audit: " + result.summary());
+                    "Integrated Tokyo-3 visual map failed audit: "
+                            + mapAudit.summary());
         }
-        // Keep the real server player under the central apron so the complete
-        // +/-104 district stays inside the chunk tracking square. The client
-        // screenshot camera is independent and may still visit all four views.
-        player.teleportTo(level, origin.getX() + 0.5D, origin.getY() - 20.0D,
-                origin.getZ() + 13.5D, 180.0F, 0.0F);
+        AABB cleanup = new AABB(origin).inflate(192.0D, 384.0D, 192.0D);
+        level.getEntitiesOfClass(EvaUnit01Entity.class, cleanup).forEach(Entity::discard);
+        List<EvaUnit01Entity> units = GeoFrontCommands.ensureContinuousSortieUnits(level);
+        for (EvaUnit01Entity unit : units)
+        {
+            IntegratedNervMapBuilder.LiftLink lift =
+                    IntegratedNervMapBuilder.liftForUnitVariant(unit.getUnitVariant());
+            BlockPos bed = lift.surfaceBed();
+            unit.clearSortieDestination();
+            unit.moveTo(bed.getX() + 0.5D, bed.getY() + 1.0D,
+                    bed.getZ() + 0.5D, EvaUnit01Entity.SILO_BAY_YAW, 0.0F);
+            unit.setYRot(EvaUnit01Entity.SILO_BAY_YAW);
+            unit.setYBodyRot(EvaUnit01Entity.SILO_BAY_YAW);
+            unit.setYHeadRot(EvaUnit01Entity.SILO_BAY_YAW);
+            unit.setDeltaMovement(net.minecraft.world.phys.Vec3.ZERO);
+            unit.setNoGravity(true);
+            unit.setNoAi(true);
+        }
+        ProjectSeele.LOGGER.info(
+                "Tokyo-3 integrated visual setup: map={} surfaceUnits={}",
+                mapAudit.summary(), units.size());
+        // The real player remains high over the city centre so all imported
+        // chunks stay tracked while the independent camera visits each view.
+        player.teleportTo(level, origin.getX() + 0.5D, origin.getY() + 50.0D,
+                origin.getZ() + 0.5D, 180.0F, 0.0F);
         return 1;
     }
 
     static BlockPos fixedVisualOrigin(ServerLevel level)
     {
+        if (level.dimension().equals(GeoFrontCommands.GEOFRONT)
+                && IntegratedNervMapBuilder.inspect(level).valid())
+        {
+            return IntegratedNervMapBuilder.TOKYO3_ORIGIN;
+        }
         return new BlockPos(0,
                 Math.max(level.getMinBuildHeight() + 36,
                         Math.min(level.getMaxBuildHeight() - 48, 96)),
@@ -156,6 +205,87 @@ public final class ThirdTokyoCommands
                 "Tokyo-3 towers: %s depth=%d/%d target=%d",
                 status.phase(), status.depth(), status.maximumDepth(),
                 status.targetDepth())), false);
+        return 1;
+    }
+
+    private static int ramielStart(CommandSourceStack source)
+            throws CommandSyntaxException
+    {
+        ServerPlayer player = source.getPlayerOrException();
+        ServerLevel level = player.serverLevel();
+        if (!level.dimension().equals(GeoFrontCommands.GEOFRONT))
+        {
+            source.sendFailure(Component.literal(
+                    "Enter the integrated GeoFront/Tokyo-3 dimension first."));
+            return 0;
+        }
+        IntegratedNervMapBuilder.RuntimeAudit audit =
+                IntegratedNervMapBuilder.prepareRuntime(level);
+        if (!audit.valid())
+        {
+            source.sendFailure(Component.literal(
+                    "Operation Yashima refused: live sortie route failed: "
+                            + audit.summary()));
+            return 0;
+        }
+        BattleResult result = Tokyo3RamielBattleDirector.start(level,
+                IntegratedNervMapBuilder.TOKYO3_ORIGIN, player);
+        if (!result.accepted())
+        {
+            source.sendFailure(Component.literal(result.message()));
+            return 0;
+        }
+        source.sendSuccess(() -> Component.literal(result.message()), false);
+        return 1;
+    }
+
+    private static int ramielStatus(CommandSourceStack source)
+            throws CommandSyntaxException
+    {
+        ServerPlayer player = source.getPlayerOrException();
+        BattleStatus status = Tokyo3RamielBattleDirector.status(
+                player.serverLevel(), IntegratedNervMapBuilder.TOKYO3_ORIGIN);
+        source.sendSuccess(() -> Component.literal(status.summary()), false);
+        return 1;
+    }
+
+    private static int ramielAbort(CommandSourceStack source)
+            throws CommandSyntaxException
+    {
+        ServerPlayer player = source.getPlayerOrException();
+        BattleResult result = Tokyo3RamielBattleDirector.abort(
+                player.serverLevel(), IntegratedNervMapBuilder.TOKYO3_ORIGIN);
+        if (!result.accepted())
+        {
+            source.sendFailure(Component.literal(result.message()));
+            return 0;
+        }
+        source.sendSuccess(() -> Component.literal(result.message()), false);
+        return 1;
+    }
+
+    private static int siegeStatus(CommandSourceStack source)
+            throws CommandSyntaxException
+    {
+        ServerPlayer player = source.getPlayerOrException();
+        AngelSiegeDirector.SiegeStatus status = AngelSiegeDirector.status(
+                player.serverLevel(), player.blockPosition());
+        source.sendSuccess(() -> Component.literal(status.summary()), false);
+        return status.active() ? 1 : 0;
+    }
+
+    private static int siegeAbort(CommandSourceStack source)
+            throws CommandSyntaxException
+    {
+        ServerPlayer player = source.getPlayerOrException();
+        AngelSiegeDirector.OperationResult result = AngelSiegeDirector.abort(
+                player.serverLevel(), player.blockPosition());
+        if (!result.accepted())
+        {
+            source.sendFailure(Component.literal(result.message()));
+            return 0;
+        }
+        source.sendSuccess(() -> Component.literal(result.message()), false);
         return 1;
     }
 

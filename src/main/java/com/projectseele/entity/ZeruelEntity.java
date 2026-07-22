@@ -5,6 +5,8 @@ import com.projectseele.fx.CrossExplosionFX;
 import com.projectseele.network.ClientboundCannonBeamPacket;
 import com.projectseele.network.ClientboundNukeFxPacket;
 import com.projectseele.network.SeeleNetwork;
+import net.minecraft.core.BlockPos;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.EntityType;
@@ -22,11 +24,12 @@ import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.network.PacketDistributor;
 
 /** Fourteenth Angel: extreme A.T. Field, paper-arm cleaves and twin-eye annihilation beam. */
-public class ZeruelEntity extends Monster implements Angel
+public class ZeruelEntity extends Monster implements Angel, SiegeAnchorAware
 {
     private float atField = 2400.0F;
     private int armCooldown = 28;
     private int beamCooldown = 90;
+    private BlockPos siegeBeacon;
 
     public ZeruelEntity(EntityType<? extends ZeruelEntity> type, Level level)
     {
@@ -59,6 +62,17 @@ public class ZeruelEntity extends Monster implements Angel
         LivingEntity target = this.getTarget();
         if (target == null || !target.isAlive())
         {
+            if (this.siegeBeacon != null)
+            {
+                Vec3 anchor = Vec3.atCenterOf(this.siegeBeacon)
+                        .subtract(this.position().add(0.0D, 12.0D, 0.0D));
+                Vec3 horizontal = new Vec3(anchor.x, 0.0D, anchor.z);
+                if (horizontal.lengthSqr() > 100.0D)
+                {
+                    this.setDeltaMovement(this.getDeltaMovement().scale(0.70D)
+                            .add(horizontal.normalize().scale(0.075D)));
+                }
+            }
             return;
         }
         Vec3 delta = target.getBoundingBox().getCenter().subtract(this.position().add(0.0D, 12.0D, 0.0D));
@@ -112,6 +126,30 @@ public class ZeruelEntity extends Monster implements Angel
                 new ClientboundNukeFxPacket(impact.x, impact.y, impact.z, 2.2F, true));
         target.hurt(this.damageSources().mobAttack(this), 125.0F);
         server.explode(this, impact.x, impact.y, impact.z, 10.0F, ExplosionInteraction.MOB);
+    }
+
+    @Override
+    public void setSiegeBeacon(BlockPos beacon)
+    {
+        this.siegeBeacon = beacon == null ? null : beacon.immutable();
+    }
+
+    @Override
+    public void addAdditionalSaveData(CompoundTag tag)
+    {
+        super.addAdditionalSaveData(tag);
+        if (this.siegeBeacon != null)
+        {
+            tag.putLong("SiegeBeacon", this.siegeBeacon.asLong());
+        }
+    }
+
+    @Override
+    public void readAdditionalSaveData(CompoundTag tag)
+    {
+        super.readAdditionalSaveData(tag);
+        this.siegeBeacon = tag.contains("SiegeBeacon")
+                ? BlockPos.of(tag.getLong("SiegeBeacon")) : null;
     }
 
     @Override

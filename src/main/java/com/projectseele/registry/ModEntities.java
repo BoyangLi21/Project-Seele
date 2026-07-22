@@ -2,6 +2,7 @@ package com.projectseele.registry;
 
 import com.projectseele.ProjectSeele;
 import com.projectseele.entity.EvaUnit01Entity;
+import com.projectseele.entity.LilithEntity;
 import com.projectseele.entity.RamielEntity;
 import com.projectseele.entity.SachielEntity;
 import com.projectseele.entity.MassProductionEvaEntity;
@@ -74,4 +75,10 @@ public class ModEntities
     public static final RegistryObject<EntityType<IsrafelEntity>> ISRAFEL = ENTITY_TYPES.register("israfel",
             () -> EntityType.Builder.of(IsrafelEntity::new, MobCategory.MONSTER)
                     .sized(9.0F, 24.0F).fireImmune().clientTrackingRange(16).build("israfel"));
+    public static final RegistryObject<EntityType<LilithEntity>> LILITH =
+            ENTITY_TYPES.register("lilith",
+                    () -> EntityType.Builder.of(LilithEntity::new, MobCategory.MISC)
+                            .sized(1.0F, 1.0F).fireImmune()
+                            .clientTrackingRange(24).updateInterval(20)
+                            .build("lilith"));
 }

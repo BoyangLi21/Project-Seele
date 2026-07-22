@@ -13,27 +13,36 @@ public final class ClientboundTokyo3CapturePacket
 {
     private final BlockPos origin;
     private final boolean retraction;
+    private final boolean battle;
 
     public ClientboundTokyo3CapturePacket(BlockPos origin)
     {
-        this(origin, false);
+        this(origin, false, false);
     }
 
     public ClientboundTokyo3CapturePacket(BlockPos origin, boolean retraction)
     {
+        this(origin, retraction, false);
+    }
+
+    public ClientboundTokyo3CapturePacket(BlockPos origin, boolean retraction,
+                                          boolean battle)
+    {
         this.origin = origin;
         this.retraction = retraction;
+        this.battle = battle;
     }
 
     public ClientboundTokyo3CapturePacket(FriendlyByteBuf buffer)
     {
-        this(buffer.readBlockPos(), buffer.readBoolean());
+        this(buffer.readBlockPos(), buffer.readBoolean(), buffer.readBoolean());
     }
 
     public void encode(FriendlyByteBuf buffer)
     {
         buffer.writeBlockPos(this.origin);
         buffer.writeBoolean(this.retraction);
+        buffer.writeBoolean(this.battle);
     }
 
     public void handle(Supplier<NetworkEvent.Context> context)
@@ -43,6 +52,11 @@ public final class ClientboundTokyo3CapturePacket
             {
                 com.projectseele.client.visual.VisualCaptureManager
                         .startTokyo3Retraction(this.origin);
+            }
+            else if (this.battle)
+            {
+                com.projectseele.client.visual.VisualCaptureManager
+                        .startTokyo3Battle(this.origin);
             }
             else
             {

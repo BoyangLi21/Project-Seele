@@ -122,6 +122,14 @@ minecraft {
             if (project.hasProperty('strictHighDetail')) {
                 property 'projectseele.strictHighDetail', 'true'
             }
+            // The 784-block-tall connected Tokyo-3 / GeoFront dimension
+            // contains roughly twice vanilla's section count. Both manual
+            // high-detail play and fresh-map capture need more than the
+            // ergonomic 4G default while the 512-block sphere is resident.
+            if (project.hasProperty('visualCapture') || project.hasProperty('strictHighDetail')) {
+                jvmArgs '-Xms2G', '-Xmx6G', '-XX:+UseG1GC',
+                        '-XX:MaxGCPauseMillis=80'
+            }
             if (project.hasProperty('visualCapturePose')) {
                 property 'projectseele.visualCapturePose', project.property('visualCapturePose')
             }
@@ -133,6 +141,12 @@ minecraft {
         server {
             property 'forge.enabledGameTestNamespaces', mod_id
             args '--nogui'
+            // The private 1-3 player SEELE test server keeps the tall
+            // connected dimension and its active EVA/Angel simulation away
+            // from the rendering client. Eight gigabytes leaves headroom for
+            // the enlarged Tokyo-3 and GeoFront chunk sets.
+            jvmArgs '-Xms2G', '-Xmx8G', '-XX:+UseG1GC',
+                    '-XX:MaxGCPauseMillis=100'
         }
 
         // This run config launches GameTestServer and runs all registered gametests, then exits.
@@ -167,6 +181,13 @@ repositories {
             includeGroupByRegex 'software\\.bernie.*'
         }
     }
+
+    // Local-only evaluation mods are copied here by tools/start_test.bat.
+    // flatDir gives ForgeGradle coordinates so fg.deobf can remap their
+    // production SRG/refmap names for the official-mappings dev runtime.
+    flatDir {
+        dirs '.Codex/local-mods'
+    }
 }
 
 dependencies {
@@ -179,6 +200,15 @@ dependencies {
 
     // GeckoLib: animated entity pipeline (EVA units and humanoid Angels)
     implementation fg.deobf("software.bernie.geckolib:geckolib-forge-${minecraft_version}:${geckolib_version}")
+
+    def localArs = file('.Codex/local-mods/ars-nouveau-4.12.7.jar')
+    def localCurios = file('.Codex/local-mods/curios-forge-1.20.1-5.14.1.jar')
+    if (localCurios.exists()) {
+        runtimeOnly fg.deobf('local:curios-forge-1.20.1:5.14.1')
+    }
+    if (localArs.exists()) {
+        runtimeOnly fg.deobf('local:ars-nouveau:4.12.7')
+    }
 
     // Mixin annotation processor: generates our refmap at compile time.
     annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'

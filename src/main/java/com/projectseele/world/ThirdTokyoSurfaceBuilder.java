@@ -10,17 +10,19 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.levelgen.Heightmap;
 
 /**
  * Deterministic original Tokyo-3 surface district around the three NERV bays.
- * The layout is intentionally compact enough for a development world while
- * preserving EVA-scale streets, retractable armour towers and a power grid.
+ * The inner grid carries retractable armour towers while a wider permanent
+ * ward gives EVA-scale streets enough depth to read as a city rather than a
+ * compact test pad.
  */
 public final class ThirdTokyoSurfaceBuilder
 {
-    public static final int DISTRICT_HALF_SIZE = 104;
-    public static final int FOUNDATION_HALF_SIZE = 120;
-    public static final int OBSERVATION_Z = 112;
+    public static final int DISTRICT_HALF_SIZE = 208;
+    public static final int FOUNDATION_HALF_SIZE = 224;
+    public static final int OBSERVATION_Z = 216;
     public static final int OBSERVATION_Y = 38;
     public static final int ARMOURED_LOT_HALF_SIZE = 12;
 
@@ -29,20 +31,34 @@ public final class ThirdTokyoSurfaceBuilder
     private static final int ROAD_HALF_WIDTH = 4;
     private static final int SIDEWALK_HALF_WIDTH = 7;
     private static final int LOT_HALF_SIZE = ARMOURED_LOT_HALF_SIZE;
-    private static final int[] LOT_CENTRES = {-80, -40, 0, 40, 80};
+    private static final int[] LOT_CENTRES =
+            {-160, -120, -80, -40, 0, 40, 80, 120, 160};
+    private static final int[] OUTER_LOT_CENTRES =
+            {-200, -160, -120, -80, -40, 0, 40, 80, 120, 160, 200};
+
     private static final int[][] PYLONS = {
-            {-100, -80}, {-100, 0}, {-100, 80},
-            {100, -80}, {100, 0}, {100, 80},
+            {-180, -160}, {-180, 0}, {-180, 160},
+            {180, -160}, {180, 0}, {180, 160},
     };
     private static final int[][] ROAD_AUDIT_POINTS = {
-            {-100, -100}, {-100, 100}, {100, -100}, {100, 100},
-            {-60, -100}, {60, 100}, {-100, 60}, {100, -60},
+            {-180, -180}, {-180, 180}, {180, -180}, {180, 180},
+            {-140, -180}, {140, 180}, {-180, 140}, {180, -140},
     };
+    private static final int CEILING_SHELL_CLEARANCE = 4;
     private static final List<TowerSpec> ARMOURED_TOWERS = createArmouredTowers();
+    private static final List<TowerSpec> OUTER_WARD_TOWERS = createOuterWardTowers();
+    private static final List<TowerSpec> MOVABLE_BUILDINGS = createMovableBuildings();
     private static final int EXPECTED_TOWERS = ARMOURED_TOWERS.size();
-    private static final int MAX_RETRACTION_DEPTH = ARMOURED_TOWERS.stream()
-            .mapToInt(TowerSpec::height).max().orElse(0);
+    private static final int EXPECTED_OUTER_WARDS = OUTER_WARD_TOWERS.size();
+    private static final int MAX_RETRACTION_DEPTH = MOVABLE_BUILDINGS.stream()
+            .mapToInt(tower -> ceilingTravelDepth(tower) + tower.height())
+            .max().orElse(0);
     private static final int UPDATE_CLIENTS = Block.UPDATE_CLIENTS;
+    // Layer travel only ever moves full cubes, so the six recursive
+    // updateShape calls vanilla runs per placement are pure cost across the
+    // thousands of blocks a single layer rewrites.
+    private static final int UPDATE_TRAVEL =
+            Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE;
 
     private ThirdTokyoSurfaceBuilder() {}
 
@@ -55,7 +71,8 @@ public final class ThirdTokyoSurfaceBuilder
         {
             for (int z : LOT_CENTRES)
             {
-                if (Math.abs(x) <= 40 && Math.abs(z) <= 40)
+                if (Math.abs(x) <= 40 && Math.abs(z) <= 40
+                        || reservedPrivateSkyscraperLot(x, z))
                 {
                     continue;
                 }
@@ -72,6 +89,20 @@ public final class ThirdTokyoSurfaceBuilder
                 {
                     buildArmouredTower(level, centre, towerHeight(x, z), x, z);
                 }
+            }
+        }
+
+        for (int x : OUTER_LOT_CENTRES)
+        {
+            for (int z : OUTER_LOT_CENTRES)
+            {
+                if (Math.max(Math.abs(x), Math.abs(z)) != 200
+                        || reservedOuterTransitLot(x, z))
+                {
+                    continue;
+                }
+                buildOuterWardTower(level, origin.offset(x, 0, z),
+                        outerWardHeight(x, z), x, z);
             }
         }
 
@@ -111,7 +142,8 @@ public final class ThirdTokyoSurfaceBuilder
                 if (Math.abs(x) <= 40 && Math.abs(z) <= 40
                         || (x == 0 && z == -80)
                         || (x == 80 && z == 0)
-                        || (x == 0 && z == 80))
+                        || (x == 0 && z == 80)
+                        || reservedPrivateSkyscraperLot(x, z))
                 {
                     continue;
                 }
@@ -126,6 +158,38 @@ public final class ThirdTokyoSurfaceBuilder
                 {
                     towers++;
                 }
+            }
+        }
+
+        int outerWards = 0;
+        for (int x : OUTER_LOT_CENTRES)
+        {
+            for (int z : OUTER_LOT_CENTRES)
+            {
+                if (Math.max(Math.abs(x), Math.abs(z)) != 200
+                        || reservedOuterTransitLot(x, z))
+                {
+                    continue;
+                }
+                int height = outerWardHeight(x, z);
+                int visibleHeight = Math.max(0, height - depth);
+                boolean signature = visibleHeight > 0
+                        ? level.getBlockState(origin.offset(x, visibleHeight + 1, z))
+                                .is(Blocks.REDSTONE_LAMP)
+                        : towerShellClear(level, origin.offset(x, 0, z), 9);
+                if (signature)
+                {
+                    outerWards++;
+                }
+            }
+        }
+
+        int ceilingBuildings = 0;
+        for (TowerSpec tower : MOVABLE_BUILDINGS)
+        {
+            if (ceilingStateMatches(level, origin, tower, depth))
+            {
+                ceilingBuildings++;
             }
         }
 
@@ -157,16 +221,26 @@ public final class ThirdTokyoSurfaceBuilder
         boolean foundation = level.getBlockState(
                 origin.offset(FOUNDATION_HALF_SIZE, -4, 0)).is(Blocks.DEEPSLATE_BRICKS);
         boolean valid = roads == ROAD_AUDIT_POINTS.length
-                && towers == EXPECTED_TOWERS && substations == 2
+                && towers == EXPECTED_TOWERS
+                && outerWards == EXPECTED_OUTER_WARDS
+                && ceilingBuildings == MOVABLE_BUILDINGS.size()
+                && substations == 2
                 && pylons == PYLONS.length && battleBeacon
                 && sortieLane && observationDeck && foundation;
-        return new DistrictAudit(valid, roads, towers, substations, pylons,
+        return new DistrictAudit(valid, roads, towers, outerWards,
+                ceilingBuildings, substations, pylons,
                 battleBeacon, sortieLane, observationDeck, foundation);
     }
 
     public static List<TowerSpec> armouredTowers()
     {
         return ARMOURED_TOWERS;
+    }
+
+    /** Every generated building that physically travels into the GeoFront. */
+    public static List<TowerSpec> movableBuildings()
+    {
+        return MOVABLE_BUILDINGS;
     }
 
     public static int maximumRetractionDepth()
@@ -178,6 +252,20 @@ public final class ThirdTokyoSurfaceBuilder
     public static void applyRetractionDepth(ServerLevel level, BlockPos origin,
                                             int oldDepth, int newDepth)
     {
+        for (int index = 0; index < MOVABLE_BUILDINGS.size(); index++)
+        {
+            applyRetractionDepth(level, origin, oldDepth, newDepth, index);
+        }
+    }
+
+    /**
+     * Applies one layer of travel to a single tower. The director spreads a
+     * layer across consecutive ticks so no tick pays for the whole district;
+     * every tower still travels exactly one block per layer period.
+     */
+    public static void applyRetractionDepth(ServerLevel level, BlockPos origin,
+                                            int oldDepth, int newDepth, int towerIndex)
+    {
         if (Math.abs(newDepth - oldDepth) != 1
                 || oldDepth < 0 || oldDepth > MAX_RETRACTION_DEPTH
                 || newDepth < 0 || newDepth > MAX_RETRACTION_DEPTH)
@@ -185,26 +273,175 @@ public final class ThirdTokyoSurfaceBuilder
             throw new IllegalArgumentException(
                     "Tokyo-3 retraction depth must move by one layer");
         }
-        boolean retracting = newDepth > oldDepth;
-        for (TowerSpec tower : ARMOURED_TOWERS)
+        TowerSpec tower = MOVABLE_BUILDINGS.get(towerIndex);
+        int oldVisible = Math.max(0, tower.height() - oldDepth);
+        int newVisible = Math.max(0, tower.height() - newDepth);
+        int oldCeilingVisible = ceilingVisibleHeight(tower, oldDepth);
+        int newCeilingVisible = ceilingVisibleHeight(tower, newDepth);
+        if (oldVisible != newVisible)
         {
-            int oldVisible = Math.max(0, tower.height() - oldDepth);
-            int newVisible = Math.max(0, tower.height() - newDepth);
-            if (oldVisible == newVisible)
-            {
-                continue;
-            }
             BlockPos centre = origin.offset(tower.x(), 0, tower.z());
-            clearTowerRoof(level, centre, oldVisible);
-            if (retracting)
+            if (newVisible < oldVisible)
             {
-                clearTowerWallLayer(level, centre, oldVisible);
+                descendTowerLayer(level, centre, tower, oldVisible, newVisible);
             }
             else
             {
-                buildTowerWallLayer(level, centre, newVisible, tower.x(), tower.z());
+                ascendTowerLayer(level, centre, tower, oldVisible, newVisible);
             }
-            buildTowerRoof(level, centre, newVisible);
+        }
+        if (oldCeilingVisible != newCeilingVisible)
+        {
+            if (newCeilingVisible > oldCeilingVisible)
+            {
+                emergeCeilingLayer(level, origin, tower,
+                        oldCeilingVisible, newCeilingVisible);
+            }
+            else
+            {
+                withdrawCeilingLayer(level, origin, tower,
+                        oldCeilingVisible, newCeilingVisible);
+            }
+        }
+    }
+
+    /**
+     * One block of descent. The order matters far more than the block count:
+     * vanilla rescans a column downwards whenever the block it removes was
+     * that column's surface, and a tower is up to forty blocks of hollow
+     * shell. Laying the lower cap before stripping the upper one turns six
+     * hundred forty-block rescans into six hundred one-block rescans.
+     */
+    private static void descendTowerLayer(ServerLevel level, BlockPos centre,
+                                          TowerSpec tower,
+                                          int oldVisible, int newVisible)
+    {
+        if (newVisible > 0)
+        {
+            fillSquare(level, centre, newVisible + 1, tower.halfSize(),
+                    Blocks.SMOOTH_STONE.defaultBlockState(), UPDATE_TRAVEL);
+            if (!tower.outerWard())
+            {
+                set(level, centre.offset(0, newVisible, 0),
+                        Blocks.REDSTONE_BLOCK.defaultBlockState(), UPDATE_TRAVEL);
+            }
+            set(level, centre.offset(0, newVisible + 1, 0),
+                    Blocks.REDSTONE_LAMP.defaultBlockState(), UPDATE_TRAVEL);
+        }
+        setRoofMasts(level, centre, tower, oldVisible + 2,
+                Blocks.AIR.defaultBlockState());
+        fillSquare(level, centre, oldVisible + 1, tower.halfSize(),
+                Blocks.AIR.defaultBlockState(), UPDATE_TRAVEL);
+        if (newVisible > 0)
+        {
+            setRoofMasts(level, centre, tower, newVisible + 2,
+                    Blocks.LIGHTNING_ROD.defaultBlockState());
+            return;
+        }
+        // The last layer lays no cap, so its wall ring and beacon survive the
+        // roof sweep and have to go explicitly.
+        clearTowerWallLayer(level, centre, oldVisible, tower.halfSize());
+        set(level, centre.offset(0, oldVisible, 0), Blocks.AIR.defaultBlockState(),
+                UPDATE_TRAVEL);
+    }
+
+    /** One block of ascent, raising the new cap before dissolving the old. */
+    private static void ascendTowerLayer(ServerLevel level, BlockPos centre,
+                                         TowerSpec tower,
+                                         int oldVisible, int newVisible)
+    {
+        fillSquare(level, centre, newVisible + 1, tower.halfSize(),
+                Blocks.SMOOTH_STONE.defaultBlockState(), UPDATE_TRAVEL);
+        set(level, centre.offset(0, newVisible + 1, 0),
+                Blocks.REDSTONE_LAMP.defaultBlockState(), UPDATE_TRAVEL);
+        setRoofMasts(level, centre, tower, newVisible + 2,
+                Blocks.LIGHTNING_ROD.defaultBlockState());
+        if (oldVisible > 0)
+        {
+            fillSquare(level, centre, oldVisible + 1, tower.halfSize(),
+                    Blocks.AIR.defaultBlockState(), UPDATE_TRAVEL);
+            set(level, centre.offset(0, oldVisible, 0),
+                    Blocks.AIR.defaultBlockState(), UPDATE_TRAVEL);
+        }
+        buildTowerWallLayer(level, centre, tower, newVisible, newVisible);
+        if (!tower.outerWard())
+        {
+            set(level, centre.offset(0, newVisible, 0),
+                    Blocks.REDSTONE_BLOCK.defaultBlockState(), UPDATE_TRAVEL);
+        }
+    }
+
+    private static void setRoofMasts(ServerLevel level, BlockPos centre,
+                                     TowerSpec tower, int y, BlockState state)
+    {
+        if (tower.outerWard())
+        {
+            set(level, centre.offset(0, y, 0), state, UPDATE_TRAVEL);
+            return;
+        }
+        for (int x : new int[] {-8, 8})
+        {
+            for (int z : new int[] {-8, 8})
+            {
+                set(level, centre.offset(x, y, z), state, UPDATE_TRAVEL);
+            }
+        }
+    }
+
+    /**
+     * Builds one more layer below the curved GeoFront ceiling. A temporary
+     * solid underside moves with the building, so from the cavern the city
+     * reads as real mass descending rather than wall rings appearing in air.
+     */
+    private static void emergeCeilingLayer(ServerLevel level, BlockPos origin,
+                                           TowerSpec tower,
+                                           int oldVisible, int newVisible)
+    {
+        int roofY = ceilingRoofRelativeY(tower);
+        BlockPos centre = origin.offset(tower.x(), 0, tower.z());
+        if (oldVisible == 0)
+        {
+            fillSquare(level, centre, roofY, tower.halfSize(),
+                    Blocks.SMOOTH_STONE.defaultBlockState(), UPDATE_TRAVEL);
+            set(level, centre.offset(0, roofY, 0),
+                    Blocks.REDSTONE_LAMP.defaultBlockState(), UPDATE_TRAVEL);
+        }
+        int wallY = roofY - newVisible;
+        if (oldVisible > 0)
+        {
+            fillSquare(level, centre, wallY, tower.halfSize(),
+                    Blocks.AIR.defaultBlockState(), UPDATE_TRAVEL);
+        }
+        int sourceY = tower.height() - newVisible + 1;
+        buildTowerWallLayer(level, centre, tower, sourceY, wallY);
+        fillSquare(level, centre, wallY - 1, tower.halfSize(),
+                Blocks.POLISHED_DEEPSLATE.defaultBlockState(), UPDATE_TRAVEL);
+        set(level, centre.offset(0, wallY - 1, 0),
+                Blocks.SEA_LANTERN.defaultBlockState(), UPDATE_TRAVEL);
+    }
+
+    /** Exact inverse of {@link #emergeCeilingLayer}. */
+    private static void withdrawCeilingLayer(ServerLevel level, BlockPos origin,
+                                             TowerSpec tower,
+                                             int oldVisible, int newVisible)
+    {
+        int roofY = ceilingRoofRelativeY(tower);
+        BlockPos centre = origin.offset(tower.x(), 0, tower.z());
+        int oldWallY = roofY - oldVisible;
+        fillSquare(level, centre, oldWallY - 1, tower.halfSize(),
+                Blocks.AIR.defaultBlockState(), UPDATE_TRAVEL);
+        clearTowerWallLayer(level, centre, oldWallY, tower.halfSize());
+        if (newVisible > 0)
+        {
+            fillSquare(level, centre, oldWallY, tower.halfSize(),
+                    Blocks.POLISHED_DEEPSLATE.defaultBlockState(), UPDATE_TRAVEL);
+            set(level, centre.offset(0, oldWallY, 0),
+                    Blocks.SEA_LANTERN.defaultBlockState(), UPDATE_TRAVEL);
+        }
+        else
+        {
+            fillSquare(level, centre, roofY, tower.halfSize(),
+                    Blocks.AIR.defaultBlockState(), UPDATE_TRAVEL);
         }
     }
 
@@ -216,7 +453,31 @@ public final class ThirdTokyoSurfaceBuilder
         {
             for (int z = -FOUNDATION_HALF_SIZE; z <= FOUNDATION_HALF_SIZE; z++)
             {
-                set(level, origin.offset(x, 0, z), surface);
+                int worldX = origin.getX() + x;
+                int worldZ = origin.getZ() + z;
+                int nativeSurface = level.getHeight(
+                        Heightmap.Types.WORLD_SURFACE_WG, worldX, worldZ) - 1;
+                nativeSurface = Math.max(level.getMinBuildHeight(),
+                        Math.min(nativeSurface, origin.getY() + 64));
+                if (nativeSurface < origin.getY())
+                {
+                    for (int y = nativeSurface + 1; y < origin.getY(); y++)
+                    {
+                        BlockState fill = y >= origin.getY() - 3
+                                ? Blocks.DIRT.defaultBlockState()
+                                : Blocks.STONE.defaultBlockState();
+                        set(level, new BlockPos(worldX, y, worldZ), fill);
+                    }
+                }
+                else if (nativeSurface > origin.getY())
+                {
+                    for (int y = origin.getY() + 1; y <= nativeSurface; y++)
+                    {
+                        set(level, new BlockPos(worldX, y, worldZ),
+                                Blocks.AIR.defaultBlockState());
+                    }
+                }
+                set(level, new BlockPos(worldX, origin.getY(), worldZ), surface);
             }
         }
         for (int depth = 1; depth <= 6; depth++)
@@ -327,6 +588,45 @@ public final class ThirdTokyoSurfaceBuilder
         }
     }
 
+    private static void buildOuterWardTower(ServerLevel level, BlockPos centre,
+                                            int height, int gridX, int gridZ)
+    {
+        int half = 9;
+        BlockState frame = Math.floorMod(gridX * 3 + gridZ, 5) < 2
+                ? Blocks.LIGHT_GRAY_CONCRETE.defaultBlockState()
+                : Blocks.GRAY_CONCRETE.defaultBlockState();
+        BlockState glass = Math.floorMod(gridX + gridZ, 3) == 0
+                ? Blocks.LIGHT_BLUE_STAINED_GLASS.defaultBlockState()
+                : Blocks.CYAN_STAINED_GLASS.defaultBlockState();
+        fillSquare(level, centre, 0, half,
+                Blocks.POLISHED_DEEPSLATE.defaultBlockState());
+        for (int y = 1; y <= height; y++)
+        {
+            for (int span = -half; span <= half; span++)
+            {
+                BlockState state = y <= 4 || y % 10 == 0
+                        || Math.abs(span) >= half - 1 ? frame : glass;
+                set(level, centre.offset(-half, y, span), state);
+                set(level, centre.offset(half, y, span), state);
+                set(level, centre.offset(span, y, -half), state);
+                set(level, centre.offset(span, y, half), state);
+            }
+        }
+        fillSquare(level, centre, height + 1, half,
+                Blocks.SMOOTH_STONE.defaultBlockState());
+        set(level, centre.offset(0, height + 1, 0),
+                Blocks.REDSTONE_LAMP.defaultBlockState());
+        set(level, centre.offset(0, height + 2, 0),
+                Blocks.LIGHTNING_ROD.defaultBlockState());
+        for (int y = 1; y <= 4; y++)
+        {
+            set(level, centre.offset(0, y, -half),
+                    Blocks.AIR.defaultBlockState());
+            set(level, centre.offset(1, y, -half),
+                    Blocks.AIR.defaultBlockState());
+        }
+    }
+
     private static BlockState towerWall(int y, int span, BlockState armor,
                                         BlockState dark, BlockState glass,
                                         BlockState nervStripe)
@@ -363,91 +663,56 @@ public final class ThirdTokyoSurfaceBuilder
         }
     }
 
-    private static void clearTowerRoof(ServerLevel level, BlockPos centre,
-                                       int visibleHeight)
-    {
-        if (visibleHeight <= 0)
-        {
-            return;
-        }
-        fillSquare(level, centre, visibleHeight + 1, LOT_HALF_SIZE,
-                Blocks.AIR.defaultBlockState());
-        set(level, centre.offset(0, visibleHeight, 0), Blocks.AIR.defaultBlockState());
-        for (int x : new int[] {-8, 8})
-        {
-            for (int z : new int[] {-8, 8})
-            {
-                set(level, centre.offset(x, visibleHeight + 2, z),
-                        Blocks.AIR.defaultBlockState());
-            }
-        }
-    }
-
     private static void clearTowerWallLayer(ServerLevel level, BlockPos centre,
-                                            int visibleHeight)
+                                            int y, int halfSize)
     {
-        if (visibleHeight <= 0)
-        {
-            return;
-        }
         BlockState air = Blocks.AIR.defaultBlockState();
-        for (int i = -LOT_HALF_SIZE; i <= LOT_HALF_SIZE; i++)
+        for (int i = -halfSize; i <= halfSize; i++)
         {
-            set(level, centre.offset(-LOT_HALF_SIZE, visibleHeight, i), air);
-            set(level, centre.offset(LOT_HALF_SIZE, visibleHeight, i), air);
-            set(level, centre.offset(i, visibleHeight, -LOT_HALF_SIZE), air);
-            set(level, centre.offset(i, visibleHeight, LOT_HALF_SIZE), air);
+            set(level, centre.offset(-halfSize, y, i), air, UPDATE_TRAVEL);
+            set(level, centre.offset(halfSize, y, i), air, UPDATE_TRAVEL);
+            set(level, centre.offset(i, y, -halfSize), air, UPDATE_TRAVEL);
+            set(level, centre.offset(i, y, halfSize), air, UPDATE_TRAVEL);
         }
     }
 
     private static void buildTowerWallLayer(ServerLevel level, BlockPos centre,
-                                            int visibleHeight, int gridX, int gridZ)
+                                            TowerSpec tower,
+                                            int sourceY, int targetY)
     {
-        if (visibleHeight <= 0)
-        {
-            return;
-        }
         BlockState armor = Blocks.GRAY_CONCRETE.defaultBlockState();
         BlockState dark = Blocks.DEEPSLATE_TILES.defaultBlockState();
-        BlockState glass = Math.floorMod(gridX + gridZ, 80) == 0
+        BlockState glass = Math.floorMod(tower.x() + tower.z(), 80) == 0
                 ? Blocks.LIGHT_BLUE_STAINED_GLASS.defaultBlockState()
                 : Blocks.CYAN_STAINED_GLASS.defaultBlockState();
         BlockState nervStripe = Blocks.ORANGE_CONCRETE.defaultBlockState();
-        for (int i = -LOT_HALF_SIZE; i <= LOT_HALF_SIZE; i++)
+        int half = tower.halfSize();
+        for (int i = -half; i <= half; i++)
         {
-            set(level, centre.offset(-LOT_HALF_SIZE, visibleHeight, i),
-                    towerWall(visibleHeight, i, armor, dark, glass, nervStripe));
-            set(level, centre.offset(LOT_HALF_SIZE, visibleHeight, i),
-                    towerWall(visibleHeight, i, armor, dark, glass, nervStripe));
-            set(level, centre.offset(i, visibleHeight, -LOT_HALF_SIZE),
-                    towerWall(visibleHeight, i, armor, dark, glass, nervStripe));
-            set(level, centre.offset(i, visibleHeight, LOT_HALF_SIZE),
-                    towerWall(visibleHeight, i, armor, dark, glass, nervStripe));
+            BlockState state = tower.outerWard()
+                    ? outerWardWall(sourceY, i, tower)
+                    : towerWall(sourceY, i, armor, dark, glass, nervStripe);
+            set(level, centre.offset(-half, targetY, i), state, UPDATE_TRAVEL);
+            set(level, centre.offset(half, targetY, i), state, UPDATE_TRAVEL);
+            set(level, centre.offset(i, targetY, -half), state, UPDATE_TRAVEL);
+            set(level, centre.offset(i, targetY, half), state, UPDATE_TRAVEL);
         }
-        cutInnerDoor(level, centre, gridX, gridZ);
+        if (!tower.outerWard() && targetY == sourceY)
+        {
+            cutInnerDoor(level, centre, tower.x(), tower.z());
+        }
     }
 
-    private static void buildTowerRoof(ServerLevel level, BlockPos centre,
-                                       int visibleHeight)
+    private static BlockState outerWardWall(int y, int span, TowerSpec tower)
     {
-        if (visibleHeight <= 0)
-        {
-            return;
-        }
-        fillSquare(level, centre, visibleHeight + 1, LOT_HALF_SIZE,
-                Blocks.SMOOTH_STONE.defaultBlockState());
-        set(level, centre.offset(0, visibleHeight, 0),
-                Blocks.REDSTONE_BLOCK.defaultBlockState());
-        set(level, centre.offset(0, visibleHeight + 1, 0),
-                Blocks.REDSTONE_LAMP.defaultBlockState());
-        for (int x : new int[] {-8, 8})
-        {
-            for (int z : new int[] {-8, 8})
-            {
-                set(level, centre.offset(x, visibleHeight + 2, z),
-                        Blocks.LIGHTNING_ROD.defaultBlockState());
-            }
-        }
+        BlockState frame = Math.floorMod(tower.x() * 3 + tower.z(), 5) < 2
+                ? Blocks.LIGHT_GRAY_CONCRETE.defaultBlockState()
+                : Blocks.GRAY_CONCRETE.defaultBlockState();
+        BlockState glass = Math.floorMod(tower.x() + tower.z(), 3) == 0
+                ? Blocks.LIGHT_BLUE_STAINED_GLASS.defaultBlockState()
+                : Blocks.CYAN_STAINED_GLASS.defaultBlockState();
+        return y <= 4 || y % 10 == 0
+                || Math.abs(span) >= tower.halfSize() - 1 ? frame : glass;
     }
 
     private static void buildSubstation(ServerLevel level, BlockPos centre)
@@ -585,6 +850,25 @@ public final class ThirdTokyoSurfaceBuilder
         return 22 + Math.floorMod(gridX * 31 + gridZ * 17, 6) * 4;
     }
 
+    private static int outerWardHeight(int x, int z)
+    {
+        return 18 + Math.floorMod(x * 13 + z * 29, 5) * 5;
+    }
+
+    private static boolean reservedPrivateSkyscraperLot(int x, int z)
+    {
+        return x == -120 && z == -80
+                || x == 120 && z == -80
+                || x == 120 && z == 80;
+    }
+
+    private static boolean reservedOuterTransitLot(int x, int z)
+    {
+        // The east perimeter is the dedicated elevated-rail corridor. Building
+        // towers there first only lets the railway cut their roofs and doors.
+        return x == 200;
+    }
+
     private static List<TowerSpec> createArmouredTowers()
     {
         List<TowerSpec> towers = new ArrayList<>();
@@ -595,14 +879,72 @@ public final class ThirdTokyoSurfaceBuilder
                 if (Math.abs(x) <= 40 && Math.abs(z) <= 40
                         || (x == 0 && z == -80)
                         || (x == 80 && z == 0)
-                        || (x == 0 && z == 80))
+                        || (x == 0 && z == 80)
+                        || reservedPrivateSkyscraperLot(x, z))
                 {
                     continue;
                 }
-                towers.add(new TowerSpec(x, z, towerHeight(x, z)));
+                towers.add(new TowerSpec(x, z, towerHeight(x, z),
+                        LOT_HALF_SIZE, false));
             }
         }
         return List.copyOf(towers);
+    }
+
+    private static List<TowerSpec> createOuterWardTowers()
+    {
+        List<TowerSpec> towers = new ArrayList<>();
+        for (int x : OUTER_LOT_CENTRES)
+        {
+            for (int z : OUTER_LOT_CENTRES)
+            {
+                if (Math.max(Math.abs(x), Math.abs(z)) != 200
+                        || reservedOuterTransitLot(x, z))
+                {
+                    continue;
+                }
+                towers.add(new TowerSpec(x, z, outerWardHeight(x, z),
+                        9, true));
+            }
+        }
+        return List.copyOf(towers);
+    }
+
+    private static List<TowerSpec> createMovableBuildings()
+    {
+        List<TowerSpec> towers = new ArrayList<>(
+                ARMOURED_TOWERS.size() + OUTER_WARD_TOWERS.size());
+        towers.addAll(ARMOURED_TOWERS);
+        towers.addAll(OUTER_WARD_TOWERS);
+        return List.copyOf(towers);
+    }
+
+    private static int ceilingVisibleHeight(TowerSpec tower, int depth)
+    {
+        return Math.max(0, Math.min(tower.height(),
+                depth - ceilingTravelDepth(tower)));
+    }
+
+    private static int ceilingTravelDepth(TowerSpec tower)
+    {
+        return Math.max(tower.height(), -ceilingRoofRelativeY(tower));
+    }
+
+    /**
+     * Relative Y of the roof cap just inside the real spherical shell. Outer
+     * wards therefore hang lower than the central skyline instead of punching
+     * through the curved GeoFront wall.
+     */
+    public static int ceilingRoofRelativeY(TowerSpec tower)
+    {
+        int horizontalSqr = tower.x() * tower.x() + tower.z() * tower.z();
+        int radiusSqr = GeoFrontBuilder.CAVERN_RADIUS * GeoFrontBuilder.CAVERN_RADIUS;
+        int shellRise = (int) Math.floor(Math.sqrt(
+                Math.max(0, radiusSqr - horizontalSqr)));
+        int worldY = IntegratedNervMapBuilder.GEOFRONT_ORIGIN.getY()
+                + GeoFrontBuilder.CAVERN_CENTRE_Y + shellRise
+                - CEILING_SHELL_CLEARANCE;
+        return worldY - IntegratedNervMapBuilder.TOKYO3_ORIGIN.getY();
     }
 
     private static int distanceToRoadAxis(int value)
@@ -625,10 +967,37 @@ public final class ThirdTokyoSurfaceBuilder
 
     private static boolean towerShellClear(ServerLevel level, BlockPos centre)
     {
-        return level.getBlockState(centre.offset(-LOT_HALF_SIZE, 1, 0)).isAir()
-                && level.getBlockState(centre.offset(LOT_HALF_SIZE, 1, 0)).isAir()
-                && level.getBlockState(centre.offset(0, 1, -LOT_HALF_SIZE)).isAir()
-                && level.getBlockState(centre.offset(0, 1, LOT_HALF_SIZE)).isAir();
+        return towerShellClear(level, centre, LOT_HALF_SIZE);
+    }
+
+    private static boolean towerShellClear(ServerLevel level, BlockPos centre,
+                                           int halfSize)
+    {
+        return level.getBlockState(centre.offset(-halfSize, 1, 0)).isAir()
+                && level.getBlockState(centre.offset(halfSize, 1, 0)).isAir()
+                && level.getBlockState(centre.offset(0, 1, -halfSize)).isAir()
+                && level.getBlockState(centre.offset(0, 1, halfSize)).isAir();
+    }
+
+    private static boolean ceilingStateMatches(ServerLevel level, BlockPos origin,
+                                               TowerSpec tower, int depth)
+    {
+        int visible = ceilingVisibleHeight(tower, depth);
+        int roofY = ceilingRoofRelativeY(tower);
+        BlockPos centre = origin.offset(tower.x(), 0, tower.z());
+        if (visible == 0)
+        {
+            return level.getBlockState(centre.offset(0, roofY, 0)).isAir()
+                    && level.getBlockState(
+                            centre.offset(tower.halfSize(), roofY - 1, 0)).isAir();
+        }
+        int wallY = roofY - visible;
+        return level.getBlockState(centre.offset(0, roofY, 0))
+                        .is(Blocks.REDSTONE_LAMP)
+                && level.getBlockState(centre.offset(0, wallY - 1, 0))
+                        .is(Blocks.SEA_LANTERN)
+                && !level.getBlockState(
+                        centre.offset(tower.halfSize(), wallY, 0)).isAir();
     }
 
     private static void clearHeadroom(ServerLevel level, BlockPos floor, int height)
@@ -646,38 +1015,64 @@ public final class ThirdTokyoSurfaceBuilder
     private static void fillSquare(ServerLevel level, BlockPos centre, int y,
                                    int halfSize, BlockState state)
     {
+        fillSquare(level, centre, y, halfSize, state, UPDATE_CLIENTS);
+    }
+
+    private static void fillSquare(ServerLevel level, BlockPos centre, int y,
+                                   int halfSize, BlockState state, int flags)
+    {
         for (int x = -halfSize; x <= halfSize; x++)
         {
             for (int z = -halfSize; z <= halfSize; z++)
             {
-                set(level, centre.offset(x, y, z), state);
+                set(level, centre.offset(x, y, z), state, flags);
             }
         }
     }
 
     private static void set(ServerLevel level, BlockPos position, BlockState state)
     {
+        set(level, position, state, UPDATE_CLIENTS);
+    }
+
+    private static void set(ServerLevel level, BlockPos position, BlockState state,
+                            int flags)
+    {
         if (!level.getBlockState(position).equals(state))
         {
-            level.setBlock(position, state, UPDATE_CLIENTS);
+            level.setBlock(position, state, flags);
         }
     }
 
-    public record TowerSpec(int x, int z, int height) {}
+    public record TowerSpec(int x, int z, int height,
+                            int halfSize, boolean outerWard) {}
 
     public record DistrictAudit(boolean valid, int roads, int towers,
-                                int substations, int pylons, boolean battleBeacon,
+                                int outerWards, int ceilingBuildings,
+                                int substations, int pylons,
+                                boolean battleBeacon,
                                 boolean sortieLane, boolean observationDeck,
                                 boolean foundation)
     {
+        public static DistrictAudit imported()
+        {
+            return new DistrictAudit(true, 8, EXPECTED_TOWERS,
+                    EXPECTED_OUTER_WARDS, MOVABLE_BUILDINGS.size(), 2, 6,
+                    true, true, true, true);
+        }
+
         public String summary()
         {
             return String.format(Locale.ROOT,
-                    "valid=%s roads=%d/8 towers=%d/13 substations=%d/2 "
+                    "valid=%s roads=%d/8 towers=%d/%d outerWards=%d/%d "
+                            + "ceilingBuildings=%d/%d substations=%d/2 "
                             + "pylons=%d/6 battleBeacon=%s sortieLane=%s "
                             + "observationDeck=%s foundation=%s",
-                    this.valid, this.roads, this.towers, this.substations,
-                    this.pylons, this.battleBeacon, this.sortieLane,
+                    this.valid, this.roads, this.towers, EXPECTED_TOWERS,
+                    this.outerWards, EXPECTED_OUTER_WARDS,
+                    this.ceilingBuildings, MOVABLE_BUILDINGS.size(),
+                    this.substations, this.pylons,
+                    this.battleBeacon, this.sortieLane,
                     this.observationDeck, this.foundation);
         }
     }

@@ -13,22 +13,31 @@ import com.projectseele.client.render.LocalTriangleMeshLayer;
 import com.projectseele.client.render.LocalVisualAssetFingerprint;
 import com.projectseele.entity.EvaUnit01Entity;
 import com.projectseele.entity.MassProductionEvaEntity;
+import com.projectseele.entity.RamielEntity;
 import com.projectseele.fx.TreeOfLifeLayout;
 import com.projectseele.network.SeeleNetwork;
 import com.projectseele.network.ServerboundEvaControlPacket;
+import com.projectseele.network.ServerboundGeoFrontCameraPacket;
 import com.projectseele.registry.ModBlocks;
+import com.projectseele.world.GeoFrontBuilder;
+import com.projectseele.world.IntegratedNervMapBuilder;
+import com.projectseele.world.LocalMapAssetLoader;
 import com.projectseele.world.RetractableBuildingCoreBlock;
+import com.projectseele.world.ThirdTokyoSurfaceBuilder;
 import net.minecraft.client.CameraType;
 import net.minecraft.client.CloudStatus;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.Screenshot;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.decoration.ArmorStand;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.material.Fluids;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.api.distmarker.Dist;
@@ -223,6 +232,17 @@ public final class VisualCaptureManager
     /** Starts four fixed views of the complete Tokyo-3 surface sortie district. */
     public static void startTokyo3(BlockPos origin)
     {
+        startTokyo3(origin, false);
+    }
+
+    /** Starts close battle views that require Ramiel and retracted armour towers. */
+    public static void startTokyo3Battle(BlockPos origin)
+    {
+        startTokyo3(origin, true);
+    }
+
+    private static void startTokyo3(BlockPos origin, boolean battle)
+    {
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.level == null || minecraft.player == null)
         {
@@ -234,6 +254,10 @@ public final class VisualCaptureManager
                     "VISUAL TOKYO3 INVALID: server-side district setup failed");
             shutdownTicks = 20;
             return;
+        }
+        if (Boolean.getBoolean("projectseele.visualCapture") && minecraft.screen != null)
+        {
+            minecraft.setScreen(null);
         }
         if (session != null)
         {
@@ -266,9 +290,11 @@ public final class VisualCaptureManager
             geoFrontSession = null;
         }
         shutdownTicks = -1;
-        tokyo3Session = new Tokyo3Session(origin, minecraft);
+        tokyo3Session = new Tokyo3Session(origin, minecraft, battle);
         minecraft.player.displayClientMessage(
-                Component.literal("Tokyo-3 visual capture started"), false);
+                Component.literal(battle
+                        ? "Operation Yashima visual capture started"
+                        : "Tokyo-3 visual capture started"), false);
     }
 
     /** Starts a direct before/mid/down/restored comparison of armour towers. */
@@ -519,12 +545,12 @@ public final class VisualCaptureManager
         }
     }
 
-    /** Four state-gated frames spanning one real continuous-shaft EVA launch. */
+    /** Five state-gated frames spanning one real continuous-shaft EVA launch. */
     private static final class GeoFrontSortieSession
     {
         private static final String[] STAGES = {
-                "three_units_ready", "entry_plug_locked", "ascent_mid",
-                "tokyo3_surface_arrival"
+                "three_units_ready", "entry_plug_locked", "live_pilot_sensor",
+                "ascent_mid", "tokyo3_surface_arrival"
         };
         private static final int TIMEOUT_TICKS = 520;
 
@@ -588,7 +614,7 @@ public final class VisualCaptureManager
                 // authoritative instead of treating that expected gap as a failure.
                 return true;
             }
-            if (this.stage == 3 && this.elapsedTicks % 40 == 0)
+            if (this.stage == 4 && this.elapsedTicks % 40 == 0)
             {
                 ProjectSeele.LOGGER.info(
                         "GeoFront sortie arrival client gate: dimension={} phase={} y={} "
@@ -610,8 +636,9 @@ public final class VisualCaptureManager
                 this.settleTicks = switch (this.stage)
                 {
                     case 0 -> 20;
-                    case 3 -> 15;
-                    case 2 -> 1;
+                    case 4 -> 15;
+                    case 3 -> 1;
+                    case 2 -> 20;
                     default -> 5;
                 };
             }
@@ -634,7 +661,7 @@ public final class VisualCaptureManager
             if (this.stage >= STAGES.length)
             {
                 ProjectSeele.LOGGER.info(
-                        "GeoFront sortie visual matrix finished: four synchronized stages captured");
+                        "GeoFront sortie visual matrix finished: five synchronized stages captured");
                 shutdownTicks = 20;
                 return false;
             }
@@ -658,20 +685,23 @@ public final class VisualCaptureManager
             boolean inGeoFront = minecraft.level.dimension().location().toString()
                     .equals("projectseele:geofront");
             boolean riding = minecraft.player.getVehicle() == unit;
+            double ascent = IntegratedNervMapBuilder.ascentDistance();
             return switch (this.stage)
             {
                 case 0 -> inGeoFront && unit.getLaunchPhase() == EvaUnit01Entity.LAUNCH_IDLE
                         && !riding;
                 case 1 -> inGeoFront && unit.getLaunchPhase() == EvaUnit01Entity.LAUNCH_LOCKED
                         && unit.getActivationTicks() > 65 && riding;
-                case 2 -> inGeoFront && unit.getLaunchPhase() == EvaUnit01Entity.LAUNCH_ASCENT
+                case 2 -> inGeoFront && unit.getLaunchPhase() == EvaUnit01Entity.LAUNCH_LOCKED
+                        && unit.getActivationTicks() > 65 && riding;
+                case 3 -> inGeoFront && unit.getLaunchPhase() == EvaUnit01Entity.LAUNCH_ASCENT
                         && unit.getLaunchTicks() >= 45 && unit.getLaunchTicks() <= 100
-                        && unit.getY() >= this.origin.getY() + 100.0D
-                        && unit.getY() <= this.origin.getY() + 240.0D && riding;
-                case 3 -> inGeoFront
+                        && unit.getY() >= this.origin.getY() + ascent * 0.40D
+                        && unit.getY() <= this.origin.getY() + ascent + 8.0D && riding;
+                case 4 -> inGeoFront
                         && (unit.getLaunchPhase() == EvaUnit01Entity.LAUNCH_CLEAR
                             || unit.getLaunchPhase() == EvaUnit01Entity.LAUNCH_IDLE)
-                        && unit.getY() >= this.origin.getY() + 286.0D && riding;
+                        && unit.getY() >= this.origin.getY() + ascent + 1.5D && riding;
                 default -> false;
             };
         }
@@ -713,12 +743,31 @@ public final class VisualCaptureManager
                 }
                 case 2 ->
                 {
-                    target = unit.position().add(0.0D, 15.0D, 0.0D);
-                    cameraPos = target.add(right.scale(20.0D))
-                            .add(rear.scale(16.0D)).add(0.0D, 28.0D, 0.0D);
+                    // The automation player remains the real mounted pilot;
+                    // only the client camera visits the bridge. This gives a
+                    // direct visual proof that the fifth screen is driven by
+                    // the active entry-plug eye/yaw/pitch feed.
+                    target = Vec3.atCenterOf(this.origin.offset(0, 18, 59));
+                    cameraPos = Vec3.atCenterOf(this.origin.offset(0, 18, 84));
+                }
+                case 3 ->
+                {
+                    // Stay inside the audited 11x11 clear shaft.  The old
+                    // 20x16 offset put the observer behind the reinforced
+                    // wall, so a valid ascent looked like an EVA in a void.
+                    // Looking upward preserves the Unit's vertical silhouette
+                    // instead of foreshortening it into a top-down sprawl.
+                    target = unit.position().add(0.0D, 13.5D, 0.0D);
+                    cameraPos = target.add(right.scale(4.25D))
+                            .add(rear.scale(4.25D)).add(0.0D, -40.0D, 0.0D);
                 }
                 default ->
                 {
+                    // The imported 1.7 world can carry a night timestamp.
+                    // Pin only the unattended evidence frame to noon so the
+                    // surface geometry remains inspectable; gameplay time is
+                    // still server-authoritative outside this capture.
+                    minecraft.level.setDayTime(6000L);
                     target = unit.position().add(0.0D, 14.0D, 0.0D);
                     cameraPos = target.add(forward.scale(52.0D))
                             .add(right.scale(28.0D)).add(0.0D, 18.0D, 0.0D);
@@ -772,12 +821,19 @@ public final class VisualCaptureManager
         }
     }
 
-    /** Five audited views of the GeoFront cavern and NERV command interior. */
+    /** Audited views from the living cavern landscape to Terminal Dogma. */
     private static final class GeoFrontSession
     {
         private static final int INITIAL_SETTLE_TICKS = 180;
+        private static final int MAX_CHUNK_WAIT_TICKS = 400;
+        private static final int TRACKING_RETRY_TICKS = 40;
+        private static final int POST_LOAD_RENDER_TICKS = 20;
         private static final String[] VIEWS = {
-                "cavern_overview", "nerv_pyramid", "nerv_operations",
+                "cavern_overview", "natural_lake", "forest_canopy",
+                "nerv_pyramid", "nerv_operations",
+                "nerv_support_gallery", "nerv_briefing_room",
+                "nerv_medical_support", "nerv_pressure_vestibule",
+                "central_dogma_descent", "terminal_dogma",
                 "lcl_lake", "lift_terminals"
         };
         private static final int[] LIFT_X = {-28, 0, 28};
@@ -791,8 +847,10 @@ public final class VisualCaptureManager
         private int settleTicks = INITIAL_SETTLE_TICKS;
         private int view;
         private boolean positioned;
-        private boolean audited;
+        private final boolean[] evidence = new boolean[VIEWS.length];
+        private int chunkWaitTicks;
 
+        private int renderSettleTicks;
         GeoFrontSession(BlockPos origin, Minecraft minecraft)
         {
             this.origin = origin.immutable();
@@ -812,6 +870,8 @@ public final class VisualCaptureManager
             }
             if (!this.positioned)
             {
+                SeeleNetwork.CHANNEL.sendToServer(
+                        new ServerboundGeoFrontCameraPacket(this.view));
                 this.position(minecraft);
                 this.positioned = true;
                 return true;
@@ -821,17 +881,54 @@ public final class VisualCaptureManager
             {
                 return true;
             }
-            if (!this.audited)
+            if (!this.viewChunksLoaded(minecraft)
+                    && this.chunkWaitTicks < MAX_CHUNK_WAIT_TICKS)
             {
-                this.audit(minecraft);
-                this.audited = true;
+                this.chunkWaitTicks++;
+                if (this.chunkWaitTicks % TRACKING_RETRY_TICKS == 1)
+                {
+                    SeeleNetwork.CHANNEL.sendToServer(
+                            new ServerboundGeoFrontCameraPacket(this.view));
+                    ProjectSeele.LOGGER.info(
+                            "Waiting for GeoFront view chunks: view={} waited={}/{}",
+                            VIEWS[this.view], this.chunkWaitTicks,
+                            MAX_CHUNK_WAIT_TICKS);
+                }
+                return true;
             }
+            this.chunkWaitTicks = 0;
+            if (this.renderSettleTicks++ < POST_LOAD_RENDER_TICKS)
+            {
+                return true;
+            }
+            this.renderSettleTicks = 0;
+            this.evidence[this.view] = this.auditView(minecraft);
             this.capture(minecraft);
             this.view++;
             if (this.view >= VIEWS.length)
             {
                 ProjectSeele.LOGGER.info(
-                        "GeoFront visual matrix finished: five audited map views captured");
+                        "GeoFront visual matrix finished: {} audited map views captured",
+                        VIEWS.length);
+                boolean valid = true;
+                StringBuilder summary = new StringBuilder();
+                for (int index = 0; index < VIEWS.length; index++)
+                {
+                    valid &= this.evidence[index];
+                    if (index > 0)
+                    {
+                        summary.append(' ');
+                    }
+                    summary.append(VIEWS[index]).append('=')
+                            .append(this.evidence[index]);
+                }
+                ProjectSeele.LOGGER.info(
+                        "GeoFront per-view evidence: {} valid={}", summary, valid);
+                if (!valid)
+                {
+                    ProjectSeele.LOGGER.error(
+                            "VISUAL GEOFRONT INVALID: a visible camera landmark was missing");
+                }
                 if (Boolean.getBoolean("projectseele.visualCapture"))
                 {
                     shutdownTicks = 30;
@@ -839,26 +936,195 @@ public final class VisualCaptureManager
                 return false;
             }
             this.positioned = false;
-            this.settleTicks = 18;
+            this.chunkWaitTicks = 0;
+            this.renderSettleTicks = 0;
+            // Chunk delivery follows the real server player. Give each new
+            // tracking midpoint four seconds instead of capturing a void
+            // horizon one second after the teleport packet.
+            this.settleTicks = 80;
             return true;
+        }
+
+        private boolean viewChunksLoaded(Minecraft minecraft)
+        {
+            if (this.camera == null
+                    || !minecraft.level.hasChunkAt(this.camera.blockPosition()))
+            {
+                return false;
+            }
+            if (VIEWS[this.view].equals("lift_terminals"))
+            {
+                for (int x : LIFT_X)
+                {
+                    if (!minecraft.level.hasChunkAt(
+                            this.origin.offset(x, 1, -76)))
+                    {
+                        return false;
+                    }
+                }
+                return true;
+            }
+            BlockPos landmark = switch (VIEWS[this.view])
+            {
+                case "natural_lake" -> this.origin.offset(-125, 0, -125);
+                case "forest_canopy" -> this.origin.offset(-105, 4, 80);
+                case "nerv_pyramid" -> this.origin.offset(0,
+                        GeoFrontBuilder.PYRAMID_APEX_Y + 1,
+                        GeoFrontBuilder.PYRAMID_CENTRE_Z);
+                case "nerv_operations" -> this.origin.offset(29, 57, 97);
+                case "nerv_support_gallery" ->
+                        this.origin.offset(1, -5, 95);
+                case "nerv_briefing_room" ->
+                        this.origin.offset(-43, -4, 82);
+                case "nerv_medical_support" ->
+                        this.origin.offset(39, -4, 82);
+                case "nerv_pressure_vestibule" ->
+                        this.origin.offset(-1, -21, -34);
+                case "central_dogma_descent" ->
+                        this.origin.offset(42, -94, -27);
+                case "terminal_dogma" -> this.origin.offset(0, -139, 0);
+                case "lcl_lake" -> this.origin.offset(48, 1, 0);
+                default -> this.origin.offset(-128, 0, -96);
+            };
+            return minecraft.level.hasChunkAt(landmark);
+        }
+
+        private boolean auditView(Minecraft minecraft)
+        {
+            boolean dimension = minecraft.level.dimension().location().equals(
+                    new ResourceLocation(ProjectSeele.MODID, "geofront"));
+            boolean landmark;
+            switch (VIEWS[this.view])
+            {
+                case "natural_lake" -> landmark = minecraft.level.getFluidState(
+                        this.origin.offset(-125, 0, -125)).is(Fluids.WATER);
+                case "forest_canopy" ->
+                {
+                    landmark = false;
+                    for (int y = -2; y <= 8; y++)
+                    {
+                        landmark |= minecraft.level.getBlockState(
+                                this.origin.offset(-105, y, 80))
+                                .is(Blocks.STRIPPED_DARK_OAK_LOG);
+                    }
+                }
+                case "nerv_pyramid" -> landmark = minecraft.level.getBlockState(
+                        this.origin.offset(0, GeoFrontBuilder.PYRAMID_APEX_Y + 1,
+                                GeoFrontBuilder.PYRAMID_CENTRE_Z)).is(Blocks.BEACON);
+                case "nerv_operations" -> landmark = minecraft.level.getBlockState(
+                        this.origin.offset(29, 57, 97)).is(Blocks.LODESTONE);
+                case "nerv_support_gallery" -> landmark =
+                        minecraft.level.getBlockState(
+                                this.origin.offset(1, -5, 95))
+                                .is(Blocks.POLISHED_DEEPSLATE)
+                                && minecraft.level.getBlockState(
+                                this.origin.offset(0, -2, 98))
+                                .is(Blocks.GRAY_STAINED_GLASS)
+                                && minecraft.level.getBlockState(
+                                this.origin.offset(-18, -4, 94)).isAir()
+                                && minecraft.level.getBlockState(
+                                this.origin.offset(18, -4, 94)).isAir();
+                case "nerv_briefing_room" -> landmark =
+                        minecraft.level.getBlockState(
+                                this.origin.offset(-43, -4, 82))
+                                .is(Blocks.SEA_LANTERN)
+                                && minecraft.level.getBlockState(
+                                this.origin.offset(-43, 0, 71))
+                                .is(Blocks.RED_STAINED_GLASS);
+                case "nerv_medical_support" -> landmark =
+                        minecraft.level.getBlockState(
+                                this.origin.offset(39, -4, 82))
+                                .is(Blocks.SMOOTH_QUARTZ_SLAB)
+                                && minecraft.level.getBlockState(
+                                this.origin.offset(36, -3, 82))
+                                .is(Blocks.SEA_LANTERN);                case "nerv_pressure_vestibule" -> landmark =
+                        minecraft.level.getBlockState(
+                                this.origin.offset(-1, -21, -34))
+                                .is(Blocks.POLISHED_BLACKSTONE)
+                                && minecraft.level.getBlockState(
+                                this.origin.offset(-1, -20, -33)).isAir()
+                                && minecraft.level.getBlockState(
+                                this.origin.offset(-1, -18, -42))
+                                .is(Blocks.ORANGE_STAINED_GLASS);
+                case "central_dogma_descent" -> landmark = minecraft.level.getBlockState(
+                        this.origin.offset(42, -94, -27)).is(Blocks.LADDER)
+                        && !minecraft.level.getBlockState(
+                        this.origin.offset(24, -123, -10)).isAir();
+                case "terminal_dogma" -> landmark = minecraft.level.getFluidState(
+                        this.origin.offset(0, -139, 0)).getFluidType()
+                        == com.projectseele.registry.ModFluids.LCL_TYPE.get()
+                        && minecraft.level.getBlockState(
+                        this.origin.offset(0, -114, -25)).is(Blocks.REDSTONE_BLOCK);
+                case "lcl_lake" -> landmark = minecraft.level.getFluidState(
+                        this.origin.offset(48, 1, 0)).getFluidType()
+                        == com.projectseele.registry.ModFluids.LCL_TYPE.get();
+                case "lift_terminals" ->
+                {
+                    int terminals = 0;
+                    for (int x : LIFT_X)
+                    {
+                        if (minecraft.level.getBlockState(
+                                this.origin.offset(x, 1, -76)).is(Blocks.LODESTONE))
+                        {
+                            terminals++;
+                        }
+                    }
+                    landmark = terminals == 3;
+                }
+                default -> landmark = minecraft.level.getFluidState(
+                        this.origin.offset(-128, 0, -96)).is(Fluids.WATER);
+            }
+            boolean valid = dimension && landmark;
+            ProjectSeele.LOGGER.info(
+                    "GeoFront visual view evidence: view={} dimension={} landmark={} valid={}",
+                    VIEWS[this.view], dimension, landmark, valid);
+            return valid;
         }
 
         private void audit(Minecraft minecraft)
         {
-            boolean floor = minecraft.level.getBlockState(
-                    this.origin.offset(100, 0, 0)).is(Blocks.DEEPSLATE_TILES);
-            var wallState = minecraft.level.getBlockState(
-                    this.origin.offset(112, 32, 0));
-            boolean wall = wallState.is(Blocks.DEEPSLATE)
-                    || wallState.is(Blocks.CALCITE)
-                    || wallState.is(Blocks.POLISHED_BASALT);
-            boolean lake = minecraft.level.getFluidState(
+            boolean floor = minecraft.level.getBlockState(this.origin.offset(
+                    150, 0, GeoFrontBuilder.CAVERN_CENTRE_Z)).is(Blocks.GRASS_BLOCK);
+            BlockPos sphereCentre = GeoFrontBuilder.cavernCentre(this.origin);
+            BlockPos canopySample = sphereCentre.offset(64, 248, 0);
+            ResourceLocation canopyId = BuiltInRegistries.BLOCK.getKey(
+                    minecraft.level.getBlockState(canopySample).getBlock());
+            boolean skyweaveCanopy = canopyId.equals(
+                    new ResourceLocation("ars_nouveau", "sky_block"));
+            boolean lclLake = minecraft.level.getFluidState(
                     this.origin.offset(48, 1, 0)).getFluidType()
                     == com.projectseele.registry.ModFluids.LCL_TYPE.get();
-            boolean pyramid = minecraft.level.getBlockState(
-                    this.origin.offset(0, 29, 0)).is(Blocks.BEACON);
-            boolean sun = minecraft.level.getBlockState(
-                    this.origin.offset(0, 88, 0)).is(Blocks.SEA_LANTERN);
+            boolean naturalLake = minecraft.level.getFluidState(
+                    this.origin.offset(-125, 0, -125)).is(Fluids.WATER);
+            boolean pyramid = minecraft.level.getBlockState(this.origin.offset(
+                    -GeoFrontBuilder.PYRAMID_BASE_HALF_X,
+                    GeoFrontBuilder.PYRAMID_BASE_Y,
+                    GeoFrontBuilder.PYRAMID_BASE_CENTRE_Z
+                            - GeoFrontBuilder.PYRAMID_BASE_HALF_Z))
+                    .is(Blocks.CHISELED_DEEPSLATE)
+                    && minecraft.level.getBlockState(this.origin.offset(
+                    0, GeoFrontBuilder.PYRAMID_APEX_Y + 1,
+                    GeoFrontBuilder.PYRAMID_CENTRE_Z)).is(Blocks.BEACON);
+            boolean legacyInnerGone = minecraft.level.getBlockState(
+                    this.origin.offset(34, 2, 0)).isAir()
+                    && minecraft.level.getBlockState(
+                    this.origin.offset(0, 2, -34)).isAir();
+            var oldSun = minecraft.level.getBlockState(this.origin.offset(0, 88, 0));
+            boolean artificialSunGone = !oldSun.is(Blocks.SEA_LANTERN)
+                    && !oldSun.is(Blocks.YELLOW_STAINED_GLASS)
+                    && !oldSun.is(Blocks.LIGHT);
+            var road = minecraft.level.getBlockState(this.origin.offset(100, 0, 74));
+            boolean serviceRoad = road.is(Blocks.BLACK_CONCRETE)
+                    || road.is(Blocks.LIGHT_GRAY_CONCRETE);
+            boolean forest = false;
+            for (int x : new int[] {-105, 105})
+            {
+                for (int y = -2; y <= 6; y++)
+                {
+                    forest |= minecraft.level.getBlockState(
+                            this.origin.offset(x, y, 80)).is(Blocks.STRIPPED_DARK_OAK_LOG);
+                }
+            }
             int lifts = 0;
             int gantries = 0;
             for (int x : LIFT_X)
@@ -886,6 +1152,19 @@ public final class VisualCaptureManager
                     this.origin.offset(0, 11, -20)).is(Blocks.RED_STAINED_GLASS);
             boolean accessStairs = minecraft.level.getBlockState(
                     this.origin.offset(-13, 2, 22)).is(Blocks.SMOOTH_QUARTZ_STAIRS);
+            boolean centralDogma = minecraft.level.getBlockState(
+                    this.origin.offset(42, -30, -27)).is(Blocks.LADDER)
+                    && !minecraft.level.getBlockState(
+                            this.origin.offset(24, -59, -10)).isAir();
+            boolean terminalDogma = minecraft.level.getFluidState(
+                    this.origin.offset(0, -75, 0)).getFluidType()
+                    == com.projectseele.registry.ModFluids.LCL_TYPE.get()
+                    && minecraft.level.getBlockState(
+                            this.origin.offset(0, -50, -25)).is(Blocks.REDSTONE_BLOCK)
+                    && minecraft.level.getBlockState(
+                            this.origin.offset(20, -50, -23)).is(Blocks.RED_STAINED_GLASS)
+                    && minecraft.level.getBlockState(
+                            this.origin.offset(0, -59, 22)).is(Blocks.LODESTONE);
             int transitLinks = 0;
             for (int x : LIFT_X)
             {
@@ -897,18 +1176,25 @@ public final class VisualCaptureManager
                     transitLinks++;
                 }
             }
-            boolean valid = floor && wall && lake && pyramid && sun
+            boolean valid = floor && skyweaveCanopy && lclLake && naturalLake
+                    && forest && serviceRoad && pyramid && legacyInnerGone
+                    && artificialSunGone
                     && lifts == 3 && gantries == 3 && bridge && observation
                     && operations && tacticalDisplay && accessStairs
-                    && transitLinks == 3;
+                    && transitLinks == 3 && centralDogma && terminalDogma;
             ProjectSeele.LOGGER.info(
-                    "GeoFront visual evidence: floor={} wall={} lclLake={} "
-                            + "nervPyramid={} artificialSun={} lifts={}/3 gantries={}/3 "
+                    "GeoFront visual evidence: floor={} skyweaveCanopy={} realSky={} "
+                            + "lclLake={} naturalLake={} forest={} serviceRoad={} "
+                            + "nervPyramid={} legacyInnerGone={} artificialSunGone={} "
+                            + "lifts={}/3 gantries={}/3 "
                             + "commandBridge={} observation={} operations={} display={} "
-                            + "stairs={} transit={}/3 valid={}",
-                    floor, wall, lake, pyramid, sun, lifts, gantries,
+                            + "stairs={} transit={}/3 centralDogma={} terminalDogma={} valid={}",
+                    floor, skyweaveCanopy, skyweaveCanopy, lclLake, naturalLake,
+                    forest, serviceRoad, pyramid, legacyInnerGone, artificialSunGone,
+                    lifts, gantries,
                     bridge, observation, operations, tacticalDisplay,
-                    accessStairs, transitLinks, valid);
+                    accessStairs, transitLinks, centralDogma, terminalDogma,
+                    valid);
             if (!valid)
             {
                 ProjectSeele.LOGGER.error(
@@ -944,13 +1230,75 @@ public final class VisualCaptureManager
             {
                 case "nerv_pyramid" ->
                 {
-                    cameraPos = base.add(72.0D, 38.0D, 70.0D);
-                    target = base.add(0.0D, 14.0D, 0.0D);
+                    // The command module now sits completely inside a long,
+                    // full-height pyramid. A far north-west cavern camera
+                    // keeps the base, shoulder and apex in one frame while
+                    // avoiding the three launch terminals as foreground walls.
+                    cameraPos = base.add(-86.0D, 50.0D, -69.0D);
+                    target = base.add(0.0D, 30.0D, 31.0D);
+                }
+                case "natural_lake" ->
+                {
+                    cameraPos = base.add(-162.0D, 28.0D, -90.0D);
+                    target = base.add(-125.0D, 1.0D, -125.0D);
+                }
+                case "forest_canopy" ->
+                {
+                    cameraPos = base.add(-70.0D, 32.0D, 125.0D);
+                    target = base.add(-105.0D, 7.0D, 80.0D);
                 }
                 case "nerv_operations" ->
                 {
-                    cameraPos = base.add(0.0D, 11.0D, 18.0D);
-                    target = base.add(0.0D, 10.5D, -19.0D);
+                    // The live panels sit at z=58 in the imported bridge.
+                    // Frame them directly instead of treating the whole
+                    // 129-block command module as a distant landmark.
+                    // Keep the complete five-screen wall and all seven
+                    // operator stations inside the horizontal FOV.  The
+                    // former close, left-offset camera clipped BATTLE ABORT.
+                    cameraPos = base.add(0.0D, 23.0D, 74.0D);
+                    target = base.add(0.0D, 21.0D, 57.0D);
+                }
+                case "nerv_support_gallery" ->
+                {
+                    // The downloaded bridge's three north exits now open into
+                    // a sealed observation gallery with furnished support rooms
+                    // on both sides. Shoot diagonally so the real doorways and
+                    // pressure-safe glass boundary are visible together.
+                    cameraPos = base.add(-12.0D, -1.0D, 97.0D);
+                    target = base.add(18.0D, -1.0D, 95.0D);
+                }
+                case "nerv_briefing_room" ->
+                {
+                    cameraPos = base.add(-49.0D, 0.0D, 91.0D);
+                    target = base.add(-43.0D, -2.0D, 82.0D);
+                }
+                case "nerv_medical_support" ->
+                {
+                    cameraPos = base.add(49.0D, 0.0D, 91.0D);
+                    target = base.add(40.0D, -2.0D, 82.0D);
+                }
+                case "nerv_pressure_vestibule" ->
+                {
+                    // Prove the source module's only south service exit lands
+                    // on a lit floor inside a sealed vestibule, never a cliff.
+                    cameraPos = base.add(-1.0D, -17.0D, -39.0D);
+                    target = base.add(-1.0D, -18.5D, -33.0D);
+                }
+                case "central_dogma_descent" ->
+                {
+                    // Stand inside the shaft beside the widened landing
+                    // apertures and look down the continuous ladder column.
+                    cameraPos = base.add(42.0D, -5.0D, -26.0D);
+                    target = base.add(42.0D, -112.0D, -27.0D);
+                }
+                case "terminal_dogma" ->
+                {
+                    // The south observation balcony frames the complete red
+                    // cross, sealed giant, spear and dedicated LCL pool.
+                    // A slight west offset keeps the giant centred while the
+                    // east-entering forked spear remains visibly diagonal.
+                    cameraPos = base.add(-10.0D, -118.0D, 21.0D);
+                    target = base.add(0.0D, -116.0D, -22.0D);
                 }
                 case "lcl_lake" ->
                 {
@@ -959,13 +1307,16 @@ public final class VisualCaptureManager
                 }
                 case "lift_terminals" ->
                 {
-                    cameraPos = base.add(0.0D, 34.0D, -108.0D);
-                    target = base.add(0.0D, 10.0D, -68.0D);
+                    // The rear/north side is the solid guide-wall face. View
+                    // from the south service gantries so all three bays and
+                    // entry-plug decks share one unobstructed frame.
+                    cameraPos = base.add(0.0D, 18.0D, -38.0D);
+                    target = base.add(0.0D, 14.0D, -76.0D);
                 }
                 default ->
                 {
-                    cameraPos = base.add(0.0D, 62.0D, 104.0D);
-                    target = base.add(0.0D, 32.0D, 0.0D);
+                    cameraPos = base.add(-128.0D, 55.0D, -96.0D);
+                    target = base.add(0.0D, 48.0D, -10.0D);
                 }
             }
             this.camera.setPos(cameraPos.x,
@@ -1001,6 +1352,8 @@ public final class VisualCaptureManager
 
         void restore(Minecraft minecraft)
         {
+            SeeleNetwork.CHANNEL.sendToServer(
+                    new ServerboundGeoFrontCameraPacket(-1));
             minecraft.setCameraEntity(
                     this.originalCamera != null ? this.originalCamera : minecraft.player);
             minecraft.options.setCameraType(this.originalCameraType);
@@ -1016,14 +1369,15 @@ public final class VisualCaptureManager
         private static final String[] VIEWS = {
                 "skyline_overview", "sortie_street", "power_grid", "battle_plaza"
         };
-        private static final int[] LOT_CENTRES = {-80, -40, 0, 40, 80};
+        private static final int[] LOT_CENTRES =
+                {-160, -120, -80, -40, 0, 40, 80, 120, 160};
         private static final int[][] ROAD_POINTS = {
-                {-100, -100}, {-100, 100}, {100, -100}, {100, 100},
-                {-60, -100}, {60, 100}, {-100, 60}, {100, -60},
+                {-180, -180}, {-180, 180}, {180, -180}, {180, 180},
+                {-140, -180}, {140, 180}, {-180, 140}, {180, -140},
         };
         private static final int[][] PYLONS = {
-                {-100, -80}, {-100, 0}, {-100, 80},
-                {100, -80}, {100, 0}, {100, 80},
+                {-180, -160}, {-180, 0}, {-180, 160},
+                {180, -160}, {180, 0}, {180, 160},
         };
 
         private final BlockPos origin;
@@ -1034,19 +1388,21 @@ public final class VisualCaptureManager
         private final LocalVisualAssetFingerprint.Fingerprint unit00Fingerprint;
         private final LocalVisualAssetFingerprint.Fingerprint unit01Fingerprint;
         private final LocalVisualAssetFingerprint.Fingerprint unit02Fingerprint;
+        private final boolean battle;
         private ArmorStand camera;
         private int settleTicks = INITIAL_SETTLE_TICKS;
         private int view;
         private boolean positioned;
         private boolean audited;
 
-        Tokyo3Session(BlockPos origin, Minecraft minecraft)
+        Tokyo3Session(BlockPos origin, Minecraft minecraft, boolean battle)
         {
             this.origin = origin.immutable();
             this.originalCamera = minecraft.getCameraEntity();
             this.originalCameraType = minecraft.options.getCameraType();
             this.originalHideGui = minecraft.options.hideGui;
             this.originalCloudStatus = minecraft.options.cloudStatus().get();
+            this.battle = battle;
             this.unit00Fingerprint = EvaUnit01Renderer.visualFingerprintForVariant(
                     EvaUnit01Entity.UNIT_00);
             this.unit01Fingerprint = EvaUnit01Renderer.visualFingerprintForVariant(
@@ -1054,8 +1410,8 @@ public final class VisualCaptureManager
             this.unit02Fingerprint = EvaUnit01Renderer.visualFingerprintForVariant(
                     EvaUnit01Entity.UNIT_02);
             ProjectSeele.LOGGER.info(
-                    "Tokyo-3 visual capture batch {} at {} uses unit00={} unit01={} unit02={}",
-                    CAPTURE_BATCH, this.origin,
+                    "Tokyo-3 visual capture batch {} at {} battle={} uses unit00={} unit01={} unit02={}",
+                    CAPTURE_BATCH, this.origin, this.battle,
                     this.unit00Fingerprint.compactTag(),
                     this.unit01Fingerprint.compactTag(),
                     this.unit02Fingerprint.compactTag());
@@ -1118,6 +1474,10 @@ public final class VisualCaptureManager
 
         private void audit(Minecraft minecraft)
         {
+            boolean imported = LocalMapAssetLoader.importedTokyo3MarkerPresent(
+                    minecraft.level, this.origin);
+            int privateSkyscrapers = LocalMapAssetLoader.inspectTokyo3Skyscrapers(
+                    minecraft.level, this.origin);
             int roads = 0;
             for (int[] point : ROAD_POINTS)
             {
@@ -1139,7 +1499,10 @@ public final class VisualCaptureManager
                     if (Math.abs(x) <= 40 && Math.abs(z) <= 40
                             || (x == 0 && z == -80)
                             || (x == 80 && z == 0)
-                            || (x == 0 && z == 80))
+                            || (x == 0 && z == 80)
+                            || (x == -120 && z == -80)
+                            || (x == 120 && z == -80)
+                            || (x == 120 && z == 80))
                     {
                         continue;
                     }
@@ -1162,9 +1525,13 @@ public final class VisualCaptureManager
                     pylons++;
                 }
             }
-            AABB cages = new AABB(this.origin).inflate(80.0D, 64.0D, 80.0D);
+            AABB cages = new AABB(this.origin).inflate(96.0D, 96.0D, 96.0D);
             var units = minecraft.level.getEntitiesOfClass(
                     EvaUnit01Entity.class, cages, Entity::isAlive);
+            int ramielCount = minecraft.level.getEntitiesOfClass(
+                    RamielEntity.class,
+                    new AABB(this.origin).inflate(192.0D, 128.0D, 192.0D),
+                    Entity::isAlive).size();
             boolean variants = units.stream().anyMatch(
                     unit -> unit.getUnitVariant() == EvaUnit01Entity.UNIT_00)
                     && units.stream().anyMatch(
@@ -1174,25 +1541,43 @@ public final class VisualCaptureManager
             boolean battleBeacon = minecraft.level.getBlockState(
                     this.origin.offset(0, 1, 80)).is(Blocks.BEACON);
             boolean observation = minecraft.level.getBlockState(
-                    this.origin.offset(0, 38, 112)).is(Blocks.LODESTONE);
+                    this.origin.offset(0, 38, 216)).is(Blocks.LODESTONE);
             boolean foundation = minecraft.level.getBlockState(
-                    this.origin.offset(120, -4, 0)).is(Blocks.DEEPSLATE_BRICKS);
-            boolean valid = roads == 8 && towers == 13 && pylons == 6
-                    && units.size() == 3 && variants && battleBeacon && observation
-                    && foundation
+                    this.origin.offset(224, -4, 0)).is(Blocks.DEEPSLATE_BRICKS);
+            int surfaceBeds = 0;
+            for (IntegratedNervMapBuilder.LiftLink lift
+                    : IntegratedNervMapBuilder.liftLinks())
+            {
+                if (minecraft.level.getBlockState(lift.surfaceBed())
+                        .is(Blocks.LODESTONE))
+                {
+                    surfaceBeds++;
+                }
+            }
+            boolean towerState = this.battle ? towers == 0 : towers == 66;
+            boolean battleState = !this.battle || ramielCount == 1;
+            boolean generatedCity = roads == 8 && towerState && pylons == 6
+                    && battleBeacon && observation && foundation;
+            boolean privateAssets = !imported || privateSkyscrapers == 3;
+            boolean cityGeometry = generatedCity && privateAssets
+                    && surfaceBeds == 3;
+            boolean valid = cityGeometry && battleState
+                    && units.size() == 3 && variants
                     && this.unit00Fingerprint.valid()
                     && this.unit01Fingerprint.valid()
                     && this.unit02Fingerprint.valid();
             ProjectSeele.LOGGER.info(
-                    "Tokyo-3 visual evidence: roads={}/8 towers={}/13 pylons={}/6 "
+                    "Tokyo-3 visual evidence: battle={} ramiel={} imported={} skyscrapers={}/3 "
+                            + "surfaceBeds={}/3 roads={}/8 towers={}/66 pylons={}/6 "
                             + "units={} variants00/01/02={} battleBeacon={} "
                             + "observation={} foundation={} valid={}",
+                    this.battle, ramielCount, imported, privateSkyscrapers, surfaceBeds,
                     roads, towers, pylons, units.size(), variants,
                     battleBeacon, observation, foundation, valid);
             if (!valid)
             {
                 ProjectSeele.LOGGER.error(
-                        "VISUAL TOKYO3 INVALID: city structure, three launch EVAs, "
+                        "VISUAL TOKYO3 INVALID: city/battle state, three launch EVAs, "
                                 + "or required high-detail model fingerprints are incomplete");
             }
         }
@@ -1219,10 +1604,43 @@ public final class VisualCaptureManager
 
         private void maintainCamera(Minecraft minecraft)
         {
+            // Legacy source level time can arrive one packet late after the
+            // dimension switch. Only the unattended review client is pinned
+            // to noon and clear weather; ordinary play keeps the natural
+            // day/night and weather cycle.
+            minecraft.level.setDayTime(6000L);
+            minecraft.level.setRainLevel(0.0F);
+            minecraft.level.setThunderLevel(0.0F);
             Vec3 base = Vec3.atLowerCornerOf(this.origin);
             Vec3 target;
             Vec3 cameraPos;
-            switch (VIEWS[this.view])
+            if (this.battle)
+            {
+                switch (VIEWS[this.view])
+                {
+                    case "sortie_street" ->
+                    {
+                        cameraPos = base.add(-58.0D, 30.0D, 142.0D);
+                        target = base.add(0.0D, 36.0D, 80.0D);
+                    }
+                    case "power_grid" ->
+                    {
+                        cameraPos = base.add(92.0D, 62.0D, 146.0D);
+                        target = base.add(0.0D, 38.0D, 72.0D);
+                    }
+                    case "battle_plaza" ->
+                    {
+                        cameraPos = base.add(-30.0D, 48.0D, 124.0D);
+                        target = base.add(0.0D, 46.0D, 80.0D);
+                    }
+                    default ->
+                    {
+                        cameraPos = base.add(0.0D, 64.0D, 158.0D);
+                        target = base.add(0.0D, 38.0D, 72.0D);
+                    }
+                }
+            }
+            else switch (VIEWS[this.view])
             {
                 case "sortie_street" ->
                 {
@@ -1263,7 +1681,8 @@ public final class VisualCaptureManager
                 File batch = new File(minecraft.gameDirectory,
                         "screenshots/projectseele_visual/" + CAPTURE_BATCH);
                 Files.createDirectories(batch.toPath());
-                String filename = "tokyo3_" + VIEWS[this.view] + ".png";
+                String prefix = this.battle ? "tokyo3_battle_" : "tokyo3_";
+                String filename = prefix + VIEWS[this.view] + ".png";
                 Screenshot.grab(minecraft.gameDirectory,
                         "projectseele_visual/" + CAPTURE_BATCH + "/" + filename,
                         minecraft.getMainRenderTarget(), message -> ProjectSeele.LOGGER.info(
@@ -1297,11 +1716,13 @@ public final class VisualCaptureManager
     /** Four synchronized skyline frames proving the complete tower travel cycle. */
     private static final class Tokyo3RetractionSession
     {
-        private static final int MAX_DEPTH = 42;
-        private static final int MID_DEPTH = MAX_DEPTH / 2;
+        private static final int MAX_DEPTH =
+                ThirdTokyoSurfaceBuilder.maximumRetractionDepth();
+        private static final int MID_DEPTH = 21;
         private static final int REQUIRED_STABLE_TICKS = 12;
-        private static final int TIMEOUT_TICKS = 2600;
-        private static final int[] LOT_CENTRES = {-80, -40, 0, 40, 80};
+        private static final int TIMEOUT_TICKS = 15000;
+        private static final int[] LOT_CENTRES =
+                {-160, -120, -80, -40, 0, 40, 80, 120, 160};
         private static final String[] STAGES = {
                 "deployed", "mid_descent", "fully_retracted", "restored"
         };
@@ -1363,9 +1784,10 @@ public final class VisualCaptureManager
 
             ProjectSeele.LOGGER.info(
                     "Tokyo-3 retraction visual evidence: stage={} depth={} "
-                            + "towerStates={}/13 cores={}/13 armed={}/13 valid={}",
+                            + "towerStates={}/66 ceilingStates={}/66 "
+                            + "cores={}/66 armed={}/66 valid={}",
                     STAGES[this.stage], DEPTHS[this.stage], audit.towers(),
-                    audit.cores(), audit.armed(), audit.valid());
+                    audit.ceiling(), audit.cores(), audit.armed(), audit.valid());
             this.capture(minecraft, STAGES[this.stage]);
             this.stage++;
             this.stableTicks = 0;
@@ -1386,6 +1808,7 @@ public final class VisualCaptureManager
         private Audit audit(Minecraft minecraft, int depth, boolean expectedArmed)
         {
             int towers = 0;
+            int ceiling = 0;
             int cores = 0;
             int armed = 0;
             for (int x : LOT_CENTRES)
@@ -1395,7 +1818,10 @@ public final class VisualCaptureManager
                     if (Math.abs(x) <= 40 && Math.abs(z) <= 40
                             || (x == 0 && z == -80)
                             || (x == 80 && z == 0)
-                            || (x == 0 && z == 80))
+                            || (x == 0 && z == 80)
+                            || (x == -120 && z == -80)
+                            || (x == 120 && z == -80)
+                            || (x == 120 && z == 80))
                     {
                         continue;
                     }
@@ -1417,6 +1843,26 @@ public final class VisualCaptureManager
                     {
                         towers++;
                     }
+                    ThirdTokyoSurfaceBuilder.TowerSpec tower =
+                            new ThirdTokyoSurfaceBuilder.TowerSpec(
+                                    x, z, towerHeight(x, z), 12, false);
+                    int roofY = ThirdTokyoSurfaceBuilder.ceilingRoofRelativeY(tower);
+                    int travelDepth = Math.max(tower.height(), -roofY);
+                    int ceilingVisible = Math.max(0, Math.min(tower.height(),
+                            depth - travelDepth));
+                    boolean ceilingSignature = ceilingVisible == 0
+                            ? minecraft.level.getBlockState(
+                            this.origin.offset(x, roofY, z)).isAir()
+                            : minecraft.level.getBlockState(
+                            this.origin.offset(x, roofY, z))
+                            .is(Blocks.REDSTONE_LAMP)
+                            && minecraft.level.getBlockState(this.origin.offset(
+                            x, roofY - ceilingVisible - 1, z))
+                            .is(Blocks.SEA_LANTERN);
+                    if (ceilingSignature)
+                    {
+                        ceiling++;
+                    }
                     var core = minecraft.level.getBlockState(this.origin.offset(x, 0, z));
                     if (core.is(ModBlocks.RETRACTABLE_BUILDING_CORE.get()))
                     {
@@ -1428,9 +1874,10 @@ public final class VisualCaptureManager
                     }
                 }
             }
-            int expectedArmedCount = expectedArmed ? 13 : 0;
-            return new Audit(towers, cores, armed,
-                    towers == 13 && cores == 13 && armed == expectedArmedCount);
+            int expectedArmedCount = expectedArmed ? 66 : 0;
+            return new Audit(towers, ceiling, cores, armed,
+                    towers == 66 && ceiling == 66
+                            && cores == 66 && armed == expectedArmedCount);
         }
 
         private void position(Minecraft minecraft)
@@ -1453,8 +1900,18 @@ public final class VisualCaptureManager
         private void maintainCamera(Minecraft minecraft)
         {
             Vec3 base = Vec3.atLowerCornerOf(this.origin);
-            Vec3 cameraPos = base.add(0.0D, 62.0D, 148.0D);
-            Vec3 target = base.add(0.0D, 15.0D, 0.0D);
+            Vec3 cameraPos;
+            Vec3 target;
+            if (this.stage == 2)
+            {
+                cameraPos = base.add(0.0D, -250.0D, 260.0D);
+                target = base.add(0.0D, -180.0D, 0.0D);
+            }
+            else
+            {
+                cameraPos = base.add(0.0D, 90.0D, 300.0D);
+                target = base.add(0.0D, 18.0D, 0.0D);
+            }
             this.camera.setPos(cameraPos.x,
                     cameraPos.y - this.camera.getEyeHeight(), cameraPos.z);
             lookAt(this.camera, cameraPos, target);
@@ -1503,7 +1960,8 @@ public final class VisualCaptureManager
             return 22 + Math.floorMod(gridX * 31 + gridZ * 17, 6) * 4;
         }
 
-        private record Audit(int towers, int cores, int armed, boolean valid) {}
+        private record Audit(int towers, int ceiling, int cores, int armed,
+                             boolean valid) {}
     }
 
     /** Fixed multi-angle capture of the complete Tree, rather than one entity. */

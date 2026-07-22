@@ -1,8 +1,10 @@
 package com.projectseele;
 
+import com.projectseele.capability.EvaPilotData;
 import com.projectseele.entity.EvaUnit01Entity;
 import com.projectseele.entity.RamielEntity;
 import com.projectseele.registry.ModEntities;
+import net.minecraftforge.common.capabilities.RegisterCapabilitiesEvent;
 import net.minecraftforge.event.entity.EntityAttributeCreationEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
@@ -10,6 +12,12 @@ import net.minecraftforge.fml.common.Mod;
 @Mod.EventBusSubscriber(modid = ProjectSeele.MODID, bus = Mod.EventBusSubscriber.Bus.MOD)
 public class CommonEvents
 {
+    @SubscribeEvent
+    public static void onRegisterCapabilities(RegisterCapabilitiesEvent event)
+    {
+        event.register(EvaPilotData.class);
+    }
+
     @SubscribeEvent
     public static void onEntityAttributeCreation(EntityAttributeCreationEvent event)
     {
@@ -23,5 +31,7 @@ public class CommonEvents
         event.put(ModEntities.ISRAFEL.get(), com.projectseele.entity.IsrafelEntity.createAttributes().build());
         event.put(ModEntities.MASS_PRODUCTION_EVA.get(),
                 com.projectseele.entity.MassProductionEvaEntity.createAttributes().build());
+        event.put(ModEntities.LILITH.get(),
+                com.projectseele.entity.LilithEntity.createAttributes().build());
     }
 }

@@ -4,6 +4,8 @@ import com.projectseele.fx.AtFieldFX;
 import com.projectseele.fx.CrossExplosionFX;
 import com.projectseele.network.ClientboundNukeFxPacket;
 import com.projectseele.network.SeeleNetwork;
+import net.minecraft.core.BlockPos;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.EntityType;
@@ -27,7 +29,7 @@ import software.bernie.geckolib.core.animation.RawAnimation;
 import software.bernie.geckolib.util.GeckoLibUtil;
 
 /** Third Angel: a close-range giant that ends the fight with a cross-shaped self-destruction. */
-public class SachielEntity extends Monster implements Angel, GeoEntity
+public class SachielEntity extends Monster implements Angel, GeoEntity, SiegeAnchorAware
 {
     private static final RawAnimation ANIM_IDLE = RawAnimation.begin().thenLoop("animation.Sachiel.idle");
     private static final RawAnimation ANIM_WALK = RawAnimation.begin().thenLoop("animation.Sachiel.move");
@@ -36,6 +38,7 @@ public class SachielEntity extends Monster implements Angel, GeoEntity
     private float atField = AT_FIELD_MAX;
     private int spearCooldown = 45;
     private int selfDestructTicks = -1;
+    private BlockPos siegeBeacon;
 
     public SachielEntity(EntityType<? extends SachielEntity> type, Level level)
     {
@@ -81,6 +84,19 @@ public class SachielEntity extends Monster implements Angel, GeoEntity
             return;
         }
         LivingEntity target = this.getTarget();
+        if ((target == null || !target.isAlive()) && this.siegeBeacon != null)
+        {
+            if (this.distanceToSqr(Vec3.atCenterOf(this.siegeBeacon)) > 64.0D)
+            {
+                this.getNavigation().moveTo(this.siegeBeacon.getX() + 0.5D,
+                        this.siegeBeacon.getY(), this.siegeBeacon.getZ() + 0.5D,
+                        1.0D);
+            }
+            else
+            {
+                this.getNavigation().stop();
+            }
+        }
         if (target != null && target.isAlive() && --this.spearCooldown <= 0)
         {
             this.spearCooldown = 75;
@@ -139,6 +155,30 @@ public class SachielEntity extends Monster implements Angel, GeoEntity
                 new ClientboundNukeFxPacket(center.x, center.y, center.z, 3.2F, false));
         server.explode(this, this.getX(), this.getY() + 4.0D, this.getZ(), 16.0F, ExplosionInteraction.MOB);
         this.discard();
+    }
+
+    @Override
+    public void setSiegeBeacon(BlockPos beacon)
+    {
+        this.siegeBeacon = beacon == null ? null : beacon.immutable();
+    }
+
+    @Override
+    public void addAdditionalSaveData(CompoundTag tag)
+    {
+        super.addAdditionalSaveData(tag);
+        if (this.siegeBeacon != null)
+        {
+            tag.putLong("SiegeBeacon", this.siegeBeacon.asLong());
+        }
+    }
+
+    @Override
+    public void readAdditionalSaveData(CompoundTag tag)
+    {
+        super.readAdditionalSaveData(tag);
+        this.siegeBeacon = tag.contains("SiegeBeacon")
+                ? BlockPos.of(tag.getLong("SiegeBeacon")) : null;
     }
 
     public float getAtField()

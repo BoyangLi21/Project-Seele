@@ -386,10 +386,10 @@ def audit_contract(contract: SiloContract) -> dict[str, Any]:
         check("three_variants", variants == ["00", "01", "02"], variants, ["00", "01", "02"]),
         check("three_unique_beds", len(set(bay_positions)) == 3, bay_positions, "three unique bay centres"),
         check("bay_spacing", sorted(x for x, _ in bay_positions) == [-28, 0, 28], bay_positions, "x=-28,0,28"),
-        check("integrated_world_heights", contract.geo_origin_y == -40 and contract.tokyo_origin_y == 248, {"geofront_origin_y": contract.geo_origin_y, "tokyo3_origin_y": contract.tokyo_origin_y}, {"geofront_origin_y": -40, "tokyo3_origin_y": 248}),
-        check("shaft_shell", contract.shaft_outer_half == 7 and contract.shaft_y == (-38, 247), {"half": contract.shaft_outer_half, "world_y": contract.shaft_y}, {"half": 7, "world_y": [-38, 247]}),
+        check("integrated_world_heights", contract.geo_origin_y == -380 and contract.tokyo_origin_y == 80, {"geofront_origin_y": contract.geo_origin_y, "tokyo3_origin_y": contract.tokyo_origin_y}, {"geofront_origin_y": -380, "tokyo3_origin_y": 80}),
+        check("shaft_shell", contract.shaft_outer_half == 7 and contract.shaft_y == (-378, 79), {"half": contract.shaft_outer_half, "world_y": contract.shaft_y}, {"half": 7, "world_y": [-378, 79]}),
         check("clearance_11x11", clear_width == 11 and clear_depth == 11, [clear_width, clear_depth], [11, 11]),
-        check("clearance_286_high", clear_height == 286 and contract.audit_y == (1, 286), {"height": clear_height, "bed_relative_y": contract.audit_y}, {"height": 286, "bed_relative_y": [1, 286]}),
+        check("clearance_458_high", clear_height == 458 and contract.audit_y == (1, 458), {"height": clear_height, "bed_relative_y": contract.audit_y}, {"height": 458, "bed_relative_y": [1, 458]}),
         check("eva_fits_clearance", contract.unit_width <= clear_width, contract.unit_width, f"<= {clear_width}"),
         check("permanent_bed_13x13", permanent_bed_width == 13, permanent_bed_width, 13),
         check("moving_carrier_11x11", moving_carrier_width == 11, moving_carrier_width, 11),
@@ -400,9 +400,9 @@ def audit_contract(contract: SiloContract) -> dict[str, Any]:
         check("entry_socket_matches_gantry", 0.4 <= contract.plug_socket_world_y - contract.board_bed_y <= 2.2, {"socket_y": round(contract.plug_socket_world_y, 3), "boarding_feet_y": contract.board_bed_y}, "socket 0.4..2.2 blocks above boarding feet"),
         check("plug_descends_from_above", contract.plug_animation_start_y > contract.plug_animation_end_y and contract.plug_start_world_y > contract.plug_end_world_y, {"animation_y": [contract.plug_animation_start_y, contract.plug_animation_end_y], "world_y": [round(contract.plug_start_world_y, 3), round(contract.plug_end_world_y, 3)]}, "start above end"),
         check("plug_starts_above_gantry", contract.plug_start_world_y > contract.board_bed_y, round(contract.plug_start_world_y, 3), f"> {contract.board_bed_y}"),
-        check("carrier_travel_286", abs(carrier_travel - 286.0) < 1.0e-6, carrier_travel, 286.0),
-        check("launch_endpoint", contract.launch_target == 287.0 and contract.shutter_y == 286.0 and contract.launch_target > contract.shutter_y, {"eva_base_y": contract.launch_target, "surface_y": contract.surface_y, "shutter_y": contract.shutter_y}, {"eva_base_y": 287.0, "surface_y": 286.0, "above_shutter": True}),
-        check("dynamic_ascent_143_ticks", contract.ascent_ticks == 143 and contract.legacy_ascent_ticks == 34, {"continuous_ticks": contract.ascent_ticks, "legacy_ticks": contract.legacy_ascent_ticks}, {"continuous_ticks": 143, "legacy_ticks": 34}),
+        check("carrier_travel_458", abs(carrier_travel - 458.0) < 1.0e-6, carrier_travel, 458.0),
+        check("launch_endpoint", contract.launch_target == 459.0 and contract.shutter_y == 458.0 and contract.launch_target > contract.shutter_y, {"eva_base_y": contract.launch_target, "surface_y": contract.surface_y, "shutter_y": contract.shutter_y}, {"eva_base_y": 459.0, "surface_y": 458.0, "above_shutter": True}),
+        check("dynamic_ascent_229_ticks", contract.ascent_ticks == 229 and contract.legacy_ascent_ticks == 34, {"continuous_ticks": contract.ascent_ticks, "legacy_ticks": contract.legacy_ascent_ticks}, {"continuous_ticks": 229, "legacy_ticks": 34}),
         check("same_dimension_primary", contract.same_dimension_primary, contract.same_dimension_primary, True),
         check("surface_clear_timed", contract.clear_ticks > 0, contract.clear_ticks, "> 0"),
     ]
@@ -503,7 +503,10 @@ def render_preview(contract: SiloContract, report: dict[str, Any], output: Path)
     status_color = PASS if report["status"] == "PASS" else FAIL
     draw.rounded_rectangle((1330, 27, 1555, 75), 10, outline=status_color, width=3)
     draw.text((1398, 36), report["status"], font=heading, fill=status_color)
-    draw.text((44, 78), "Tokyo-3 Y=248 and GeoFront Y=-40 share one dimension; coordinates are parsed from Java.", font=small, fill=MUTED)
+    draw.text((44, 78),
+              f"Tokyo-3 Y={contract.tokyo_origin_y} and GeoFront Y={contract.geo_origin_y} "
+              "share one dimension; coordinates are parsed from Java.",
+              font=small, fill=MUTED)
 
     # Top view: the three actual bay centres and full shaft/clearance/gantry footprints.
     top_box = (40, 120, 940, 570)

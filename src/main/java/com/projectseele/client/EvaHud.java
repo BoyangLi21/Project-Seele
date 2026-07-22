@@ -171,6 +171,28 @@ public final class EvaHud
         guiGraphics.drawString(gui.getFont(), Component.translatable(roleKey).withStyle(ChatFormatting.DARK_GRAY),
                 m + 6, m + 6, 0xFFB8A48D);
 
+        int powerTicks = eva.getPowerTicks();
+        int powerSeconds = Math.max(0, powerTicks / 20);
+        Component powerStatus = eva.isUmbilicalConnected()
+                ? Component.translatable("hud.projectseele.power_external")
+                    .withStyle(ChatFormatting.GREEN)
+                : eva.isPowerDepleted()
+                    ? Component.translatable("hud.projectseele.power_depleted")
+                        .withStyle(ChatFormatting.RED, ChatFormatting.BOLD)
+                    : Component.translatable("hud.projectseele.power_battery",
+                            String.format("%d:%02d", powerSeconds / 60, powerSeconds % 60))
+                        .withStyle(powerSeconds <= 60
+                                ? ChatFormatting.RED : ChatFormatting.GOLD);
+        guiGraphics.drawString(gui.getFont(), powerStatus,
+                m + 6, m + 18, 0xFFFFFFFF);
+        float powerFraction = Mth.clamp(powerTicks
+                / (float) eva.getPowerCapacityTicks(), 0.0F, 1.0F);
+        guiGraphics.fill(m + 6, m + 29, m + 106, m + 33, 0xA0202020);
+        guiGraphics.fill(m + 6, m + 29,
+                m + 6 + Math.round(100.0F * powerFraction), m + 33,
+                eva.isUmbilicalConnected() ? 0xFF43E874
+                        : powerSeconds <= 60 ? 0xFFE03535 : 0xFFE89A22);
+
         int heading = Math.floorMod(Math.round(player.getYRot()), 360);
         guiGraphics.drawCenteredString(gui.getFont(),
                 Component.literal(String.format("HDG %03d   PITCH %+03d", heading, Math.round(-player.getXRot())))

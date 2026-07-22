@@ -23,8 +23,8 @@ public final class GeoFrontLandscapeBuilder
 {
     private static final int SHORE_INNER_RADIUS = 73;
     private static final int SHORE_OUTER_RADIUS = 78;
-    private static final int SERVICE_ROAD_INNER_RADIUS = 88;
-    private static final int SERVICE_ROAD_OUTER_RADIUS = 92;
+    private static final int SERVICE_ROAD_INNER_RADIUS = 176;
+    private static final int SERVICE_ROAD_OUTER_RADIUS = 182;
     private static final int UPDATE_CLIENTS = Block.UPDATE_CLIENTS;
 
     private static final BlockPos PUMP_CENTRE = new BlockPos(84, 0, 28);
@@ -34,10 +34,10 @@ public final class GeoFrontLandscapeBuilder
             new BlockPos(98, 0, -22)
     };
     private static final int[][] FOREST_CENTRES = {
-            {-82, -50}, {-70, -58}, {-94, -44}, {-61, -69},
-            {69, -59}, {82, -49}, {96, -39},
-            {-98, 20}, {-88, 31}, {-61, 70},
-            {61, 70}, {78, 55}, {98, 33}
+            {-185, -130}, {-160, -80}, {-150, -20}, {-135, 55},
+            {185, -130}, {160, -80}, {150, -20}, {135, 55},
+            {-90, -250}, {0, -270}, {90, -250},
+            {-105, 80}, {105, 80}
     };
 
     private GeoFrontLandscapeBuilder() {}
@@ -88,7 +88,7 @@ public final class GeoFrontLandscapeBuilder
                 PUMP_CENTRE.getX(), 2, PUMP_CENTRE.getZ()))
                 .getFluidType() == ModFluids.LCL_TYPE.get();
         boolean serviceRoad = isServiceRoad(level.getBlockState(
-                origin.offset(0, 0, -91)));
+                origin.offset(20, 0, GeoFrontBuilder.CAVERN_CENTRE_Z - 180)));
         boolean maintenance = level.getBlockState(origin.offset(
                 MAINTENANCE_CENTRE.getX(), 9, MAINTENANCE_CENTRE.getZ()))
                 .is(Blocks.LODESTONE);
@@ -106,7 +106,9 @@ public final class GeoFrontLandscapeBuilder
         int forestGroves = 0;
         for (int[] centre : FOREST_CENTRES)
         {
-            if (level.getBlockState(origin.offset(centre[0], 1, centre[1]))
+            int groundY = forestGroundY(level, origin, centre[0], centre[1]);
+            if (level.getBlockState(origin.offset(
+                    centre[0], groundY + 1, centre[1]))
                     .is(Blocks.STRIPPED_DARK_OAK_LOG))
             {
                 forestGroves++;
@@ -115,7 +117,7 @@ public final class GeoFrontLandscapeBuilder
 
         int lclLakeSamples = 0;
         for (int[] sample : new int[][] {
-                {60, 0}, {-60, 0}, {0, 60}, {42, 42}})
+                {60, 0}, {-60, 0}, {-42, -42}, {42, -42}})
         {
             if (level.getFluidState(origin.offset(sample[0], 1, sample[1]))
                     .getFluidType() == ModFluids.LCL_TYPE.get())
@@ -124,8 +126,9 @@ public final class GeoFrontLandscapeBuilder
             }
         }
 
-        boolean protectedSites = level.getBlockState(origin.offset(0, 29, 0))
-                .is(Blocks.BEACON)
+        boolean protectedSites = level.getBlockState(origin.offset(
+                        0, GeoFrontBuilder.PYRAMID_APEX_Y + 1,
+                        GeoFrontBuilder.PYRAMID_CENTRE_Z)).is(Blocks.BEACON)
                 && level.getBlockState(origin.offset(0, 2, 70))
                 .is(Blocks.IRON_BLOCK);
         for (int x : IntegratedNervMapBuilder.LIFT_X)
@@ -198,9 +201,11 @@ public final class GeoFrontLandscapeBuilder
         int outerSqr = SERVICE_ROAD_OUTER_RADIUS * SERVICE_ROAD_OUTER_RADIUS;
         for (int x = -SERVICE_ROAD_OUTER_RADIUS; x <= SERVICE_ROAD_OUTER_RADIUS; x++)
         {
-            for (int z = -SERVICE_ROAD_OUTER_RADIUS; z <= SERVICE_ROAD_OUTER_RADIUS; z++)
+            for (int centredZ = -SERVICE_ROAD_OUTER_RADIUS;
+                 centredZ <= SERVICE_ROAD_OUTER_RADIUS; centredZ++)
             {
-                int distanceSqr = x * x + z * z;
+                int z = GeoFrontBuilder.CAVERN_CENTRE_Z + centredZ;
+                int distanceSqr = x * x + centredZ * centredZ;
                 if (distanceSqr < innerSqr || distanceSqr > outerSqr
                         || isProtected(x, z))
                 {
@@ -560,13 +565,14 @@ public final class GeoFrontLandscapeBuilder
     private static void buildTreeGrove(ServerLevel level, BlockPos origin,
                                        int centreX, int centreZ, int height)
     {
+        int groundY = forestGroundY(level, origin, centreX, centreZ);
         for (int x = -3; x <= 3; x++)
         {
             for (int z = -3; z <= 3; z++)
             {
                 if (x * x + z * z <= 10)
                 {
-                    set(level, origin.offset(centreX + x, 0, centreZ + z),
+                    set(level, origin.offset(centreX + x, groundY, centreZ + z),
                             Math.floorMod(x * 3 + z * 5, 7) == 0
                                     ? Blocks.MOSS_BLOCK.defaultBlockState()
                                     : Blocks.GRASS_BLOCK.defaultBlockState());
@@ -575,23 +581,24 @@ public final class GeoFrontLandscapeBuilder
         }
         for (int y = 1; y <= height; y++)
         {
-            set(level, origin.offset(centreX, y, centreZ),
+            set(level, origin.offset(centreX, groundY + y, centreZ),
                     Blocks.STRIPPED_DARK_OAK_LOG.defaultBlockState());
             if (y <= 3)
             {
-                set(level, origin.offset(centreX + 1, y, centreZ),
+                set(level, origin.offset(centreX + 1, groundY + y, centreZ),
                         Blocks.DARK_OAK_LOG.defaultBlockState());
             }
         }
         for (int x = -3; x <= 3; x++)
         {
-            for (int y = -2; y <= 2; y++)
+                for (int y = -2; y <= 2; y++)
             {
                 for (int z = -3; z <= 3; z++)
                 {
                     if (x * x + y * y + z * z <= 11)
                     {
-                        set(level, origin.offset(centreX + x, height + y,
+                    set(level, origin.offset(centreX + x,
+                                    groundY + height + y,
                                         centreZ + z),
                                 Math.floorMod(x * 7 + y * 11 + z * 13, 9) == 0
                                         ? Blocks.FLOWERING_AZALEA_LEAVES.defaultBlockState()
@@ -600,13 +607,32 @@ public final class GeoFrontLandscapeBuilder
                 }
             }
         }
-        set(level, origin.offset(centreX, height + 1, centreZ),
+        set(level, origin.offset(centreX, groundY + height + 1, centreZ),
                 Blocks.DARK_OAK_LOG.defaultBlockState());
+    }
+
+    private static int forestGroundY(ServerLevel level, BlockPos origin,
+                                     int x, int z)
+    {
+        for (int y = 4; y >= -4; y--)
+        {
+            BlockState state = level.getBlockState(origin.offset(x, y, z));
+            if (state.is(Blocks.GRASS_BLOCK) || state.is(Blocks.MOSS_BLOCK)
+                    || state.is(Blocks.DIRT) || state.is(Blocks.STONE))
+            {
+                return y;
+            }
+        }
+        return 0;
     }
 
     /** Hard exclusions shared by every surface pass in this builder. */
     private static boolean isProtected(int x, int z)
     {
+        if (GeoFrontBuilder.isWithinPyramidFootprint(x, z, 2))
+        {
+            return true;
+        }
         if (Math.abs(x) <= 40 && Math.abs(z) <= 40)
         {
             return true;
@@ -635,7 +661,8 @@ public final class GeoFrontLandscapeBuilder
 
     private static boolean inServiceRoad(int x, int z)
     {
-        int distanceSqr = x * x + z * z;
+        int centredZ = z - GeoFrontBuilder.CAVERN_CENTRE_Z;
+        int distanceSqr = x * x + centredZ * centredZ;
         return distanceSqr >= SERVICE_ROAD_INNER_RADIUS * SERVICE_ROAD_INNER_RADIUS
                 && distanceSqr <= SERVICE_ROAD_OUTER_RADIUS * SERVICE_ROAD_OUTER_RADIUS;
     }

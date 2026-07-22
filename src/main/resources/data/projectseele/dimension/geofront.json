@@ -1,18 +1,11 @@
 {
   "type": "projectseele:geofront",
   "generator": {
-    "type": "minecraft:flat",
-    "settings": {
-      "biome": "minecraft:plains",
-      "lakes": false,
-      "features": false,
-      "layers": [
-        {
-          "block": "minecraft:bedrock",
-          "height": 1
-        }
-      ],
-      "structure_overrides": []
-    }
+    "type": "minecraft:noise",
+    "biome_source": {
+      "type": "minecraft:multi_noise",
+      "preset": "minecraft:overworld"
+    },
+    "settings": "projectseele:geofront_surface"
   }
 }

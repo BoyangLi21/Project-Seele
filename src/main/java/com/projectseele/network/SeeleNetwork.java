@@ -12,7 +12,7 @@ import net.minecraftforge.network.simple.SimpleChannel;
  */
 public final class SeeleNetwork
 {
-    private static final String PROTOCOL_VERSION = "11";
+    private static final String PROTOCOL_VERSION = "13";
 
     public static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(
             new ResourceLocation(ProjectSeele.MODID, "main"),
@@ -97,6 +97,21 @@ public final class SeeleNetwork
                 .encoder(ServerboundEntryPlugPacket::encode)
                 .decoder(ServerboundEntryPlugPacket::new)
                 .consumerMainThread(ServerboundEntryPlugPacket::handle)
+                .add();
+        CHANNEL.messageBuilder(ServerboundGeoFrontCameraPacket.class, id++, NetworkDirection.PLAY_TO_SERVER)
+                .encoder(ServerboundGeoFrontCameraPacket::encode)
+                .decoder(ServerboundGeoFrontCameraPacket::new)
+                .consumerMainThread(ServerboundGeoFrontCameraPacket::handle)
+                .add();
+        CHANNEL.messageBuilder(ServerboundEvaVideoFramePacket.class, id++, NetworkDirection.PLAY_TO_SERVER)
+                .encoder(ServerboundEvaVideoFramePacket::encode)
+                .decoder(ServerboundEvaVideoFramePacket::new)
+                .consumerMainThread(ServerboundEvaVideoFramePacket::handle)
+                .add();
+        CHANNEL.messageBuilder(ClientboundEvaVideoFramePacket.class, id++, NetworkDirection.PLAY_TO_CLIENT)
+                .encoder(ClientboundEvaVideoFramePacket::encode)
+                .decoder(ClientboundEvaVideoFramePacket::new)
+                .consumerMainThread(ClientboundEvaVideoFramePacket::handle)
                 .add();
     }
 }

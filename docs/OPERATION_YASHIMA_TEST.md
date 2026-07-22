@@ -1,0 +1,65 @@
+# 屋岛作战 / 拉米尔战测试
+
+屋岛作战运行在已拼接的 `projectseele:geofront` 连续地图中。拉米尔、东京-3 装甲楼、NERV 警报和指挥室遥测由同一个持久化战斗记录联动；退出重进不会靠客户端猜测状态。
+
+## 手工流程
+
+1. 用桌面 `Project SEELE 测试.bat` 进入 `SEELE_TOKYO3_REBUILT`。
+2. 首次使用执行 `/seele geofront setup`，再用 `/seele geofront audit` 确认地图全绿。
+3. 执行 `/seele tokyo3 ramiel start`。拉米尔在东京-3 迎击广场上空生成，警报启动，66 栋内城装甲楼与 29 栋外环楼开始沿真实路线下降。
+4. `/seele tokyo3 ramiel status` 显示阶段、HP、A.T. Field 和 5 秒歼灭确认计时。
+5. `/seele geofront link` 后从地下发射初号机；正常路线仍是同一维度的 200 格物理竖井。
+6. 拉米尔死亡后保持 100 tick 清场确认，随后解除警报并恢复东京-3。开发中止可用 `/seele tokyo3 ramiel abort`。
+
+同一原点已经存在活着的拉米尔时，重复 `start` 必须拒绝。`abort` 必须销毁战斗实体、移除持久记录、解除对应警报并请求楼群复位。
+
+## 战斗硬规则
+
+- 默认拉米尔 HP 350，A.T. Field 1750（HP 的 5 倍）；
+- 核心未暴露时阳电子炮被 A.T. Field 完全格挡；
+- EVA 近战可以削减使徒 A.T. Field；
+- 核心窗口内阳电子炮按核心伤害结算；
+- 指挥室战略屏实时显示 HP、A.T. Field、核心状态、驾驶员方向/俯仰与实体位置。
+
+数值以 `SeeleConfig` 和实体实际运行值为准；本文件只记录当前默认验收基线。
+
+## 自动视觉批次
+
+```bat
+tools\start_test.bat visual tokyo3_battle
+```
+
+批次会自动：
+
+1. 准备连续地图与三台地表 EVA；
+2. 生成拉米尔并触发装甲楼回收；
+3. 保存 `tokyo3_battle_skyline_overview`、`sortie_street`、`power_grid`、`battle_plaza` 四张 PNG；
+4. 要求 `ramiel=1`、`towers=0/13`、`units=3`、`variants00/01/02=true`、私有高楼 `3/3`；
+5. 客户端退出时自动 `abort`，恢复城市并清理战斗夹具。
+
+通过日志至少包含：
+
+```text
+Operation Yashima started
+Tokyo-3 visual evidence: battle=true ramiel=1 ... towers=0/13 ... valid=true
+Operation Yashima aborted
+Tokyo-3 armour towers restoration requested
+```
+
+自动批次证明状态机、持久记录、城市联动与固定构图存在；拉米尔尺度、爆炸压迫感、城市美术密度和实际驾驶战斗仍须人类肉眼验收。
+
+## 私有资产边界
+
+EVA-X、NERV Command Module 和东京-3 schematic 仅在本机测试存档中使用，位于 gitignored 路径，不进入 jar。正式发布地图前必须取得作者授权；若未获授权，发布物只能使用原创回退结构。
+
+## 指挥室实体启动
+
+除命令外，作战也可完全从 NERV 指挥模块的实体按钮启动：
+
+- 先按 “MAGI CHECK”，战略屏应显示三机和 200 格物理路线在线；
+- 按 “YASHIMA START”，应看到警报启动、拉米尔进入战略屏、装甲楼开始下降；
+- 三名驾驶员分别从高位插入栓入口登机后，指挥员可按三台 “RELEASE” 按钮提前释放磁悬浮载台；
+- 每次按键后战略屏必须在 10 tick 内更新 “LAST COMMAND”；
+- “BATTLE ABORT” 必须同时清理拉米尔、警报、持久化作战记录并请求城市复位。
+
+实体按钮是命令入口的服务器权威外壳，不是另一套战斗状态机。

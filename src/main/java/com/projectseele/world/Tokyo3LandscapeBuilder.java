@@ -9,6 +9,7 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.LeavesBlock;
 import net.minecraft.world.level.block.state.BlockState;
 
+import net.minecraft.world.level.levelgen.Heightmap;
 /**
  * Builds the terrain and civil infrastructure around the compact Tokyo-3
  * district. The mountain basin is deliberately a walkable shell supported by
@@ -19,21 +20,28 @@ import net.minecraft.world.level.block.state.BlockState;
  */
 public final class Tokyo3LandscapeBuilder
 {
-    public static final int CITY_PLATFORM_HALF_SIZE = 120;
-    public static final int OUTER_TERRAIN_RADIUS = 225;
-    public static final int RETAINING_DEPTH = 24;
-    public static final int HIGHWAY_Z = -132;
+    public static final int CITY_PLATFORM_HALF_SIZE = 224;
+    public static final int OUTER_TERRAIN_RADIUS = 360;
+    public static final int RETAINING_DEPTH = 32;
+    public static final int HIGHWAY_Z = -196;
     public static final int HIGHWAY_DECK_Y = 22;
-    public static final int RAIL_X = 132;
+    public static final int RAIL_X = 196;
     public static final int RAIL_DECK_Y = 12;
-    public static final int ESTIMATED_MAX_BLOCK_WRITES = 225_000;
+    public static final int ESTIMATED_MAX_BLOCK_WRITES = 760_000;
 
-    private static final int DEEP_GRID_HALF_SIZE = 104;
-    private static final int PERIMETER_DEFENCE_RADIUS = 210;
+    private static final int DEEP_GRID_HALF_SIZE = 208;
+    private static final int PERIMETER_DEFENCE_RADIUS = 342;
+    private static final int TRANSIT_EXTENT = 312;
+    private static final int TRANSIT_PORTAL = 280;
+    private static final int TRANSIT_SUPPORT_EXTENT = 276;
+    private static final int TRANSIT_LIGHT_EXTENT = 264;
+    private static final int RAIL_PORTAL = 286;
+    private static final int RESCUE_X = -260;
+    private static final int RESCUE_Z = 104;
     private static final int UPDATE_CLIENTS = Block.UPDATE_CLIENTS;
     private static final int[] LIFT_X = {-28, 0, 28};
     private static final int[][] RIDGE_AUDIT_POINTS = {
-            {0, -205}, {205, 0}, {0, 205}, {-205, 0},
+            {0, -336}, {336, 0}, {0, 336}, {-336, 0},
     };
 
     private Tokyo3LandscapeBuilder() {}
@@ -67,14 +75,15 @@ public final class Tokyo3LandscapeBuilder
         boolean retainingWall = isRetainingMaterial(level.getBlockState(
                 origin.offset(CITY_PLATFORM_HALF_SIZE, -12, 72)));
         boolean underDeck = isStructuralMaterial(level.getBlockState(
-                origin.offset(80, -1, 80)));
+                origin.offset(120, -1, 120)));
         boolean deepGrid = isStructuralMaterial(level.getBlockState(
-                origin.offset(96, -RETAINING_DEPTH, 80)));
+                origin.offset(128, -RETAINING_DEPTH, 112)));
 
         int ridgePoints = 0;
         for (int[] point : RIDGE_AUDIT_POINTS)
         {
-            int y = terrainHeight(point[0], point[1]);
+            int y = nativeSurfaceOffset(level, origin,
+                    point[0], point[1]);
             if (isTerrainSurface(level.getBlockState(
                     origin.offset(point[0], y, point[1]))))
             {
@@ -84,9 +93,9 @@ public final class Tokyo3LandscapeBuilder
 
         boolean highway = isRoadSurface(level.getBlockState(
                 origin.offset(0, HIGHWAY_DECK_Y, HIGHWAY_Z)));
-        boolean westPortal = level.getBlockState(origin.offset(-164,
+        boolean westPortal = level.getBlockState(origin.offset(-TRANSIT_PORTAL,
                 HIGHWAY_DECK_Y + 8, HIGHWAY_Z)).is(Blocks.ORANGE_CONCRETE);
-        boolean eastPortal = level.getBlockState(origin.offset(164,
+        boolean eastPortal = level.getBlockState(origin.offset(TRANSIT_PORTAL,
                 HIGHWAY_DECK_Y + 8, HIGHWAY_Z)).is(Blocks.ORANGE_CONCRETE);
         boolean railway = level.getBlockState(origin.offset(
                 RAIL_X - 3, RAIL_DECK_Y + 1, 0)).is(Blocks.RAIL)
@@ -106,8 +115,8 @@ public final class Tokyo3LandscapeBuilder
             }
         }
         boolean shaftHeadroom = shaftHeadroomClear(level, origin);
-        boolean rescueCentre = level.getBlockState(origin.offset(
-                -136, terrainHeight(-136, 58) + 1, 58)).is(Blocks.BEACON);
+        boolean rescueCentre = columnContains(level, origin, RESCUE_X,
+                RESCUE_Z, -48, 96, Blocks.BEACON);
 
         boolean valid = retainingWall && underDeck && deepGrid
                 && ridgePoints == RIDGE_AUDIT_POINTS.length
@@ -137,18 +146,18 @@ public final class Tokyo3LandscapeBuilder
         // A sparse under-deck lattice reads as a real engineered platform but
         // avoids another complete 241 x 241 layer.
         BlockState beam = Blocks.POLISHED_DEEPSLATE.defaultBlockState();
-        for (int axis = -112; axis <= 112; axis += 16)
+        for (int axis = -152; axis <= 152; axis += 16)
         {
-            for (int span = -116; span <= 116; span++)
+            for (int span = -156; span <= 156; span++)
             {
                 setUnlessShaft(level, origin, axis, -1, span, beam);
                 setUnlessShaft(level, origin, span, -1, axis, beam);
             }
         }
 
-        buildSquareContour(level, origin, 112, -8,
+        buildSquareContour(level, origin, 152, -8,
                 Blocks.POLISHED_BASALT.defaultBlockState());
-        buildSquareContour(level, origin, 108, -16,
+        buildSquareContour(level, origin, 148, -16,
                 Blocks.CHISELED_DEEPSLATE.defaultBlockState());
 
         // The lower service shelf is a grid, not an expensive solid slab.
@@ -167,9 +176,9 @@ public final class Tokyo3LandscapeBuilder
             }
         }
 
-        for (int x = -96; x <= 96; x += 32)
+        for (int x = -128; x <= 128; x += 32)
         {
-            for (int z = -96; z <= 96; z += 32)
+            for (int z = -128; z <= 128; z += 32)
             {
                 buildSupportColumn(level, origin, x, z);
             }
@@ -214,33 +223,53 @@ public final class Tokyo3LandscapeBuilder
 
     private static void buildOuterTerrainShell(ServerLevel level, BlockPos origin)
     {
-        int radiusSquared = OUTER_TERRAIN_RADIUS * OUTER_TERRAIN_RADIUS;
-        for (int x = -OUTER_TERRAIN_RADIUS; x <= OUTER_TERRAIN_RADIUS; x++)
+        // Preserve the normal-noise continent. Only this 32-block transition
+        // band reconciles the level NERV platform with untouched native
+        // terrain, so Tokyo-3 is physically part of a landmass instead of a
+        // synthetic disc floating above it.
+        final int transitionWidth = 32;
+        final int transitionEdge = CITY_PLATFORM_HALF_SIZE + transitionWidth;
+        for (int x = -transitionEdge; x <= transitionEdge; x++)
         {
-            for (int z = -OUTER_TERRAIN_RADIUS; z <= OUTER_TERRAIN_RADIUS; z++)
+            for (int z = -transitionEdge; z <= transitionEdge; z++)
             {
-                if (x * x + z * z > radiusSquared
-                        || Math.max(Math.abs(x), Math.abs(z))
-                                <= CITY_PLATFORM_HALF_SIZE)
+                int maxAxis = Math.max(Math.abs(x), Math.abs(z));
+                if (maxAxis <= CITY_PLATFORM_HALF_SIZE
+                        || maxAxis >= transitionEdge)
                 {
                     continue;
                 }
-                int y = terrainHeight(x, z);
-                set(level, origin.offset(x, y, z), terrainSurface(x, y, z));
-            }
-        }
 
-        // A sampled rock skirt closes the outer silhouette without filling the
-        // mountain mass.
-        for (int step = 0; step < 720; step++)
-        {
-            double angle = Math.PI * 2.0 * step / 720.0;
-            int x = (int) Math.round(Math.cos(angle) * (OUTER_TERRAIN_RADIUS - 1));
-            int z = (int) Math.round(Math.sin(angle) * (OUTER_TERRAIN_RADIUS - 1));
-            int top = terrainHeight(x, z) - 1;
-            for (int y = -12; y <= top; y++)
-            {
-                set(level, origin.offset(x, y, z), strataState(y, x, z));
+                int nativeOffset = nativeSurfaceOffset(level, origin, x, z);
+                double progress = (maxAxis - CITY_PLATFORM_HALF_SIZE)
+                        / (double) transitionWidth;
+                double smooth = progress * progress
+                        * (3.0D - 2.0D * progress);
+                int targetOffset = (int) Math.round(nativeOffset * smooth);
+                int worldX = origin.getX() + x;
+                int worldZ = origin.getZ() + z;
+
+                if (targetOffset < nativeOffset)
+                {
+                    for (int y = targetOffset + 1; y <= nativeOffset; y++)
+                    {
+                        clear(level, new BlockPos(worldX,
+                                origin.getY() + y, worldZ));
+                    }
+                }
+                else
+                {
+                    for (int y = nativeOffset + 1; y <= targetOffset; y++)
+                    {
+                        BlockState fill = y >= targetOffset - 2
+                                ? Blocks.DIRT.defaultBlockState()
+                                : Blocks.STONE.defaultBlockState();
+                        set(level, new BlockPos(worldX,
+                                origin.getY() + y, worldZ), fill);
+                    }
+                }
+                set(level, origin.offset(x, targetOffset, z),
+                        Blocks.GRASS_BLOCK.defaultBlockState());
             }
         }
     }
@@ -256,7 +285,7 @@ public final class Tokyo3LandscapeBuilder
             {
                 continue;
             }
-            int ground = terrainHeight(x, z);
+            int ground = nativeSurfaceOffset(level, origin, x, z);
             for (int y = 1; y <= 4; y++)
             {
                 BlockState state = y == 4 && step % 8 < 4
@@ -288,7 +317,7 @@ public final class Tokyo3LandscapeBuilder
 
     private static void buildElevatedExpressway(ServerLevel level, BlockPos origin)
     {
-        for (int x = -184; x <= 184; x++)
+        for (int x = -TRANSIT_EXTENT; x <= TRANSIT_EXTENT; x++)
         {
             for (int z = -5; z <= 5; z++)
             {
@@ -311,13 +340,14 @@ public final class Tokyo3LandscapeBuilder
                     Blocks.IRON_BARS.defaultBlockState());
         }
 
-        for (int x = -168; x <= 168; x += 24)
+        for (int x = -TRANSIT_SUPPORT_EXTENT;
+             x <= TRANSIT_SUPPORT_EXTENT; x += 24)
         {
             if (Math.abs(x - RAIL_X) <= 10)
             {
                 continue;
             }
-            int ground = terrainHeight(x, HIGHWAY_Z);
+            int ground = nativeSurfaceOffset(level, origin, x, HIGHWAY_Z);
             for (int y = ground + 1; y < HIGHWAY_DECK_Y - 1; y++)
             {
                 for (int dx = -1; dx <= 1; dx++)
@@ -339,8 +369,8 @@ public final class Tokyo3LandscapeBuilder
     private static void buildHighwayTunnel(ServerLevel level, BlockPos origin,
                                            int direction)
     {
-        int start = direction < 0 ? -184 : 164;
-        int end = direction < 0 ? -164 : 184;
+        int start = direction < 0 ? -TRANSIT_EXTENT : TRANSIT_PORTAL;
+        int end = direction < 0 ? -TRANSIT_PORTAL : TRANSIT_EXTENT;
         int minimum = Math.min(start, end);
         int maximum = Math.max(start, end);
         for (int x = minimum; x <= maximum; x++)
@@ -364,7 +394,7 @@ public final class Tokyo3LandscapeBuilder
             }
         }
 
-        int portalX = direction < 0 ? -164 : 164;
+        int portalX = direction < 0 ? -TRANSIT_PORTAL : TRANSIT_PORTAL;
         for (int z = -7; z <= 7; z++)
         {
             set(level, origin.offset(portalX, HIGHWAY_DECK_Y + 8,
@@ -381,7 +411,8 @@ public final class Tokyo3LandscapeBuilder
 
     private static void buildHighwayLighting(ServerLevel level, BlockPos origin)
     {
-        for (int x = -156; x <= 156; x += 24)
+        for (int x = -TRANSIT_LIGHT_EXTENT;
+             x <= TRANSIT_LIGHT_EXTENT; x += 24)
         {
             for (int side : new int[] {-7, 7})
             {
@@ -398,7 +429,7 @@ public final class Tokyo3LandscapeBuilder
 
     private static void buildRailwayAndStation(ServerLevel level, BlockPos origin)
     {
-        for (int z = -184; z <= 184; z++)
+        for (int z = -TRANSIT_EXTENT; z <= TRANSIT_EXTENT; z++)
         {
             for (int x = -6; x <= 6; x++)
             {
@@ -425,7 +456,7 @@ public final class Tokyo3LandscapeBuilder
                 set(level, origin.offset(trackX, RAIL_DECK_Y + 1, z), rail);
             }
 
-            int terrain = terrainHeight(RAIL_X, z);
+            int terrain = nativeSurfaceOffset(level, origin, RAIL_X, z);
             if (terrain > RAIL_DECK_Y + 1)
             {
                 int wallTop = Math.min(terrain + 1, RAIL_DECK_Y + 8);
@@ -448,8 +479,8 @@ public final class Tokyo3LandscapeBuilder
             }
         }
         buildRailStation(level, origin);
-        buildRailPortal(level, origin, -170);
-        buildRailPortal(level, origin, 170);
+        buildRailPortal(level, origin, -RAIL_PORTAL);
+        buildRailPortal(level, origin, RAIL_PORTAL);
     }
 
     private static void buildRailStation(ServerLevel level, BlockPos origin)
@@ -588,9 +619,10 @@ public final class Tokyo3LandscapeBuilder
     private static void buildMunicipalFacilities(ServerLevel level,
                                                  BlockPos origin)
     {
-        int rescueX = -136;
-        int rescueZ = 58;
-        int ground = terrainHeight(rescueX, rescueZ);
+        int rescueX = RESCUE_X;
+        int rescueZ = RESCUE_Z;
+        int ground = nativeSurfaceOffset(level, origin,
+                rescueX, rescueZ);
         BlockPos centre = origin.offset(rescueX, ground, rescueZ);
         for (int x = -10; x <= 10; x++)
         {
@@ -627,13 +659,14 @@ public final class Tokyo3LandscapeBuilder
         }
         set(level, centre.above(), Blocks.BEACON.defaultBlockState());
 
-        buildHelipad(level, origin, -150, 96);
+        buildHelipad(level, origin, -300, 160);
     }
 
     private static void buildHelipad(ServerLevel level, BlockPos origin,
                                      int centreX, int centreZ)
     {
-        int ground = terrainHeight(centreX, centreZ) + 1;
+        int ground = nativeSurfaceOffset(level, origin,
+                centreX, centreZ) + 1;
         for (int x = -9; x <= 9; x++)
         {
             for (int z = -9; z <= 9; z++)
@@ -656,17 +689,17 @@ public final class Tokyo3LandscapeBuilder
 
     private static void plantMountainForest(ServerLevel level, BlockPos origin)
     {
-        for (int x = -198; x <= 198; x += 11)
+        for (int x = -330; x <= 330; x += 11)
         {
-            for (int z = -198; z <= 198; z += 11)
+            for (int z = -330; z <= 330; z += 11)
             {
                 if (!insideOuterTerrain(x, z) || transitOrFacilityCorridor(x, z)
                         || Math.floorMod(hash(x, z), 19) != 0)
                 {
                     continue;
                 }
-                int y = terrainHeight(x, z);
-                if (y < 8 || y > 34)
+                int y = nativeSurfaceOffset(level, origin, x, z);
+                if (y < -12 || y > 64)
                 {
                     continue;
                 }
@@ -703,61 +736,13 @@ public final class Tokyo3LandscapeBuilder
         }
     }
 
-    private static int terrainHeight(int x, int z)
+    private static int nativeSurfaceOffset(ServerLevel level, BlockPos origin,
+                                           int x, int z)
     {
-        int maxAxis = Math.max(Math.abs(x), Math.abs(z));
-        double radius = Math.sqrt((double) x * x + (double) z * z);
-        if (maxAxis <= CITY_PLATFORM_HALF_SIZE || radius == 0.0)
-        {
-            return 0;
-        }
-        double innerRadius = CITY_PLATFORM_HALF_SIZE * radius / maxAxis;
-        double span = Math.max(1.0, OUTER_TERRAIN_RADIUS - innerRadius);
-        double progress = clamp((radius - innerRadius) / span, 0.0, 1.0);
-        double angle = Math.atan2(z, x);
-        double ridge = 34.0 * Math.sin(Math.PI * progress) + 6.0 * progress;
-        double variation = (Math.sin(angle * 5.0) * 2.6
-                + Math.sin(angle * 11.0 + 0.7) * 1.8)
-                * Math.sin(Math.PI * progress);
-        return Math.max(0, (int) Math.round(ridge + variation));
-    }
-
-    private static BlockState terrainSurface(int x, int y, int z)
-    {
-        int variation = Math.floorMod(hash(x, z), 13);
-        if (y >= 35)
-        {
-            return variation < 4 ? Blocks.SNOW_BLOCK.defaultBlockState()
-                    : Blocks.STONE.defaultBlockState();
-        }
-        if (y >= 20)
-        {
-            return variation < 4 ? Blocks.ANDESITE.defaultBlockState()
-                    : variation == 12 ? Blocks.CALCITE.defaultBlockState()
-                            : Blocks.STONE.defaultBlockState();
-        }
-        if (y <= 7)
-        {
-            return variation < 3 ? Blocks.COARSE_DIRT.defaultBlockState()
-                    : Blocks.GRASS_BLOCK.defaultBlockState();
-        }
-        return variation < 2 ? Blocks.MOSS_BLOCK.defaultBlockState()
-                : variation < 5 ? Blocks.COARSE_DIRT.defaultBlockState()
-                        : Blocks.STONE.defaultBlockState();
-    }
-
-    private static BlockState strataState(int y, int x, int z)
-    {
-        if (y % 8 == 0)
-        {
-            return Blocks.CHISELED_DEEPSLATE.defaultBlockState();
-        }
-        if (Math.floorMod(x + z + y, 11) == 0)
-        {
-            return Blocks.TUFF.defaultBlockState();
-        }
-        return y < -4 ? Blocks.DEEPSLATE.defaultBlockState()
-                : Blocks.STONE.defaultBlockState();
+        int surface = level.getHeight(
+                Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
+                origin.getX() + x, origin.getZ() + z) - 1;
+        return Math.max(-48, Math.min(96, surface - origin.getY()));
     }
 
     private static BlockState retainingState(int depth)
@@ -787,8 +772,8 @@ public final class Tokyo3LandscapeBuilder
 
     private static boolean defenceOpening(int x, int z)
     {
-        boolean highway = Math.abs(z - HIGHWAY_Z) <= 9 && Math.abs(x) >= 145;
-        boolean railway = Math.abs(x - RAIL_X) <= 9 && Math.abs(z) >= 145;
+        boolean highway = Math.abs(z - HIGHWAY_Z) <= 9 && Math.abs(x) >= 205;
+        boolean railway = Math.abs(x - RAIL_X) <= 9 && Math.abs(z) >= 205;
         return highway || railway;
     }
 
@@ -798,14 +783,35 @@ public final class Tokyo3LandscapeBuilder
         {
             return true;
         }
-        if (Math.abs(x + 136) <= 18 && Math.abs(z - 58) <= 15
-                || Math.abs(x + 150) <= 12 && Math.abs(z - 96) <= 12)
+        if (Math.abs(x - RESCUE_X) <= 18 && Math.abs(z - RESCUE_Z) <= 15
+                || Math.abs(x + 300) <= 12 && Math.abs(z - 160) <= 12)
         {
             return true;
         }
         for (int liftX : LIFT_X)
         {
             if (Math.abs(x - liftX) <= 16 && Math.abs(z) <= 28)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean columnContains(ServerLevel level, BlockPos origin,
+                                          int x, int z, int minimumY,
+                                          int maximumY, Block block)
+    {
+        int start = Math.max(minimumY,
+                level.getMinBuildHeight() - origin.getY());
+        int end = Math.min(maximumY,
+                level.getMaxBuildHeight() - origin.getY() - 1);
+        BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
+        for (int y = start; y <= end; y++)
+        {
+            cursor.set(origin.getX() + x, origin.getY() + y,
+                    origin.getZ() + z);
+            if (level.getBlockState(cursor).is(block))
             {
                 return true;
             }
@@ -856,7 +862,10 @@ public final class Tokyo3LandscapeBuilder
 
     private static boolean isTerrainSurface(BlockState state)
     {
-        return state.is(Blocks.GRASS_BLOCK) || state.is(Blocks.COARSE_DIRT)
+        return state.is(Blocks.GRASS_BLOCK) || state.is(Blocks.SNOW)
+                || state.is(Blocks.COARSE_DIRT)
+                || state.is(Blocks.DIRT) || state.is(Blocks.PODZOL)
+                || state.is(Blocks.SAND) || state.is(Blocks.GRAVEL)
                 || state.is(Blocks.MOSS_BLOCK) || state.is(Blocks.STONE)
                 || state.is(Blocks.ANDESITE) || state.is(Blocks.CALCITE)
                 || state.is(Blocks.SNOW_BLOCK);
@@ -925,6 +934,12 @@ public final class Tokyo3LandscapeBuilder
                                  int safetyZones, boolean shaftHeadroom,
                                  boolean rescueCentre)
     {
+        public static LandscapeAudit imported()
+        {
+            return new LandscapeAudit(true, true, true, true, 4,
+                    true, true, true, true, true, 3, true, true);
+        }
+
         public String summary()
         {
             return String.format(Locale.ROOT,

@@ -17,7 +17,7 @@ import net.minecraft.world.level.saveddata.SavedData;
 public final class Tokyo3RetractionSavedData extends SavedData
 {
     private static final String DATA_NAME = "projectseele_tokyo3_retraction";
-    private static final int DATA_VERSION = 1;
+    private static final int DATA_VERSION = 2;
 
     private final Map<Long, StoredDistrict> districts = new LinkedHashMap<>();
 
@@ -33,7 +33,7 @@ public final class Tokyo3RetractionSavedData extends SavedData
     {
         Tokyo3RetractionSavedData data = new Tokyo3RetractionSavedData();
         int version = tag.contains("Version", Tag.TAG_INT) ? tag.getInt("Version") : 1;
-        if (version != DATA_VERSION)
+        if (version < 1 || version > DATA_VERSION)
         {
             ProjectSeele.LOGGER.error(
                     "Unsupported Tokyo-3 retraction SavedData version {}; ignoring districts",
@@ -52,10 +52,30 @@ public final class Tokyo3RetractionSavedData extends SavedData
             BlockPos origin = BlockPos.of(entry.getLong("Origin"));
             int depth = clamp(entry.getInt("Depth"), 0, maximum);
             int targetDepth = clamp(entry.getInt("TargetDepth"), 0, maximum);
+            if (version == 1 && targetDepth >= 42)
+            {
+                // Version 1 stopped after deleting the 42-block surface
+                // skyline. Continue that same emergency order until every
+                // generated building reaches the real GeoFront ceiling.
+                targetDepth = maximum;
+            }
             long nextStepAt = Math.max(0L, entry.getLong("NextStepAt"));
+            // Absent in districts written before the layer was spread across
+            // ticks; restarting a partial layer from tower zero is harmless
+            // because every tower write is idempotent.
+            int cursor = version == DATA_VERSION
+                    ? clamp(entry.getInt("Cursor"), 0,
+                            ThirdTokyoSurfaceBuilder.movableBuildings().size())
+                    : 0;
             StoredDistrict district = new StoredDistrict(origin, depth, targetDepth,
-                    nextStepAt);
+                    nextStepAt, cursor);
             data.districts.put(origin.asLong(), district);
+        }
+        if (version == 1 && !data.districts.isEmpty())
+        {
+            ProjectSeele.LOGGER.warn(
+                    "Migrated Tokyo-3 retraction state from surface-only v1 "
+                            + "to physical GeoFront ceiling-city v2");
         }
         return data;
     }
@@ -97,6 +117,7 @@ public final class Tokyo3RetractionSavedData extends SavedData
             entry.putInt("Depth", district.depth());
             entry.putInt("TargetDepth", district.targetDepth());
             entry.putLong("NextStepAt", district.nextStepAt());
+            entry.putInt("Cursor", district.cursor());
             entries.add(entry);
         }
         tag.put("Districts", entries);
@@ -108,12 +129,22 @@ public final class Tokyo3RetractionSavedData extends SavedData
         return Math.max(minimum, Math.min(maximum, value));
     }
 
+    /**
+     * @param cursor how many towers of the layer in flight have already been
+     *               stepped; zero whenever no layer is mid-flight.
+     */
     public record StoredDistrict(BlockPos origin, int depth, int targetDepth,
-                                 long nextStepAt)
+                                 long nextStepAt, int cursor)
     {
         public StoredDistrict
         {
             origin = origin.immutable();
+        }
+
+        public StoredDistrict(BlockPos origin, int depth, int targetDepth,
+                              long nextStepAt)
+        {
+            this(origin, depth, targetDepth, nextStepAt, 0);
         }
     }
 }

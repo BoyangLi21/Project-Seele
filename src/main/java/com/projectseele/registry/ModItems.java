@@ -27,6 +27,29 @@ public class ModItems
             () -> new BlockItem(ModBlocks.RETRACTABLE_BUILDING_CORE.get(),
                     new Item.Properties().fireResistant()));
 
+    public static final RegistryObject<Item> EVA_ARMAMENT_RACK = ITEMS.register(
+            "eva_armament_rack",
+            () -> new BlockItem(ModBlocks.EVA_ARMAMENT_RACK.get(),
+                    new Item.Properties().fireResistant()));
+
+    public static final RegistryObject<Item> EVA_PROGRESSIVE_KNIFE = ITEMS.register(
+            "eva_progressive_knife",
+            () -> new Item(new Item.Properties().stacksTo(1).fireResistant()));
+    public static final RegistryObject<Item> EVA_PALLET_RIFLE = ITEMS.register(
+            "eva_pallet_rifle",
+            () -> new Item(new Item.Properties().stacksTo(1).fireResistant()));
+    public static final RegistryObject<Item> EVA_POSITRON_CANNON = ITEMS.register(
+            "eva_positron_cannon",
+            () -> new Item(new Item.Properties().stacksTo(1).fireResistant()));
+    public static final RegistryObject<Item> EVA_N2_DEVICE = ITEMS.register(
+            "eva_n2_device",
+            () -> new Item(new Item.Properties().stacksTo(1).fireResistant()));
+
+    public static final RegistryObject<Item> UMBILICAL_PYLON = ITEMS.register(
+            "umbilical_pylon",
+            () -> new BlockItem(ModBlocks.UMBILICAL_PYLON.get(),
+                    new Item.Properties().fireResistant()));
+
     public static final RegistryObject<Item> POSITRON_RIFLE = ITEMS.register("positron_rifle",
             () -> new PositronRifleItem(new Item.Properties().stacksTo(1)));
 

@@ -2,6 +2,8 @@ package com.projectseele.entity;
 
 import com.projectseele.fx.AtFieldFX;
 import com.projectseele.fx.CrossExplosionFX;
+import net.minecraft.core.BlockPos;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.EntityType;
@@ -17,10 +19,11 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
 /** Fourth Angel: low-hovering pursuit type with a pair of sweeping energy whips. */
-public class ShamshelEntity extends Monster implements Angel
+public class ShamshelEntity extends Monster implements Angel, SiegeAnchorAware
 {
     private float atField = 700.0F;
     private int sweepCooldown = 30;
+    private BlockPos siegeBeacon;
 
     public ShamshelEntity(EntityType<? extends ShamshelEntity> type, Level level)
     {
@@ -55,8 +58,25 @@ public class ShamshelEntity extends Monster implements Angel
         LivingEntity target = this.getTarget();
         if (target == null || !target.isAlive())
         {
-            this.setDeltaMovement(this.getDeltaMovement().scale(0.85D).add(0.0D,
-                    Math.sin(this.tickCount * 0.08D) * 0.006D, 0.0D));
+            if (this.siegeBeacon != null)
+            {
+                Vec3 anchor = Vec3.atCenterOf(this.siegeBeacon).add(0.0D, 10.0D, 0.0D);
+                Vec3 approach = anchor.subtract(this.position().add(0.0D, 6.0D, 0.0D));
+                if (approach.lengthSqr() > 64.0D)
+                {
+                    this.setDeltaMovement(this.getDeltaMovement().scale(0.72D)
+                            .add(approach.normalize().scale(0.11D)));
+                }
+                else
+                {
+                    this.setDeltaMovement(this.getDeltaMovement().scale(0.82D));
+                }
+            }
+            else
+            {
+                this.setDeltaMovement(this.getDeltaMovement().scale(0.85D).add(0.0D,
+                        Math.sin(this.tickCount * 0.08D) * 0.006D, 0.0D));
+            }
             return;
         }
         Vec3 aim = target.getBoundingBox().getCenter().subtract(this.position().add(0.0D, 6.0D, 0.0D));
@@ -78,6 +98,30 @@ public class ShamshelEntity extends Monster implements Angel
                 victim.push(push.x, 0.45D, push.z);
             }
         }
+    }
+
+    @Override
+    public void setSiegeBeacon(BlockPos beacon)
+    {
+        this.siegeBeacon = beacon == null ? null : beacon.immutable();
+    }
+
+    @Override
+    public void addAdditionalSaveData(CompoundTag tag)
+    {
+        super.addAdditionalSaveData(tag);
+        if (this.siegeBeacon != null)
+        {
+            tag.putLong("SiegeBeacon", this.siegeBeacon.asLong());
+        }
+    }
+
+    @Override
+    public void readAdditionalSaveData(CompoundTag tag)
+    {
+        super.readAdditionalSaveData(tag);
+        this.siegeBeacon = tag.contains("SiegeBeacon")
+                ? BlockPos.of(tag.getLong("SiegeBeacon")) : null;
     }
 
     @Override

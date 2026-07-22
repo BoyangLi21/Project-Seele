@@ -5,6 +5,7 @@ import com.projectseele.client.render.EvaUnit01Renderer;
 import com.projectseele.client.render.LocalTriangleMeshLayer;
 import com.projectseele.client.render.LocalVisualAssetFingerprint;
 import com.projectseele.client.render.RamielRenderer;
+import com.projectseele.client.render.LilithRenderer;
 import com.projectseele.client.render.ColossalHumanoidRenderer;
 import com.projectseele.client.render.HybridAddonRenderer;
 import com.projectseele.registry.ModEntities;
@@ -51,6 +52,7 @@ public class ClientEvents
                 context -> new ColossalHumanoidRenderer<>(context, ColossalHumanoidRenderer.Style.ZERUEL));
         event.registerEntityRenderer(ModEntities.ISRAFEL.get(), context -> new HybridAddonRenderer<>(context,
                 ColossalHumanoidRenderer.Style.SACHIEL, "israfel", 9.0F));
+        event.registerEntityRenderer(ModEntities.LILITH.get(), LilithRenderer::new);
         event.registerEntityRenderer(ModEntities.MASS_PRODUCTION_EVA.get(), context -> new HybridAddonRenderer<>(context,
                 ColossalHumanoidRenderer.Style.MASS_PRODUCTION, "mass_production_eva", 6.5F));
     }
@@ -63,6 +65,7 @@ public class ClientEvents
         event.registerAboveAll("sniper_scope", EvaHud.SCOPE);
         event.registerAboveAll("plug_insertion", EvaHud.INSERTION);
         event.registerAboveAll("nuclear_flash", EvaHud.NUCLEAR_FLASH);
+        event.registerAboveAll("eva_command_feed_capture", EvaCommandFeedClient.CAPTURE_OVERLAY);
     }
 
     @SubscribeEvent

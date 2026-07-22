@@ -51,6 +51,36 @@ public final class SeeleConfig
     // ----- common: strategic explosions -----
     public static final ForgeConfigSpec.IntValue N2_ARM_TICKS;
     public static final ForgeConfigSpec.IntValue STRATEGIC_BLOCKS_PER_TICK;
+    // ----- common: LCL -----
+    public static final ForgeConfigSpec.DoubleValue LCL_HEAL_AMOUNT;
+    public static final ForgeConfigSpec.IntValue LCL_HEAL_INTERVAL_TICKS;
+    public static final ForgeConfigSpec.BooleanValue LCL_ITEMS_PERSIST;
+
+    // ----- common: EVA power -----
+    public static final ForgeConfigSpec.IntValue EVA_POWER_CAPACITY_TICKS;
+    public static final ForgeConfigSpec.IntValue UMBILICAL_RANGE;
+    public static final ForgeConfigSpec.DoubleValue UMBILICAL_REPAIR_PER_SECOND;
+
+    // ----- common: EVA pilot synchronization -----
+    public static final ForgeConfigSpec.DoubleValue EVA_SYNC_INITIAL;
+    public static final ForgeConfigSpec.DoubleValue EVA_SYNC_MAX;
+    public static final ForgeConfigSpec.DoubleValue EVA_SYNC_DRIVE_GAIN_PER_MINUTE;
+    public static final ForgeConfigSpec.DoubleValue EVA_SYNC_ANGEL_KILL_GAIN;
+    public static final ForgeConfigSpec.DoubleValue EVA_SYNC_MAX_MOBILITY_BONUS;
+    public static final ForgeConfigSpec.DoubleValue EVA_SYNC_MAX_ATTACK_SPEED_BONUS;
+    public static final ForgeConfigSpec.DoubleValue EVA_SYNC_FEEDBACK_THRESHOLD;
+    public static final ForgeConfigSpec.DoubleValue EVA_SYNC_MAX_FEEDBACK_FRACTION;
+
+    // ----- common: EVA Unit-01 berserk -----
+    public static final ForgeConfigSpec.IntValue EVA_BERSERK_DURATION_TICKS;
+    public static final ForgeConfigSpec.IntValue EVA_BERSERK_RECOVERY_TICKS;
+    public static final ForgeConfigSpec.DoubleValue EVA_BERSERK_HEALTH_THRESHOLD;
+    public static final ForgeConfigSpec.DoubleValue EVA_BERSERK_SYNC_THRESHOLD;
+    public static final ForgeConfigSpec.DoubleValue EVA_BERSERK_DAMAGE_MULTIPLIER;
+    public static final ForgeConfigSpec.IntValue EVA_BERSERK_TARGET_RANGE;
+
+    // ----- common: EVA armament logistics -----
+    public static final ForgeConfigSpec.BooleanValue EVA_ARMAMENT_RACK_ENFORCES_LOADOUT;
 
     // ----- client -----
     public static final ForgeConfigSpec.BooleanValue ALARM_VIGNETTE;
@@ -168,6 +198,85 @@ public final class SeeleConfig
         STRATEGIC_BLOCKS_PER_TICK = common
                 .comment("Global terrain-edit budget for staged cannon/N2 craters. Lower values reduce tick spikes.")
                 .defineInRange("blocksPerTick", 2048, 128, 20000);
+        common.pop();
+
+        common.push("lcl");
+        LCL_HEAL_AMOUNT = common
+                .comment("Health restored to players on each LCL recovery pulse. Set to zero to disable healing.")
+                .defineInRange("healAmount", 1.0D, 0.0D, 20.0D);
+        LCL_HEAL_INTERVAL_TICKS = common
+                .comment("Ticks between LCL recovery pulses. Default 40 ticks is one health point every two seconds.")
+                .defineInRange("healIntervalTicks", 40, 1, 1200);
+        LCL_ITEMS_PERSIST = common
+                .comment("Prevent dropped items submerged in LCL from expiring while they remain in the fluid.")
+                .define("itemsPersist", true);
+        common.pop();
+
+        common.push("eva_power");
+        EVA_POWER_CAPACITY_TICKS = common
+                .comment("Internal EVA battery capacity after disconnecting from external power. 6000 ticks is five minutes.")
+                .defineInRange("capacityTicks", 6000, 200, 72000);
+        UMBILICAL_RANGE = common
+                .comment("Maximum block distance from an EVA to a loaded umbilical power pylon.")
+                .defineInRange("umbilicalRange", 32, 4, 128);
+        UMBILICAL_REPAIR_PER_SECOND = common
+                .comment("Hull health restored each second while connected to an umbilical pylon.")
+                .defineInRange("repairPerSecond", 1.0D, 0.0D, 20.0D);
+        common.pop();
+
+        common.push("eva_synchronization");
+        EVA_SYNC_INITIAL = common
+                .comment("Initial pilot synchronization percentage and the no-bonus response baseline.")
+                .defineInRange("initial", 40.0D, 0.0D, 100.0D);
+        EVA_SYNC_MAX = common
+                .comment("Maximum persistent pilot synchronization percentage.")
+                .defineInRange("maximum", 100.0D, 1.0D, 100.0D);
+        EVA_SYNC_DRIVE_GAIN_PER_MINUTE = common
+                .comment("Synchronization gained for each active minute in an entry plug.")
+                .defineInRange("driveGainPerMinute", 0.25D, 0.0D, 10.0D);
+        EVA_SYNC_ANGEL_KILL_GAIN = common
+                .comment("Synchronization gained when the pilot deals the killing blow to an Angel.")
+                .defineInRange("angelKillGain", 2.5D, 0.0D, 25.0D);
+        EVA_SYNC_MAX_MOBILITY_BONUS = common
+                .comment("Fractional EVA movement-speed bonus at maximum synchronization. 0.25 is +25 percent.")
+                .defineInRange("maxMobilityBonus", 0.25D, 0.0D, 1.0D);
+        EVA_SYNC_MAX_ATTACK_SPEED_BONUS = common
+                .comment("Fractional melee and pallet-rifle response bonus at maximum synchronization.")
+                .defineInRange("maxAttackSpeedBonus", 0.25D, 0.0D, 1.0D);
+        EVA_SYNC_FEEDBACK_THRESHOLD = common
+                .comment("Synchronization percentage above which real hull damage feeds back into the pilot.")
+                .defineInRange("feedbackThreshold", 60.0D, 0.0D, 100.0D);
+        EVA_SYNC_MAX_FEEDBACK_FRACTION = common
+                .comment("Fraction of actual hull damage transferred to the pilot at maximum synchronization.")
+                .defineInRange("maxFeedbackFraction", 0.35D, 0.0D, 1.0D);
+        common.pop();
+
+        common.push("eva_berserk");
+        EVA_BERSERK_DURATION_TICKS = common
+                .comment("Autonomous Unit-01 berserk duration. 900 ticks is 45 seconds.")
+                .defineInRange("durationTicks", 900, 20, 7200);
+        EVA_BERSERK_RECOVERY_TICKS = common
+                .comment("Forced shutdown after berserk. 6000 ticks is five minutes.")
+                .defineInRange("recoveryTicks", 6000, 20, 72000);
+        EVA_BERSERK_HEALTH_THRESHOLD = common
+                .comment("Hull fraction below which a depleted Unit-01 may enter berserk.")
+                .defineInRange("healthThreshold", 0.15D, 0.01D, 1.0D);
+        EVA_BERSERK_SYNC_THRESHOLD = common
+                .comment("Persistent pilot synchronization required to trigger berserk.")
+                .defineInRange("syncThreshold", 60.0D, 0.0D, 100.0D);
+        EVA_BERSERK_DAMAGE_MULTIPLIER = common
+                .comment("Autonomous claw damage multiplier during berserk.")
+                .defineInRange("damageMultiplier", 2.5D, 0.1D, 20.0D);
+        EVA_BERSERK_TARGET_RANGE = common
+                .comment("Maximum Angel acquisition range for berserk Unit-01.")
+                .defineInRange("targetRange", 128, 16, 512);
+        common.pop();
+
+        common.push("eva_armament");
+        EVA_ARMAMENT_RACK_ENFORCES_LOADOUT = common
+                .comment("Require an EVA to use only the armament physically loaded from a NERV rack.",
+                        "Disabled by default so existing visual-test worlds keep the complete R-key weapon wheel.")
+                .define("requireRackLoadout", false);
         common.pop();
 
         COMMON_SPEC = common.build();

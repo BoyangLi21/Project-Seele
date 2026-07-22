@@ -434,7 +434,7 @@ def validate_tree(gate: Gate) -> None:
     resync = all(token in packet for token in (
         "eventId", "buf.readUUID()", "buf.writeUUID(this.eventId)",
         "initialTreeAge", "buf.readVarInt()", "buf.writeVarInt(this.initialTreeAge)",
-    )) and 'PROTOCOL_VERSION = "11"' in network \
+    )) and 'PROTOCOL_VERSION = "13"' in network \
         and all(token in game_events for token in (
             "PlayerLoggedInEvent", "PlayerChangedDimensionEvent", "PlayerRespawnEvent",
             "ThirdImpactDirector.syncTo(player)",
@@ -442,7 +442,7 @@ def validate_tree(gate: Gate) -> None:
         and "tree.eventId.equals(packet.eventId)" in client_fx \
         and "Math.max(tree.age" in client_fx
     gate.require("impact.client_resync", resync,
-                 "protocol-v11 event-id sync resumes Tree age without replacement")
+                 "protocol-v13 event-id sync resumes Tree age without replacement")
 
 
 def number(source: str, name: str) -> float:
@@ -452,6 +452,16 @@ def number(source: str, name: str) -> float:
     if not match:
         raise ValueError(f"Numeric Java constant not found: {name}")
     return float(match.group(1))
+
+
+def blockpos_y(source: str, name: str) -> int:
+    match = re.search(
+        rf"\b{re.escape(name)}\s*=\s*new BlockPos\("
+        rf"-?\d+,\s*(-?\d+),\s*-?\d+\)", source
+    )
+    if not match:
+        raise ValueError(f"BlockPos Java constant not found: {name}")
+    return int(match.group(1))
 
 
 def validate_silo(gate: Gate) -> None:
@@ -626,7 +636,12 @@ def validate_silo(gate: Gate) -> None:
     target = number(entity, "LAUNCH_TARGET_ABOVE_BED")
     ascent_ticks = number(entity, "LAUNCH_ASCENT_TICKS")
     ascent_speed = number(entity, "CONTINUOUS_ASCENT_BLOCKS_PER_TICK")
-    continuous_ascent_ticks = math.ceil(286.0 / ascent_speed)
+    geo_y = blockpos_y(integrated, "GEOFRONT_ORIGIN")
+    tokyo_y = blockpos_y(integrated, "TOKYO3_ORIGIN")
+    lower_bed_y = geo_y + int(number(integrated, "LOWER_BED_ABOVE_ORIGIN"))
+    surface_bed_y = tokyo_y - int(number(integrated, "SURFACE_BED_BELOW_ORIGIN"))
+    physical_ascent = surface_bed_y - lower_bed_y
+    continuous_ascent_ticks = math.ceil(physical_ascent / ascent_speed)
     launch_contract = (
         target == 32.0
         and ascent_ticks > 0
@@ -647,16 +662,17 @@ def validate_silo(gate: Gate) -> None:
         "silo.catapult_state_machine",
         launch_contract,
         f"legacyTarget={target:g} legacyTicks={ascent_ticks:g}; "
-        f"continuous286Ticks={continuous_ascent_ticks}",
+        f"continuous{physical_ascent}Ticks={continuous_ascent_ticks}",
     )
     freeze_and_easing = all(token in entity for token in (
         "enforceLaunchLock()", "this.isCrucified() || this.isPilotControlLocked()",
         "public void travel(Vec3 input)", "public boolean isPushable()",
         "LAUNCH_PASSENGER_RESTORE_GRACE_TICKS",
-        "progress * progress * (3.0F - 2.0F * progress)",
+        "progress * (0.35F + 0.65F * progress)",
+        "CONTINUOUS_SURFACE_SYNC_TICKS = 1",
     ))
     gate.require("silo.freeze_and_deterministic_ascent", freeze_and_easing,
-                 "activation is position/yaw/input locked and ascent follows a persisted smoothstep clock")
+                 "activation stays locked while the persisted carrier accelerates through the aperture and releases after one sync tick")
     reset_start = entity.find("private void resetLaunchSequence()")
     reset_end = entity.find("@Override\n    public void die", reset_start)
     reset_body = entity[reset_start:reset_end] if reset_start >= 0 and reset_end > reset_start else ""
@@ -688,15 +704,18 @@ def validate_silo(gate: Gate) -> None:
     same_dimension_body = entity[same_start:legacy_start] \
         if 0 <= complete_start <= same_start < legacy_start else ""
     continuous_map = all(token in integrated for token in (
-        "GEOFRONT_ORIGIN = new BlockPos(0, -40, 76)",
-        "TOKYO3_ORIGIN = new BlockPos(0, 248, 0)",
+        "GEOFRONT_ORIGIN = new BlockPos(30, -444, 296)",
+        "TOKYO3_ORIGIN = new BlockPos(30, 80, 220)",
         "LIFT_X = {-28, 0, 28}", "SHAFT_OUTER_RADIUS = 7",
         "SHAFT_CLEAR_RADIUS = 5", "buildContinuousShaft(level, link)",
+        "int worldZ = TOKYO3_ORIGIN.getZ()",
+        "new LiftLink(index, worldX, worldZ",
+        "link.z() + z", "shaftLayerIsClear(level, link, y)",
         "return this.surfaceBed.getY() - this.lowerBed.getY()",
         "continuousShafts == LIFT_LINKS.size()",
     )) and all(token in geo_commands for token in (
         "ensureContinuousSortieUnits", "setSortieDestination(level.dimension(),",
-        "setSortieParkingBed(lift.lowerBed())", "same 286-block shaft",
+        "setSortieParkingBed(lift.lowerBed())", "ascentDistance()",
         "no portal or EVA teleport",
     )) and all(token in entity for token in (
         "private boolean isContinuousSortie()", "isContinuousSortieShaftClear",
@@ -707,7 +726,7 @@ def validate_silo(gate: Gate) -> None:
     gate.require(
         "silo.same_dimension_continuous_map",
         bool(continuous_map),
-        "three 286-block physical shafts are primary; changeDimension is allowed only after the same-level branch",
+        f"three {physical_ascent}-block physical shafts are primary; changeDimension is allowed only after the same-level branch",
     )
     log_contract = all(token in entity for token in (
         "NERV launch locked", "NERV launch ascent", "NERV launch surface clear"
@@ -721,7 +740,7 @@ def validate_silo(gate: Gate) -> None:
         "VisualCaptureManager.startSilo", "buffer.readVarInt()",
         "buffer.writeVarInt(this.entityId)",
     )) and all(token in network for token in (
-        "ClientboundSiloCapturePacket.class", 'PROTOCOL_VERSION = "11"',
+        "ClientboundSiloCapturePacket.class", 'PROTOCOL_VERSION = "13"',
     )) and all(token in capture for token in (
         '"gantry_rear_socket"', '"plug_descent_external"',
         '"plug_descent_cockpit"', '"hatch_locked"', '"ascent_mid"',
@@ -771,7 +790,7 @@ def validate_silo(gate: Gate) -> None:
             "continuousShafts == LIFT_LINKS.size()",
             "clearExits == LIFT_LINKS.size()",
         )),
-        "legacy bays and the primary 11x11x286 physical corridors are independently audited",
+        f"legacy bays and the primary 11x11x{physical_ascent} physical corridors are independently audited",
     )
     gate.require(
         "silo.documentation",
@@ -779,8 +798,8 @@ def validate_silo(gate: Gate) -> None:
         and "11×11" in doc and "背部登乘扇区" in doc
         and "LAUNCH_CLEAR" in doc and "18 tick" in doc and "0.9" in doc
         and "visual silo" in doc and "六张 PNG" in doc
-        and "286 格" in doc and "同一维度" in doc,
-        "manual test distinguishes the physical 286-block route from the legacy short test rig",
+        and "522 格" in doc and "同一维度" in doc,
+        "manual test distinguishes the physical 522-block route from the legacy short test rig",
     )
 
 

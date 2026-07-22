@@ -92,7 +92,7 @@ acceptance: every model or renderer change must still pass the views below.
 Run the dedicated batch with:
 
 ```text
-gradlew runClient -PquickPlayWorld=SEELE_VISUAL_TEST_2 -PvisualCapture=true -PvisualCaptureUnit=impact
+gradlew runClient -PquickPlayWorld=SEELE_TOKYO3_REBUILT -PvisualCapture=true -PvisualCaptureUnit=impact
 ```
 
 The desktop equivalent is `tools/start_test.bat visual impact`. The client

@@ -5,6 +5,7 @@ import com.projectseele.config.SeeleConfig;
 import com.projectseele.network.SeeleNetwork;
 import com.projectseele.registry.ModCreativeTabs;
 import com.projectseele.registry.ModBlocks;
+import com.projectseele.registry.ModBlockEntities;
 import com.projectseele.registry.ModEntities;
 import com.projectseele.registry.ModItems;
 import com.projectseele.registry.ModFluids;
@@ -32,6 +33,7 @@ public class ProjectSeele
         ModFluids.FLUID_TYPES.register(modEventBus);
         ModFluids.FLUIDS.register(modEventBus);
         ModBlocks.BLOCKS.register(modEventBus);
+        ModBlockEntities.BLOCK_ENTITY_TYPES.register(modEventBus);
         ModItems.ITEMS.register(modEventBus);
         ModEntities.ENTITY_TYPES.register(modEventBus);
         ModCreativeTabs.TABS.register(modEventBus);

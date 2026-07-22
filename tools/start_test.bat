@@ -14,6 +14,16 @@ if not exist "%SEELE_HOME%\gradlew.bat" (
 )
 cd /d "%SEELE_HOME%"
 set "PYTHONUTF8=1"
+rem Local-only Ars Nouveau integration: Skyweave renders the real skybox on
+rem the buried GeoFront sphere. ForgeGradle must remap these production jars
+rem before a dev launch, so never load their raw copies from run\mods.
+if exist "run\mods\ars_nouveau-1.20.1-4.12.7-all.jar" del /Q "run\mods\ars_nouveau-1.20.1-4.12.7-all.jar"
+if exist "run\mods\curios-forge-5.14.1+1.20.1.jar" del /Q "run\mods\curios-forge-5.14.1+1.20.1.jar"
+if not exist ".Codex\local-mods" mkdir ".Codex\local-mods"
+set "SEELE_MC_MODS=C:\Users\liboy\AppData\Roaming\.minecraft\mods"
+if exist "%SEELE_MC_MODS%\ars_nouveau-1.20.1-4.12.7-all.jar" copy /Y "%SEELE_MC_MODS%\ars_nouveau-1.20.1-4.12.7-all.jar" ".Codex\local-mods\ars-nouveau-4.12.7.jar" >nul
+if exist "%SEELE_MC_MODS%\curios-forge-5.14.1+1.20.1.jar" copy /Y "%SEELE_MC_MODS%\curios-forge-5.14.1+1.20.1.jar" ".Codex\local-mods\curios-forge-1.20.1-5.14.1.jar" >nul
+set "SEELE_MC_MODS="
 rem SmOd remains the required private base/Angel source.  Its old Unit-01/02
 rem conversions are overwritten below; the active four EVA bodies are the
 rem locally downloaded Tigerar1 meshes.  Never fall back to Chikita: an old
@@ -30,6 +40,29 @@ if errorlevel 1 (
     pause
     exit /b 1
 )
+rem Prepare the user's private map downloads with the Python 3.12 runtime that
+rem carries nbtlib. Converted structures and the staged save stay under run/
+rem and are never packaged into the mod jar.
+set "SEELE_MAP_PY=C:\Users\liboy\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe"
+if not exist "%SEELE_MAP_PY%" set "SEELE_MAP_PY=python"
+if exist "external-assets\work\maps\source_eva_bilibili\EVA\level.dat" if exist "external-assets\work\maps\source_nerv_command\Nerv Comand Module\level.dat" if exist "external-assets\incoming\maps\tokyo-3-type-skyscrapper1-converted.schem" (
+    set "SEELE_OLD_PYTHONPATH=!PYTHONPATH!"
+    if exist ".Codex\pydeps312" set "PYTHONPATH=%SEELE_HOME%\.Codex\pydeps312"
+    "%SEELE_MAP_PY%" tools\prepare_local_map_assets.py
+    set "SEELE_MAP_RESULT=!ERRORLEVEL!"
+    set "PYTHONPATH=!SEELE_OLD_PYTHONPATH!"
+    set "SEELE_OLD_PYTHONPATH="
+    if not "!SEELE_MAP_RESULT!"=="0" (
+        echo Private Tokyo-3/NERV map preparation failed.
+        pause
+        exit /b 1
+    )
+    set "SEELE_MAP_RESULT="
+)
+set "SEELE_MAP_PY="
+set "SEELE_VISUAL_WORLD=SEELE_VISUAL_TEST_2"
+if exist "run\saves\SEELE_TOKYO3_COMPLETE\level.dat" set "SEELE_VISUAL_WORLD=SEELE_TOKYO3_COMPLETE"
+if exist "run\saves\SEELE_TOKYO3_REBUILT\level.dat" set "SEELE_VISUAL_WORLD=SEELE_TOKYO3_REBUILT"
 python tools\make_smod_model_pack.py "evaaddon1-0.zip"
 if errorlevel 1 (
     echo SmOd model-pack generation failed.
@@ -39,6 +72,12 @@ if errorlevel 1 (
 python tools\make_smod_angel_pack.py "evaaddon1-0.zip"
 if errorlevel 1 (
     echo SmOd Angel model-pack generation failed.
+    pause
+    exit /b 1
+)
+python tools\make_lilith_model_pack.py
+if errorlevel 1 (
+    echo Kiki Lilith local model generation failed.
     pause
     exit /b 1
 )
@@ -178,6 +217,42 @@ if errorlevel 1 (
     pause
     exit /b 1
 )
+python tools\validate_angel_siege_contract.py
+if errorlevel 1 (
+    echo Persistent Angel siege validation failed.
+    pause
+    exit /b 1
+)
+python tools\validate_lcl_contract.py
+if errorlevel 1 (
+    echo LCL gameplay validation failed.
+    pause
+    exit /b 1
+)
+python tools\validate_eva_power_contract.py
+if errorlevel 1 (
+    echo EVA internal and umbilical power validation failed.
+    pause
+    exit /b 1
+)
+python tools\validate_eva_sync_contract.py
+if errorlevel 1 (
+    echo Persistent EVA pilot synchronization validation failed.
+    pause
+    exit /b 1
+)
+python tools\validate_eva_berserk_contract.py
+if errorlevel 1 (
+    echo EVA Unit-01 berserk validation failed.
+    pause
+    exit /b 1
+)
+python tools\validate_eva_armament_contract.py
+if errorlevel 1 (
+    echo Persistent EVA armament-rack validation failed.
+    pause
+    exit /b 1
+)
 if /i "%~1"=="offline" (
     set "OFFLINE_FAILED=0"
     echo Running the fail-closed offline visual recovery suite...
@@ -209,11 +284,11 @@ if /i "%~1"=="offline" (
 )
 echo.
 echo Continuous Tokyo-3 / GeoFront test flow:
-echo   1. Enter any creative world.
-echo   2. Run /seele geofront setup once. The first full build is intentionally heavy.
+echo   1. The fresh normal-terrain SEELE_TOKYO3_REBUILT world opens automatically when available.
+echo   2. Run /seele geofront setup once only if the integrated map has not been initialized.
 echo   3. Run /seele geofront link to freeze Unit-00/01/02 at the lower stations.
 echo   4. Run /seele silo board from Unit-01's high rear gantry.
-echo   5. Wait for insertion and the real 286-block physical shaft ascent.
+echo   5. Wait for insertion and the real 522-block physical shaft ascent.
 echo   /seele geofront surface is a developer camera shortcut only.
 echo   /seele geofront exit returns to the original world.
 echo   /seele geofront audit and sortie_audit report both map and EVA links.
@@ -229,7 +304,7 @@ if /i "%~1"=="visual" (
             echo === Visual suite target: %%U ===
             python tools\validate_visual_capture_run.py begin %%U
             if errorlevel 1 exit /b 1
-            call gradlew.bat runClient -PquickPlayWorld=SEELE_VISUAL_TEST_2 -PvisualCapture=true -PvisualCaptureUnit=%%U
+            call gradlew.bat runClient -PquickPlayWorld=!SEELE_VISUAL_WORLD! -PvisualCapture=true -PvisualCaptureUnit=%%U
             if errorlevel 1 (
                 echo Visual suite stopped because %%U failed.
                 exit /b 1
@@ -246,34 +321,38 @@ if /i "%~1"=="visual" (
         echo Four audited views cover the skyline, sortie road, power grid and Angel plaza.
         python tools\validate_visual_capture_run.py begin tokyo3
         if errorlevel 1 exit /b 1
-        call gradlew.bat runClient -PquickPlayWorld=SEELE_VISUAL_TEST_2 -PvisualCapture=true -PvisualCaptureUnit=tokyo3
+        call gradlew.bat runClient -PquickPlayWorld=%SEELE_VISUAL_WORLD% -PvisualCapture=true -PvisualCaptureUnit=tokyo3
         if errorlevel 1 exit /b 1
         python tools\validate_visual_capture_run.py verify tokyo3
         if errorlevel 1 exit /b 1
     ) else if /i "%~2"=="tokyo3_retraction" (
         echo Capturing Tokyo-3 armour towers deployed, half-lowered, retracted and restored.
-        echo The full persisted cycle takes roughly 100 seconds and closes automatically.
+        echo The full 285-layer down-and-up cycle takes roughly 10 minutes and closes automatically.
         python tools\validate_visual_capture_run.py begin tokyo3_retraction
         if errorlevel 1 exit /b 1
-        call gradlew.bat runClient -PquickPlayWorld=SEELE_VISUAL_TEST_2 -PvisualCapture=true -PvisualCaptureUnit=tokyo3_retraction
+        call gradlew.bat runClient -PquickPlayWorld=%SEELE_VISUAL_WORLD% -PvisualCapture=true -PvisualCaptureUnit=tokyo3_retraction
         if errorlevel 1 exit /b 1
         python tools\validate_visual_capture_run.py verify tokyo3_retraction
         if errorlevel 1 exit /b 1
     ) else if /i "%~2"=="geofront" (
         echo Building and capturing the sealed GeoFront below the connected Tokyo-3 world.
-        echo Audited views cover the cavern, NERV pyramid, real LCL lake and lift terminals.
+        echo Thirteen audited views cover the cavern, command room, sealed support rooms, Central/Terminal Dogma, LCL and lift terminals.
         python tools\validate_visual_capture_run.py begin geofront
         if errorlevel 1 exit /b 1
-        call gradlew.bat runClient -PquickPlayWorld=SEELE_VISUAL_TEST_2 -PvisualCapture=true -PvisualCaptureUnit=geofront
+        call gradlew.bat runClient -PquickPlayWorld=%SEELE_VISUAL_WORLD% -PvisualCapture=true -PvisualCaptureUnit=geofront
         if errorlevel 1 exit /b 1
         python tools\validate_visual_capture_run.py verify geofront
         if errorlevel 1 exit /b 1
+    ) else if /i "%~2"=="tokyo3_battle" (
+        echo Capturing Operation Yashima over the integrated Tokyo-3 map.
+        call gradlew.bat runClient -PquickPlayWorld=%SEELE_VISUAL_WORLD% -PvisualCapture=true -PvisualCaptureUnit=tokyo3_battle
+        exit /b %errorlevel%
     ) else if /i "%~2"=="geofront_sortie" (
         echo Capturing one EVA entity through the real GeoFront-to-Tokyo-3 shaft.
-        echo Four state-gated frames prove readiness, plug lock, mid-shaft height and same-dimension arrival.
+        echo Five state-gated frames prove readiness, plug lock, live pilot telemetry, mid-shaft height and same-dimension arrival.
         python tools\validate_visual_capture_run.py begin geofront_sortie
         if errorlevel 1 exit /b 1
-        call gradlew.bat runClient -PquickPlayWorld=SEELE_VISUAL_TEST_2 -PvisualCapture=true -PvisualCaptureUnit=geofront_sortie
+        call gradlew.bat runClient -PquickPlayWorld=%SEELE_VISUAL_WORLD% -PvisualCapture=true -PvisualCaptureUnit=geofront_sortie
         if errorlevel 1 exit /b 1
         python tools\validate_visual_capture_run.py verify geofront_sortie
         if errorlevel 1 exit /b 1
@@ -282,7 +361,7 @@ if /i "%~1"=="visual" (
         echo Six frames are state-gated: gantry, plug travel, cockpit, hatch, ascent, surface.
         python tools\validate_visual_capture_run.py begin silo
         if errorlevel 1 exit /b 1
-        call gradlew.bat runClient -PquickPlayWorld=SEELE_VISUAL_TEST_2 -PvisualCapture=true -PvisualCaptureUnit=silo
+        call gradlew.bat runClient -PquickPlayWorld=%SEELE_VISUAL_WORLD% -PvisualCapture=true -PvisualCaptureUnit=silo
         if errorlevel 1 exit /b 1
         python tools\validate_visual_capture_run.py verify silo
         if errorlevel 1 exit /b 1
@@ -290,7 +369,7 @@ if /i "%~1"=="visual" (
         echo Capturing the complete Third Impact front tableau.
         python tools\validate_visual_capture_run.py begin impact
         if errorlevel 1 exit /b 1
-        call gradlew.bat runClient -PquickPlayWorld=SEELE_VISUAL_TEST_2 -PvisualCapture=true -PvisualCaptureUnit=impact
+        call gradlew.bat runClient -PquickPlayWorld=%SEELE_VISUAL_WORLD% -PvisualCapture=true -PvisualCaptureUnit=impact
         if errorlevel 1 exit /b 1
         python tools\validate_visual_capture_run.py verify impact
         if errorlevel 1 exit /b 1
@@ -298,7 +377,7 @@ if /i "%~1"=="visual" (
         echo Capturing the complete Unit-00 pose suite.
         python tools\validate_visual_capture_run.py begin unit00
         if errorlevel 1 exit /b 1
-        call gradlew.bat runClient -PquickPlayWorld=SEELE_VISUAL_TEST_2 -PvisualCapture=true -PvisualCaptureUnit=unit00
+        call gradlew.bat runClient -PquickPlayWorld=%SEELE_VISUAL_WORLD% -PvisualCapture=true -PvisualCaptureUnit=unit00
         if errorlevel 1 exit /b 1
         python tools\validate_visual_capture_run.py verify unit00
         if errorlevel 1 exit /b 1
@@ -306,7 +385,7 @@ if /i "%~1"=="visual" (
         echo Capturing the complete Unit-02 pose suite.
         python tools\validate_visual_capture_run.py begin unit02
         if errorlevel 1 exit /b 1
-        call gradlew.bat runClient -PquickPlayWorld=SEELE_VISUAL_TEST_2 -PvisualCapture=true -PvisualCaptureUnit=unit02
+        call gradlew.bat runClient -PquickPlayWorld=%SEELE_VISUAL_WORLD% -PvisualCapture=true -PvisualCaptureUnit=unit02
         if errorlevel 1 exit /b 1
         python tools\validate_visual_capture_run.py verify unit02
         if errorlevel 1 exit /b 1
@@ -315,7 +394,7 @@ if /i "%~1"=="visual" (
         echo Each state is recorded from seven fixed external views.
         python tools\validate_visual_capture_run.py begin mass
         if errorlevel 1 exit /b 1
-        call gradlew.bat runClient -PquickPlayWorld=SEELE_VISUAL_TEST_2 -PvisualCapture=true -PvisualCaptureUnit=mass
+        call gradlew.bat runClient -PquickPlayWorld=%SEELE_VISUAL_WORLD% -PvisualCapture=true -PvisualCaptureUnit=mass
         if errorlevel 1 exit /b 1
         python tools\validate_visual_capture_run.py verify mass
         if errorlevel 1 exit /b 1
@@ -323,7 +402,7 @@ if /i "%~1"=="visual" (
         echo Capturing the complete Unit-01 pose suite.
         python tools\validate_visual_capture_run.py begin unit01
         if errorlevel 1 exit /b 1
-        call gradlew.bat runClient -PquickPlayWorld=SEELE_VISUAL_TEST_2 -PvisualCapture=true -PvisualCaptureUnit=unit01
+        call gradlew.bat runClient -PquickPlayWorld=%SEELE_VISUAL_WORLD% -PvisualCapture=true -PvisualCaptureUnit=unit01
         if errorlevel 1 exit /b 1
         python tools\validate_visual_capture_run.py verify unit01
         if errorlevel 1 exit /b 1
@@ -331,19 +410,33 @@ if /i "%~1"=="visual" (
         echo Capturing the complete Unit-01 pose suite.
         python tools\validate_visual_capture_run.py begin unit01
         if errorlevel 1 exit /b 1
-        call gradlew.bat runClient -PquickPlayWorld=SEELE_VISUAL_TEST_2 -PvisualCapture=true -PvisualCaptureUnit=unit01
+        call gradlew.bat runClient -PquickPlayWorld=%SEELE_VISUAL_WORLD% -PvisualCapture=true -PvisualCaptureUnit=unit01
         if errorlevel 1 exit /b 1
         python tools\validate_visual_capture_run.py verify unit01
         if errorlevel 1 exit /b 1
     ) else (
         echo Unknown visual target "%~2".
-        echo Use: visual all, unit01, unit00, unit02, mass, tokyo3, tokyo3_retraction, geofront, geofront_sortie, silo, or impact.
+        echo Use: visual all, unit01, unit00, unit02, mass, tokyo3, tokyo3_battle, tokyo3_retraction, geofront, geofront_sortie, silo, or impact.
         pause
         exit /b 2
     )
 ) else (
     rem Local desktop testing is fail-closed: never display the obsolete
     rem fallback body when the active ResourceManager sees a stale/mixed pack.
-    call gradlew.bat runClient -PstrictHighDetail=true
+    rem Keep the huge transparent GeoFront sphere responsive without touching
+    rem the strict Tigerar1 EVA mesh or texture path.
+    python tools\apply_client_performance_profile.py
+    if errorlevel 1 (
+        echo SEELE manual performance profile could not be applied.
+        pause
+        exit /b 1
+    )
+    if exist "run\saves\SEELE_TOKYO3_REBUILT\level.dat" (
+        call gradlew.bat runClient -PstrictHighDetail=true -PquickPlayWorld=SEELE_TOKYO3_REBUILT
+    ) else if exist "run\saves\SEELE_TOKYO3_COMPLETE\level.dat" (
+        call gradlew.bat runClient -PstrictHighDetail=true -PquickPlayWorld=SEELE_TOKYO3_COMPLETE
+    ) else (
+        call gradlew.bat runClient -PstrictHighDetail=true
+    )
 )
 pause
