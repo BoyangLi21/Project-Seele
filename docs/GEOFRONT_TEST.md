@@ -21,13 +21,27 @@
 3. 玩家会到达 GeoFront 观察位。执行 `/seele geofront audit`，通过结果必须同时包含：
 
    ```text
-   valid=true mapVersion=17 controlMarkers=true lowerBeds=3/3
+   valid=true mapVersion=18 controlMarkers=true lowerBeds=3/3
    surfaceBeds=3/3 continuousShafts=3/3 clearExits=3/3
    ```
 
 4. `/seele geofront operations` 进入 NERV 作战中心；南侧路线通往观察桥，北侧三条通道分别通往三台 EVA 的高位插入栓栈桥。下层大厅东端的橙色通道通往 Central Dogma 实体梯井。
 5. `/seele geofront surface` 只是开发用城市摄影机捷径，不代表 EVA 的正常移动方式。EVA 必须经过真实竖井上升。
 6. `/seele geofront exit` 返回进入连续地图前保存的维度与坐标。
+
+## 最短人工测试（地图、出击与回收）
+
+完整的舰队后勤验收见 [`FLEET_LOGISTICS_TEST.md`](FLEET_LOGISTICS_TEST.md)。需要快速确认当前存档能否继续测试时，按以下最短流程进行：
+
+1. 执行 `/seele geofront setup`，随后执行 `/seele geofront audit`；先确认地图版本、三条连续竖井、上下站台和出口全部通过。
+2. 执行 `/seele eva reset all`，再执行 `/seele geofront hangar` 与 `/seele eva status all`。目视确认三台 EVA 分别位于独立湿式机库、LCL 到肩部附近、肩部栈桥可通行。
+3. 检查机库和地表指挥台：所有按钮必须固定在实体平台或控制台上，操作员脚下有完整地板；任何浮空按钮直接记为失败。
+4. 登上 Unit-01，由机库控制平台按 01 准备按钮；观察 LCL 排放、闸门打开、实体载台沿轨道进入 01 发射井，然后沿 522 格连续竖井上升。单人调试可用 `/seele eva prepare unit01`。
+5. 到达地表后把 Unit-01 开回 01 号站台中央并完全静止。此时等待不得自动回收；必须由地表回收指挥台的玩家实际按下 01 实体按钮授权，正常回收没有远程命令旁路。
+6. 观察原机体沿竖井下降、沿轨道返回 01 湿式机库、闸门关闭并重新灌注 LCL。最后用 `/seele eva status unit01` 确认回到机库状态，且 UUID、驾驶员和维度在正常运输过程中没有变化。
+7. 对 Unit-00、Unit-02 重复步骤 4–6；仅在存档损坏抢救测试中分别执行 `/seele eva reset unit00`、`unit01`、`unit02`，确认每次只重置指定机型，并始终保持一个世界中每种型号只有一台。管理员 `reset` 不属于正常回收流程。
+
+最短流程只用于快速发现断路、错站台、悬空按钮、自动误回收与重复实体；金字塔比例、草地边界、灯光、机库观感和机械动画仍需另行截图与肉眼复核。
 
 ## 本机私有地图资产
 
@@ -52,7 +66,7 @@
 城市装甲不再把楼宇删除或只在地表做缩短动画。`/seele tokyo3 retract` 以每 20 tick 一层的速度驱动 66 栋内城装甲楼和 29 栋外环楼；每下降一层，地表少一层实体墙体，同时在 GeoFront 球体曲面下方多一层悬挂墙体。三座本机私有 NBT 高楼也按同一深度移动，但采用 12 格量化步长避免每 tick 重放大型模板。
 
 - `/seele tokyo3 status`：报告当前深度、目标深度和运行状态；
-- `/seele tokyo3 retract`：从地表下沉到最大深度 285；单程约 285 秒；
+- `/seele tokyo3 retract`：从地表下沉到最大深度 312；单程约 312 秒；
 - `/seele tokyo3 restore`：沿原路线复位；完整下降—复位约 10 分钟；
 - 地表完全回收时，审计必须同时得到 `towers=66/66`、`outerWards=29/29` 和 `ceilingBuildings=95/95`；只消失、不在地下出现会直接失败；
 - 回升前会检查楼内的玩家与 EVA，检测到夹压风险时暂停该层，而不是把实体封死。

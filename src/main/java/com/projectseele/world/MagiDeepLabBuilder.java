@@ -111,7 +111,10 @@ public final class MagiDeepLabBuilder
             BlockPos control = controlPosition(origin, index);
             level.getChunk(control.getX() >> 4, control.getZ() >> 4);
         }
-        installLabels(level, origin);
+        if (!level.players().isEmpty())
+        {
+            installLabels(level, origin);
+        }
         return inspect(level, origin);
     }
 
@@ -523,6 +526,7 @@ public final class MagiDeepLabBuilder
             String tagName = LABEL_TAG_PREFIX + CORE_IDS[index];
             List<Display.TextDisplay> matches = labels(level, origin, tagName);
             Display.TextDisplay label;
+            boolean pendingAdd = false;
             if (matches.isEmpty())
             {
                 label = EntityType.TEXT_DISPLAY.create(level);
@@ -534,7 +538,7 @@ public final class MagiDeepLabBuilder
                 label.setNoGravity(true);
                 label.setInvulnerable(true);
                 label.setSilent(true);
-                level.addFreshEntity(label);
+                pendingAdd = true;
             }
             else
             {
@@ -545,6 +549,10 @@ public final class MagiDeepLabBuilder
                 }
             }
             updateLabel(level, origin, label, index);
+            if (pendingAdd)
+            {
+                level.addFreshEntity(label);
+            }
         }
     }
 
@@ -696,6 +704,14 @@ public final class MagiDeepLabBuilder
                             boolean pribnowBox, int cores, int controls,
                             int labels, int onlineCores)
     {
+        /** Text labels are cosmetic entities and may register one tick later. */
+        public boolean runtimePhysicalValid()
+        {
+            return this.physicalAccess && this.shaft && this.roomShell
+                    && this.pribnowBox && this.cores == CORE_NAMES.length
+                    && this.controls == CORE_NAMES.length;
+        }
+
         public String summary()
         {
             return String.format(Locale.ROOT,

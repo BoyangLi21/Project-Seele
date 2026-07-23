@@ -14,6 +14,7 @@ import com.projectseele.event.Tokyo3RamielBattleDirector.BattleStatus;
 import com.projectseele.world.ThirdTokyoSurfaceBuilder;
 import com.projectseele.world.ThirdTokyoSurfaceBuilder.DistrictAudit;
 import com.projectseele.world.IntegratedNervMapBuilder;
+import com.projectseele.world.EvaLogisticsDirector;
 import com.projectseele.world.Tokyo3RetractionDirector;
 import com.projectseele.world.Tokyo3RetractionDirector.RequestResult;
 import com.projectseele.world.Tokyo3RetractionDirector.Status;
@@ -53,7 +54,12 @@ public final class ThirdTokyoCommands
                         .then(Commands.literal("restore")
                                 .executes(context -> setRetraction(
                                         context.getSource(), false)))
-                        .then(Commands.literal("status")
+                        .then(Commands.literal("retract_now")
+                                .executes(context -> forceRetraction(
+                                        context.getSource(), true)))
+                        .then(Commands.literal("restore_now")
+                                .executes(context -> forceRetraction(
+                                        context.getSource(), false)))                        .then(Commands.literal("status")
                                 .executes(context -> status(context.getSource())))
                         .then(Commands.literal("ramiel")
                                 .executes(context -> ramielStart(context.getSource()))
@@ -112,7 +118,7 @@ public final class ThirdTokyoCommands
         level.setWeatherParameters(12000, 0, false, false);
         // Do not let a prior manual CITY ARMOUR toggle make this fixed
         // visual fixture audit a different skyline on the next run.
-        Tokyo3RetractionDirector.reset(level, origin);
+        Tokyo3RetractionDirector.forceDepth(level, origin, false);
         IntegratedNervMapBuilder.IntegratedAudit mapAudit =
                 IntegratedNervMapBuilder.ensure(level);
         if (!mapAudit.valid())
@@ -121,9 +127,11 @@ public final class ThirdTokyoCommands
                     "Integrated Tokyo-3 visual map failed audit: "
                             + mapAudit.summary());
         }
-        AABB cleanup = new AABB(origin).inflate(192.0D, 384.0D, 192.0D);
-        level.getEntitiesOfClass(EvaUnit01Entity.class, cleanup).forEach(Entity::discard);
-        List<EvaUnit01Entity> units = GeoFrontCommands.ensureContinuousSortieUnits(level);
+        List<EvaUnit01Entity> units = new java.util.ArrayList<>(3);
+        for (int variant = 0; variant < 3; variant++)
+        {
+            units.add(EvaLogisticsDirector.forceReset(level, variant));
+        }
         for (EvaUnit01Entity unit : units)
         {
             IntegratedNervMapBuilder.LiftLink lift =
@@ -138,6 +146,7 @@ public final class ThirdTokyoCommands
             unit.setDeltaMovement(net.minecraft.world.phys.Vec3.ZERO);
             unit.setNoGravity(true);
             unit.setNoAi(true);
+            EvaLogisticsDirector.markDeployedForVisual(level, unit);
         }
         ProjectSeele.LOGGER.info(
                 "Tokyo-3 integrated visual setup: map={} surfaceUnits={}",
@@ -196,6 +205,18 @@ public final class ThirdTokyoCommands
         return result.accepted() ? 1 : 0;
     }
 
+    private static int forceRetraction(CommandSourceStack source, boolean retract)
+            throws CommandSyntaxException
+    {
+        ServerPlayer player = source.getPlayerOrException();
+        BlockPos origin = findOrigin(player);
+        source.sendSuccess(() -> Component.literal(
+                "Tokyo-3 rapid maintenance started; the server may pause briefly."), false);
+        RequestResult result = Tokyo3RetractionDirector.forceDepth(
+                player.serverLevel(), origin, retract);
+        source.sendSuccess(() -> Component.literal(result.message()), false);
+        return result.accepted() ? 1 : 0;
+    }
     private static int status(CommandSourceStack source) throws CommandSyntaxException
     {
         ServerPlayer player = source.getPlayerOrException();

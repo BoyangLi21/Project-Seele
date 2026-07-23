@@ -111,12 +111,12 @@ def main() -> int:
         gate(
             "map.login_upgrade",
             "GeoFront login infrastructure gate" in commands
-            and "IntegratedNervMapBuilder.prepareRuntime(current)" in commands,
+            and "IntegratedNervMapBuilder.prepareRuntime(installedMap)" in commands,
             "existing connected saves do not receive bounded rack/pylon repair on login",
         ),
         gate(
-            "map.schema_v17",
-            "MAP_VERSION = 17" in integrated
+            "map.schema_v18",
+            "MAP_VERSION = 18" in integrated
             and integrated.count("ensureArmamentRacks(level);") == 3
             and "lowerArmamentRack" in integrated
             and "rack.stockStandardLoadout()" in integrated

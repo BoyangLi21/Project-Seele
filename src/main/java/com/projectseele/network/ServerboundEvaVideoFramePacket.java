@@ -33,6 +33,9 @@ public final class ServerboundEvaVideoFramePacket
     private static final long[] LAST_VARIANT_TICK = {
             Long.MIN_VALUE / 2, Long.MIN_VALUE / 2, Long.MIN_VALUE / 2
     };
+    private static final long[] LAST_HUMAN_VARIANT_TICK = {
+            Long.MIN_VALUE / 2, Long.MIN_VALUE / 2, Long.MIN_VALUE / 2
+    };
     private static final byte[] PNG_SIGNATURE = {
             (byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A
     };
@@ -96,6 +99,7 @@ public final class ServerboundEvaVideoFramePacket
         boolean acquired = !isFeedActive(level, this.variant);
         LAST_ACCEPTED_TICK.put(sender.getUUID(), now);
         LAST_VARIANT_TICK[this.variant] = now;
+        LAST_HUMAN_VARIANT_TICK[this.variant] = now;
 
         BlockPos origin = IntegratedNervMapBuilder.GEOFRONT_ORIGIN;
         AABB commandArea = new AABB(
@@ -134,6 +138,57 @@ public final class ServerboundEvaVideoFramePacket
         long accepted = LAST_VARIANT_TICK[variant];
         return now >= accepted && now - accepted <= FEED_ACTIVE_TICKS;
     }
+    public static boolean isHumanFeedActive(ServerLevel level, int variant)
+    {
+        if (variant < EvaUnit01Entity.UNIT_00
+                || variant > EvaUnit01Entity.UNIT_02)
+        {
+            return false;
+        }
+        long now = level.getGameTime();
+        long accepted = LAST_HUMAN_VARIANT_TICK[variant];
+        return now >= accepted && now - accepted <= FEED_ACTIVE_TICKS;
+    }
+
+    public static boolean hasCommandViewers(ServerLevel level)
+    {
+        AABB area = commandArea();
+        return level.players().stream().anyMatch(
+                viewer -> area.contains(viewer.position()));
+    }
+
+    /** Relays a server-sampled view only while no real pilot owns this feed. */
+    public static void relayTrainingFrame(ServerLevel level, int variant,
+                                          byte[] png)
+    {
+        if (!level.dimension().equals(GeoFrontCommands.GEOFRONT)
+                || variant < EvaUnit01Entity.UNIT_00
+                || variant > EvaUnit01Entity.UNIT_02
+                || isHumanFeedActive(level, variant) || !validPng(png))
+        {
+            return;
+        }
+        LAST_VARIANT_TICK[variant] = level.getGameTime();
+        ClientboundEvaVideoFramePacket outgoing =
+                new ClientboundEvaVideoFramePacket(variant, png);
+        for (ServerPlayer viewer : level.players())
+        {
+            if (commandArea().contains(viewer.position()))
+            {
+                SeeleNetwork.CHANNEL.send(
+                        PacketDistributor.PLAYER.with(() -> viewer), outgoing);
+            }
+        }
+    }
+
+    private static AABB commandArea()
+    {
+        BlockPos origin = IntegratedNervMapBuilder.GEOFRONT_ORIGIN;
+        return new AABB(origin.getX() - 72.0D, origin.getY() - 35.0D,
+                origin.getZ() - 50.0D, origin.getX() + 73.0D,
+                origin.getY() + 91.0D, origin.getZ() + 111.0D);
+    }
+
     private static boolean validPng(byte[] data)
     {
         if (data == null || data.length < 24

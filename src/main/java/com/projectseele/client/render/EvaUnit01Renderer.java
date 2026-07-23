@@ -137,8 +137,15 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
         this.pilotView = minecraft.options.getCameraType().isFirstPerson()
                 && minecraft.getCameraEntity() != null
                 && minecraft.getCameraEntity().getVehicle() == entity;
+        // Wet cages and launch shafts use dedicated NERV floodlights.  Keeping
+        // the airframe full-bright only while logistics-locked prevents a
+        // 24-block model from sampling one dark centre voxel and becoming a
+        // black silhouette despite the illuminated shaft walls.
+        boolean nervFloodlit = entity.isNervLogisticsLocked()
+                || entity.getLaunchPhase() == EvaUnit01Entity.LAUNCH_ASCENT;
         super.render(entity, entityYaw, partialTick, poseStack, bufferSource,
-                entity.isCrucified() ? LightTexture.FULL_BRIGHT : packedLight);
+                entity.isCrucified() || nervFloodlit
+                        ? LightTexture.FULL_BRIGHT : packedLight);
     }
 
     @Override

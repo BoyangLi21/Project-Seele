@@ -4,9 +4,11 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Set;
 
 import com.projectseele.ProjectSeele;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.SectionPos;
 import net.minecraft.core.Vec3i;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.nbt.CompoundTag;
@@ -51,7 +53,31 @@ public final class LocalMapAssetLoader
     private static final BlockPos SKYSCRAPER_STATE_MARKER =
             new BlockPos(132, -20, 120);
     private static final int SKYSCRAPER_MOVE_QUANTUM = 12;
+    private static final Vec3i SKYSCRAPER_TEMPLATE_SIZE =
+            new Vec3i(23, 82, 12);
     private static final int UPDATE_CLIENTS = Block.UPDATE_CLIENTS;
+
+    /**
+     * Sparse, distinctive blocks sampled through the local 5,996-block
+     * template. A state marker alone must never pass the city audit after the
+     * building body was cleared or a travel placement failed.
+     */
+    private static final SkyscraperSignature[] SKYSCRAPER_SIGNATURES = {
+            new SkyscraperSignature(new BlockPos(21, 8, 2),
+                    Blocks.REDSTONE_LAMP),
+            new SkyscraperSignature(new BlockPos(1, 9, 7),
+                    Blocks.REDSTONE_LAMP),
+            new SkyscraperSignature(new BlockPos(1, 53, 3),
+                    Blocks.REDSTONE_LAMP),
+            new SkyscraperSignature(new BlockPos(21, 53, 8),
+                    Blocks.REDSTONE_LAMP),
+            new SkyscraperSignature(new BlockPos(18, 74, 7),
+                    Blocks.END_ROD),
+            new SkyscraperSignature(new BlockPos(19, 74, 8),
+                    Blocks.END_ROD),
+            new SkyscraperSignature(new BlockPos(5, 80, 3),
+                    Blocks.LIGHTNING_ROD),
+    };
 
     private static final SkyscraperPlacement[] SKYSCRAPERS = {
             new SkyscraperPlacement(new BlockPos(-140, 1, -70),
@@ -217,38 +243,65 @@ public final class LocalMapAssetLoader
         {
             return 0;
         }
+        if (!template.getSize().equals(SKYSCRAPER_TEMPLATE_SIZE))
+        {
+            ProjectSeele.LOGGER.error(
+                    "Private Tokyo-3 skyscraper template size changed: expected={} actual={}",
+                    SKYSCRAPER_TEMPLATE_SIZE, template.getSize());
+            return 0;
+        }
+
         int placed = 0;
         for (int index = 0; index < SKYSCRAPERS.length; index++)
         {
             SkyscraperPlacement placement = SKYSCRAPERS[index];
-            Vec3i size = template.getSize(placement.rotation());
-            int drop = skyscraperDrop(placement, size, retractionDepth);
+            Vec3i rotatedSize = template.getSize(placement.rotation());
+            int drop = skyscraperDrop(placement, rotatedSize, retractionDepth);
             BlockPos surfaceBase = tokyo3Origin.offset(placement.offset());
             BlockPos base = surfaceBase.below(drop);
             BlockPos travelMarker = skyscraperMarker(base, index);
             BlockPos stateMarker = skyscraperStateMarker(tokyo3Origin, index);
-            if (level.getBlockState(travelMarker).is(Blocks.NETHERITE_BLOCK)
-                    && level.getBlockState(stateMarker).is(Blocks.LODESTONE))
+
+            boolean travelPresent = level.getBlockState(travelMarker)
+                    .is(Blocks.NETHERITE_BLOCK);
+            boolean bodyPresent = skyscraperBodyPresent(
+                    level, base, placement.rotation());
+            if (travelPresent && bodyPresent)
             {
+                if (!level.getBlockState(stateMarker).is(Blocks.LODESTONE))
+                {
+                    set(level, stateMarker, Blocks.LODESTONE.defaultBlockState());
+                }
                 placed++;
                 continue;
             }
 
-            // Version 15 and earlier always left imported towers on the
-            // surface. Clear that old copy once before materialising the
-            // authoritative position.
-            if (!base.equals(surfaceBase))
-            {
-                clearVolume(level, surfaceBase, size);
-                set(level, skyscraperMarker(surfaceBase, index),
-                        Blocks.AIR.defaultBlockState());
-            }
-            clearVolume(level, base, size);
-            if (place(level, template, base, placement.rotation()))
+            // The state marker is only a completion receipt. Invalidate it
+            // before clearing or writing any part of the real building.
+            set(level, stateMarker, Blocks.AIR.defaultBlockState());
+            clearStaleSkyscraperCopies(level, tokyo3Origin, placement,
+                    template.getSize(), index, base);
+            clearSkyscraperVolume(level, base, template.getSize(),
+                    placement.rotation());
+            set(level, travelMarker, Blocks.AIR.defaultBlockState());
+
+            boolean written = place(level, template, base, placement.rotation());
+            if (written && skyscraperBodyPresent(
+                    level, base, placement.rotation()))
             {
                 set(level, travelMarker, Blocks.NETHERITE_BLOCK.defaultBlockState());
                 set(level, stateMarker, Blocks.LODESTONE.defaultBlockState());
                 placed++;
+            }
+            else
+            {
+                // A partial write must remain visibly incomplete so the next
+                // setup/ensure pass retries it instead of trusting stale NBT.
+                set(level, travelMarker, Blocks.AIR.defaultBlockState());
+                set(level, stateMarker, Blocks.AIR.defaultBlockState());
+                ProjectSeele.LOGGER.error(
+                        "Private Tokyo-3 skyscraper {} failed structural placement at {} depth={}",
+                        index, base, retractionDepth);
             }
         }
         if (placed > 0)
@@ -274,45 +327,136 @@ public final class LocalMapAssetLoader
         {
             return;
         }
+        if (!template.getSize().equals(SKYSCRAPER_TEMPLATE_SIZE))
+        {
+            ProjectSeele.LOGGER.error(
+                    "Private Tokyo-3 skyscraper travel refused: expected size={} actual={}",
+                    SKYSCRAPER_TEMPLATE_SIZE, template.getSize());
+            return;
+        }
+
         for (int index = 0; index < SKYSCRAPERS.length; index++)
         {
             SkyscraperPlacement placement = SKYSCRAPERS[index];
-            Vec3i size = template.getSize(placement.rotation());
-            int oldDrop = skyscraperDrop(placement, size, oldDepth);
-            int newDrop = skyscraperDrop(placement, size, newDepth);
-            if (oldDrop == newDrop)
-            {
-                continue;
-            }
+            Vec3i rotatedSize = template.getSize(placement.rotation());
+            int oldDrop = skyscraperDrop(placement, rotatedSize, oldDepth);
+            int newDrop = skyscraperDrop(placement, rotatedSize, newDepth);
             BlockPos surfaceBase = tokyo3Origin.offset(placement.offset());
             BlockPos oldBase = surfaceBase.below(oldDrop);
             BlockPos newBase = surfaceBase.below(newDrop);
-            clearVolume(level, oldBase, size);
-            set(level, skyscraperMarker(oldBase, index),
-                    Blocks.AIR.defaultBlockState());
-            clearVolume(level, newBase, size);
-            if (!place(level, template, newBase, placement.rotation()))
+            BlockPos stateMarker = skyscraperStateMarker(tokyo3Origin, index);
+
+            if (oldDrop == newDrop)
             {
-                ProjectSeele.LOGGER.error(
-                        "Private Tokyo-3 skyscraper {} failed to move depth {} -> {}",
-                        index, oldDepth, newDepth);
+                BlockPos travelMarker = skyscraperMarker(newBase, index);
+                if (level.getBlockState(travelMarker).is(Blocks.NETHERITE_BLOCK)
+                        && skyscraperBodyPresent(
+                        level, newBase, placement.rotation()))
+                {
+                    set(level, stateMarker, Blocks.LODESTONE.defaultBlockState());
+                    continue;
+                }
+
+                // A vanished body can be detected between twelve-block travel
+                // steps. Repair it at the authoritative SavedData depth now.
+                set(level, stateMarker, Blocks.AIR.defaultBlockState());
+                clearStaleSkyscraperCopies(level, tokyo3Origin, placement,
+                        template.getSize(), index, newBase);
+                clearSkyscraperVolume(level, newBase, template.getSize(),
+                        placement.rotation());
+                set(level, travelMarker, Blocks.AIR.defaultBlockState());
+                if (place(level, template, newBase, placement.rotation())
+                        && skyscraperBodyPresent(
+                        level, newBase, placement.rotation()))
+                {
+                    set(level, travelMarker,
+                            Blocks.NETHERITE_BLOCK.defaultBlockState());
+                    set(level, stateMarker, Blocks.LODESTONE.defaultBlockState());
+                }
+                else
+                {
+                    set(level, travelMarker, Blocks.AIR.defaultBlockState());
+                    ProjectSeele.LOGGER.error(
+                            "Private Tokyo-3 skyscraper {} failed repair at depth {}",
+                            index, newDepth);
+                }
                 continue;
             }
+
+            // Clear the completion receipt before the destructive half of a
+            // move. A crash or failed write can therefore never look complete.
+            set(level, stateMarker, Blocks.AIR.defaultBlockState());
+            clearSkyscraperVolume(level, oldBase, template.getSize(),
+                    placement.rotation());
+            set(level, skyscraperMarker(oldBase, index),
+                    Blocks.AIR.defaultBlockState());
+            clearSkyscraperVolume(level, newBase, template.getSize(),
+                    placement.rotation());
             set(level, skyscraperMarker(newBase, index),
-                    Blocks.NETHERITE_BLOCK.defaultBlockState());
-            set(level, skyscraperStateMarker(tokyo3Origin, index),
-                    Blocks.LODESTONE.defaultBlockState());
+                    Blocks.AIR.defaultBlockState());
+
+            boolean moved = place(level, template, newBase, placement.rotation())
+                    && skyscraperBodyPresent(
+                    level, newBase, placement.rotation());
+            if (moved)
+            {
+                set(level, skyscraperMarker(newBase, index),
+                        Blocks.NETHERITE_BLOCK.defaultBlockState());
+                set(level, stateMarker, Blocks.LODESTONE.defaultBlockState());
+                continue;
+            }
+
+            // Remove any partial destination write, then make a best-effort
+            // rollback. The state marker deliberately remains absent even when
+            // rollback succeeds, forcing the next pass to reconcile SavedData.
+            clearSkyscraperVolume(level, newBase, template.getSize(),
+                    placement.rotation());
+            set(level, skyscraperMarker(newBase, index),
+                    Blocks.AIR.defaultBlockState());
+            clearSkyscraperVolume(level, oldBase, template.getSize(),
+                    placement.rotation());
+            boolean restored = place(
+                    level, template, oldBase, placement.rotation())
+                    && skyscraperBodyPresent(
+                    level, oldBase, placement.rotation());
+            set(level, skyscraperMarker(oldBase, index), restored
+                    ? Blocks.NETHERITE_BLOCK.defaultBlockState()
+                    : Blocks.AIR.defaultBlockState());
+            set(level, stateMarker, Blocks.AIR.defaultBlockState());
+            ProjectSeele.LOGGER.error(
+                    "Private Tokyo-3 skyscraper {} failed to move depth {} -> {}; restoredOld={}",
+                    index, oldDepth, newDepth, restored);
         }
     }
 
     public static int inspectTokyo3Skyscrapers(BlockGetter level,
                                                BlockPos tokyo3Origin)
     {
+        return inspectTokyo3Skyscrapers(level, tokyo3Origin, 0);
+    }
+
+    /**
+     * Counts only complete buildings at the position implied by the current
+     * persisted retraction depth. A remote completion marker cannot mask a
+     * missing body or a tower stranded at a previous travel quantum.
+     */
+    public static int inspectTokyo3Skyscrapers(BlockGetter level,
+                                               BlockPos tokyo3Origin,
+                                               int retractionDepth)
+    {
         int found = 0;
         for (int index = 0; index < SKYSCRAPERS.length; index++)
         {
+            SkyscraperPlacement placement = SKYSCRAPERS[index];
+            Vec3i rotatedSize = rotatedSkyscraperSize(placement.rotation());
+            int drop = skyscraperDrop(placement, rotatedSize, retractionDepth);
+            BlockPos base = tokyo3Origin.offset(placement.offset()).below(drop);
             if (level.getBlockState(skyscraperStateMarker(tokyo3Origin, index))
-                    .is(Blocks.LODESTONE))
+                    .is(Blocks.LODESTONE)
+                    && level.getBlockState(skyscraperMarker(base, index))
+                    .is(Blocks.NETHERITE_BLOCK)
+                    && skyscraperBodyPresent(
+                    level, base, placement.rotation()))
             {
                 found++;
             }
@@ -320,24 +464,188 @@ public final class LocalMapAssetLoader
         return found;
     }
 
+    /** Adds every chunk touched by the three rotated private high-rises. */
+    public static void addTokyo3SkyscraperTravelChunks(
+            BlockPos tokyo3Origin, Set<Long> chunks)
+    {
+        for (SkyscraperPlacement placement : SKYSCRAPERS)
+        {
+            SkyscraperBounds bounds = skyscraperBounds(placement.rotation());
+            int baseX = tokyo3Origin.getX() + placement.offset().getX();
+            int baseZ = tokyo3Origin.getZ() + placement.offset().getZ();
+            for (int chunkX = SectionPos.blockToSectionCoord(
+                    baseX + bounds.minimumX());
+                 chunkX <= SectionPos.blockToSectionCoord(
+                         baseX + bounds.maximumX()); chunkX++)
+            {
+                for (int chunkZ = SectionPos.blockToSectionCoord(
+                        baseZ + bounds.minimumZ());
+                     chunkZ <= SectionPos.blockToSectionCoord(
+                             baseZ + bounds.maximumZ()); chunkZ++)
+                {
+                    chunks.add(net.minecraft.world.level.ChunkPos.asLong(
+                            chunkX, chunkZ));
+                }
+            }
+        }
+    }
+
+    private static boolean skyscraperBodyPresent(BlockGetter level,
+                                                  BlockPos base,
+                                                  Rotation rotation)
+    {
+        for (SkyscraperSignature signature : SKYSCRAPER_SIGNATURES)
+        {
+            BlockPos transformed = StructureTemplate.transform(
+                    signature.offset(), Mirror.NONE, rotation, BlockPos.ZERO);
+            if (!level.getBlockState(base.offset(transformed))
+                    .is(signature.block()))
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static Vec3i rotatedSkyscraperSize(Rotation rotation)
+    {
+        if (rotation == Rotation.CLOCKWISE_90
+                || rotation == Rotation.COUNTERCLOCKWISE_90)
+        {
+            return new Vec3i(SKYSCRAPER_TEMPLATE_SIZE.getZ(),
+                    SKYSCRAPER_TEMPLATE_SIZE.getY(),
+                    SKYSCRAPER_TEMPLATE_SIZE.getX());
+        }
+        return SKYSCRAPER_TEMPLATE_SIZE;
+    }
+
+    /**
+     * Removes complete private-template copies left at an earlier travel quantum.
+     * Either our receipt or all seven body signatures is required, allowing
+     * schema upgrades to remove legacy unmarked surface duplicates safely.
+     */
+    private static void clearStaleSkyscraperCopies(ServerLevel level,
+                                                   BlockPos tokyo3Origin,
+                                                   SkyscraperPlacement placement,
+                                                   Vec3i templateSize,
+                                                   int index,
+                                                   BlockPos expectedBase)
+    {
+        Vec3i rotatedSize = rotatedSkyscraperSize(placement.rotation());
+        BlockPos surfaceBase = tokyo3Origin.offset(placement.offset());
+        int previousDrop = Integer.MIN_VALUE;
+        int maximumDepth = ThirdTokyoSurfaceBuilder.maximumRetractionDepth();
+        for (int depth = 0; depth <= maximumDepth; depth++)
+        {
+            int drop = skyscraperDrop(placement, rotatedSize, depth);
+            if (drop == previousDrop)
+            {
+                continue;
+            }
+            previousDrop = drop;
+            BlockPos candidate = surfaceBase.below(drop);
+            if (!candidate.equals(expectedBase)
+                    && (level.getBlockState(skyscraperMarker(candidate, index))
+                    .is(Blocks.NETHERITE_BLOCK)
+                    || skyscraperBodyPresent(
+                            level, candidate, placement.rotation())))
+            {
+                clearSkyscraperVolume(level, candidate, templateSize,
+                        placement.rotation());
+                set(level, skyscraperMarker(candidate, index),
+                        Blocks.AIR.defaultBlockState());
+            }
+        }
+    }
+
+    /**
+     * Rotation happens around the template origin, so clockwise variants can
+     * occupy negative relative X/Z. Clear the transformed bounds rather than a
+     * positive-only box beginning at the placement origin.
+     */
+    private static void clearSkyscraperVolume(ServerLevel level, BlockPos base,
+                                              Vec3i templateSize,
+                                              Rotation rotation)
+    {
+        int maximumX = templateSize.getX() - 1;
+        int maximumZ = templateSize.getZ() - 1;
+        int minimumRelativeX = Integer.MAX_VALUE;
+        int maximumRelativeX = Integer.MIN_VALUE;
+        int minimumRelativeZ = Integer.MAX_VALUE;
+        int maximumRelativeZ = Integer.MIN_VALUE;
+        for (int x : new int[] {0, maximumX})
+        {
+            for (int z : new int[] {0, maximumZ})
+            {
+                BlockPos transformed = StructureTemplate.transform(
+                        new BlockPos(x, 0, z), Mirror.NONE, rotation,
+                        BlockPos.ZERO);
+                minimumRelativeX = Math.min(minimumRelativeX, transformed.getX());
+                maximumRelativeX = Math.max(maximumRelativeX, transformed.getX());
+                minimumRelativeZ = Math.min(minimumRelativeZ, transformed.getZ());
+                maximumRelativeZ = Math.max(maximumRelativeZ, transformed.getZ());
+            }
+        }
+
+        for (int x = minimumRelativeX; x <= maximumRelativeX; x++)
+        {
+            for (int z = minimumRelativeZ; z <= maximumRelativeZ; z++)
+            {
+                for (int y = 0; y < templateSize.getY(); y++)
+                {
+                    BlockPos position = base.offset(x, y, z);
+                    if (!level.getBlockState(position).isAir())
+                    {
+                        set(level, position, Blocks.AIR.defaultBlockState());
+                    }
+                }
+            }
+        }
+    }
+
     private static int skyscraperDrop(SkyscraperPlacement placement,
                                       Vec3i size, int depth)
     {
-        int centreX = placement.offset().getX() + size.getX() / 2;
-        int centreZ = placement.offset().getZ() + size.getZ() / 2;
-        ThirdTokyoSurfaceBuilder.TowerSpec envelope =
-                new ThirdTokyoSurfaceBuilder.TowerSpec(
-                        centreX, centreZ, size.getY(),
-                        Math.max(size.getX(), size.getZ()) / 2, true);
+        SkyscraperBounds bounds = skyscraperBounds(placement.rotation());
+        int minimumX = placement.offset().getX() + bounds.minimumX();
+        int maximumX = placement.offset().getX() + bounds.maximumX();
+        int minimumZ = placement.offset().getZ() + bounds.minimumZ();
+        int maximumZ = placement.offset().getZ() + bounds.maximumZ();
         int topAtSurface = placement.offset().getY() + size.getY() - 1;
         int targetDrop = Math.max(0, topAtSurface
-                - ThirdTokyoSurfaceBuilder.ceilingRoofRelativeY(envelope));
+                - ThirdTokyoSurfaceBuilder.ceilingRoofRelativeYForBounds(
+                        minimumX, maximumX, minimumZ, maximumZ));
         int bounded = Math.max(0, Math.min(depth, targetDrop));
         if (bounded == targetDrop)
         {
             return targetDrop;
         }
         return bounded / SKYSCRAPER_MOVE_QUANTUM * SKYSCRAPER_MOVE_QUANTUM;
+    }
+
+    private static SkyscraperBounds skyscraperBounds(Rotation rotation)
+    {
+        int maximumX = SKYSCRAPER_TEMPLATE_SIZE.getX() - 1;
+        int maximumZ = SKYSCRAPER_TEMPLATE_SIZE.getZ() - 1;
+        int minimumRelativeX = Integer.MAX_VALUE;
+        int maximumRelativeX = Integer.MIN_VALUE;
+        int minimumRelativeZ = Integer.MAX_VALUE;
+        int maximumRelativeZ = Integer.MIN_VALUE;
+        for (int x : new int[] {0, maximumX})
+        {
+            for (int z : new int[] {0, maximumZ})
+            {
+                BlockPos transformed = StructureTemplate.transform(
+                        new BlockPos(x, 0, z), Mirror.NONE, rotation,
+                        BlockPos.ZERO);
+                minimumRelativeX = Math.min(minimumRelativeX, transformed.getX());
+                maximumRelativeX = Math.max(maximumRelativeX, transformed.getX());
+                minimumRelativeZ = Math.min(minimumRelativeZ, transformed.getZ());
+                maximumRelativeZ = Math.max(maximumRelativeZ, transformed.getZ());
+            }
+        }
+        return new SkyscraperBounds(minimumRelativeX, maximumRelativeX,
+                minimumRelativeZ, maximumRelativeZ);
     }
 
     private static BlockPos skyscraperMarker(BlockPos base, int index)
@@ -409,4 +717,9 @@ public final class LocalMapAssetLoader
     }
 
     private record SkyscraperPlacement(BlockPos offset, Rotation rotation) {}
+
+    private record SkyscraperSignature(BlockPos offset, Block block) {}
+
+    private record SkyscraperBounds(int minimumX, int maximumX,
+                                    int minimumZ, int maximumZ) {}
 }

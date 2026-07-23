@@ -1,5 +1,7 @@
 package com.projectseele.visual;
 
+import java.util.HashSet;
+import java.util.Set;
 import java.util.UUID;
 
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
@@ -13,8 +15,12 @@ import com.projectseele.network.ClientboundTokyo3CapturePacket;
 import com.projectseele.network.SeeleNetwork;
 import com.projectseele.world.Tokyo3RetractionDirector;
 import com.projectseele.world.IntegratedNervMapBuilder;
+import com.projectseele.world.EvaLogisticsDirector;
+import com.projectseele.world.EntryPlugDirector;
+import com.projectseele.world.TrainingPilotDirector;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
@@ -66,6 +72,19 @@ public final class VisualLabAutomation
     private static int nextPose;
     private static int tokyo3RestoreAt;
     private static boolean geoFrontSortieSurfaceAudited;
+    private static boolean geoFrontSortiePilotRequested;
+    private static boolean geoFrontSortiePrepareRequested;
+    private static boolean geoFrontSortieReleaseAuthorized;
+    private static boolean geoFrontSortieRecoveryRequested;
+    private static boolean geoFrontSortieCycleValidated;
+    private static int geoFrontSortieRecoveryAt;
+    private static int geoFrontSortieReleaseAt;
+    private static int geoFrontSortieObserverMoveAt;
+    private static int geoFrontSortieObserverReturnAt;
+    private static boolean geoFrontSortieObserverInOperations;
+    private static boolean geoFrontSortieObserverReturned;
+    private static String geoFrontSortieLastPhase;
+    private static final Set<String> GEOFRONT_LOGISTICS_PHASES = new HashSet<>();
 
     private VisualLabAutomation() {}
 
@@ -96,6 +115,19 @@ public final class VisualLabAutomation
             nextPose = 0;
             tokyo3RestoreAt = -1;
             geoFrontSortieSurfaceAudited = false;
+            geoFrontSortiePilotRequested = false;
+            geoFrontSortiePrepareRequested = false;
+            geoFrontSortieReleaseAuthorized = false;
+            geoFrontSortieRecoveryRequested = false;
+            geoFrontSortieCycleValidated = false;
+            geoFrontSortieRecoveryAt = -1;
+            geoFrontSortieReleaseAt = -1;
+            geoFrontSortieObserverMoveAt = -1;
+            geoFrontSortieObserverReturnAt = -1;
+            geoFrontSortieObserverInOperations = false;
+            geoFrontSortieObserverReturned = false;
+            geoFrontSortieLastPhase = "";
+            GEOFRONT_LOGISTICS_PHASES.clear();
             ProjectSeele.LOGGER.info("Visual Lab automation armed for {}", player.getGameProfile().getName());
         }
     }
@@ -201,48 +233,206 @@ public final class VisualLabAutomation
                         throw new IllegalStateException(
                                 "Visual GeoFront sortie audit failed: " + audit.summary());
                     }
-                    EvaUnit01Entity unit = LaunchSiloCommands.nearestCagedUnit(player);
+                    EvaUnit01Entity unit = EvaLogisticsDirector.ensureFleet(player.serverLevel())
+                            .stream()
+                            .filter(candidate -> candidate.getUnitVariant() == 1)
+                            .findFirst()
+                            .orElseThrow(() -> new IllegalStateException(
+                                    "Canonical Unit-01 is missing from the wet cage"));
                     SeeleNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
                             new ClientboundGeoFrontSortieCapturePacket(
                                     unit.getId(), GeoFrontCommands.ORIGIN));
                     ProjectSeele.LOGGER.info(
-                            "Visual Lab armed GeoFront-to-Tokyo-3 sortie capture for {}",
+                            "Visual Lab armed full hangar-sortie-recovery capture for {}",
                             unit.getStringUUID());
                 }
-                if (ticks == 160)
+
+                ServerLevel geoFront = server.getLevel(GeoFrontCommands.GEOFRONT);
+                if (geoFront == null)
                 {
-                    if (LaunchSiloCommands.board(player.createCommandSourceStack()) != 1)
+                    throw new IllegalStateException(
+                            "Visual GeoFront logistics dimension became unavailable");
+                }
+                if (ticks >= 115 && !geoFrontSortiePilotRequested)
+                {
+                    TrainingPilotDirector.ActionResult result =
+                            TrainingPilotDirector.start(geoFront, 1);
+                    if (!result.accepted())
                     {
                         throw new IllegalStateException(
-                                "Visual GeoFront sortie boarding command failed");
+                                "Visual GeoFront dummy dispatch failed: " + result.message());
                     }
+                    geoFrontSortiePilotRequested = true;
                     ProjectSeele.LOGGER.info(
-                            "Visual Lab started linked GeoFront catapult sequence");
+                            "Visual Lab dispatched Unit-01 dummy to the external entry plug");
                 }
-                if (!geoFrontSortieSurfaceAudited && ticks > 300
-                        && player.serverLevel().dimension().equals(GeoFrontCommands.GEOFRONT)
-                        && player.getVehicle() instanceof EvaUnit01Entity unit
-                        && unit.getY() >= IntegratedNervMapBuilder.surfaceLiftBed(1).getY() + 1.0D
-                        && !unit.isLaunchSequenceActive())
+                if (ticks >= 140 && !geoFrontSortiePrepareRequested)
                 {
-                    IntegratedNervMapBuilder.IntegratedAudit audit =
-                            IntegratedNervMapBuilder.inspect(player.serverLevel());
-                    if (!audit.valid())
+                    EvaUnit01Entity unit = EvaLogisticsDirector.canonicalUnit(
+                            geoFront, 1);
+                    if (unit == null)
                     {
                         throw new IllegalStateException(
-                                "Tokyo-3 post-sortie continuous-map audit failed: "
-                                        + audit.summary());
+                                "Visual GeoFront canonical Unit-01 disappeared before boarding");
                     }
-                    geoFrontSortieSurfaceAudited = true;
-                    ProjectSeele.LOGGER.info(
-                            "Visual Lab verified same-dimension Tokyo-3 arrival after {} blocks",
-                            IntegratedNervMapBuilder.ascentDistance());
+                    if (EntryPlugDirector.hasBoardedPilot(geoFront, 1, unit))
+                    {
+                        EvaLogisticsDirector.ActionResult result =
+                                EvaLogisticsDirector.requestPrepare(geoFront, 1);
+                        if (!result.accepted())
+                        {
+                            throw new IllegalStateException(
+                                    "Visual GeoFront hangar prepare failed after dummy boarding: "
+                                            + result.message());
+                        }
+                        geoFrontSortiePrepareRequested = true;
+                        ProjectSeele.LOGGER.info(
+                                "Visual Lab confirmed external-plug occupant and requested Unit-01 transfer");
+                    }
+                    else if (ticks > 600)
+                    {
+                        throw new IllegalStateException(
+                                "Visual GeoFront dummy failed to reach the external entry plug");
+                    }
                 }
-                if (ticks > 600)
+                if (geoFrontSortiePrepareRequested)
                 {
-                    ProjectSeele.LOGGER.error(
-                            "VISUAL GEOFRONT SORTIE INVALID: sequence exceeded 600 ticks");
-                    playerId = null;
+                    EvaLogisticsDirector.Status logistics =
+                            EvaLogisticsDirector.status(geoFront, 1);
+                    String phase = logistics.phase();
+                    GEOFRONT_LOGISTICS_PHASES.add(phase);
+                    if (!phase.equals(geoFrontSortieLastPhase))
+                    {
+                        ProjectSeele.LOGGER.info(
+                                "Visual GeoFront logistics gate: phase={} ticks={} lcl={} loaded={}",
+                                phase, logistics.ticks(), logistics.lclLayers(),
+                                logistics.loaded());
+                        geoFrontSortieLastPhase = phase;
+                    }
+                    if (phase.equals("SILO_READY")
+                            && !geoFrontSortieReleaseAuthorized)
+                    {
+                        if (geoFrontSortieReleaseAt < 0)
+                        {
+                            // Keep a real locked interval for the external
+                            // plug and command-room live-feed evidence frames.
+                            geoFrontSortieObserverMoveAt = ticks + 5;
+                            geoFrontSortieObserverReturnAt = ticks + 100;
+                            geoFrontSortieReleaseAt = ticks + 140;
+                            ProjectSeele.LOGGER.info(
+                                    "Visual Lab holding Unit-01 launch lock for tracked command-room evidence");
+                        }
+                        if (!geoFrontSortieObserverInOperations
+                                && ticks >= geoFrontSortieObserverMoveAt)
+                        {
+                            player.stopRiding();
+                            // Text displays have a shorter client tracking
+                            // range than the room itself. Park the real player
+                            // beside the five screens while the detached
+                            // evidence camera frames them from the same bay.
+                            player.setNoGravity(true);
+                            player.setDeltaMovement(0.0D, 0.0D, 0.0D);
+                            player.teleportTo(geoFront,
+                                    GeoFrontCommands.ORIGIN.getX() + 12.5D,
+                                    GeoFrontCommands.ORIGIN.getY() + 29.5D,
+                                    GeoFrontCommands.ORIGIN.getZ() + 68.5D,
+                                    180.0F, 0.0F);
+                            geoFrontSortieObserverInOperations = true;
+                            ProjectSeele.LOGGER.info(
+                                    "Visual Lab moved the real observer into operations entity-tracking range");
+                        }
+                        if (!geoFrontSortieObserverReturned
+                                && ticks >= geoFrontSortieObserverReturnAt)
+                        {
+                            BlockPos central = IntegratedNervMapBuilder.lowerLiftBed(1);
+                            player.setNoGravity(false);
+                            player.setDeltaMovement(0.0D, 0.0D, 0.0D);
+                            player.teleportTo(geoFront,
+                                    central.getX() + 0.5D,
+                                    central.getY() + 27.0D,
+                                    central.getZ() + 6.5D,
+                                    180.0F, -8.0F);
+                            geoFrontSortieObserverReturned = true;
+                            ProjectSeele.LOGGER.info(
+                                    "Visual Lab returned the observer to the launch-column tracking area");
+                        }
+                        if (ticks >= geoFrontSortieReleaseAt)
+                        {
+                            EvaUnit01Entity unit = EvaLogisticsDirector.canonicalUnit(
+                                    geoFront, 1);
+                            if (unit == null || !unit.releaseLaunchFromCommand())
+                            {
+                                throw new IllegalStateException(
+                                        "Visual GeoFront command release failed after SILO_READY");
+                            }
+                            geoFrontSortieReleaseAuthorized = true;
+                            ProjectSeele.LOGGER.info(
+                                    "Visual Lab authorized Unit-01 catapult only after dummy lock and physical rail transfer");
+                        }
+                    }
+                    if (phase.equals("DEPLOYED") && !geoFrontSortieSurfaceAudited)
+                    {
+                        IntegratedNervMapBuilder.IntegratedAudit audit =
+                                IntegratedNervMapBuilder.inspect(geoFront);
+                        if (!IntegratedNervMapBuilder.continuousMapValidDuringSortie(
+                                geoFront, audit))
+                        {
+                            throw new IllegalStateException(
+                                    "Tokyo-3 post-sortie continuous-map audit failed: "
+                                            + audit.summary());
+                        }
+                        geoFrontSortieSurfaceAudited = true;
+                        geoFrontSortieRecoveryAt = ticks + 40;
+                        ProjectSeele.LOGGER.info(
+                                "Visual Lab verified same-dimension Tokyo-3 arrival after {} blocks",
+                                IntegratedNervMapBuilder.ascentDistance());
+                    }
+                    if (geoFrontSortieSurfaceAudited
+                            && !geoFrontSortieRecoveryRequested
+                            && ticks >= geoFrontSortieRecoveryAt)
+                    {
+                        EvaLogisticsDirector.ActionResult result =
+                                EvaLogisticsDirector.requestRecovery(geoFront, 1);
+                        if (!result.accepted())
+                        {
+                            throw new IllegalStateException(
+                                    "Visual GeoFront surface recovery failed: " + result.message());
+                        }
+                        geoFrontSortieRecoveryRequested = true;
+                        ProjectSeele.LOGGER.info(
+                                "Visual Lab authorized Unit-01 physical recovery descent");
+                    }
+                    if (geoFrontSortieRecoveryRequested && phase.equals("PARKED")
+                            && !geoFrontSortieCycleValidated)
+                    {
+                        Set<String> required = Set.of("DRAINING", "TO_SILO",
+                                "SILO_READY", "DEPLOYED", "DESCENDING",
+                                "TO_HANGAR", "FILLING", "PARKED");
+                        if (!GEOFRONT_LOGISTICS_PHASES.containsAll(required))
+                        {
+                            throw new IllegalStateException(
+                                    "Visual GeoFront logistics skipped phases: observed="
+                                            + GEOFRONT_LOGISTICS_PHASES);
+                        }
+                        IntegratedNervMapBuilder.IntegratedAudit audit =
+                                IntegratedNervMapBuilder.inspect(geoFront);
+                        if (!audit.valid())
+                        {
+                            throw new IllegalStateException(
+                                    "Post-recovery continuous-map audit failed: "
+                                            + audit.summary());
+                        }
+                        geoFrontSortieCycleValidated = true;
+                        ProjectSeele.LOGGER.info(
+                                "VISUAL GEOFRONT LOGISTICS CYCLE VALID: phases={} audit={}",
+                                GEOFRONT_LOGISTICS_PHASES, audit.summary());
+                    }
+                }
+                if (ticks > 2400 && !geoFrontSortieCycleValidated)
+                {
+                    throw new IllegalStateException(
+                            "VISUAL GEOFRONT SORTIE INVALID: logistics cycle exceeded 2400 ticks; observed="
+                                    + GEOFRONT_LOGISTICS_PHASES);
                 }
                 return;
             }

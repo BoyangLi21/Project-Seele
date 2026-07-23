@@ -1,10 +1,13 @@
 package com.projectseele.client;
 
 import com.projectseele.ProjectSeele;
+import com.projectseele.client.render.EntryPlugCarrierRenderer;
 import com.projectseele.client.render.EvaUnit01Renderer;
 import com.projectseele.client.render.LocalTriangleMeshLayer;
 import com.projectseele.client.render.LocalVisualAssetFingerprint;
+import com.projectseele.client.render.NervCarrierPlatformRenderer;
 import com.projectseele.client.render.RamielRenderer;
+import com.projectseele.client.render.TrainingPilotRenderer;
 import com.projectseele.client.render.LilithRenderer;
 import com.projectseele.client.render.ColossalHumanoidRenderer;
 import com.projectseele.client.render.HybridAddonRenderer;
@@ -44,6 +47,12 @@ public class ClientEvents
         event.registerEntityRenderer(ModEntities.EVA_UNIT01.get(), EvaUnit01Renderer::new);
         event.registerEntityRenderer(ModEntities.EVA_UNIT00.get(), EvaUnit01Renderer::new);
         event.registerEntityRenderer(ModEntities.EVA_UNIT02.get(), EvaUnit01Renderer::new);
+        event.registerEntityRenderer(ModEntities.ENTRY_PLUG_CARRIER.get(),
+                EntryPlugCarrierRenderer::new);
+        event.registerEntityRenderer(ModEntities.TRAINING_PILOT.get(),
+                TrainingPilotRenderer::new);
+        event.registerEntityRenderer(ModEntities.NERV_CARRIER_PLATFORM.get(),
+                NervCarrierPlatformRenderer::new);
         event.registerEntityRenderer(ModEntities.SACHIEL.get(), context -> new HybridAddonRenderer<>(context,
                 ColossalHumanoidRenderer.Style.SACHIEL, "sachiel", 8.0F));
         event.registerEntityRenderer(ModEntities.SHAMSHEL.get(),

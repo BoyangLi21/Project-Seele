@@ -70,6 +70,10 @@ def main() -> int:
     magi = text(
         "src/main/java/com/projectseele/world/MagiDeepLabBuilder.java")
     game_events = text("src/main/java/com/projectseele/GameEvents.java")
+    logistics = text(
+        "src/main/java/com/projectseele/world/EvaLogisticsDirector.java")
+    hangars = text(
+        "src/main/java/com/projectseele/world/EvaHangarBuilder.java")
     local_assets = text(
         "src/main/java/com/projectseele/world/LocalMapAssetLoader.java")
     battle = text(
@@ -165,23 +169,33 @@ def main() -> int:
         gate("map.command_pyramid_envelope",
              all(token in builder for token in (
                  "PYRAMID_BASE_CENTRE_Z = 31", "PYRAMID_CENTRE_Z = 31",
-                 "PYRAMID_BASE_Y = -22", "PYRAMID_APEX_Y = 200",
-                 "PYRAMID_BASE_HALF_X = 70", "PYRAMID_BASE_HALF_Z = 100",
-                 "PYRAMID_APEX_HALF = 0",
-                 "clearBentEnvelopePyramid", "clearLegacyNervPyramid",
-                 "rectangularPyramidShellLayer", "buildPyramidApron",
-                 "isWithinPyramidFootprint",
+                 "PYRAMID_BASE_Y = -22", "PYRAMID_APEX_Y = 150",
+                 "PYRAMID_BASE_HALF_X = 120", "PYRAMID_BASE_HALF_Z = 120",
+                 "PYRAMID_APEX_HALF = 0", "ensurePyramidRevision",
+                 "clearTallEnvelopePyramid", "clearBentEnvelopePyramid",
+                 "clearLegacyNervPyramid", "rectangularPyramidShellLayer",
+                 "buildPyramidApron", "OBSERVATION_Z = 190",
+                 "pyramidApronMarkersPresent", "pyramidApronSurfacePresent",
+                 "writePyramidApronMarkers", "PYRAMID_APRON_MARGIN",
+                 "clearStaleNaturalColumn", "origin.offset(-x, 1",
+                 "buildObservationAccess", "pyramidGroundAccessPresent",
+                 "isWithinPyramidServiceApron",
+                 "isWithinPyramidPublicAccess",
                  "LocalMapAssetLoader.commandEnvelopeContains",
-                 "Blocks.CRYING_OBSIDIAN", "Blocks.BEACON"))
+                 "Blocks.BLACK_CONCRETE", "Blocks.CRYING_OBSIDIAN",
+                 "Blocks.BEACON"))
              and all(token in local_assets for token in (
                  "COMMAND_OFFSET = new BlockPos(-28, -21, -33)",
                  "COMMAND_SIZE = new Vec3i(56, 77, 129)",
                  "commandEnvelopeContains", "isCommandMarkerOffset")),
-             "one centred straight-slope NERV pyramid encloses the complete "
-             "56x77x129 command module, preserves LCL and clears the old kink"),
+             "one square black v18 NERV pyramid encloses the complete "
+             "56x77x129 command module, with an audited hard apron and a "
+             "walkable passage/stair to the ground overlook"),
         gate("map.integrated_coordinates",
              all(token in integrated for token in (
-                  "MAP_VERSION = 17",
+                  "MAP_VERSION = 18",
+                   "EvaHangarBuilder.build(level, GEOFRONT_ORIGIN)",
+                   "EvaHangarBuilder.ensure(level, GEOFRONT_ORIGIN)",
                   "stagedEvaWorld(level)",
                   "GEOFRONT_ORIGIN = new BlockPos(30, -444, 296)",
                   "TOKYO3_ORIGIN = new BlockPos(30, 80, 220)",
@@ -241,11 +255,14 @@ def main() -> int:
                  "OUTER_TERRAIN_RADIUS = 360",
                  "buildOuterTerrainShell", "buildElevatedExpressway",
                  "buildRailwayAndStation", "buildLaunchSafetyDistrict",
-                 "buildMunicipalFacilities", "LandscapeAudit"))
+                 "buildMunicipalFacilities", "terrainSurfacePresent",
+                 "for (int y = top; y >= -48; y--)", "LandscapeAudit"))
              and all(token in geofront_landscape for token in (
                  "buildLclShore", "buildPumpingStation",
                  "buildServiceRoad", "buildMaintenanceTerrace",
-                 "buildBlastBunkers", "LandscapeAudit")),
+                 "buildBlastBunkers", "LandscapeAudit",
+                 "isWithinPyramidServiceApron",
+                 "isWithinPyramidPublicAccess")),
              "both levels include audited terrain, transport, service and safety infrastructure"),
         gate("map.expanded_tokyo3_wards",
              all(token in tokyo3_surface for token in (
@@ -272,7 +289,9 @@ def main() -> int:
         gate("map.runtime_audit",
              all(token in integrated for token in (
                  "IntegratedAudit", "controlMarkers", "lowerBeds",
-                 "surfaceBeds", "continuousShafts", "clearExits"))
+                 "surfaceBeds", "continuousShafts", "clearExits",
+                 "hangars.valid()", "recoveryConsole.valid()",
+                 "repairMissingStreetLevelDistrict"))
              and all(token in builder for token in (
                  "floor", "skySphere", "lake", "naturalLake", "pyramid",
                  "legacyInnerPyramidGone", "realSky", "lifts == 3",
@@ -319,9 +338,11 @@ def main() -> int:
              and all(token in operations for token in (
                  "buildLowerConcourse", "buildOperationsHall",
                   "buildAccessStairs", "buildLiftTransit", "OperationsAudit",
+                  "buildCommandAccessSpine", "hasSafeAnnexRoutes",
                   "consoles == 3", "transitLinks == 3",
-                  "linkFacilities", "facilityLinks",
-                  "hasConnectedLowerRoutes", "walkable")),
+                  "linkFacilities", "facilityLinks", "linkHangars",
+                  "hasConnectedLowerRoutes", "hasConnectedHangarRoutes",
+                  "walkable")),
              "command, MAGI, Terminal Dogma and all lift routes share an audited physical interchange"),
         gate("map.nerv_live_telemetry",
              all(token in telemetry for token in (
@@ -433,7 +454,7 @@ def main() -> int:
                  "repairRuntimeLabels", "public static void tick",
                  "countLabelEntities(level, origin) != CORE_NAMES.length"))
              and "MagiDeepLabBuilder.build" in builder
-             and "magi.valid()" in builder
+             and "magi.runtimePhysicalValid()" in builder
              and "MagiDeepLabBuilder.handleUse(player, event.getPos())"
                  in game_events
              and "MagiDeepLabBuilder.tick(event.getServer())" in game_events,
@@ -456,17 +477,22 @@ def main() -> int:
                  "unsafeOverviewLogin", "unsafe saved GeoFront overview")),
              "developer camera shortcuts are separate from the physically linked EVA sortie"),
         gate("visual.city_armour_reset",
-             "Tokyo3RetractionDirector.reset(level," in geofront_visual_setup
+             "Tokyo3RetractionDirector.forceDepth(level," in geofront_visual_setup
              and geofront_visual_setup.index(
-                 "Tokyo3RetractionDirector.reset(level,")
+                 "Tokyo3RetractionDirector.forceDepth(level,")
                  < geofront_visual_setup.index(
                      "IntegratedNervMapBuilder.ensure(level)"),
-             "the fixed GeoFront capture restores Tokyo-3 street-level armour before auditing the saved world"),
+             "the fixed GeoFront capture physically restores every Tokyo-3 tower before auditing the saved world"),
         gate("sortie.same_dimension_primary",
              all(token in commands for token in (
-                 "ensureContinuousSortieUnits", "setSortieDestination(level.dimension(),",
-                 "setSortieParkingBed(lift.lowerBed())", "no transfer occurs",
+                 "ensureContinuousSortieUnits", "EvaLogisticsDirector.ensureFleet(level)",
                  "no portal or EVA teleport"))
+             and all(token in logistics for token in (
+                 "Phase.TO_SILO", "tickHorizontal", "tickDescent",
+                 "setSortieDestination(level.dimension(),",
+                 "setSortieParkingBed(silo)", "moveOnNervCarrier"))
+             and all(token in hangars for token in (
+                 "buildTransportTunnel", "setCarrier", "restoreStaticCarrier"))
              and all(token in entity for token in (
                  "private boolean isContinuousSortie()",
                  "private double launchTargetY()",
@@ -508,15 +534,23 @@ def main() -> int:
         gate("visual.same_dimension_sortie",
              all(token in capture for token in (
                  "three_units_ready", "entry_plug_locked", "live_pilot_sensor", "ascent_mid",
-                 "tokyo3_surface_arrival", "GeoFrontSortieSession",
+                 "tokyo3_surface_arrival", "recovery_descent",
+                 "wet_cage_return", "GeoFrontSortieSession",
                  "double ascent = IntegratedNervMapBuilder.ascentDistance()",
                  "ascent * 0.40D",
                  "ascent + 1.5D"))
              and 'CAPTURE_UNIT.equals("geofront_sortie")' in automation
+             and all(token in automation for token in (
+                 "TrainingPilotDirector.start",
+                 "EntryPlugDirector.hasBoardedPilot",
+                 "EvaLogisticsDirector.requestPrepare", "SILO_READY",
+                 "releaseLaunchFromCommand",
+                 "EvaLogisticsDirector.requestRecovery",
+                 "VISUAL GEOFRONT LOGISTICS CYCLE VALID"))
              and all(token in sortie_packet for token in (
                  "startGeoFrontSortie", "readVarInt", "readBlockPos"))
-             and "IntegratedNervMapBuilder.surfaceLiftBed(1)" in automation,
-             "five state-gated frames include live pilot telemetry and follow one EVA through the same-dimension shaft"),
+             and "IntegratedNervMapBuilder.surfaceLiftBed(1)" in capture,
+             "seven state-gated frames prove dummy external-plug boarding, command-authorized wet-cage transfer, live sortie and physical recovery through one same-dimension shaft"),
         gate("battle.operation_yashima_persistent",
              all(token in battle for token in (
                  "RESTORE_DELAY_TICKS = 100", "Tokyo3RamielBattleSavedData.get",

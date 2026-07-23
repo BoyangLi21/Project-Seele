@@ -211,6 +211,18 @@ if errorlevel 1 (
     pause
     exit /b 1
 )
+python tools\validate_eva_logistics_contract.py
+if errorlevel 1 (
+    echo EVA wet-hangar, transfer or recovery validation failed.
+    pause
+    exit /b 1
+)
+python tools\validate_dummy_pilot_contract.py
+if errorlevel 1 (
+    echo Dummy pilot, external entry-plug or command-feed validation failed.
+    pause
+    exit /b 1
+)
 python tools\validate_weapon_systems.py
 if errorlevel 1 (
     echo EVA firearm, scope or strategic-explosion validation failed.
@@ -292,9 +304,12 @@ echo.
 echo Continuous Tokyo-3 / GeoFront test flow:
 echo   1. The fresh normal-terrain SEELE_TOKYO3_REBUILT world opens automatically when available.
 echo   2. Run /seele geofront setup once only if the integrated map has not been initialized.
-echo   3. Run /seele geofront link to freeze Unit-00/01/02 at the lower stations.
-echo   4. Run /seele silo board from Unit-01's high rear gantry.
-echo   5. Wait for insertion and the real 522-block physical shaft ascent.
+echo   3. Run /seele geofront hangar to enter the shoulder-level wet-cage gallery.
+echo   4. Run /seele eva status all. A human or /seele eva dummy start unit01 must board the suspended white plug first.
+echo   5. MAGI CHECK retracts the split bridge, inserts the physical plug, drains LCL and moves the locked EVA to its silo.
+echo   6. EVA-01 RELEASE is still required at the main command console; its 16:9 panel can show TRAINING LIVE from the Dummy.
+echo   7. To recover, park motionless on the matching surface deck; a second operator presses its supported button in /seele geofront recovery_control.
+echo   8. /seele eva reset unit00^|unit01^|unit02^|all restores the canonical airframe, bridge, LCL and external plug.
 echo   /seele geofront surface is a developer camera shortcut only.
 echo   /seele geofront exit returns to the original world.
 echo   /seele geofront audit and sortie_audit report both map and EVA links.
@@ -333,7 +348,7 @@ if /i "%~1"=="visual" (
         if errorlevel 1 exit /b 1
     ) else if /i "%~2"=="tokyo3_retraction" (
         echo Capturing Tokyo-3 armour towers deployed, half-lowered, retracted and restored.
-        echo The full 285-layer down-and-up cycle takes roughly 10 minutes and closes automatically.
+        echo The full 312-layer down-and-up cycle takes roughly 11 minutes and closes automatically.
         python tools\validate_visual_capture_run.py begin tokyo3_retraction
         if errorlevel 1 exit /b 1
         call gradlew.bat runClient -PquickPlayWorld=%SEELE_VISUAL_WORLD% -PvisualCapture=true -PvisualCaptureUnit=tokyo3_retraction

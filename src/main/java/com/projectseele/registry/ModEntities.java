@@ -1,13 +1,16 @@
 package com.projectseele.registry;
 
 import com.projectseele.ProjectSeele;
+import com.projectseele.entity.EntryPlugCarrierEntity;
 import com.projectseele.entity.EvaUnit01Entity;
 import com.projectseele.entity.LilithEntity;
+import com.projectseele.entity.NervCarrierPlatformEntity;
 import com.projectseele.entity.RamielEntity;
 import com.projectseele.entity.SachielEntity;
 import com.projectseele.entity.MassProductionEvaEntity;
 import com.projectseele.entity.ShamshelEntity;
 import com.projectseele.entity.ZeruelEntity;
+import com.projectseele.entity.TrainingPilotEntity;
 import com.projectseele.entity.IsrafelEntity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MobCategory;
@@ -49,6 +52,36 @@ public class ModEntities
                     .fireImmune()
                     .clientTrackingRange(12)
                     .build("eva_unit02"));
+
+    public static final RegistryObject<EntityType<EntryPlugCarrierEntity>> ENTRY_PLUG_CARRIER =
+            ENTITY_TYPES.register("entry_plug_carrier",
+                    () -> EntityType.Builder.of(EntryPlugCarrierEntity::new,
+                                    MobCategory.MISC)
+                            .sized(1.5F, 6.0F)
+                            .fireImmune()
+                            .clientTrackingRange(24)
+                            .updateInterval(1)
+                            .build("entry_plug_carrier"));
+
+    public static final RegistryObject<EntityType<NervCarrierPlatformEntity>>
+            NERV_CARRIER_PLATFORM = ENTITY_TYPES.register(
+                    "nerv_carrier_platform",
+                    () -> EntityType.Builder.of(NervCarrierPlatformEntity::new,
+                                    MobCategory.MISC)
+                            .noSave()
+                            .sized(11.0F, 0.6F)
+                            .clientTrackingRange(32)
+                            .updateInterval(1)
+                            .setShouldReceiveVelocityUpdates(false)
+                            .build("nerv_carrier_platform"));
+
+    public static final RegistryObject<EntityType<TrainingPilotEntity>> TRAINING_PILOT =
+            ENTITY_TYPES.register("training_pilot",
+                    () -> EntityType.Builder.of(TrainingPilotEntity::new,
+                                    MobCategory.MISC)
+                            .sized(0.6F, 1.8F)
+                            .clientTrackingRange(12)
+                            .build("training_pilot"));
 
     public static final RegistryObject<EntityType<SachielEntity>> SACHIEL = ENTITY_TYPES.register("sachiel",
             () -> EntityType.Builder.of(SachielEntity::new, MobCategory.MONSTER)

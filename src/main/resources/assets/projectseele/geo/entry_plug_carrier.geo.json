@@ -1,0 +1,28 @@
+{
+  "format_version": "1.12.0",
+  "minecraft:geometry": [
+    {
+      "description": {
+        "identifier": "geometry.projectseele.entry_plug_carrier",
+        "texture_width": 32,
+        "texture_height": 32,
+        "visible_bounds_width": 4,
+        "visible_bounds_height": 10,
+        "visible_bounds_offset": [0, 3, 0]
+      },
+      "bones": [
+        {
+          "name": "entry_plug",
+          "pivot": [0, 0, 0],
+          "cubes": [
+            {
+              "origin": [-4, -2, -4.5],
+              "size": [8, 38, 9],
+              "uv": [0, 0]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

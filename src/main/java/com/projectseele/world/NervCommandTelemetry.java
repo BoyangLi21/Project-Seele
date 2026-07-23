@@ -12,6 +12,7 @@ import com.projectseele.ProjectSeele;
 import com.projectseele.entity.Angel;
 import com.projectseele.entity.EvaUnit01Entity;
 import com.projectseele.entity.RamielEntity;
+import com.projectseele.entity.TrainingPilotEntity;
 import com.projectseele.event.AngelSiegeDirector;
 import com.projectseele.network.ServerboundEvaVideoFramePacket;
 import com.projectseele.registry.ModBlocks;
@@ -30,6 +31,7 @@ import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Display;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.tags.BlockTags;
@@ -64,7 +66,7 @@ public final class NervCommandTelemetry
     };
     private static final int[][] SCREEN_OFFSETS = {
             {-12, 0, 0}, {0, 0, 0}, {12, 0, 0},
-            {-21, 1, 3}, {21, 1, 3}
+            {-12, 12, 0}, {12, 12, 0}
     };
     private static final Map<UUID, String> LAST_TEXT = new HashMap<>();
 
@@ -83,10 +85,11 @@ public final class NervCommandTelemetry
         {
             return;
         }
-        // Entity chunks can finish loading after map setup. Re-running the
-        // bounded console installer here removes persisted duplicate labels
-        // before their translucent backgrounds stack into opaque panels.
-        NervOperationsConsole.install(level, origin);
+        // The physical console is repaired by map setup/runtime gates. Do not
+        // rebuild its platform here: this method runs every 40 ticks and the
+        // old call rewrote more than a thousand command-room blocks each pass,
+        // reducing the integrated server to roughly two TPS and making the
+        // EVA carrier state machine appear completely frozen.
         install(level, origin);
     }
 
@@ -119,6 +122,7 @@ public final class NervCommandTelemetry
             List<Display.TextDisplay> matches = displays(level, origin,
                     screenTag);
             Display.TextDisplay display;
+            boolean pendingAdd = false;
             if (matches.isEmpty())
             {
                 display = EntityType.TEXT_DISPLAY.create(level);
@@ -130,7 +134,7 @@ public final class NervCommandTelemetry
                 display.setNoGravity(true);
                 display.setInvulnerable(true);
                 display.setSilent(true);
-                level.addFreshEntity(display);
+                pendingAdd = true;
                 created++;
             }
             else
@@ -147,6 +151,10 @@ public final class NervCommandTelemetry
             Vec3 position = Vec3.atCenterOf(anchor.offset(
                     offset[0], offset[1], offset[2]));
             updateDisplay(display, position, text[index]);
+            if (pendingAdd)
+            {
+                level.addFreshEntity(display);
+            }
         }
         if (created > 0)
         {
@@ -263,7 +271,9 @@ public final class NervCommandTelemetry
         boolean videoLive = ServerboundEvaVideoFramePacket.isFeedActive(
                 level, variant);
         result.append(Component.literal(videoLive
-                        ? "\nCOCKPIT VIDEO: LIVE"
+                        ? unit.isTrainingPilotActive()
+                                ? "\nCOCKPIT VIDEO: TRAINING LIVE"
+                                : "\nCOCKPIT VIDEO: LIVE"
                         : "\nCOCKPIT VIDEO: STANDBY")
                 .withStyle(videoLive ? ChatFormatting.GREEN
                         : ChatFormatting.DARK_GRAY));
@@ -347,9 +357,10 @@ public final class NervCommandTelemetry
                             ? ChatFormatting.RED : ChatFormatting.YELLOW));
         }
         EvaUnit01Entity feed = units.stream()
-                .filter(unit -> unit.getFirstPassenger() instanceof ServerPlayer)
+                .filter(unit -> activePilot(unit) != null)
                 .findFirst().orElse(findVariant(units, EvaUnit01Entity.UNIT_01));
-        if (feed != null && feed.getFirstPassenger() instanceof ServerPlayer pilot)
+        LivingEntity pilot = activePilot(feed);
+        if (feed != null && pilot != null)
         {
             result.append(Component.literal(String.format(Locale.ROOT,
                             "\nPILOT SENSOR FEED EVA-%02d  HDG %03d  PITCH %+03d",
@@ -410,14 +421,13 @@ public final class NervCommandTelemetry
                                          List<EvaUnit01Entity> units)
     {
         EvaUnit01Entity feed = units.stream()
-                .filter(unit -> unit.getFirstPassenger()
-                        instanceof ServerPlayer)
+                .filter(unit -> activePilot(unit) != null)
                 .findFirst().orElse(null);
         MutableComponent result = Component.literal(
                 "ENTRY PLUG / LIVE OPTICAL SENSOR")
                 .withStyle(ChatFormatting.GOLD);
-        if (feed == null
-                || !(feed.getFirstPassenger() instanceof ServerPlayer pilot))
+        LivingEntity pilot = activePilot(feed);
+        if (feed == null || pilot == null)
         {
             result.append(Component.literal(
                             "\nNO ACTIVE PILOT LINK\n\n"
@@ -428,9 +438,10 @@ public final class NervCommandTelemetry
         }
 
         result.append(Component.literal(String.format(Locale.ROOT,
-                        "\nEVA-%02d  HDG %03d  PITCH %+03d",
-                        feed.getUnitVariant(), heading(pilot.getYRot()),
-                        Math.round(pilot.getXRot())))
+                        "\nEVA-%02d  %s  HDG %03d  PITCH %+03d",
+                        feed.getUnitVariant(),
+                        pilot instanceof TrainingPilotEntity ? "DUMMY" : "PILOT",
+                        heading(pilot.getYRot()), Math.round(pilot.getXRot())))
                 .withStyle(ChatFormatting.AQUA));
 
         Vec3 eye = pilot.getEyePosition();
@@ -510,7 +521,7 @@ public final class NervCommandTelemetry
     }
 
     private static void markNearestAngel(ServerLevel level,
-                                         ServerPlayer pilot,
+                                         LivingEntity pilot,
                                          Vec3 eye, Vec3 forward,
                                          Vec3 right, Vec3 up,
                                          char[][] pixels,
@@ -557,6 +568,18 @@ public final class NervCommandTelemetry
                 * 0.5D * SENSOR_HEIGHT), 0, SENSOR_HEIGHT - 1);
         pixels[row][column] = 'X';
         colours[row][column] = ChatFormatting.RED;
+    }
+
+    private static LivingEntity activePilot(EvaUnit01Entity unit)
+    {
+        if (unit == null)
+        {
+            return null;
+        }
+        Entity passenger = unit.getFirstPassenger();
+        return passenger instanceof ServerPlayer
+                || passenger instanceof TrainingPilotEntity
+                ? (LivingEntity) passenger : null;
     }
 
     private static ChatFormatting sensorColour(BlockState state,
@@ -692,10 +715,18 @@ public final class NervCommandTelemetry
             tag.putInt("background", 0xB0101418);
             tag.putByte("text_opacity", (byte) -1);
             tag.putBoolean("shadow", true);
-            tag.putBoolean("see_through", false);
+            // The imported command module may leave a glass or trim voxel in
+            // front of a display plane. Keep the live glyph layer readable
+            // through that physical panel while the black backing remains a
+            // real part of the room.
+            tag.putBoolean("see_through", true);
             tag.putBoolean("default_background", false);
             tag.putString("alignment", "left");
-            tag.putString("billboard", "vertical");
+            // The imported bridge is normally viewed from +Z, but crew can
+            // approach the upper diagnostic wings from either aisle. A centre
+            // billboard also migrates legacy fixed panels whose saved
+            // 180-degree yaw exposed only the black backing surface.
+            tag.putString("billboard", "center");
             tag.putFloat("view_range", 4.0F);
             tag.putFloat("width", 9.0F);
             tag.putFloat("height", 5.5F);
@@ -711,9 +742,9 @@ public final class NervCommandTelemetry
         {
             display.setPos(position.x, position.y, position.z);
         }
-        if (Math.abs(Mth.wrapDegrees(display.getYRot() - 180.0F)) > 0.01F)
+        if (Math.abs(Mth.wrapDegrees(display.getYRot())) > 0.01F)
         {
-            display.setYRot(180.0F);
+            display.setYRot(0.0F);
         }
         if (Math.abs(display.getXRot()) > 0.01F)
         {

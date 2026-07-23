@@ -629,7 +629,12 @@ public final class GeoFrontLandscapeBuilder
     /** Hard exclusions shared by every surface pass in this builder. */
     private static boolean isProtected(int x, int z)
     {
-        if (GeoFrontBuilder.isWithinPyramidFootprint(x, z, 2))
+        if (Math.abs(x) <= 45 && z >= -170 && z <= -34)
+        {
+            return true;
+        }
+        if (GeoFrontBuilder.isWithinPyramidServiceApron(x, z)
+                || GeoFrontBuilder.isWithinPyramidPublicAccess(x, z))
         {
             return true;
         }

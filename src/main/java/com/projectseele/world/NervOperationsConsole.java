@@ -23,6 +23,7 @@ import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.ButtonBlock;
+import net.minecraft.world.level.block.StairBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.AttachFace;
 import net.minecraft.world.phys.AABB;
@@ -84,6 +85,7 @@ public final class NervOperationsConsole
     {
         level.getChunkAt(controlPosition(origin, 0));
         removeLegacyRow(level, origin);
+        buildControlPlatform(level, origin);
         int createdControls = 0;
         int createdLabels = 0;
         BlockState button = Blocks.STONE_BUTTON.defaultBlockState()
@@ -94,25 +96,23 @@ public final class NervOperationsConsole
             BlockPos position = controlPosition(origin, index);
             BlockPos base = position.below();
             BlockPos support = base.below();
-            if (level.getBlockState(support).isAir())
-            {
-                level.setBlock(support,
-                        Blocks.POLISHED_BLACKSTONE.defaultBlockState(),
-                        UPDATE_CLIENTS);
-            }
+            setIfDifferent(level, support,
+                    Blocks.POLISHED_BLACKSTONE.defaultBlockState(),
+                    UPDATE_CLIENTS);
             if (!level.getBlockState(base).equals(BASES[index]))
             {
-                level.setBlock(base, BASES[index], UPDATE_CLIENTS);
+                setIfDifferent(level, base, BASES[index], UPDATE_CLIENTS);
             }
             if (!level.getBlockState(position).is(Blocks.STONE_BUTTON))
             {
-                level.setBlock(position, button, UPDATE_CLIENTS);
+                setIfDifferent(level, position, button, UPDATE_CLIENTS);
                 createdControls++;
             }
 
             String tag = LABEL_TAG_PREFIX + IDS[index];
             List<Display.TextDisplay> matches = labels(level, origin, tag);
             Display.TextDisplay label;
+            boolean pendingAdd = false;
             if (matches.isEmpty())
             {
                 label = EntityType.TEXT_DISPLAY.create(level);
@@ -124,7 +124,7 @@ public final class NervOperationsConsole
                 label.setNoGravity(true);
                 label.setInvulnerable(true);
                 label.setSilent(true);
-                level.addFreshEntity(label);
+                pendingAdd = true;
                 createdLabels++;
             }
             else
@@ -136,6 +136,10 @@ public final class NervOperationsConsole
                 }
             }
             updateLabel(label, position, index);
+            if (pendingAdd)
+            {
+                level.addFreshEntity(label);
+            }
         }
         if (createdControls > 0 || createdLabels > 0)
         {
@@ -145,6 +149,80 @@ public final class NervOperationsConsole
                     countLabels(level, origin), CONTROL_COUNT,
                     createdControls, createdLabels);
         }
+    }
+
+    /** Continuous supported dais and stair approach for every command key. */
+    private static void buildControlPlatform(ServerLevel level, BlockPos origin)
+    {
+        int minX = FIRST_CONTROL_X - 2;
+        int maxX = FIRST_CONTROL_X + (CONTROL_COUNT - 1) * CONTROL_SPACING + 2;
+        int floorY = CONTROL_Y - 2;
+        for (int x = minX; x <= maxX; x++)
+        {
+            for (int z = CONTROL_Z - 3; z <= CONTROL_Z + 3; z++)
+            {
+                boolean controlColumn = isControlColumn(x, z);
+                BlockState floor = controlColumn
+                        ? Blocks.POLISHED_BLACKSTONE.defaultBlockState()
+                        : Math.floorMod(x + z, 9) == 0
+                        ? Blocks.SEA_LANTERN.defaultBlockState()
+                        : Blocks.POLISHED_BLACKSTONE.defaultBlockState();
+                setIfDifferent(level, origin.offset(x, floorY, z), floor,
+                        UPDATE_CLIENTS);
+                for (int y = floorY + 1; y <= floorY + 5; y++)
+                {
+                    // Preserve the seven real bases and buttons. The old code
+                    // deleted and recreated them on every repair/install pass.
+                    if (controlColumn && (y == CONTROL_Y - 1 || y == CONTROL_Y))
+                    {
+                        continue;
+                    }
+                    setIfDifferent(level, origin.offset(x, y, z),
+                            Blocks.AIR.defaultBlockState(), UPDATE_CLIENTS);
+                }
+            }
+        }
+
+        // Five real support bents make the elevated row read as a platform,
+        // not seven disconnected cubes hanging in the command hall.
+        for (int x = minX; x <= maxX; x += 7)
+        {
+            for (int y = 8; y < floorY; y++)
+            {
+                setIfDifferent(level, origin.offset(x, y, CONTROL_Z),
+                        Blocks.POLISHED_BLACKSTONE_BRICKS.defaultBlockState(),
+                        UPDATE_CLIENTS);
+            }
+        }
+
+        BlockState stair = Blocks.POLISHED_BLACKSTONE_BRICK_STAIRS
+                .defaultBlockState().setValue(StairBlock.FACING, Direction.NORTH);
+        for (int step = 0; step < 5; step++)
+        {
+            int z = CONTROL_Z + 8 - step;
+            int y = 8 + step;
+            for (int x = -3; x <= 3; x++)
+            {
+                setIfDifferent(level, origin.offset(x, y, z), stair,
+                        UPDATE_CLIENTS);
+                for (int head = 1; head <= 3; head++)
+                {
+                    setIfDifferent(level, origin.offset(x, y + head, z),
+                            Blocks.AIR.defaultBlockState(), UPDATE_CLIENTS);
+                }
+            }
+        }
+    }
+
+    private static boolean isControlColumn(int relativeX, int relativeZ)
+    {
+        if (relativeZ != CONTROL_Z)
+        {
+            return false;
+        }
+        int delta = relativeX - FIRST_CONTROL_X;
+        return delta >= 0 && delta % CONTROL_SPACING == 0
+                && delta / CONTROL_SPACING < CONTROL_COUNT;
     }
 
     /** Returns true only for one of the seven exact NERV command buttons. */
@@ -208,10 +286,44 @@ public final class NervOperationsConsole
                 supports++;
             }
         }
+        int platformTiles = 0;
+        int minX = FIRST_CONTROL_X - 2;
+        int maxX = FIRST_CONTROL_X + (CONTROL_COUNT - 1) * CONTROL_SPACING + 2;
+        int expectedPlatformTiles = (maxX - minX + 1) * 7;
+        for (int x = minX; x <= maxX; x++)
+        {
+            for (int z = CONTROL_Z - 3; z <= CONTROL_Z + 3; z++)
+            {
+                BlockState floor = level.getBlockState(
+                        origin.offset(x, CONTROL_Y - 2, z));
+                if (floor.is(Blocks.POLISHED_BLACKSTONE)
+                        || floor.is(Blocks.SEA_LANTERN))
+                {
+                    platformTiles++;
+                }
+            }
+        }
+        int approachSteps = 0;
+        for (int step = 0; step < 5; step++)
+        {
+            int z = CONTROL_Z + 8 - step;
+            int y = 8 + step;
+            for (int x = -3; x <= 3; x++)
+            {
+                if (level.getBlockState(origin.offset(x, y, z))
+                        .is(Blocks.POLISHED_BLACKSTONE_BRICK_STAIRS))
+                {
+                    approachSteps++;
+                }
+            }
+        }
         return new ConsoleAudit(controls == CONTROL_COUNT
                 && bases == CONTROL_COUNT && labels == CONTROL_COUNT
-                && supports == CONTROL_COUNT,
-                controls, bases, labels, supports);
+                && supports == CONTROL_COUNT
+                && platformTiles == expectedPlatformTiles
+                && approachSteps == 35,
+                controls, bases, labels, supports, platformTiles,
+                expectedPlatformTiles, approachSteps);
     }
 
     public static String statusLine(ServerLevel level)
@@ -243,9 +355,20 @@ public final class NervOperationsConsole
         {
             List<EvaUnit01Entity> units =
                     GeoFrontCommands.ensureContinuousSortieUnits(level);
+            int started = 0;
+            for (int variant = 0; variant < 3; variant++)
+            {
+                EvaLogisticsDirector.ActionResult transfer =
+                        EvaLogisticsDirector.requestPrepare(level, variant);
+                if (transfer.accepted())
+                {
+                    started++;
+                }
+            }
             return new ActionResult(units.size() == 3,
                     units.size() == 3
-                            ? "MAGI check complete; EVA-00/01/02 are linked to their physical shafts."
+                            ? "MAGI check complete; wet-cage drain/transfer started for "
+                                    + started + " EVA airframes."
                             : "MAGI check found only " + units.size() + "/3 airframes.");
         }
         catch (IllegalStateException exception)
@@ -348,6 +471,14 @@ public final class NervOperationsConsole
         return -1;
     }
 
+    private static void setIfDifferent(ServerLevel level, BlockPos position,
+                                       BlockState state, int flags)
+    {
+        if (!level.getBlockState(position).equals(state))
+        {
+            level.setBlock(position, state, flags);
+        }
+    }
     private static void removeLegacyRow(ServerLevel level, BlockPos origin)
     {
         for (int index = 0; index < CONTROL_COUNT; index++)
@@ -357,7 +488,7 @@ public final class NervOperationsConsole
                     LEGACY_CONTROL_Z);
             if (level.getBlockState(legacy).is(Blocks.STONE_BUTTON))
             {
-                level.setBlock(legacy, Blocks.AIR.defaultBlockState(),
+                setIfDifferent(level, legacy, Blocks.AIR.defaultBlockState(),
                         UPDATE_CLIENTS);
             }
             BlockState oldBase = level.getBlockState(legacy.below());
@@ -365,7 +496,7 @@ public final class NervOperationsConsole
             {
                 if (oldBase.equals(state))
                 {
-                    level.setBlock(legacy.below(),
+                    setIfDifferent(level, legacy.below(),
                             Blocks.AIR.defaultBlockState(), UPDATE_CLIENTS);
                     break;
                 }
@@ -459,15 +590,27 @@ public final class NervOperationsConsole
     private record ActionResult(boolean accepted, String message) {}
 
     public record ConsoleAudit(boolean valid, int controls,
-                               int bases, int labels, int supports)
+                               int bases, int labels, int supports,
+                               int platformTiles, int expectedPlatformTiles,
+                               int approachSteps)
     {
+        public boolean physicalValid()
+        {
+            return this.controls == CONTROL_COUNT && this.bases == CONTROL_COUNT
+                    && this.supports == CONTROL_COUNT
+                    && this.platformTiles == this.expectedPlatformTiles
+                    && this.approachSteps == 35;
+        }
+
         public String summary()
         {
             return String.format(Locale.ROOT,
-                    "valid=%s controls=%d/%d bases=%d/%d labels=%d/%d supports=%d/%d",
+                    "valid=%s controls=%d/%d bases=%d/%d labels=%d/%d "
+                            + "supports=%d/%d platform=%d/%d stairs=%d/35",
                     this.valid, this.controls, CONTROL_COUNT,
                     this.bases, CONTROL_COUNT, this.labels, CONTROL_COUNT,
-                    this.supports, CONTROL_COUNT);
+                    this.supports, CONTROL_COUNT, this.platformTiles,
+                    this.expectedPlatformTiles, this.approachSteps);
         }
     }
 }

@@ -194,11 +194,11 @@ public final class ThirdTokyoSurfaceBuilder
         }
 
         int substations = 0;
-        if (level.getBlockState(origin.offset(0, 1, -80)).is(Blocks.COPPER_BLOCK))
+        if (isSubstationCore(level.getBlockState(origin.offset(0, 1, -80))))
         {
             substations++;
         }
-        if (level.getBlockState(origin.offset(80, 1, 0)).is(Blocks.COPPER_BLOCK))
+        if (isSubstationCore(level.getBlockState(origin.offset(80, 1, 0))))
         {
             substations++;
         }
@@ -744,7 +744,32 @@ public final class ThirdTokyoSurfaceBuilder
         }
         // Place the audit/core block after the centre lamp strip so the strip
         // cannot silently overwrite both substation signatures.
-        set(level, centre.above(), Blocks.COPPER_BLOCK.defaultBlockState());
+        set(level, centre.above(), Blocks.WAXED_COPPER_BLOCK.defaultBlockState());
+    }
+
+    /** Migrates the two old weatherable audit cores without rebuilding Tokyo-3. */
+    public static void repairSubstationCores(ServerLevel level, BlockPos origin)
+    {
+        for (BlockPos core : new BlockPos[] {
+                origin.offset(0, 1, -80), origin.offset(80, 1, 0)})
+        {
+            if (!level.getBlockState(core).is(Blocks.WAXED_COPPER_BLOCK))
+            {
+                set(level, core, Blocks.WAXED_COPPER_BLOCK.defaultBlockState());
+            }
+        }
+    }
+
+    private static boolean isSubstationCore(BlockState state)
+    {
+        return state.is(Blocks.COPPER_BLOCK)
+                || state.is(Blocks.EXPOSED_COPPER)
+                || state.is(Blocks.WEATHERED_COPPER)
+                || state.is(Blocks.OXIDIZED_COPPER)
+                || state.is(Blocks.WAXED_COPPER_BLOCK)
+                || state.is(Blocks.WAXED_EXPOSED_COPPER)
+                || state.is(Blocks.WAXED_WEATHERED_COPPER)
+                || state.is(Blocks.WAXED_OXIDIZED_COPPER);
     }
 
     private static void buildBattlePlaza(ServerLevel level, BlockPos centre)
@@ -937,7 +962,26 @@ public final class ThirdTokyoSurfaceBuilder
      */
     public static int ceilingRoofRelativeY(TowerSpec tower)
     {
-        int horizontalSqr = tower.x() * tower.x() + tower.z() * tower.z();
+        // The complete rectangular tower, not merely its centre column, must
+        // stay inside the curved Skyweave shell. Using the centre radius put
+        // the outward edge of eleven east-side towers directly on the
+        // discretised sphere, so rebuilding GeoFront replaced their expected
+        // air/ceiling state and made the integrated map fail 84/95. The
+        // farthest footprint corner is the limiting radius for a level cap.
+        return ceilingRoofRelativeYForBounds(
+                tower.x() - tower.halfSize(),
+                tower.x() + tower.halfSize(),
+                tower.z() - tower.halfSize(),
+                tower.z() + tower.halfSize());
+    }
+
+    /** Curved-ceiling clearance for an arbitrary, possibly rotated footprint. */
+    public static int ceilingRoofRelativeYForBounds(int minimumX, int maximumX,
+                                                     int minimumZ, int maximumZ)
+    {
+        int farthestX = Math.max(Math.abs(minimumX), Math.abs(maximumX));
+        int farthestZ = Math.max(Math.abs(minimumZ), Math.abs(maximumZ));
+        int horizontalSqr = farthestX * farthestX + farthestZ * farthestZ;
         int radiusSqr = GeoFrontBuilder.CAVERN_RADIUS * GeoFrontBuilder.CAVERN_RADIUS;
         int shellRise = (int) Math.floor(Math.sqrt(
                 Math.max(0, radiusSqr - horizontalSqr)));

@@ -2,6 +2,7 @@ package com.projectseele.world;
 
 import java.util.Locale;
 
+import com.projectseele.ProjectSeele;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
@@ -19,6 +20,7 @@ public final class NervOperationsCentreBuilder
 
     private static final int UPDATE_CLIENTS = Block.UPDATE_CLIENTS;
     private static final int[] TRANSIT_X = {-28, 0, 28};
+    private static final int COMMAND_SPINE_X = -10;
 
     private NervOperationsCentreBuilder() {}
 
@@ -35,6 +37,7 @@ public final class NervOperationsCentreBuilder
         buildVideoWall(level, origin, localCommand);
         buildAccessStairs(level, origin);
         buildLiftTransit(level, origin);
+        linkHangars(level, origin);
         NervOperationsConsole.install(level, origin);
         NervCommandTelemetry.install(level, origin);
     }
@@ -91,15 +94,35 @@ public final class NervOperationsCentreBuilder
     public static OperationsAudit repairRuntimeAccess(ServerLevel level,
                                                        BlockPos origin)
     {
-        repairConnectedLowerRoutes(level, origin);
+        if (!hasConnectedHangarRoutes(level, origin))
+        {
+            linkHangars(level, origin);
+        }
         linkFacilities(level, origin);
-        NervOperationsConsole.install(level, origin);
+        if (!level.players().isEmpty())
+        {
+            NervOperationsConsole.install(level, origin);
+        }
         boolean localCommand =
                 LocalMapAssetLoader.commandMarkersPresent(level, origin);
         buildCommandSupportAnnex(level, origin, localCommand);
         buildVideoWall(level, origin, localCommand);
-        NervCommandTelemetry.install(level, origin);
-        return inspect(level, origin);
+        // The imported command module and its sealed support annex both
+        // repaint parts of the lower pressure spine. Restore the bounded
+        // pedestrian deck after every structural pass so no doorway cleanup
+        // can leave a one-block fall at the hangar interchange.
+        repairConnectedLowerRoutes(level, origin);
+        if (!level.players().isEmpty())
+        {
+            NervCommandTelemetry.install(level, origin);
+        }
+        OperationsAudit audit = inspect(level, origin);
+        if (!audit.runtimePhysicalValid())
+        {
+            ProjectSeele.LOGGER.warn("NERV route diagnostic: {}",
+                    routeDiagnostics(level, origin, audit));
+        }
+        return audit;
     }
 
     public static OperationsAudit inspect(ServerLevel level, BlockPos origin)
@@ -140,6 +163,7 @@ public final class NervOperationsCentreBuilder
             }
         }
         boolean connectedRoutes = hasConnectedLowerRoutes(level, origin);
+        boolean hangarRoutes = hasConnectedHangarRoutes(level, origin);
         boolean facilityLinks =
                 level.getBlockState(origin.offset(-30, OPERATIONS_FLOOR_Y, 12))
                         .is(Blocks.PURPLE_CONCRETE)
@@ -174,19 +198,21 @@ public final class NervOperationsCentreBuilder
                 && level.getBlockState(origin.offset(-1, -20, -33)).isAir()
                 && level.getBlockState(origin.offset(-1, -21, -34))
                 .is(Blocks.POLISHED_BLACKSTONE)
-                && level.getBlockState(origin.offset(-1, -18, -42))
-                .is(Blocks.ORANGE_STAINED_GLASS)
+                && level.getBlockState(origin.offset(-1, -18, -42)).isAir()
+                && level.getBlockState(origin.offset(-3, -18, -42))
+                .is(Blocks.ORANGE_CONCRETE)
                 && hasSafeAnnexRoutes(level, origin);
         NervOperationsConsole.ConsoleAudit commandConsole =
                 NervOperationsConsole.inspect(level, origin);
         boolean valid = entrance && tacticalTable && display && stairs
                 && consoles == 3 && transitLinks == 3 && connectedRoutes
-                && facilityLinks && videoWall && safeAnnex
+                && hangarRoutes && facilityLinks && videoWall && safeAnnex
                 && telemetryScreens == NervCommandTelemetry.SCREEN_COUNT
                 && commandConsole.valid();
         return new OperationsAudit(valid, entrance, tacticalTable, display,
-                stairs, consoles, transitLinks, connectedRoutes, facilityLinks,
-                videoWall, safeAnnex, telemetryScreens, commandConsole);
+                stairs, consoles, transitLinks, connectedRoutes, hangarRoutes,
+                facilityLinks, videoWall, safeAnnex, telemetryScreens,
+                commandConsole);
     }
 
     private static void buildLowerConcourse(ServerLevel level, BlockPos origin)
@@ -493,6 +519,7 @@ public final class NervOperationsCentreBuilder
             }
         }
         openPressureVestibuleDoorway(level, origin);
+        buildCommandAccessSpine(level, origin);
 
         // Two high maintenance apertures are observation windows, not exits.
         for (int x : new int[] {-26, -25, 21, 22})
@@ -628,6 +655,101 @@ public final class NervOperationsCentreBuilder
         }
     }
 
+    /**
+     * A real 22-step pressure tunnel joins the imported module's lower
+     * service vestibule to the central hangar interchange at Y=2.
+     */
+    private static void buildCommandAccessSpine(ServerLevel level,
+                                                 BlockPos origin)
+    {
+        BlockState stair = Blocks.SMOOTH_QUARTZ_STAIRS.defaultBlockState()
+                .setValue(StairBlock.FACING, Direction.NORTH);
+        for (int z = -40; z >= -61; z--)
+        {
+            // Keep the rising service spine west of the public Y=1 concourse.
+            // Sharing the same X/Z column made one route's floor become the
+            // other route's head obstruction on every runtime repair.
+            int floorY = -20 + (-z - 40);
+            for (int x = -3; x <= 3; x++)
+            {
+                int routeX = COMMAND_SPINE_X + x;
+                set(level, origin.offset(routeX, floorY, z), stair);
+                for (int y = 1; y <= 4; y++)
+                {
+                    set(level, origin.offset(routeX, floorY + y, z),
+                            Blocks.AIR.defaultBlockState());
+                }
+                set(level, origin.offset(routeX, floorY + 5, z),
+                        x == 0 && Math.floorMod(z, 5) == 0
+                                ? Blocks.SEA_LANTERN.defaultBlockState()
+                                : Blocks.IRON_BLOCK.defaultBlockState());
+            }
+            for (int y = 0; y <= 5; y++)
+            {
+                BlockState wall = y == 2 && Math.floorMod(z, 6) == 0
+                        ? Blocks.ORANGE_STAINED_GLASS.defaultBlockState()
+                        : Blocks.LIGHT_GRAY_CONCRETE.defaultBlockState();
+                set(level, origin.offset(COMMAND_SPINE_X - 4,
+                        floorY + y, z), wall);
+                set(level, origin.offset(COMMAND_SPINE_X + 4,
+                        floorY + y, z), wall);
+            }
+        }
+
+        // Lower landing: the imported service vestibule at X=-1 turns west
+        // before the climb begins, so it never passes underneath the public
+        // concourse.
+        for (int x = COMMAND_SPINE_X; x <= -1; x++)
+        {
+            set(level, origin.offset(x, -21, -39),
+                    Blocks.POLISHED_BLACKSTONE.defaultBlockState());
+            for (int y = -20; y <= -17; y++)
+            {
+                set(level, origin.offset(x, y, -39),
+                        Blocks.AIR.defaultBlockState());
+            }
+            set(level, origin.offset(x, -16, -39),
+                    Math.floorMod(x, 5) == 0
+                            ? Blocks.SEA_LANTERN.defaultBlockState()
+                            : Blocks.IRON_BLOCK.defaultBlockState());
+        }
+
+        // Upper landing: at Y=1 the spine turns east into the central
+        // interchange, then continues north through the three shaft bypasses.
+        for (int x = COMMAND_SPINE_X; x <= 0; x++)
+        {
+            set(level, origin.offset(x, 1, -61),
+                    Blocks.POLISHED_BLACKSTONE.defaultBlockState());
+            for (int y = 2; y <= 5; y++)
+            {
+                set(level, origin.offset(x, y, -61),
+                        Blocks.AIR.defaultBlockState());
+            }
+            set(level, origin.offset(x, 6, -61),
+                    Math.floorMod(x, 5) == 0
+                            ? Blocks.SEA_LANTERN.defaultBlockState()
+                            : Blocks.IRON_BLOCK.defaultBlockState());
+        }
+
+        // Open the ramp through the vestibule's former observation glazing.
+        int thresholdFloorY = -19;
+        for (int x = -2; x <= 2; x++)
+        {
+            for (int y = thresholdFloorY + 1;
+                 y <= thresholdFloorY + 4; y++)
+            {
+                set(level, origin.offset(x, y, -42),
+                        Blocks.AIR.defaultBlockState());
+            }
+        }
+        for (int y = thresholdFloorY; y <= thresholdFloorY + 5; y++)
+        {
+            set(level, origin.offset(-3, y, -42),
+                    Blocks.ORANGE_CONCRETE.defaultBlockState());
+            set(level, origin.offset(3, y, -42),
+                    Blocks.ORANGE_CONCRETE.defaultBlockState());
+        }
+    }
     private static void openPressureVestibuleDoorway(ServerLevel level,
                                                       BlockPos origin)
     {
@@ -895,6 +1017,27 @@ public final class NervOperationsCentreBuilder
             set(level, anchor.offset(x, 0, -1),
                     Blocks.SEA_LANTERN.defaultBlockState());
         }
+
+        // Two upper diagnostic wings keep the strategic and optical-sensor
+        // TextDisplays inside the command-room shell.  Their former +/-21 X
+        // positions intersected the imported module's side walls, making a
+        // valid live sensor invisible from the operations floor.
+        for (int centreX : new int[] {-12, 12})
+        {
+            for (int x = centreX - 6; x <= centreX + 6; x++)
+            {
+                for (int y = 9; y <= 16; y++)
+                {
+                    boolean frame = x == centreX - 6 || x == centreX + 6
+                            || y == 9 || y == 16;
+                    set(level, anchor.offset(x, y, -1), frame
+                            ? Blocks.POLISHED_DEEPSLATE.defaultBlockState()
+                            : Blocks.BLACK_CONCRETE.defaultBlockState());
+                }
+            }
+            set(level, anchor.offset(centreX, 9, -1),
+                    Blocks.SEA_LANTERN.defaultBlockState());
+        }
     }
     private static void buildAccessStairs(ServerLevel level, BlockPos origin)
     {
@@ -947,6 +1090,138 @@ public final class NervOperationsCentreBuilder
                 }
             }
         }
+    }
+
+    /**
+     * Three sealed pedestrian arteries climb from the lower command
+     * interchange to the shared wet-cage gallery. They are block-continuous,
+     * not teleport links, and remain separated from the EVA carrier rails.
+     */
+    public static void linkHangars(ServerLevel level, BlockPos origin)
+    {
+        int galleryDoorZ = EvaHangarBuilder.GALLERY_Z - 7;
+        for (int laneX : TRANSIT_X)
+        {
+            BlockState accent = laneX < 0
+                    ? Blocks.ORANGE_CONCRETE.defaultBlockState()
+                    : laneX > 0
+                    ? Blocks.RED_CONCRETE.defaultBlockState()
+                    : Blocks.PURPLE_CONCRETE.defaultBlockState();
+            for (int z = -62; z >= galleryDoorZ; z--)
+            {
+                int routeX = hangarRouteCentreX(origin, laneX, z);
+                int rise = Math.min(EvaHangarBuilder.GALLERY_Y - 1,
+                        Math.max(0, (-z - 61) / 2));
+                int floorY = 1 + rise;
+                int previousRise = Math.min(EvaHangarBuilder.GALLERY_Y - 1,
+                        Math.max(0, (-(z + 1) - 61) / 2));
+                boolean stepUp = rise > previousRise;
+                for (int x = -3; x <= 3; x++)
+                {
+                    BlockState floor = stepUp
+                            ? Blocks.SMOOTH_QUARTZ_STAIRS.defaultBlockState()
+                                    .setValue(StairBlock.FACING,
+                                            Direction.SOUTH)
+                            : x == 0 ? accent
+                            : Blocks.POLISHED_DEEPSLATE.defaultBlockState();
+                    set(level, origin.offset(routeX + x, floorY, z), floor);
+                    for (int y = 1; y <= 4; y++)
+                    {
+                        BlockPos clearance = origin.offset(routeX + x,
+                                floorY + y, z);
+                        // The final horizontal artery shares eight cells with
+                        // the split boarding bridge. Preserve only a rail that
+                        // the bridge state machine has actually extended; an
+                        // absent rail stays absent while the bridge retracts.
+                        boolean liveBridgeRail = floorY
+                                == EvaHangarBuilder.GALLERY_Y
+                                && y == 1 && Math.abs(x) == 3
+                                && level.getBlockState(clearance)
+                                .is(Blocks.IRON_BARS);
+                        if (!liveBridgeRail)
+                        {
+                            set(level, clearance, Blocks.AIR.defaultBlockState());
+                        }
+                    }
+                    set(level, origin.offset(routeX + x,
+                                    floorY + 5, z),
+                            x == 0 && Math.floorMod(z, 8) == 0
+                                    ? Blocks.SEA_LANTERN.defaultBlockState()
+                                    : Blocks.IRON_BLOCK.defaultBlockState());
+                }
+                for (int y = 1; y <= 4; y++)
+                {
+                    set(level, origin.offset(routeX - 4, floorY + y, z),
+                            Blocks.GRAY_CONCRETE.defaultBlockState());
+                    set(level, origin.offset(routeX + 4, floorY + y, z),
+                            Blocks.GRAY_CONCRETE.defaultBlockState());
+                }
+            }
+
+            // Enter the broad observation gallery through a side pressure
+            // door. Returning to the EVA centreline outside the gallery would
+            // cross the retractable boarding bridge at Z=142.
+            int doorX = hangarRouteCentreX(origin, laneX, galleryDoorZ);
+            for (int x = -3; x <= 3; x++)
+            {
+                for (int y = EvaHangarBuilder.GALLERY_Y + 1;
+                     y <= EvaHangarBuilder.GALLERY_Y + 4; y++)
+                {
+                    set(level, origin.offset(doorX + x, y, galleryDoorZ),
+                            Blocks.AIR.defaultBlockState());
+                }
+            }
+            for (int y = EvaHangarBuilder.GALLERY_Y;
+                 y <= EvaHangarBuilder.GALLERY_Y + 5; y++)
+            {
+                set(level, origin.offset(doorX - 4, y, galleryDoorZ), accent);
+                set(level, origin.offset(doorX + 4, y, galleryDoorZ), accent);
+            }
+        }
+    }
+
+    private static boolean hasConnectedHangarRoutes(ServerLevel level,
+                                                     BlockPos origin)
+    {
+        int galleryDoorZ = EvaHangarBuilder.GALLERY_Z - 7;
+        for (int laneX : TRANSIT_X)
+        {
+            for (int z = -62; z >= galleryDoorZ; z--)
+            {
+                int routeX = hangarRouteCentreX(origin, laneX, z);
+                int rise = Math.min(EvaHangarBuilder.GALLERY_Y - 1,
+                        Math.max(0, (-z - 61) / 2));
+                int floorY = 1 + rise;
+                if (!walkable(level,
+                        origin.offset(routeX, floorY + 1, z)))
+                {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Routes staff around the launch column, carrier rail and closed wet-cage
+     * isolation gate. The seven-wide deck moves twelve blocks sideways before
+     * the shaft, stays there throughout the complete mechanical corridor, and
+     * only returns to the EVA centreline inside the protected rear gallery.
+     */
+    private static int hangarRouteCentreX(BlockPos origin, int laneX, int z)
+    {
+        int shaftZ = IntegratedNervMapBuilder.lowerLiftBed(0).getZ()
+                - origin.getZ();
+        int south = shaftZ + IntegratedNervMapBuilder.SHAFT_OUTER_RADIUS + 1;
+        if (z >= south && z <= -62)
+        {
+            return laneX + Math.min(12, (-62 - z) * 2);
+        }
+        if (z < south)
+        {
+            return laneX + 12;
+        }
+        return laneX;
     }
 
     private static boolean hasConnectedLowerRoutes(ServerLevel level, BlockPos origin)
@@ -1037,9 +1312,32 @@ public final class NervOperationsCentreBuilder
                 return false;
             }
         }
-        for (int z = -41; z <= -33; z++)
+        for (int z = -39; z <= -33; z++)
         {
             if (!walkable(level, origin.offset(-1, -20, z)))
+            {
+                return false;
+            }
+        }
+        for (int x = COMMAND_SPINE_X; x <= -1; x++)
+        {
+            if (!walkable(level, origin.offset(x, -20, -39)))
+            {
+                return false;
+            }
+        }
+        for (int z = -40; z >= -61; z--)
+        {
+            int floorY = -20 + (-z - 40);
+            if (!walkable(level, origin.offset(COMMAND_SPINE_X,
+                    floorY + 1, z)))
+            {
+                return false;
+            }
+        }
+        for (int x = COMMAND_SPINE_X; x <= 0; x++)
+        {
+            if (!walkable(level, origin.offset(x, 2, -61)))
             {
                 return false;
             }
@@ -1056,6 +1354,81 @@ public final class NervOperationsCentreBuilder
                 && !floorState.getCollisionShape(level, floor).isEmpty()
                 && level.getBlockState(feet).isAir()
                 && level.getBlockState(feet.above()).isAir();
+    }
+
+    private static String routeDiagnostics(ServerLevel level, BlockPos origin,
+                                           OperationsAudit audit)
+    {
+        if (!audit.connectedRoutes())
+        {
+            for (int z = -61; z <= 36; z++)
+            {
+                if (z > -18 || z < -28)
+                {
+                    int feetY = z >= 35 ? 3 : 2;
+                    BlockPos feet = origin.offset(0, feetY, z);
+                    if (!walkable(level, feet))
+                    {
+                        return "lower-main " + describeWalkable(level, feet);
+                    }
+                }
+            }
+            for (int laneX : TRANSIT_X)
+            {
+                int minimum = Math.min(0, laneX);
+                int maximum = Math.max(0, laneX);
+                for (int x = minimum; x <= maximum; x++)
+                {
+                    BlockPos feet = origin.offset(x, 2, -23);
+                    if (!walkable(level, feet))
+                    {
+                        return "lower-cross " + describeWalkable(level, feet);
+                    }
+                }
+                for (int z = -61; z <= -28; z++)
+                {
+                    BlockPos feet = origin.offset(laneX, 2, z);
+                    if (!walkable(level, feet))
+                    {
+                        return "lower-lane " + describeWalkable(level, feet);
+                    }
+                }
+            }
+            return "lower-stair contract failed";
+        }
+        if (!audit.hangarRoutes())
+        {
+            int galleryDoorZ = EvaHangarBuilder.GALLERY_Z - 7;
+            for (int laneX : TRANSIT_X)
+            {
+                for (int z = -62; z >= galleryDoorZ; z--)
+                {
+                    int routeX = hangarRouteCentreX(origin, laneX, z);
+                    int rise = Math.min(EvaHangarBuilder.GALLERY_Y - 1,
+                            Math.max(0, (-z - 61) / 2));
+                    BlockPos feet = origin.offset(routeX, 2 + rise, z);
+                    if (!walkable(level, feet))
+                    {
+                        return "hangar-lane " + describeWalkable(level, feet);
+                    }
+                }
+            }
+        }
+        if (!audit.safeAnnex())
+        {
+            return "support-annex static marker or sealed route failed";
+        }
+        return "physical console or facility marker failed";
+    }
+
+    private static String describeWalkable(ServerLevel level, BlockPos feet)
+    {
+        BlockPos floor = feet.below();
+        return feet.toShortString() + " floor="
+                + level.getBlockState(floor).getBlock().getDescriptionId()
+                + " feet=" + level.getBlockState(feet).getBlock().getDescriptionId()
+                + " head=" + level.getBlockState(feet.above())
+                .getBlock().getDescriptionId();
     }
 
     private static void repairConnectedLowerRoutes(ServerLevel level,
@@ -1136,21 +1509,31 @@ public final class NervOperationsCentreBuilder
                                   boolean tacticalTable, boolean display,
                                   boolean stairs, int consoles,
                                   int transitLinks, boolean connectedRoutes,
-                                  boolean facilityLinks,
+                                  boolean hangarRoutes, boolean facilityLinks,
                                   boolean videoWall, boolean safeAnnex,
                                   int telemetryScreens,
                                   NervOperationsConsole.ConsoleAudit commandConsole)
     {
+        public boolean runtimePhysicalValid()
+        {
+            return this.entrance && this.tacticalTable && this.display
+                    && this.stairs && this.consoles == 3
+                    && this.transitLinks == 3 && this.connectedRoutes
+                    && this.hangarRoutes && this.facilityLinks
+                    && this.videoWall && this.safeAnnex
+                    && this.commandConsole.physicalValid();
+        }
+
         public String summary()
         {
             return String.format(Locale.ROOT,
                     "valid=%s entrance=%s tacticalTable=%s display=%s stairs=%s "
                             + "consoles=%d/3 transit=%d/3 connectedRoutes=%s "
-                            + "facilityLinks=%s videoWall=%s safeAnnex=%s",
+                            + "hangarRoutes=%s facilityLinks=%s videoWall=%s safeAnnex=%s",
                     this.valid, this.entrance, this.tacticalTable, this.display,
                     this.stairs, this.consoles, this.transitLinks,
-                    this.connectedRoutes, this.facilityLinks,
-                    this.videoWall, this.safeAnnex)
+                    this.connectedRoutes, this.hangarRoutes,
+                    this.facilityLinks, this.videoWall, this.safeAnnex)
                     + String.format(Locale.ROOT, " telemetry=%d/%d",
                     this.telemetryScreens, NervCommandTelemetry.SCREEN_COUNT)
                     + " commandConsole={" + this.commandConsole.summary() + "}";

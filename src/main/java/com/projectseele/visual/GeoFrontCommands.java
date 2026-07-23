@@ -13,6 +13,7 @@ import com.projectseele.ProjectSeele;
 import com.projectseele.entity.EvaUnit01Entity;
 import com.projectseele.registry.ModEntities;
 import com.projectseele.world.GeoFrontBuilder;
+import com.projectseele.world.EvaLogisticsDirector;
 import com.projectseele.world.GeoFrontBuilder.GeoFrontAudit;
 import com.projectseele.world.IntegratedNervMapBuilder;
 import com.projectseele.world.IntegratedNervMapBuilder.IntegratedAudit;
@@ -105,11 +106,13 @@ public final class GeoFrontCommands
             return;
         }
         ServerLevel current = player.serverLevel();
-        if (current.dimension().equals(GEOFRONT)
-                && IntegratedNervMapBuilder.isInstalled(current))
+        ServerLevel installedMap = current.dimension().equals(GEOFRONT)
+                ? current : current.getServer().getLevel(GEOFRONT);
+        if (installedMap != null
+                && IntegratedNervMapBuilder.isInstalled(installedMap))
         {
             IntegratedNervMapBuilder.RuntimeAudit runtime =
-                    IntegratedNervMapBuilder.prepareRuntime(current);
+                    IntegratedNervMapBuilder.prepareRuntime(installedMap);
             if (!runtime.valid())
             {
                 ProjectSeele.LOGGER.warn(
@@ -206,11 +209,11 @@ public final class GeoFrontCommands
         level.setDayTime(6000L);
         level.setWeatherParameters(12000, 0, false, false);
         // Visual captures must not inherit a CITY ARMOUR state left by a
-        // previous manual session.  Resetting the persisted depth before
-        // ensure() makes its audit rebuild the street-level tower geometry
-        // whenever the saved world still contains retracted towers.
-        Tokyo3RetractionDirector.reset(level,
-                IntegratedNervMapBuilder.TOKYO3_ORIGIN);
+        // previous manual session. Restore the physical tower volumes before
+        // the fixed-camera audit; changing SavedData alone can leave a valid
+        // looking marker set above an empty skyline.
+        Tokyo3RetractionDirector.forceDepth(level,
+                IntegratedNervMapBuilder.TOKYO3_ORIGIN, false);
         IntegratedAudit result = IntegratedNervMapBuilder.ensure(level);
         logIntegratedAudit("visual-setup", result);
         if (!result.valid())
@@ -220,11 +223,28 @@ public final class GeoFrontCommands
         }
         List<EvaUnit01Entity> linked = ensureContinuousSortieUnits(level);
         SortieAudit sortie = inspectLinkedUnits(player.getServer(), level, linked);
+        if (!sortie.valid())
+        {
+            // Unattended captures are a destructive development fixture, not
+            // a player command. Recover all three canonical units when an old
+            // run left one deployed or its UUID in another dimension; normal
+            // login and readiness checks continue to preserve deployed EVAs.
+            ProjectSeele.LOGGER.warn(
+                    "Visual GeoFront fixture repairing incomplete fleet: {}",
+                    sortie.summary());
+            for (int variant = 0; variant < 3; variant++)
+            {
+                EvaLogisticsDirector.forceReset(level, variant);
+            }
+            linked = ensureContinuousSortieUnits(level);
+            sortie = inspectLinkedUnits(player.getServer(), level, linked);
+        }
         logSortieAudit("geofront-visual", sortie);
         if (!sortie.valid())
         {
             throw new IllegalStateException(
-                    "GeoFront visual launch bays failed audit: " + sortie.summary());
+                    "GeoFront visual launch bays failed audit after canonical reset: "
+                            + sortie.summary());
         }
         // Exercise the same public navigation paths used during manual QA.
         // This catches unsafe overview landings and operations-route audit
@@ -328,7 +348,7 @@ public final class GeoFrontCommands
                 centralTerminal.getY() + 27.0D,
                 centralTerminal.getZ() + 6.5D, 180.0F, -8.0F);
         source.sendSuccess(() -> Component.literal(
-                "Physical sortie ready: Unit-00/01/02 are frozen at the lower stations. "
+                "Physical sortie ready: Unit-00/01/02 are registered in their individual wet cages. "
                         + "Launch travels the same "
                         + IntegratedNervMapBuilder.ascentDistance()
                         + "-block shaft into Tokyo-3; no portal or EVA teleport."), false);
@@ -337,110 +357,8 @@ public final class GeoFrontCommands
 
     public static List<EvaUnit01Entity> ensureContinuousSortieUnits(ServerLevel level)
     {
-        int lowerY = IntegratedNervMapBuilder.lowerLiftBed(1).getY();
-        int surfaceY = IntegratedNervMapBuilder.surfaceLiftBed(1).getY();
-        BlockPos centre = IntegratedNervMapBuilder.TOKYO3_ORIGIN;
-        double radius = SORTIE_ENTITY_RADIUS;
-        AABB mapArea = new AABB(
-                centre.getX() - radius, lowerY - 32.0D,
-                centre.getZ() - radius,
-                centre.getX() + radius, surfaceY + 72.0D,
-                centre.getZ() + radius);
-        List<EvaUnit01Entity> all = new java.util.ArrayList<>(
-                level.getEntitiesOfClass(
-                        EvaUnit01Entity.class, mapArea, EvaUnit01Entity::isAlive));
-        List<EvaUnit01Entity> linked = new java.util.ArrayList<>(3);
-        for (LiftLink lift : IntegratedNervMapBuilder.liftLinks())
-        {
-            int variant = lift.index();
-            List<EvaUnit01Entity> variantUnits = all.stream()
-                    .filter(unit -> unit.getUnitVariant() == variant)
-                    .toList();
-            if (variantUnits.size() > 1 && variantUnits.stream().anyMatch(
-                    candidate -> candidate.isVehicle() || candidate.isPassenger()
-                            || candidate.isLaunchSequenceActive()))
-            {
-                throw new IllegalStateException(
-                        "Duplicate Unit-0" + variant
-                                + " includes an occupied or launching airframe.");
-            }
-            EvaUnit01Entity unit = variantUnits.stream().min(
-                    Comparator.comparingDouble(candidate -> candidate.distanceToSqr(
-                            lift.lowerBed().getX() + 0.5D,
-                            lift.lowerBed().getY() + 1.0D,
-                            lift.lowerBed().getZ() + 0.5D))).orElse(null);
-            if (variantUnits.size() > 1)
-            {
-                int removed = 0;
-                for (EvaUnit01Entity duplicate : variantUnits)
-                {
-                    if (duplicate != unit)
-                    {
-                        duplicate.discard();
-                        all.remove(duplicate);
-                        removed++;
-                    }
-                }
-                ProjectSeele.LOGGER.warn(
-                        "GeoFront canonicalized Unit-0{}: retained={} removedIdleDuplicates={}",
-                        variant, unit == null ? "none" : unit.getStringUUID(), removed);
-            }
-            if (unit == null)
-            {
-                unit = createUnit(level, variant);
-                if (unit == null)
-                {
-                    throw new IllegalStateException(
-                            "Failed to create Unit-0" + variant
-                                    + " for its lower station.");
-                }
-                unit.moveTo(lift.lowerBed().getX() + 0.5D,
-                        lift.lowerBed().getY() + 1.0D,
-                        lift.lowerBed().getZ() + 0.5D,
-                        EvaUnit01Entity.SILO_BAY_YAW, 0.0F);
-                unit.setPersistenceRequired();
-                if (!level.addFreshEntity(unit))
-                {
-                    throw new IllegalStateException(
-                            "Server rejected Unit-0" + variant + " deployment.");
-                }
-                all.add(unit);
-            }
-            if (unit.isVehicle() || unit.isPassenger() || unit.isLaunchSequenceActive())
-            {
-                throw new IllegalStateException(
-                        "Unit-0" + variant + " is occupied or already launching.");
-            }
-            unit.moveTo(lift.lowerBed().getX() + 0.5D,
-                    lift.lowerBed().getY() + 1.0D,
-                    lift.lowerBed().getZ() + 0.5D,
-                    EvaUnit01Entity.SILO_BAY_YAW, 0.0F);
-            unit.setYRot(EvaUnit01Entity.SILO_BAY_YAW);
-            unit.setYBodyRot(EvaUnit01Entity.SILO_BAY_YAW);
-            unit.setYHeadRot(EvaUnit01Entity.SILO_BAY_YAW);
-            unit.yRotO = EvaUnit01Entity.SILO_BAY_YAW;
-            unit.yBodyRotO = EvaUnit01Entity.SILO_BAY_YAW;
-            unit.yHeadRotO = EvaUnit01Entity.SILO_BAY_YAW;
-            unit.setDeltaMovement(net.minecraft.world.phys.Vec3.ZERO);
-            unit.setNoAi(false);
-            unit.setNoGravity(true);
-            unit.setSortieDestination(level.dimension(), lift.surfaceBed());
-            unit.setSortieParkingBed(lift.lowerBed());
-            linked.add(unit);
-        }
-        return linked;
+        return EvaLogisticsDirector.ensureFleet(level);
     }
-
-    private static EvaUnit01Entity createUnit(ServerLevel level, int variant)
-    {
-        return switch (variant)
-        {
-            case EvaUnit01Entity.UNIT_00 -> ModEntities.EVA_UNIT00.get().create(level);
-            case EvaUnit01Entity.UNIT_02 -> ModEntities.EVA_UNIT02.get().create(level);
-            default -> ModEntities.EVA_UNIT01.get().create(level);
-        };
-    }
-
     /** Dedicated-world reset before the unattended cross-dimension sortie. */
     static void preloadVisualSortie(ServerPlayer player)
     {
@@ -505,7 +423,13 @@ public final class GeoFrontCommands
                 EvaUnit01Entity.class,
                 new AABB(centre).inflate(SORTIE_ENTITY_RADIUS,
                         384.0D, SORTIE_ENTITY_RADIUS));
-        stale.forEach(EvaUnit01Entity::discard);
+        // Reset through the fleet director so SavedData and the three new
+        // UUIDs move together. Directly discarding entities leaves PARKED
+        // canonical UUIDs pointing at nothing on the next launch.
+        for (int variant = 0; variant < 3; variant++)
+        {
+            EvaLogisticsDirector.forceReset(geoFront, variant);
+        }
         return stale.size();
     }
 
@@ -549,9 +473,7 @@ public final class GeoFrontCommands
     static SortieAudit inspectSortie(net.minecraft.server.MinecraftServer server,
                                      ServerLevel geoFront)
     {
-        List<EvaUnit01Entity> units = geoFront.getEntitiesOfClass(EvaUnit01Entity.class,
-                new AABB(ORIGIN.offset(0, 1, -76)).inflate(48.0D, 40.0D, 20.0D),
-                unit -> unit.isAlive() && unit.findLaunchBed() != null);
+        List<EvaUnit01Entity> units = EvaLogisticsDirector.ensureFleet(geoFront);
         return inspectLinkedUnits(server, geoFront, units);
     }
 
@@ -773,7 +695,7 @@ public final class GeoFrontCommands
         }
         NervOperationsCentreBuilder.OperationsAudit result =
                 NervOperationsCentreBuilder.repairRuntimeAccess(level, ORIGIN);
-        if (!result.valid())
+        if (!result.runtimePhysicalValid())
         {
             source.sendFailure(Component.literal(
                     "NERV operations centre failed its structural audit: "

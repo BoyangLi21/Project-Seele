@@ -69,7 +69,7 @@ external-assets/private-test-bundle/
 - 玩家 B：留在 NERV Operations，操作七键控制台并观察 01 驾驶视频；
 - 玩家 C（可选）：驾驶 Unit-00/02 或在地表观察城市下沉和屋岛作战。
 
-城市下沉使用 `/seele tokyo3 retract`，恢复使用 `/seele tokyo3 restore`。95 栋生成建筑最大行程为 285 层，完整下降再恢复约十分钟。验收时必须在 GeoFront 顶部看到悬挂城市；只看到地表建筑消失不算通过。
+城市下沉使用 `/seele tokyo3 retract`，恢复使用 `/seele tokyo3 restore`。95 栋生成建筑最大行程为 312 层，完整下降再恢复约十一分钟。验收时必须在 GeoFront 顶部看到悬挂城市；只看到地表建筑消失不算通过。
 
 ## 问题回报最低信息
 

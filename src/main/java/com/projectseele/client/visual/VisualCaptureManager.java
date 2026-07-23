@@ -8,6 +8,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import com.projectseele.ProjectSeele;
+import com.projectseele.client.EvaCommandFeedClient;
 import com.projectseele.client.render.EvaUnit01Renderer;
 import com.projectseele.client.render.LocalTriangleMeshLayer;
 import com.projectseele.client.render.LocalVisualAssetFingerprint;
@@ -21,9 +22,11 @@ import com.projectseele.network.ServerboundGeoFrontCameraPacket;
 import com.projectseele.registry.ModBlocks;
 import com.projectseele.world.GeoFrontBuilder;
 import com.projectseele.world.IntegratedNervMapBuilder;
+import com.projectseele.world.EvaHangarBuilder;
 import com.projectseele.world.LocalMapAssetLoader;
 import com.projectseele.world.RetractableBuildingCoreBlock;
 import com.projectseele.world.ThirdTokyoSurfaceBuilder;
+import com.projectseele.world.Tokyo3RetractionDirector;
 import net.minecraft.client.CameraType;
 import net.minecraft.client.CloudStatus;
 import net.minecraft.client.Minecraft;
@@ -33,6 +36,7 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
+import net.minecraft.world.entity.Display;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.decoration.ArmorStand;
@@ -545,14 +549,15 @@ public final class VisualCaptureManager
         }
     }
 
-    /** Five state-gated frames spanning one real continuous-shaft EVA launch. */
+    /** Seven state-gated frames spanning one complete hangar-sortie-recovery cycle. */
     private static final class GeoFrontSortieSession
     {
         private static final String[] STAGES = {
                 "three_units_ready", "entry_plug_locked", "live_pilot_sensor",
-                "ascent_mid", "tokyo3_surface_arrival"
+                "ascent_mid", "tokyo3_surface_arrival", "recovery_descent",
+                "wet_cage_return"
         };
-        private static final int TIMEOUT_TICKS = 520;
+        private static final int TIMEOUT_TICKS = 2400;
 
         private int entityId;
         private final BlockPos origin;
@@ -606,6 +611,15 @@ public final class VisualCaptureManager
                 shutdownTicks = 20;
                 return false;
             }
+            // The real observer temporarily enters the command room so the
+            // server tracks its display entities. The EVA may leave this
+            // client's tracking set during that interval, therefore the
+            // sensor evidence frame must not depend on resolving the distant
+            // airframe a second time.
+            if (this.stage == 2)
+            {
+                return this.tickSensorStage(minecraft);
+            }
             EvaUnit01Entity unit = this.resolveUnit(minecraft);
             if (unit == null || !unit.isAlive())
             {
@@ -626,7 +640,18 @@ public final class VisualCaptureManager
                                 : minecraft.player.getVehicle().getId(),
                         unit.getId());
             }
-            if (!this.stageReady(minecraft, unit))
+            boolean ready = this.stageReady(minecraft, unit);
+            if (this.stage == 3 && !ready
+                    && (unit.getLaunchPhase() == EvaUnit01Entity.LAUNCH_LOCKED
+                        || unit.getLaunchPhase() == EvaUnit01Entity.LAUNCH_ASCENT))
+            {
+                // Prewarm one fixed vertical-section camera while the EVA is
+                // still transferring to the silo. Following a 2.4-block/tick
+                // ascent produced blank frames because the client never
+                // settled on a render section before the screenshot.
+                this.position(minecraft, unit);
+            }
+            if (!ready)
             {
                 return true;
             }
@@ -636,6 +661,8 @@ public final class VisualCaptureManager
                 this.settleTicks = switch (this.stage)
                 {
                     case 0 -> 20;
+                    case 6 -> 100;
+                    case 5 -> 10;
                     case 4 -> 15;
                     case 3 -> 1;
                     case 2 -> 20;
@@ -661,11 +688,104 @@ public final class VisualCaptureManager
             if (this.stage >= STAGES.length)
             {
                 ProjectSeele.LOGGER.info(
-                        "GeoFront sortie visual matrix finished: five synchronized stages captured");
+                        "GeoFront sortie visual matrix finished: seven synchronized logistics stages captured");
                 shutdownTicks = 20;
                 return false;
             }
             return true;
+        }
+
+        private boolean tickSensorStage(Minecraft minecraft)
+        {
+            if (!this.positioned)
+            {
+                this.positioned = true;
+                this.settleTicks = 30;
+            }
+            this.positionSensorCamera(minecraft);
+            if (this.settleTicks-- > 0)
+            {
+                return true;
+            }
+            boolean unit00Live = EvaCommandFeedClient.hasFreshFrame(
+                    EvaUnit01Entity.UNIT_00);
+            boolean unit01Live = EvaCommandFeedClient.hasFreshFrame(
+                    EvaUnit01Entity.UNIT_01);
+            boolean unit02Live = EvaCommandFeedClient.hasFreshFrame(
+                    EvaUnit01Entity.UNIT_02);
+            if (!unit01Live)
+            {
+                if (this.settleTicks-- > -120)
+                {
+                    return true;
+                }
+                throw new IllegalStateException(
+                        "GeoFront Unit-01 command video frame never reached the observer");
+            }
+            ProjectSeele.LOGGER.info(
+                    "GeoFront command video client evidence: live=00:{} 01:{} 02:{}",
+                    unit00Live, unit01Live, unit02Live);
+            this.captureSensor(minecraft);
+            this.stage++;
+            this.positioned = false;
+            return true;
+        }
+
+        private void positionSensorCamera(Minecraft minecraft)
+        {
+            minecraft.options.setCameraType(CameraType.FIRST_PERSON);
+            minecraft.options.hideGui = true;
+            minecraft.options.cloudStatus().set(CloudStatus.OFF);
+            if (this.camera == null || this.camera.level() != minecraft.level)
+            {
+                this.camera = EntityType.ARMOR_STAND.create(minecraft.level);
+                if (this.camera == null)
+                {
+                    throw new IllegalStateException(
+                            "GeoFront sensor camera creation failed");
+                }
+                this.camera.setInvisible(true);
+                this.camera.setNoGravity(true);
+            }
+            // Frame the centre 16:9 command screen, where the real decoded
+            // Unit-01 cockpit PNG is rendered. The ASCII optical sensor lives
+            // on the upper diagnostic wing and is a separate fallback panel.
+            BlockPos videoWall = this.origin.offset(0, 21, 58);
+            Vec3 target = Vec3.atCenterOf(videoWall);
+            Vec3 cameraPos = Vec3.atCenterOf(videoWall.offset(0, 0, 12));
+            this.camera.setPos(cameraPos.x,
+                    cameraPos.y - this.camera.getEyeHeight(), cameraPos.z);
+            lookAt(this.camera, cameraPos, target);
+            this.camera.xo = this.camera.getX();
+            this.camera.yo = this.camera.getY();
+            this.camera.zo = this.camera.getZ();
+            this.camera.yRotO = this.camera.getYRot();
+            this.camera.xRotO = this.camera.getXRot();
+            minecraft.setCameraEntity(this.camera);
+        }
+
+        private void captureSensor(Minecraft minecraft)
+        {
+            ProjectSeele.LOGGER.info(
+                    "GeoFront sortie visual stage live_pilot_sensor: fresh Unit-01 video wall frame");
+            try
+            {
+                File batch = new File(minecraft.gameDirectory,
+                        "screenshots/projectseele_visual/" + CAPTURE_BATCH);
+                Files.createDirectories(batch.toPath());
+                String filename = "geofront_sortie_" + this.modelTag
+                        + "_live_pilot_sensor.png";
+                Screenshot.grab(minecraft.gameDirectory,
+                        "projectseele_visual/" + CAPTURE_BATCH + "/" + filename,
+                        minecraft.getMainRenderTarget(), message -> ProjectSeele.LOGGER.info(
+                                "GeoFront sortie visual capture {}/{}: {}",
+                                CAPTURE_BATCH, filename, message.getString()));
+            }
+            catch (Exception exception)
+            {
+                ProjectSeele.LOGGER.error(
+                        "GeoFront sortie visual screenshot failed", exception);
+            }
         }
 
         @Nullable
@@ -685,23 +805,36 @@ public final class VisualCaptureManager
             boolean inGeoFront = minecraft.level.dimension().location().toString()
                     .equals("projectseele:geofront");
             boolean riding = minecraft.player.getVehicle() == unit;
+            boolean occupied = riding || unit.isTrainingPilotActive();
             double ascent = IntegratedNervMapBuilder.ascentDistance();
             return switch (this.stage)
             {
                 case 0 -> inGeoFront && unit.getLaunchPhase() == EvaUnit01Entity.LAUNCH_IDLE
                         && !riding;
                 case 1 -> inGeoFront && unit.getLaunchPhase() == EvaUnit01Entity.LAUNCH_LOCKED
-                        && unit.getActivationTicks() > 65 && riding;
+                        && unit.getActivationTicks() > 65 && occupied;
                 case 2 -> inGeoFront && unit.getLaunchPhase() == EvaUnit01Entity.LAUNCH_LOCKED
-                        && unit.getActivationTicks() > 65 && riding;
+                        && unit.getActivationTicks() > 65 && occupied;
                 case 3 -> inGeoFront && unit.getLaunchPhase() == EvaUnit01Entity.LAUNCH_ASCENT
                         && unit.getLaunchTicks() >= 45 && unit.getLaunchTicks() <= 100
                         && unit.getY() >= this.origin.getY() + ascent * 0.40D
-                        && unit.getY() <= this.origin.getY() + ascent + 8.0D && riding;
+                        && unit.getY() <= this.origin.getY() + ascent + 8.0D && occupied;
                 case 4 -> inGeoFront
                         && (unit.getLaunchPhase() == EvaUnit01Entity.LAUNCH_CLEAR
                             || unit.getLaunchPhase() == EvaUnit01Entity.LAUNCH_IDLE)
-                        && unit.getY() >= this.origin.getY() + ascent + 1.5D && riding;
+                        && unit.getY() >= this.origin.getY() + ascent + 1.5D && occupied;
+                case 5 -> inGeoFront && occupied && unit.isNervLogisticsLocked()
+                        && unit.getLaunchPhase() == EvaUnit01Entity.LAUNCH_IDLE
+                        && unit.getY() <= IntegratedNervMapBuilder.surfaceLiftBed(1).getY() - 64.0D
+                        && unit.getY() >= IntegratedNervMapBuilder.lowerLiftBed(1).getY() + 48.0D;
+                case 6 ->
+                {
+                    BlockPos hangar = EvaHangarBuilder.hangarBed(this.origin, 1);
+                    yield inGeoFront && occupied && unit.isNervLogisticsLocked()
+                            && unit.getLaunchPhase() == EvaUnit01Entity.LAUNCH_IDLE
+                            && unit.position().distanceToSqr(hangar.getCenter().add(0.0D, 1.0D, 0.0D))
+                            <= 2.25D;
+                }
                 default -> false;
             };
         }
@@ -732,8 +865,14 @@ public final class VisualCaptureManager
             {
                 case 0 ->
                 {
-                    target = Vec3.atCenterOf(this.origin.offset(0, 17, -76));
-                    cameraPos = Vec3.atCenterOf(this.origin.offset(0, 60, -28));
+                    // Start inside Unit-01's wet cage instead of above the
+                    // command-centre roof.  The old overview was physically
+                    // blocked by the pyramid and proved only that a ceiling
+                    // existed.  This angle sees the parked airframe, LCL line,
+                    // extended dorsal bridge and suspended external plug.
+                    target = unit.getEntryPlugSocketPosition().add(0.0D, 1.2D, 0.0D);
+                    cameraPos = target.add(rear.scale(4.0D))
+                            .add(right.scale(5.25D)).add(0.0D, 3.8D, 0.0D);
                 }
                 case 1 ->
                 {
@@ -743,25 +882,35 @@ public final class VisualCaptureManager
                 }
                 case 2 ->
                 {
-                    // The automation player remains the real mounted pilot;
-                    // only the client camera visits the bridge. This gives a
-                    // direct visual proof that the fifth screen is driven by
-                    // the active entry-plug eye/yaw/pitch feed.
-                    target = Vec3.atCenterOf(this.origin.offset(0, 18, 59));
-                    cameraPos = Vec3.atCenterOf(this.origin.offset(0, 18, 84));
+                    // A training pilot has no independent render client, so
+                    // this frame deliberately audits the server-sampled live
+                    // optical sensor rather than claiming a framebuffer video
+                    // feed.  Framebuffer relay remains a separate multiplayer
+                    // contract exercised by a real mounted pilot.
+                    BlockPos sensor = this.origin.offset(12, 29, 58);
+                    target = Vec3.atCenterOf(sensor);
+                    cameraPos = Vec3.atCenterOf(sensor.offset(0, 0, 10));
                 }
                 case 3 ->
                 {
-                    // Stay inside the audited 11x11 clear shaft.  The old
-                    // 20x16 offset put the observer behind the reinforced
-                    // wall, so a valid ascent looked like an EVA in a void.
-                    // Looking upward preserves the Unit's vertical silhouette
-                    // instead of foreshortening it into a top-down sprawl.
-                    target = unit.position().add(0.0D, 13.5D, 0.0D);
-                    cameraPos = target.add(right.scale(4.25D))
-                            .add(rear.scale(4.25D)).add(0.0D, -40.0D, 0.0D);
+                    // The shaft cannot provide an external side camera.  Look
+                    // down from the clear column, offset toward the EVA's face,
+                    // so the frame shows its head/shoulders and upward travel
+                    // instead of the black underside of the carrier platform.
+                    BlockPos shaft = IntegratedNervMapBuilder.lowerLiftBed(
+                            unit.getUnitVariant());
+                    double evidenceY = this.origin.getY()
+                            + IntegratedNervMapBuilder.ascentDistance() * 0.46D;
+                    target = new Vec3(shaft.getX() + 0.5D,
+                            evidenceY + 13.5D, shaft.getZ() + 0.5D);
+                    // The physical shaft has only a five-block clear radius.
+                    // This fixed, prewarmed camera stays in the shaft core and
+                    // watches the airframe pass instead of chasing it through
+                    // unloaded vertical render sections.
+                    cameraPos = target.add(forward.scale(1.4D))
+                            .add(right.scale(0.7D)).add(0.0D, 30.0D, 0.0D);
                 }
-                default ->
+                case 4 ->
                 {
                     // The imported 1.7 world can carry a night timestamp.
                     // Pin only the unattended evidence frame to noon so the
@@ -771,6 +920,21 @@ public final class VisualCaptureManager
                     target = unit.position().add(0.0D, 14.0D, 0.0D);
                     cameraPos = target.add(forward.scale(52.0D))
                             .add(right.scale(28.0D)).add(0.0D, 18.0D, 0.0D);
+                }
+                case 5 ->
+                {
+                    target = unit.position().add(0.0D, 13.5D, 0.0D);
+                    cameraPos = target.add(right.scale(3.0D))
+                            .add(rear.scale(3.0D)).add(0.0D, 34.0D, 0.0D);
+                }
+                default ->
+                {
+                    // Remain inside the chamber.  The former +18 X position
+                    // sat behind the reinforced side wall, producing a nearly
+                    // black "return" frame even though restoration succeeded.
+                    target = unit.getEntryPlugSocketPosition().add(0.0D, 1.2D, 0.0D);
+                    cameraPos = target.add(rear.scale(4.0D))
+                            .add(right.scale(5.25D)).add(0.0D, 3.8D, 0.0D);
                 }
             }
             this.camera.setPos(cameraPos.x, cameraPos.y - this.camera.getEyeHeight(), cameraPos.z);
@@ -849,6 +1013,7 @@ public final class VisualCaptureManager
         private boolean positioned;
         private final boolean[] evidence = new boolean[VIEWS.length];
         private int chunkWaitTicks;
+        private int dimensionWaitTicks;
 
         private int renderSettleTicks;
         GeoFrontSession(BlockPos origin, Minecraft minecraft)
@@ -866,7 +1031,41 @@ public final class VisualCaptureManager
         {
             if (minecraft.level == null || minecraft.player == null)
             {
-                return false;
+                // Cross-dimension travel temporarily tears down the client
+                // level. Ending the session here captured the loading screen
+                // (or a void horizon) and then reported a false success.
+                return true;
+            }
+            boolean geoFrontReady = minecraft.level.dimension().location().equals(
+                    new ResourceLocation(ProjectSeele.MODID, "geofront"));
+            if (!geoFrontReady || minecraft.screen != null)
+            {
+                this.dimensionWaitTicks++;
+                if (!geoFrontReady
+                        && this.dimensionWaitTicks % TRACKING_RETRY_TICKS == 1)
+                {
+                    SeeleNetwork.CHANNEL.sendToServer(
+                            new ServerboundGeoFrontCameraPacket(this.view));
+                    ProjectSeele.LOGGER.info(
+                            "Waiting for GeoFront client dimension: view={} waited={}/{}",
+                            VIEWS[this.view], this.dimensionWaitTicks,
+                            MAX_CHUNK_WAIT_TICKS);
+                }
+                if (this.dimensionWaitTicks > MAX_CHUNK_WAIT_TICKS)
+                {
+                    ProjectSeele.LOGGER.error(
+                            "VISUAL GEOFRONT INVALID: client dimension/render screen never settled for view {}",
+                            VIEWS[this.view]);
+                    shutdownTicks = 20;
+                    return false;
+                }
+                return true;
+            }
+            this.dimensionWaitTicks = 0;
+            if (this.camera != null && this.camera.level() != minecraft.level)
+            {
+                this.camera = null;
+                minecraft.setCameraEntity(minecraft.player);
             }
             if (!this.positioned)
             {
@@ -1037,15 +1236,18 @@ public final class VisualCaptureManager
                                 .is(Blocks.SMOOTH_QUARTZ_SLAB)
                                 && minecraft.level.getBlockState(
                                 this.origin.offset(36, -3, 82))
-                                .is(Blocks.SEA_LANTERN);                case "nerv_pressure_vestibule" -> landmark =
+                                .is(Blocks.SEA_LANTERN);
+                case "nerv_pressure_vestibule" -> landmark =
                         minecraft.level.getBlockState(
                                 this.origin.offset(-1, -21, -34))
                                 .is(Blocks.POLISHED_BLACKSTONE)
                                 && minecraft.level.getBlockState(
                                 this.origin.offset(-1, -20, -33)).isAir()
                                 && minecraft.level.getBlockState(
-                                this.origin.offset(-1, -18, -42))
-                                .is(Blocks.ORANGE_STAINED_GLASS);
+                                this.origin.offset(-3, -18, -42))
+                                .is(Blocks.ORANGE_CONCRETE)
+                                && minecraft.level.getBlockState(
+                                this.origin.offset(-1, -18, -42)).isAir();
                 case "central_dogma_descent" -> landmark = minecraft.level.getBlockState(
                         this.origin.offset(42, -94, -27)).is(Blocks.LADDER)
                         && !minecraft.level.getBlockState(
@@ -1476,8 +1678,21 @@ public final class VisualCaptureManager
         {
             boolean imported = LocalMapAssetLoader.importedTokyo3MarkerPresent(
                     minecraft.level, this.origin);
+            int currentRetractionDepth = this.battle
+                    ? ThirdTokyoSurfaceBuilder.maximumRetractionDepth() : 0;
+            var integratedServer = minecraft.getSingleplayerServer();
+            if (integratedServer != null)
+            {
+                var serverLevel = integratedServer.getLevel(
+                        minecraft.level.dimension());
+                if (serverLevel != null)
+                {
+                    currentRetractionDepth = Tokyo3RetractionDirector.depth(
+                            serverLevel, this.origin);
+                }
+            }
             int privateSkyscrapers = LocalMapAssetLoader.inspectTokyo3Skyscrapers(
-                    minecraft.level, this.origin);
+                    minecraft.level, this.origin, currentRetractionDepth);
             int roads = 0;
             for (int[] point : ROAD_POINTS)
             {
@@ -1567,11 +1782,12 @@ public final class VisualCaptureManager
                     && this.unit01Fingerprint.valid()
                     && this.unit02Fingerprint.valid();
             ProjectSeele.LOGGER.info(
-                    "Tokyo-3 visual evidence: battle={} ramiel={} imported={} skyscrapers={}/3 "
+                    "Tokyo-3 visual evidence: battle={} ramiel={} imported={} depth={} skyscrapers={}/3 "
                             + "surfaceBeds={}/3 roads={}/8 towers={}/66 pylons={}/6 "
                             + "units={} variants00/01/02={} battleBeacon={} "
                             + "observation={} foundation={} valid={}",
-                    this.battle, ramielCount, imported, privateSkyscrapers, surfaceBeds,
+                    this.battle, ramielCount, imported, currentRetractionDepth,
+                    privateSkyscrapers, surfaceBeds,
                     roads, towers, pylons, units.size(), variants,
                     battleBeacon, observation, foundation, valid);
             if (!valid)
@@ -2258,7 +2474,18 @@ public final class VisualCaptureManager
                 shutdownTicks = 20;
                 return false;
             }
-            if (!this.stageReady(minecraft, unit))
+            boolean ready = this.stageReady(minecraft, unit);
+            if (this.stage == 3 && !ready
+                    && (unit.getLaunchPhase() == EvaUnit01Entity.LAUNCH_LOCKED
+                        || unit.getLaunchPhase() == EvaUnit01Entity.LAUNCH_ASCENT))
+            {
+                // Prewarm one fixed vertical-section camera while the EVA is
+                // still transferring to the silo. Following a 2.4-block/tick
+                // ascent produced blank frames because the client never
+                // settled on a render section before the screenshot.
+                this.position(minecraft, unit);
+            }
+            if (!ready)
             {
                 return true;
             }

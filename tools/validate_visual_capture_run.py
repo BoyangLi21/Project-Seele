@@ -9,6 +9,8 @@ from pathlib import Path
 import re
 import sys
 
+from png_scene_quality import invalid_scene_pngs
+
 
 REPO = Path(__file__).resolve().parent.parent
 CAPTURE_ROOT = REPO / "run/screenshots/projectseele_visual"
@@ -21,7 +23,7 @@ SNAPSHOT = REPO / "run/.projectseele_visual_before.json"
 EXPECTED = {
     "unit01": 364, "unit00": 364, "unit02": 364,
     "mass": 35, "tokyo3": 4, "tokyo3_retraction": 4, "geofront": 13,
-    "geofront_sortie": 5,
+    "geofront_sortie": 7,
     "silo": 6, "impact": 3,
 }
 VIEWS_PER_POSE = {"unit01": 13, "unit00": 13, "unit02": 13, "mass": 7}
@@ -52,7 +54,7 @@ TOKYO3_RETRACTION_STAGES = (
 )
 GEOFRONT_SORTIE_STAGES = (
     "three_units_ready", "entry_plug_locked", "live_pilot_sensor", "ascent_mid",
-    "tokyo3_surface_arrival",
+    "tokyo3_surface_arrival", "recovery_descent", "wet_cage_return",
 )
 GEOFRONT_VIEWS = (
     "cavern_overview", "natural_lake", "forest_canopy",
@@ -113,6 +115,11 @@ def verify(target: str) -> int:
     if wrong_prefix:
         print(f"VISUAL RUN INVALID: unexpected filenames: {wrong_prefix[:3]}", file=sys.stderr)
         return 1
+    invalid_pngs = invalid_scene_pngs(pngs)
+    if invalid_pngs:
+        print("VISUAL RUN INVALID: screenshots contain blank/loading frames: "
+              + "; ".join(invalid_pngs[:5]), file=sys.stderr)
+        return 1
     if target == "silo":
         missing = [stage for stage in SILO_STAGES
                    if not any(path.name.endswith(f"_{stage}.png") for path in pngs)]
@@ -149,6 +156,11 @@ def verify(target: str) -> int:
                 if re.search(pattern, log, flags=re.IGNORECASE)]
     if failures:
         print(f"VISUAL RUN INVALID: latest.log matched {failures}", file=sys.stderr)
+        return 1
+    if (target == "geofront_sortie"
+            and "VISUAL GEOFRONT LOGISTICS CYCLE VALID" not in log):
+        print("VISUAL RUN INVALID: full hangar-sortie-recovery cycle marker is missing",
+              file=sys.stderr)
         return 1
     if "Visual Lab screenshots complete; closing unattended client" not in log:
         print("VISUAL RUN INVALID: unattended client completion marker is missing",

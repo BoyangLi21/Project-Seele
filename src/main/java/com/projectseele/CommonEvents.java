@@ -1,8 +1,10 @@
 package com.projectseele;
 
 import com.projectseele.capability.EvaPilotData;
+import com.projectseele.entity.EntryPlugCarrierEntity;
 import com.projectseele.entity.EvaUnit01Entity;
 import com.projectseele.entity.RamielEntity;
+import com.projectseele.entity.TrainingPilotEntity;
 import com.projectseele.registry.ModEntities;
 import net.minecraftforge.common.capabilities.RegisterCapabilitiesEvent;
 import net.minecraftforge.event.entity.EntityAttributeCreationEvent;
@@ -25,6 +27,10 @@ public class CommonEvents
         event.put(ModEntities.EVA_UNIT01.get(), EvaUnit01Entity.createAttributes().build());
         event.put(ModEntities.EVA_UNIT00.get(), EvaUnit01Entity.createAttributes().build());
         event.put(ModEntities.EVA_UNIT02.get(), EvaUnit01Entity.createAttributes().build());
+        event.put(ModEntities.ENTRY_PLUG_CARRIER.get(),
+                EntryPlugCarrierEntity.createAttributes().build());
+        event.put(ModEntities.TRAINING_PILOT.get(),
+                TrainingPilotEntity.createAttributes().build());
         event.put(ModEntities.SACHIEL.get(), com.projectseele.entity.SachielEntity.createAttributes().build());
         event.put(ModEntities.SHAMSHEL.get(), com.projectseele.entity.ShamshelEntity.createAttributes().build());
         event.put(ModEntities.ZERUEL.get(), com.projectseele.entity.ZeruelEntity.createAttributes().build());

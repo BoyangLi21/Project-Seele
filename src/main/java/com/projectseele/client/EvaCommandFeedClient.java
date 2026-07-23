@@ -213,6 +213,16 @@ public final class EvaCommandFeedClient
         }
     }
 
+    /** True only while this client owns a recently decoded command-room frame. */
+    public static boolean hasFreshFrame(int variant)
+    {
+        return variant >= EvaUnit01Entity.UNIT_00
+                && variant <= EvaUnit01Entity.UNIT_02
+                && TEXTURES[variant] != null
+                && System.nanoTime() - LAST_FRAME_NANOS[variant]
+                        <= FRAME_STALE_NANOS;
+    }
+
     @SubscribeEvent
     public static void onRenderLevelStage(RenderLevelStageEvent event)
     {

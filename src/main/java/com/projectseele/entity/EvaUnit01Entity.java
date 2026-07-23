@@ -18,6 +18,8 @@ import com.projectseele.network.SeeleNetwork;
 import com.projectseele.registry.ModSounds;
 import com.projectseele.registry.ModEntities;
 import com.projectseele.world.IntegratedNervMapBuilder;
+import com.projectseele.world.EvaHangarBuilder;
+import com.projectseele.world.NervCarrierVisuals;
 import com.projectseele.world.UmbilicalPylonBlockEntity;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
@@ -280,6 +282,8 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             SynchedEntityData.defineId(EvaUnit01Entity.class, EntityDataSerializers.INT);
     private static final EntityDataAccessor<Boolean> DATA_ENTRY_PLUG_INSERTED =
             SynchedEntityData.defineId(EvaUnit01Entity.class, EntityDataSerializers.BOOLEAN);
+    private static final EntityDataAccessor<Boolean> DATA_NERV_LOGISTICS_LOCKED =
+            SynchedEntityData.defineId(EvaUnit01Entity.class, EntityDataSerializers.BOOLEAN);
     private static final EntityDataAccessor<Integer> DATA_VISUAL_POSE =
             SynchedEntityData.defineId(EvaUnit01Entity.class, EntityDataSerializers.INT);
     private static final EntityDataAccessor<Integer> DATA_LAUNCH_PHASE =
@@ -405,6 +409,8 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     private BlockPos launchBedPos;
     private int launchCarrierY = NO_LAUNCH_CARRIER;
     private boolean launchContinuousRoute;
+    /** A locked carrier may not move until the operations console releases it. */
+    private boolean launchCommandReleased;
     private boolean launchRecoveryPending;
     private int launchPassengerRestoreGraceTicks;
     private float launchLockedYaw;
@@ -457,6 +463,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         this.entityData.define(DATA_JUMP_SEQUENCE, 0);
         this.entityData.define(DATA_ACTIVATION_TICKS, 0);
         this.entityData.define(DATA_ENTRY_PLUG_INSERTED, false);
+        this.entityData.define(DATA_NERV_LOGISTICS_LOCKED, false);
         this.entityData.define(DATA_VISUAL_POSE, VISUAL_NORMAL);
         this.entityData.define(DATA_LAUNCH_PHASE, LAUNCH_IDLE);
         this.entityData.define(DATA_LAUNCH_TICKS, 0);
@@ -493,6 +500,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         tag.putInt("SeeleArmamentMask", this.getArmamentMask());
         tag.putBoolean("SeeleCrucified", this.isCrucified());
         tag.putBoolean("SeeleEntryPlugInserted", this.isEntryPlugInserted());
+        tag.putBoolean("SeeleNervLogisticsLocked", this.isNervLogisticsLocked());
         tag.putInt("SeelePowerTicks", this.getPowerTicks());
         tag.putFloat("SeelePilotSynchronization", this.getPilotSynchronization());
         tag.putBoolean("SeeleBerserk", this.isBerserk());
@@ -516,6 +524,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             tag.putLong("SeeleLaunchBed", this.launchBedPos.asLong());
             tag.putFloat("SeeleLaunchYaw", this.launchLockedYaw);
             tag.putBoolean("SeeleLaunchContinuous", this.launchContinuousRoute);
+            tag.putBoolean("SeeleLaunchCommandReleased", this.launchCommandReleased);
             if (this.launchCarrierY != NO_LAUNCH_CARRIER)
             {
                 tag.putInt("SeeleLaunchCarrierY", this.launchCarrierY);
@@ -541,7 +550,10 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         this.entityData.set(DATA_WEAPON, savedWeapon);
         boolean crucified = tag.getBoolean("SeeleCrucified");
         this.entityData.set(DATA_CRUCIFIED, crucified);
-        this.entityData.set(DATA_ENTRY_PLUG_INSERTED, tag.getBoolean("SeeleEntryPlugInserted"));
+        this.entityData.set(DATA_ENTRY_PLUG_INSERTED,
+                tag.getBoolean("SeeleEntryPlugInserted"));
+        this.entityData.set(DATA_NERV_LOGISTICS_LOCKED,
+                tag.getBoolean("SeeleNervLogisticsLocked"));
         this.entityData.set(DATA_POWER_TICKS, tag.contains("SeelePowerTicks")
                 ? Mth.clamp(tag.getInt("SeelePowerTicks"), 0, this.getPowerCapacityTicks())
                 : this.getPowerCapacityTicks());
@@ -583,6 +595,11 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             this.launchLockedYaw = tag.contains("SeeleLaunchYaw")
                     ? tag.getFloat("SeeleLaunchYaw") : this.getYRot();
             this.launchContinuousRoute = tag.getBoolean("SeeleLaunchContinuous");
+            // Legacy saves already moving through a shaft may resume, but a
+            // unit restored on the launch bed must still wait for command.
+            this.launchCommandReleased = tag.contains("SeeleLaunchCommandReleased")
+                    ? tag.getBoolean("SeeleLaunchCommandReleased")
+                    : phase != LAUNCH_LOCKED;
             this.setNoGravity(true);
         }
         else
@@ -595,6 +612,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             this.launchBedPos = null;
             this.launchCarrierY = NO_LAUNCH_CARRIER;
             this.launchContinuousRoute = false;
+            this.launchCommandReleased = false;
             this.launchRecoveryPending = false;
             this.launchPassengerRestoreGraceTicks = 0;
             this.launchLockedYaw = this.getYRot();
@@ -834,6 +852,18 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         return this.entityData.get(DATA_ENTRY_PLUG_INSERTED);
     }
 
+    public boolean isNervLogisticsLocked()
+    {
+        return this.entityData.get(DATA_NERV_LOGISTICS_LOCKED);
+    }
+
+    public void setNervLogisticsLocked(boolean locked)
+    {
+        if (!this.level().isClientSide)
+        {
+            this.entityData.set(DATA_NERV_LOGISTICS_LOCKED, locked);
+        }
+    }
     /**
      * World-space centre of this variant's reviewed dorsal entry socket.
      * This is also the authoritative target for the extended right-click ray.
@@ -893,27 +923,98 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
      */
     public boolean releaseLaunchFromCommand()
     {
+        Entity occupant = this.getFirstPassenger();
+        boolean human = occupant instanceof ServerPlayer;
+        boolean training = occupant instanceof TrainingPilotEntity;
         if (this.level().isClientSide
                 || this.getLaunchPhase() != LAUNCH_LOCKED
-                || !(this.getControllingPassenger() instanceof ServerPlayer pilot)
+                || (!human && !training)
                 || this.launchBedPos == null)
         {
             return false;
         }
         int releaseTicks = Math.min(20, Math.max(0,
                 this.getActivationTicks()));
+        this.launchCommandReleased = true;
         this.entityData.set(DATA_ACTIVATION_TICKS, releaseTicks);
         this.entityData.set(DATA_LAUNCH_TICKS, releaseTicks);
         this.enforceLaunchLock();
-        pilot.displayClientMessage(Component.literal(
-                "NERV command has authorized catapult release."), true);
+        if (occupant instanceof ServerPlayer pilot)
+        {
+            pilot.displayClientMessage(Component.literal(
+                    "NERV command has authorized catapult release."), true);
+        }
         ProjectSeele.LOGGER.info(
                 "NERV remote launch release: eva={} pilot={} bed={}",
-                this.getStringUUID(), pilot.getGameProfile().getName(),
+                this.getStringUUID(), training ? "NERV-DUMMY"
+                        : ((ServerPlayer) occupant).getGameProfile().getName(),
                 this.launchBedPos.toShortString());
         return true;
     }
 
+    private boolean hasLaunchPassenger()
+    {
+        return this.getFirstPassenger() instanceof Player
+                || this.getFirstPassenger() instanceof TrainingPilotEntity;
+    }
+
+    /** Arms a pilot who entered while the EVA was still inside its wet cage. */
+    public boolean armPreparedLaunch(BlockPos bed)
+    {
+        if (this.level().isClientSide || this.isLaunchSequenceActive()
+                || !this.hasLaunchPassenger()
+                || !IntegratedNervMapBuilder.isLowerStation(bed)
+                || !this.level().getBlockState(bed).is(Blocks.LODESTONE))
+        {
+            return false;
+        }
+        this.alignForSiloBoarding(bed);
+        this.entityData.set(DATA_ACTIVATION_TICKS, 120);
+        this.entityData.set(DATA_ENTRY_PLUG_INSERTED, true);
+        this.armLaunchBed(bed);
+        return true;
+    }
+
+    /** Server-authoritative movement shared by horizontal and recovery carriers. */
+    public void moveOnNervCarrier(double x, double y, double z, float yaw)
+    {
+        if (this.level().isClientSide)
+        {
+            return;
+        }
+        this.getNavigation().stop();
+        this.setTarget(null);
+        this.setPos(x, y, z);
+        this.setDeltaMovement(Vec3.ZERO);
+        this.setRot(yaw, 0.0F);
+        this.yRotO = this.yBodyRot = this.yHeadRot = yaw;
+        this.fallDistance = 0.0F;
+        this.setNoGravity(true);
+        this.hasImpulse = true;
+        for (Entity passenger : this.getPassengers())
+        {
+            this.positionRider(passenger, Entity::setPos);
+        }
+    }
+
+    /** Clears combat/launch motion before the surface carrier descends. */
+    public void prepareForNervRecovery()
+    {
+        if (this.isLaunchSequenceActive())
+        {
+            this.resetLaunchSequence();
+        }
+        this.clearSortieDestination();
+        this.entityData.set(DATA_CROUCHING, false);
+        this.entityData.set(DATA_PRONE, false);
+        this.entityData.set(DATA_SPRINTING, false);
+        this.entityData.set(DATA_CANNON_CHARGE, 0);
+        this.entityData.set(DATA_N2_ARM_TICKS, 0);
+        this.chargingHeld = false;
+        this.clearPilotMotion();
+        this.updatePoseDimensions();
+        this.setNoGravity(true);
+    }
     /** The armed carrier bed remains known while the EVA is rising above scan range. */
     @Nullable
     public BlockPos getLaunchBedPosition()
@@ -1003,6 +1104,10 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
                 {
                     BlockPos candidate = base.offset(x, -depth, z);
                     if (!this.level().getBlockState(candidate).is(Blocks.LODESTONE))
+                    {
+                        continue;
+                    }
+                    if (EvaHangarBuilder.isHangarBed(candidate))
                     {
                         continue;
                     }
@@ -1989,7 +2094,8 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
 
     private boolean isPilotControlLocked()
     {
-        return this.getActivationTicks() > 20 || this.isLaunchSequenceActive()
+        return this.isNervLogisticsLocked() || this.getActivationTicks() > 20
+                || this.isLaunchSequenceActive()
                 || this.isPowerDepleted() || this.isBerserk()
                 || this.berserkRecoveryTicks > 0;
     }
@@ -2224,6 +2330,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         this.entityData.set(DATA_LAUNCH_TICKS, this.getActivationTicks());
         this.launchCarrierY = bed.getY();
         this.launchContinuousRoute = this.isContinuousSortie();
+        this.launchCommandReleased = false;
         this.launchRecoveryPending = false;
         this.launchPassengerRestoreGraceTicks = 0;
         this.entityData.set(DATA_CROUCHING, false);
@@ -2384,6 +2491,22 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         }
     }
 
+    /**
+     * Advances a launch whose entity section stopped ticking while no human
+     * player rides the airframe. EvaLogisticsDirector calls this only after
+     * observing an unchanged entity tick counter, so ordinary launches are
+     * never double-ticked.
+     */
+    public boolean tickDormantNervLaunch()
+    {
+        if (this.level().isClientSide || !this.isLaunchSequenceActive())
+        {
+            return false;
+        }
+        this.tickLaunchSequence();
+        return true;
+    }
+
     private void tickLaunchSequence()
     {
         int phase = this.getLaunchPhase();
@@ -2393,7 +2516,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         }
         if (phase == LAUNCH_LOCKED)
         {
-            if (this.getControllingPassenger() == null)
+            if (!this.hasLaunchPassenger())
             {
                 if (this.launchPassengerRestoreGraceTicks > 0)
                 {
@@ -2406,9 +2529,16 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             }
             this.launchPassengerRestoreGraceTicks = 0;
             this.enforceLaunchLock();
-            // A save made on the exact transition tick can restore with the
-            // countdown already at or below 20. Resume instead of remaining
-            // permanently mag-locked at the bottom of the shaft.
+            if (!this.launchCommandReleased)
+            {
+                // Activation may finish while the airframe is transported.
+                // Hold above the release threshold until operations explicitly
+                // authorizes the carrier; never infer permission from time.
+                int interlockTicks = Math.max(21, this.getActivationTicks());
+                this.entityData.set(DATA_ACTIVATION_TICKS, interlockTicks);
+                this.entityData.set(DATA_LAUNCH_TICKS, interlockTicks);
+                return;
+            }
             if (this.getActivationTicks() <= 20)
             {
                 this.beginLaunchAscent();
@@ -2428,7 +2558,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             {
                 return;
             }
-            if (this.getControllingPassenger() == null)
+            if (!this.hasLaunchPassenger())
             {
                 if (this.launchPassengerRestoreGraceTicks > 0)
                 {
@@ -2549,36 +2679,44 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         }
     }
 
-    /** Move the visible 11x11 mag-lev carrier directly below the EVA's feet. */
+    /** Move one ephemeral visual deck below the EVA without repainting blocks. */
     private boolean updateMovingCarrier()
     {
-        if (this.launchBedPos == null || !(this.level() instanceof ServerLevel))
+        if (this.launchBedPos == null
+                || !(this.level() instanceof ServerLevel serverLevel))
         {
             return false;
         }
         int bedY = this.launchBedPos.getY();
         int deckY = this.launchDeckY();
         int desiredY = Mth.clamp(Mth.floor(this.getY()) - 1, bedY, deckY);
-        if (desiredY == this.launchCarrierY)
-        {
-            return true;
-        }
         if (desiredY > bedY && desiredY < deckY
                 && !this.canPlaceMovingCarrierLayer(desiredY))
         {
             return false;
         }
-        if (this.launchCarrierY > bedY && this.launchCarrierY < deckY)
+        // Remove a layer left by an older build exactly once. New builds use
+        // one no-save renderer entity and never modify the shaft every tick.
+        if (this.launchCarrierY > bedY && this.launchCarrierY < deckY
+                && this.hasMovingCarrierSignature(this.launchCarrierY))
         {
             this.setMovingCarrierLayer(this.launchCarrierY, false);
         }
-        if (desiredY > bedY && desiredY < deckY)
+        if (desiredY > bedY)
         {
-            this.setMovingCarrierLayer(desiredY, true);
+            NervCarrierVisuals.update(serverLevel, this,
+                    this.launchBedPos.getX() + 0.5D, desiredY,
+                    this.launchBedPos.getZ() + 0.5D);
         }
+        else
+        {
+            NervCarrierVisuals.remove(serverLevel, this);
+        }
+        boolean changed = desiredY != this.launchCarrierY;
         this.launchCarrierY = desiredY;
         int travelled = desiredY - bedY;
-        if (travelled == 1 || travelled == 16 || desiredY == deckY - 1)
+        if (changed && (travelled == 1 || travelled == 16
+                || desiredY == deckY - 1))
         {
             ProjectSeele.LOGGER.info(
                     "NERV carrier progress: eva={} carrierY={} travelled={}/{}",
@@ -2589,13 +2727,16 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
 
     private void clearMovingCarrierBelowSurface()
     {
-        if (this.launchBedPos == null)
+        if (this.launchBedPos == null
+                || !(this.level() instanceof ServerLevel serverLevel))
         {
             return;
         }
+        NervCarrierVisuals.remove(serverLevel, this);
         int bedY = this.launchBedPos.getY();
         int deckY = this.launchDeckY();
-        if (this.launchCarrierY > bedY && this.launchCarrierY < deckY)
+        if (this.launchCarrierY > bedY && this.launchCarrierY < deckY
+                && this.hasMovingCarrierSignature(this.launchCarrierY))
         {
             this.setMovingCarrierLayer(this.launchCarrierY, false);
         }
@@ -2763,18 +2904,23 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     {
         if (this.sortieDestinationDimension == null || this.sortieDestinationBed == null
                 || !(this.level() instanceof ServerLevel sourceLevel)
-                || !(this.getControllingPassenger() instanceof ServerPlayer pilot))
+                || !this.hasLaunchPassenger())
         {
             return false;
         }
+        ServerPlayer pilot = this.getControllingPassenger() instanceof ServerPlayer player
+                ? player : null;
         ServerLevel destination = sourceLevel.getServer().getLevel(
                 this.sortieDestinationDimension);
         BlockPos destinationBed = this.sortieDestinationBed;
         if (destination == null
                 || !destination.getBlockState(destinationBed).is(Blocks.LODESTONE))
         {
-            pilot.displayClientMessage(Component.literal(
-                    "NERV sortie link unavailable; completing launch inside GeoFront."), true);
+            if (pilot != null)
+            {
+                pilot.displayClientMessage(Component.literal(
+                        "NERV sortie link unavailable; completing launch inside GeoFront."), true);
+            }
             ProjectSeele.LOGGER.error(
                     "NERV cross-dimension sortie refused: eva={} dimension={} bed={}",
                     this.getStringUUID(), this.sortieDestinationDimension.location(),
@@ -2788,9 +2934,12 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
                     || !isContinuousSortieRouteClear(sourceLevel,
                             this.launchBedPos, destinationBed))
             {
-                pilot.displayClientMessage(Component.literal(
-                        "NERV physical shaft obstruction detected; launch held at the emergency deck."),
-                        true);
+                if (pilot != null)
+                {
+                    pilot.displayClientMessage(Component.literal(
+                            "NERV physical shaft obstruction detected; launch held at the emergency deck."),
+                            true);
+                }
                 ProjectSeele.LOGGER.error(
                         "NERV continuous sortie shaft blocked: eva={} lower={} upper={}",
                         this.getStringUUID(),
@@ -2814,8 +2963,11 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             setSurfaceCarrierAt(sourceLevel, destinationBed,
                     destinationBed.getY(), true);
             this.beginContinuousSurfaceArrival(arrivalYaw);
-            pilot.displayClientMessage(Component.literal(
-                    "TOKYO-3 SURFACE CLEAR - physical shaft sortie complete"), true);
+            if (pilot != null)
+            {
+                pilot.displayClientMessage(Component.literal(
+                        "TOKYO-3 SURFACE CLEAR - physical shaft sortie complete"), true);
+            }
             sourceLevel.sendParticles(ParticleTypes.CLOUD,
                     arrival.x, arrival.y, arrival.z,
                     90, 5.0D, 0.8D, 5.0D, 0.14D);
@@ -2827,6 +2979,19 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
                     this.getStringUUID(), sourceLevel.dimension().location(),
                     lowerBed.toShortString(), destinationBed.toShortString(), rise);
             return true;
+        }
+
+        // The integrated GeoFront/Tokyo-3 map always uses one continuous
+        // dimension, so a synthetic training pilot never has to cross a
+        // dimension boundary. Keep this legacy transfer path player-only:
+        // moving an arbitrary passenger separately would break vehicle UUID
+        // ownership and the one-airframe fleet contract.
+        if (pilot == null)
+        {
+            ProjectSeele.LOGGER.error(
+                    "NERV legacy cross-dimension sortie requires a human pilot: eva={} destination={}",
+                    this.getStringUUID(), destination.dimension().location());
+            return false;
         }
 
         if (!isSortieShaftClear(destination, destinationBed))
@@ -2890,6 +3055,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         this.launchBedPos = null;
         this.launchCarrierY = NO_LAUNCH_CARRIER;
         this.launchContinuousRoute = false;
+        this.launchCommandReleased = false;
         this.launchRecoveryPending = false;
         this.launchPassengerRestoreGraceTicks = 0;
         this.launchLockedYaw = yaw;
@@ -3081,7 +3247,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
 
     private void resetLaunchSequence()
     {
-        boolean abandoned = this.getControllingPassenger() == null;
+        boolean abandoned = !this.hasLaunchPassenger();
         if (this.getLaunchPhase() == LAUNCH_ASCENT)
         {
             this.clearMovingCarrierBelowSurface();
@@ -3101,6 +3267,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         this.launchBedPos = null;
         this.launchCarrierY = NO_LAUNCH_CARRIER;
         this.launchContinuousRoute = false;
+        this.launchCommandReleased = false;
         this.launchRecoveryPending = false;
         this.launchPassengerRestoreGraceTicks = 0;
         this.launchLockedYaw = this.getYRot();
@@ -3325,6 +3492,53 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             player.displayClientMessage(Component.translatable("message.projectseele.launch_locked"), true);
         }
         return InteractionResult.CONSUME;
+    }
+
+    /** Installs the visible automated pilot through the same entry-plug state. */
+    public boolean boardTrainingPilot(TrainingPilotEntity pilot)
+    {
+        if (this.level().isClientSide || this.isVehicle()
+                || pilot.isPassenger() || this.isLaunchSequenceActive())
+        {
+            return false;
+        }
+        this.entityData.set(DATA_ACTIVATION_TICKS, 120);
+        this.entityData.set(DATA_ENTRY_PLUG_INSERTED, true);
+        if (!pilot.startRiding(this, true))
+        {
+            this.entityData.set(DATA_ACTIVATION_TICKS, 0);
+            this.entityData.set(DATA_ENTRY_PLUG_INSERTED, false);
+            return false;
+        }
+        return true;
+    }
+
+    public boolean boardFromExternalPlug(Entity passenger)
+    {
+        if (this.level().isClientSide || this.isVehicle()
+                || passenger.isPassenger() || this.isLaunchSequenceActive()
+                || !(passenger instanceof Player
+                    || passenger instanceof TrainingPilotEntity))
+        {
+            return false;
+        }
+        // External travel has already finished. Continue from the authored
+        // hatch-lock half of the activation clip, without drawing a second
+        // capsule through the one that just reached the socket.
+        this.entityData.set(DATA_ACTIVATION_TICKS, 57);
+        this.entityData.set(DATA_ENTRY_PLUG_INSERTED, true);
+        if (!passenger.startRiding(this, true))
+        {
+            this.entityData.set(DATA_ACTIVATION_TICKS, 0);
+            this.entityData.set(DATA_ENTRY_PLUG_INSERTED, false);
+            return false;
+        }
+        return true;
+    }
+
+    public boolean isTrainingPilotActive()
+    {
+        return this.getFirstPassenger() instanceof TrainingPilotEntity;
     }
 
     private void alignForSiloBoarding(BlockPos bed)

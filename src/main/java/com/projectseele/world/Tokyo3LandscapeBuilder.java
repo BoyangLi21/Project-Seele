@@ -82,10 +82,7 @@ public final class Tokyo3LandscapeBuilder
         int ridgePoints = 0;
         for (int[] point : RIDGE_AUDIT_POINTS)
         {
-            int y = nativeSurfaceOffset(level, origin,
-                    point[0], point[1]);
-            if (isTerrainSurface(level.getBlockState(
-                    origin.offset(point[0], y, point[1]))))
+            if (terrainSurfacePresent(level, origin, point[0], point[1]))
             {
                 ridgePoints++;
             }
@@ -743,6 +740,30 @@ public final class Tokyo3LandscapeBuilder
                 Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
                 origin.getX() + x, origin.getZ() + z) - 1;
         return Math.max(-48, Math.min(96, surface - origin.getY()));
+    }
+
+    /**
+     * Audits the native ridge beneath later perimeter details. Heightmaps
+     * report the highest motion-blocking block in a column, which can become
+     * a defence fitting or another non-terrain detail after the landscape
+     * itself has been built. The ridge is still intact in that case, so walk
+     * down the bounded surface band instead of treating the decoration as the
+     * ground.
+     */
+    private static boolean terrainSurfacePresent(ServerLevel level,
+                                                 BlockPos origin,
+                                                 int x, int z)
+    {
+        int top = nativeSurfaceOffset(level, origin, x, z);
+        for (int y = top; y >= -48; y--)
+        {
+            if (isTerrainSurface(level.getBlockState(
+                    origin.offset(x, y, z))))
+            {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static BlockState retainingState(int depth)

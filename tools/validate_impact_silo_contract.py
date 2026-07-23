@@ -471,6 +471,7 @@ def validate_silo(gate: Gate) -> None:
     integrated = read(
         "src/main/java/com/projectseele/world/IntegratedNervMapBuilder.java")
     geo_commands = read("src/main/java/com/projectseele/visual/GeoFrontCommands.java")
+    logistics = read("src/main/java/com/projectseele/world/EvaLogisticsDirector.java")
     entity = read("src/main/java/com/projectseele/entity/EvaUnit01Entity.java")
     game_events = read("src/main/java/com/projectseele/GameEvents.java")
     client = read("src/main/java/com/projectseele/client/ClientForgeEvents.java")
@@ -677,17 +678,27 @@ def validate_silo(gate: Gate) -> None:
     reset_end = entity.find("@Override\n    public void die", reset_start)
     reset_body = entity[reset_start:reset_end] if reset_start >= 0 and reset_end > reset_start else ""
     abandoned_cleanup = all(token in reset_body for token in (
-        "boolean abandoned = this.getControllingPassenger() == null",
+        "boolean abandoned = !this.hasLaunchPassenger()",
         "if (abandoned)", "DATA_ACTIVATION_TICKS, 0", "DATA_ENTRY_PLUG_INSERTED, false",
     ))
     gate.require("silo.abandoned_entry_cleanup", abandoned_cleanup,
                  "passenger-restore timeout clears the inserted plug and activation overlay")
+    carrier_visuals = read(
+        "src/main/java/com/projectseele/world/NervCarrierVisuals.java")
+    carrier_entity = read(
+        "src/main/java/com/projectseele/entity/NervCarrierPlatformEntity.java")
     moving_carrier = all(token in entity for token in (
-        "SeeleLaunchCarrierY", "updateMovingCarrier()", "setMovingCarrierLayer",
-        "for (int x = -5; x <= 5; x++)", "for (int z = -5; z <= 5; z++)",
+        "SeeleLaunchCarrierY", "updateMovingCarrier()",
+        "NervCarrierVisuals.update", "NervCarrierVisuals.remove",
         "NERV carrier progress", "this.setSurfaceCarrier(true)",
-        "recoverMovingCarrier", "serverLevel.setBlock(block, desired, 2)",
-        "hasMovingCarrierSignature", "exact 11x11 carrier signature",
+        "recoverMovingCarrier", "hasMovingCarrierSignature",
+        "exact 11x11 carrier signature",
+    )) and all(token in carrier_visuals for token in (
+        "NERV_CARRIER_PLATFORM", "PLATFORM_BY_EVA", "moveControlled",
+        "resetRuntime",
+    )) and all(token in carrier_entity for token in (
+        "CONTROL_TIMEOUT_TICKS", "ticksWithoutControl", "this.discard()",
+        "this.noPhysics = true",
     ))
     gate.require("silo.moving_carrier", moving_carrier,
                  "persisted 11x11 carrier follows the EVA and closes on abort")
@@ -714,9 +725,12 @@ def validate_silo(gate: Gate) -> None:
         "return this.surfaceBed.getY() - this.lowerBed.getY()",
         "continuousShafts == LIFT_LINKS.size()",
     )) and all(token in geo_commands for token in (
-        "ensureContinuousSortieUnits", "setSortieDestination(level.dimension(),",
-        "setSortieParkingBed(lift.lowerBed())", "ascentDistance()",
-        "no portal or EVA teleport",
+        "ensureContinuousSortieUnits", "EvaLogisticsDirector.ensureFleet(level)",
+        "ascentDistance()", "no portal or EVA teleport",
+    )) and all(token in logistics for token in (
+        "Phase.TO_SILO", "Phase.DESCENDING", "tickHorizontal",
+        "tickDescent", "setSortieDestination(level.dimension(),",
+        "setSortieParkingBed(silo)", "moveOnNervCarrier",
     )) and all(token in entity for token in (
         "private boolean isContinuousSortie()", "isContinuousSortieShaftClear",
         "NERV continuous sortie complete",

@@ -25,7 +25,8 @@ public final class GeoFrontBuilder
     public static final int CAVERN_CENTRE_Z = -76;
     public static final int CAVERN_TOP_Y = CAVERN_CENTRE_Y + CAVERN_RADIUS;
     public static final int CAVERN_BOTTOM_Y = CAVERN_CENTRE_Y - CAVERN_RADIUS;
-    public static final int OBSERVATION_Z = 100;
+    /** Ground-access overlook south of the pyramid, reached by the public stair. */
+    public static final int OBSERVATION_Z = 190;
     public static final int OBSERVATION_Y = 24;
     public static final int[] LIFT_X = {-28, 0, 28};
 
@@ -35,11 +36,13 @@ public final class GeoFrontBuilder
     public static final int PYRAMID_BASE_CENTRE_Z = 31;
     public static final int PYRAMID_CENTRE_Z = 31;
     public static final int PYRAMID_BASE_Y = -22;
-    public static final int PYRAMID_APEX_Y = 200;
-    public static final int PYRAMID_BASE_HALF_X = 70;
-    public static final int PYRAMID_BASE_HALF_Z = 100;
+    public static final int PYRAMID_APEX_Y = 150;
+    public static final int PYRAMID_BASE_HALF_X = 120;
+    public static final int PYRAMID_BASE_HALF_Z = 120;
     private static final int PYRAMID_APEX_HALF = 0;
     private static final int PYRAMID_AUDIT_Y = 57;
+    public static final int PYRAMID_APRON_MARGIN = 14;
+    private static final int PYRAMID_APRON_MARKER_INSET = 4;
     private static final ResourceLocation SKYWEAVE_ID =
             new ResourceLocation("ars_nouveau", "sky_block");
     private static boolean warnedMissingSkyweave;
@@ -71,6 +74,7 @@ public final class GeoFrontBuilder
         buildCommandBridge(level, origin);
         buildForestRing(level, origin);
         buildObservationDeck(level, origin);
+        buildObservationAccess(level, origin);
         repairCavernLighting(level, origin);
     }
 
@@ -132,8 +136,7 @@ public final class GeoFrontBuilder
                 gantries++;
             }
         }
-        boolean bridge = level.getBlockState(origin.offset(0, 2, 70))
-                .is(Blocks.IRON_BLOCK);
+        boolean bridge = pyramidGroundAccessPresent(level, origin);
         boolean observation = level.getBlockState(
                 origin.offset(0, OBSERVATION_Y, OBSERVATION_Z)).is(Blocks.LODESTONE);
         NervOperationsCentreBuilder.OperationsAudit operations =
@@ -146,7 +149,8 @@ public final class GeoFrontBuilder
         boolean valid = floor && skySphere && lake && naturalLake
                 && pyramid && legacyInnerPyramidGone && lifts == 3
                 && cavernLighting && gantries == 3
-                && bridge && observation && operations.valid() && magi.valid()
+                && bridge && observation && operations.runtimePhysicalValid()
+                && magi.runtimePhysicalValid()
                 && terminalDogma.valid() && vanillaLavaSamples == 0;
         return new GeoFrontAudit(valid, floor, skySphere, lake, naturalLake,
                 pyramid, legacyInnerPyramidGone, realSky, cavernLighting,
@@ -223,6 +227,18 @@ public final class GeoFrontBuilder
                         distance >= floorRadius - 3
                                 ? Blocks.STONE.defaultBlockState()
                                 : Blocks.GRASS_BLOCK.defaultBlockState());
+                // Older terrain formulas left dirt/grass towers because a
+                // later rebuild wrote the new top but never cleared the old
+                // one. Remove only natural terrain; authored structures are
+                // rebuilt later and non-terrain blocks remain untouched.
+                for (int y = terrainY + 1; y <= 24; y++)
+                {
+                    BlockPos stale = column.offset(0, y, 0);
+                    if (isNaturalTerrain(level.getBlockState(stale)))
+                    {
+                        set(level, stale, Blocks.AIR.defaultBlockState());
+                    }
+                }
             }
         }
     }
@@ -379,10 +395,66 @@ public final class GeoFrontBuilder
         }
     }
 
+    /**
+     * Bounded exterior migration. Besides the shell markers, validate the
+     * traversable ground route and the actual apron surface: old saves often
+     * retained revision markers while later landscape passes restored grass
+     * or an imported wall cut the public passage in half.
+     */
+    public static boolean ensurePyramidRevision(ServerLevel level, BlockPos origin)
+    {
+        BlockPos baseMarker = origin.offset(-PYRAMID_BASE_HALF_X,
+                PYRAMID_BASE_Y,
+                PYRAMID_BASE_CENTRE_Z - PYRAMID_BASE_HALF_Z);
+        BlockPos middleMarker = origin.offset(pyramidHalfXAt(PYRAMID_AUDIT_Y),
+                PYRAMID_AUDIT_Y,
+                PYRAMID_CENTRE_Z + pyramidHalfZAt(PYRAMID_AUDIT_Y));
+        BlockPos apexMarker = origin.offset(0, PYRAMID_APEX_Y + 1,
+                PYRAMID_CENTRE_Z);
+        boolean shellValid = level.getBlockState(baseMarker)
+                .is(Blocks.CHISELED_DEEPSLATE)
+                && level.getBlockState(middleMarker).is(Blocks.CRYING_OBSIDIAN)
+                && level.getBlockState(apexMarker).is(Blocks.BEACON);
+        boolean preserveCommandAsset =
+                LocalMapAssetLoader.commandMarkersPresent(level, origin);
+        boolean repaired = false;
+        if (!shellValid)
+        {
+            buildNervPyramid(level, origin);
+            ProjectSeele.LOGGER.info(
+                    "NERV pyramid upgraded to the square black v18 envelope at {}",
+                    origin.toShortString());
+            repaired = true;
+        }
+        if (!pyramidApronMarkersPresent(level, origin)
+                || !pyramidApronSurfacePresent(level, origin))
+        {
+            buildPyramidApron(level, origin, preserveCommandAsset);
+            writePyramidApronMarkers(level, origin);
+            ProjectSeele.LOGGER.info(
+                    "NERV pyramid service apron repaired at {}",
+                    origin.toShortString());
+            repaired = true;
+        }
+        if (!pyramidGroundAccessPresent(level, origin))
+        {
+            clearLegacyObservationDeck(level, origin);
+            buildCommandBridge(level, origin);
+            buildObservationDeck(level, origin);
+            buildObservationAccess(level, origin);
+            ProjectSeele.LOGGER.info(
+                    "NERV pyramid public passage and ground overlook repaired at {}",
+                    origin.toShortString());
+            repaired = true;
+        }
+        return repaired;
+    }
+
     private static void buildNervPyramid(ServerLevel level, BlockPos origin)
     {
         boolean preserveCommandAsset =
                 LocalMapAssetLoader.commandMarkersPresent(level, origin);
+        clearTallEnvelopePyramid(level, origin, preserveCommandAsset);
         clearBentEnvelopePyramid(level, origin, preserveCommandAsset);
         clearPreviousEnvelopePyramid(level, origin, preserveCommandAsset);
         clearLegacyNervPyramid(level, origin, preserveCommandAsset);
@@ -445,28 +517,31 @@ public final class GeoFrontBuilder
         set(level, origin.offset(0, PYRAMID_APEX_Y + 2, PYRAMID_CENTRE_Z),
                 Blocks.RED_STAINED_GLASS.defaultBlockState());
         buildPyramidApron(level, origin, preserveCommandAsset);
+        writePyramidApronMarkers(level, origin);
     }
 
     /**
-     * Replaces the accidental grass carpet around NERV with a restrained
-     * service apron. Existing LCL and the private command-module interior are
-     * never overwritten.
+     * Replaces the irregular grass/plant fringe around NERV with a level,
+     * illuminated service apron. The pyramid interior, LCL and imported
+     * command module are never overwritten.
      */
     private static void buildPyramidApron(ServerLevel level, BlockPos origin,
                                           boolean preserveCommandAsset)
     {
-        int margin = 10;
-        for (int x = -PYRAMID_BASE_HALF_X - margin;
-             x <= PYRAMID_BASE_HALF_X + margin; x++)
+        for (int x = -PYRAMID_BASE_HALF_X - PYRAMID_APRON_MARGIN;
+             x <= PYRAMID_BASE_HALF_X + PYRAMID_APRON_MARGIN; x++)
         {
-            for (int z = PYRAMID_BASE_CENTRE_Z - PYRAMID_BASE_HALF_Z - margin;
-                 z <= PYRAMID_BASE_CENTRE_Z + PYRAMID_BASE_HALF_Z + margin; z++)
+            for (int z = PYRAMID_BASE_CENTRE_Z - PYRAMID_BASE_HALF_Z
+                         - PYRAMID_APRON_MARGIN;
+                 z <= PYRAMID_BASE_CENTRE_Z + PYRAMID_BASE_HALF_Z
+                         + PYRAMID_APRON_MARGIN; z++)
             {
-                if (preserveCommandAsset
-                        && LocalMapAssetLoader.commandEnvelopeContains(x, 0, z))
-                {
-                    continue;
-                }
+                int centredZ = z - PYRAMID_BASE_CENTRE_Z;
+                // Preserve authored command-module blocks, not the natural
+                // dirt columns between them. Skipping this complete projected
+                // envelope was the source of the grass pillars in old saves.
+                boolean commandColumn = preserveCommandAsset
+                        && LocalMapAssetLoader.commandEnvelopeContains(x, 0, z);
                 BlockPos position = origin.offset(x, 0, z);
                 if (!level.getFluidState(position).isEmpty()
                         || !level.getFluidState(position.above()).isEmpty())
@@ -474,20 +549,166 @@ public final class GeoFrontBuilder
                     continue;
                 }
                 BlockState state = level.getBlockState(position);
-                if (!state.is(Blocks.GRASS_BLOCK) && !state.is(Blocks.DIRT)
-                        && !state.is(Blocks.MOSS_BLOCK) && !state.is(Blocks.STONE)
-                        && !state.is(Blocks.GRAVEL) && !state.is(Blocks.SAND))
+                clearStaleNaturalColumn(level, position, 1, 24);
+                if (commandColumn && !isNaturalTerrain(state))
                 {
                     continue;
                 }
-                BlockState apron = Math.floorMod(x + z, 11) == 0
-                        ? Blocks.LIGHT_GRAY_CONCRETE.defaultBlockState()
-                        : Blocks.POLISHED_DEEPSLATE.defaultBlockState();
-                set(level, position, apron);
+                if (!state.is(Blocks.GRASS_BLOCK) && !state.is(Blocks.DIRT)
+                        && !state.is(Blocks.MOSS_BLOCK) && !state.is(Blocks.STONE)
+                        && !state.is(Blocks.GRAVEL) && !state.is(Blocks.SAND)
+                        && !state.is(Blocks.COARSE_DIRT) && !state.is(Blocks.ROOTED_DIRT)
+                        && !state.is(Blocks.PODZOL) && !state.is(Blocks.MYCELIUM)
+                        && !state.is(Blocks.MUD) && !state.is(Blocks.CLAY)
+                        && !state.is(Blocks.POLISHED_DEEPSLATE)
+                        && !state.is(Blocks.LIGHT_GRAY_CONCRETE))
+                {
+                    continue;
+                }
+                boolean border = Math.abs(x)
+                        == PYRAMID_BASE_HALF_X + PYRAMID_APRON_MARGIN
+                        || Math.abs(centredZ)
+                        == PYRAMID_BASE_HALF_Z + PYRAMID_APRON_MARGIN;
+                boolean guide = Math.floorMod(x, 16) <= 1
+                        || Math.floorMod(centredZ, 16) <= 1;
+                set(level, position, border
+                        ? Blocks.CHISELED_POLISHED_BLACKSTONE.defaultBlockState()
+                        : guide
+                                ? Blocks.LIGHT_GRAY_CONCRETE.defaultBlockState()
+                                : Blocks.POLISHED_DEEPSLATE.defaultBlockState());
+
+                if (guide && Math.floorMod(x * 7 + centredZ * 11, 31) == 0)
+                {
+                    set(level, position.above(), Blocks.LIGHT.defaultBlockState());
+                }
             }
         }
     }
+    private static void writePyramidApronMarkers(ServerLevel level,
+                                                   BlockPos origin)
+    {
+        int x = PYRAMID_BASE_HALF_X + PYRAMID_APRON_MARGIN
+                - PYRAMID_APRON_MARKER_INSET;
+        int z = PYRAMID_BASE_HALF_Z + PYRAMID_APRON_MARGIN
+                - PYRAMID_APRON_MARKER_INSET;
+        for (int signX : new int[] {-1, 1})
+        {
+            for (int signZ : new int[] {-1, 1})
+            {
+                set(level, origin.offset(signX * x, 0,
+                                PYRAMID_BASE_CENTRE_Z + signZ * z),
+                        Blocks.CHISELED_POLISHED_BLACKSTONE.defaultBlockState());
+            }
+        }
+        set(level, origin.offset(x, 1, PYRAMID_BASE_CENTRE_Z + z),
+                Blocks.LODESTONE.defaultBlockState());
+        set(level, origin.offset(-x, 1, PYRAMID_BASE_CENTRE_Z + z),
+                Blocks.LODESTONE.defaultBlockState());
+    }
 
+    private static boolean pyramidApronMarkersPresent(ServerLevel level,
+                                                        BlockPos origin)
+    {
+        int x = PYRAMID_BASE_HALF_X + PYRAMID_APRON_MARGIN
+                - PYRAMID_APRON_MARKER_INSET;
+        int z = PYRAMID_BASE_HALF_Z + PYRAMID_APRON_MARGIN
+                - PYRAMID_APRON_MARKER_INSET;
+        for (int signX : new int[] {-1, 1})
+        {
+            for (int signZ : new int[] {-1, 1})
+            {
+                if (!level.getBlockState(origin.offset(signX * x, 0,
+                                PYRAMID_BASE_CENTRE_Z + signZ * z))
+                        .is(Blocks.CHISELED_POLISHED_BLACKSTONE))
+                {
+                    return false;
+                }
+            }
+        }
+        return level.getBlockState(origin.offset(x, 1,
+                        PYRAMID_BASE_CENTRE_Z + z)).is(Blocks.LODESTONE)
+                && level.getBlockState(origin.offset(-x, 1,
+                        PYRAMID_BASE_CENTRE_Z + z)).is(Blocks.LODESTONE);
+    }
+    /**
+     * Samples the visible apron instead of trusting migration markers. This
+     * catches old worlds where a later terrain pass painted grass back over
+     * an otherwise current pyramid.
+     */
+    private static boolean pyramidApronSurfacePresent(ServerLevel level,
+                                                       BlockPos origin)
+    {
+        int[][] samples = {
+                {-96, -112}, {-48, -112}, {48, -112}, {96, -112},
+                {-96, 112}, {-48, 112}, {48, 112}, {96, 112},
+                {-128, -64}, {-128, 0}, {-128, 64},
+                {128, -64}, {128, 0}, {128, 64}
+        };
+        for (int[] sample : samples)
+        {
+            BlockState state = level.getBlockState(origin.offset(sample[0], 0,
+                    PYRAMID_BASE_CENTRE_Z + sample[1]));
+            if (state.is(Blocks.GRASS_BLOCK) || state.is(Blocks.DIRT)
+                    || state.is(Blocks.MOSS_BLOCK) || state.is(Blocks.PODZOL)
+                    || state.is(Blocks.MYCELIUM))
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+    /** Removes the rejected v17 tall, rectangular grey envelope. */
+    private static void clearTallEnvelopePyramid(ServerLevel level,
+                                                  BlockPos origin,
+                                                  boolean preserveCommandAsset)
+    {
+        final int oldBaseY = -22;
+        final int oldApexY = 200;
+        final int oldHalfX = 70;
+        final int oldHalfZ = 100;
+        final int oldCentreZ = 31;
+        BlockPos baseMarker = origin.offset(-oldHalfX, oldBaseY,
+                oldCentreZ - oldHalfZ);
+        BlockPos sideMarker = origin.offset(45, 57, 95);
+        if (!level.getBlockState(baseMarker).is(Blocks.CHISELED_DEEPSLATE)
+                || !level.getBlockState(sideMarker).is(Blocks.CRYING_OBSIDIAN))
+        {
+            return;
+        }
+        for (int x = -oldHalfX; x <= oldHalfX; x++)
+        {
+            for (int z = -oldHalfZ; z <= oldHalfZ; z++)
+            {
+                clearLegacyPyramidBlock(level, origin, x, oldBaseY,
+                        oldCentreZ + z, preserveCommandAsset);
+            }
+        }
+        int height = oldApexY - oldBaseY;
+        for (int y = oldBaseY + 1; y <= oldApexY; y++)
+        {
+            int halfX = steppedLerp(oldHalfX, 0, y - oldBaseY, height);
+            int halfZ = steppedLerp(oldHalfZ, 0, y - oldBaseY, height);
+            int nextHalfX = y == oldApexY ? 0
+                    : steppedLerp(oldHalfX, 0, y + 1 - oldBaseY, height);
+            int nextHalfZ = y == oldApexY ? 0
+                    : steppedLerp(oldHalfZ, 0, y + 1 - oldBaseY, height);
+            for (int x = -halfX; x <= halfX; x++)
+            {
+                for (int z = -halfZ; z <= halfZ; z++)
+                {
+                    if (Math.abs(x) >= nextHalfX || Math.abs(z) >= nextHalfZ)
+                    {
+                        clearLegacyPyramidBlock(level, origin, x, y,
+                                oldCentreZ + z, preserveCommandAsset);
+                    }
+                }
+            }
+        }
+        clearLegacyPyramidBlock(level, origin, 0, oldApexY + 1,
+                oldCentreZ, preserveCommandAsset);
+        clearLegacyPyramidBlock(level, origin, 0, oldApexY + 2,
+                oldCentreZ, preserveCommandAsset);
+    }
     /**
      * Removes the v15 two-stage, drifting envelope. Its shoulder kink and
      * moving centre made the lower half read wider and unrelated to the top.
@@ -705,6 +926,23 @@ public final class GeoFrontBuilder
                         + PYRAMID_BASE_HALF_Z + margin;
     }
 
+    /** Full rectangular service apron that later terrain passes must preserve. */
+    public static boolean isWithinPyramidServiceApron(int relativeX,
+                                                       int relativeZ)
+    {
+        return isWithinPyramidFootprint(relativeX, relativeZ,
+                PYRAMID_APRON_MARGIN);
+    }
+
+    /** Ground stair and overlook south of the pyramid. */
+    public static boolean isWithinPyramidPublicAccess(int relativeX,
+                                                       int relativeZ)
+    {
+        int southFace = PYRAMID_BASE_CENTRE_Z + PYRAMID_BASE_HALF_Z - 2;
+        return Math.abs(relativeX) <= 10
+                && relativeZ >= southFace
+                && relativeZ <= OBSERVATION_Z + 9;
+    }
     private static int pyramidHalfZAt(int y)
     {
         return steppedLerp(PYRAMID_BASE_HALF_Z, PYRAMID_APEX_HALF,
@@ -731,8 +969,8 @@ public final class GeoFrontBuilder
         {
             return Blocks.SMOOTH_QUARTZ.defaultBlockState();
         }
-        return band % 4 <= 1 ? Blocks.LIGHT_GRAY_CONCRETE.defaultBlockState()
-                : Blocks.GRAY_CONCRETE.defaultBlockState();
+        return band % 4 <= 1 ? Blocks.BLACK_CONCRETE.defaultBlockState()
+                : Blocks.POLISHED_BLACKSTONE.defaultBlockState();
     }
 
     private static void fillPyramidRectangle(ServerLevel level,
@@ -895,20 +1133,42 @@ public final class GeoFrontBuilder
                 set(level, origin.offset(x, 2, z), x == 0 && z % 8 < 4
                         ? Blocks.SEA_LANTERN.defaultBlockState()
                         : Blocks.IRON_BLOCK.defaultBlockState());
-                if (z >= pressureGateZ)
+                // Clear the whole authored-module-to-exterior route. The old
+                // code opened headroom only at the pyramid face, so imported
+                // command-room walls left every apparent passage as a dead end.
+                for (int y = 3; y <= 7; y++)
                 {
-                    for (int y = 3; y <= 7; y++)
-                    {
-                        set(level, origin.offset(x, y, z),
-                                Blocks.AIR.defaultBlockState());
-                    }
+                    set(level, origin.offset(x, y, z),
+                            Blocks.AIR.defaultBlockState());
                 }
             }
-            set(level, origin.offset(-5, 3, z), Blocks.IRON_BARS.defaultBlockState());
-            set(level, origin.offset(5, 3, z), Blocks.IRON_BARS.defaultBlockState());
+            for (int y = 3; y <= 5; y++)
+            {
+                set(level, origin.offset(-5, y, z),
+                        Blocks.IRON_BARS.defaultBlockState());
+                set(level, origin.offset(5, y, z),
+                        Blocks.IRON_BARS.defaultBlockState());
+            }
+        }
+
+        // Open pressure frames mark the imported module boundary and the real
+        // pyramid shell without introducing another blocking door.
+        for (int gateZ : new int[] {96, pressureGateZ})
+        {
+            for (int x = -5; x <= 5; x++)
+            {
+                set(level, origin.offset(x, 8, gateZ),
+                        Blocks.POLISHED_BLACKSTONE_BRICKS.defaultBlockState());
+            }
+            for (int y = 3; y <= 8; y++)
+            {
+                set(level, origin.offset(-5, y, gateZ),
+                        Blocks.POLISHED_BLACKSTONE_BRICKS.defaultBlockState());
+                set(level, origin.offset(5, y, gateZ),
+                        Blocks.POLISHED_BLACKSTONE_BRICKS.defaultBlockState());
+            }
         }
     }
-
     private static void removeArtificialSun(ServerLevel level, BlockPos origin)
     {
         clearLegacyArtificialSun(level, origin);
@@ -1105,8 +1365,11 @@ public final class GeoFrontBuilder
                     Blocks.IRON_BARS.defaultBlockState());
             set(level, centre.offset(8, OBSERVATION_Y + 1, i),
                     Blocks.IRON_BARS.defaultBlockState());
-            set(level, centre.offset(i, OBSERVATION_Y + 1, -8),
-                    Blocks.IRON_BARS.defaultBlockState());
+            if (Math.abs(i) > 3)
+            {
+                set(level, centre.offset(i, OBSERVATION_Y + 1, -8),
+                        Blocks.IRON_BARS.defaultBlockState());
+            }
             set(level, centre.offset(i, OBSERVATION_Y + 1, 8),
                     Blocks.IRON_BARS.defaultBlockState());
         }
@@ -1114,6 +1377,113 @@ public final class GeoFrontBuilder
                 Blocks.LODESTONE.defaultBlockState());
     }
 
+    /**
+     * A real supported stair joins the ground-level command passage to the
+     * overlook. No teleport or isolated floating deck is involved.
+     */
+    private static void buildObservationAccess(ServerLevel level,
+                                                BlockPos origin)
+    {
+        int firstZ = PYRAMID_BASE_CENTRE_Z + PYRAMID_BASE_HALF_Z + 9;
+        int finalZ = OBSERVATION_Z - 9;
+        for (int z = firstZ; z <= finalZ; z++)
+        {
+            int stepY = 3 + z - firstZ;
+            for (int x = -3; x <= 3; x++)
+            {
+                set(level, origin.offset(x, stepY, z),
+                        Blocks.POLISHED_BLACKSTONE_BRICK_STAIRS
+                                .defaultBlockState()
+                                .setValue(net.minecraft.world.level.block.StairBlock.FACING,
+                                        Direction.SOUTH));
+                for (int y = 0; y < stepY; y++)
+                {
+                    if (Math.abs(x) == 3)
+                    {
+                        set(level, origin.offset(x, y, z),
+                                Blocks.POLISHED_BLACKSTONE_BRICKS
+                                        .defaultBlockState());
+                    }
+                }
+            }
+            for (int side : new int[] {-4, 4})
+            {
+                set(level, origin.offset(side, stepY, z),
+                        Blocks.POLISHED_BLACKSTONE_BRICKS.defaultBlockState());
+                set(level, origin.offset(side, stepY + 1, z),
+                        Blocks.IRON_BARS.defaultBlockState());
+            }
+        }
+    }
+
+    private static boolean pyramidGroundAccessPresent(ServerLevel level,
+                                                       BlockPos origin)
+    {
+        int firstZ = PYRAMID_BASE_CENTRE_Z + PYRAMID_BASE_HALF_Z + 9;
+        int finalZ = OBSERVATION_Z - 9;
+        return level.getBlockState(origin.offset(0, 2, 70))
+                        .is(Blocks.IRON_BLOCK)
+                && level.getBlockState(origin.offset(0, 4, 70)).isAir()
+                && level.getBlockState(origin.offset(0, 2, firstZ - 1))
+                        .is(Blocks.IRON_BLOCK)
+                && level.getBlockState(origin.offset(0, 3, firstZ))
+                        .is(Blocks.POLISHED_BLACKSTONE_BRICK_STAIRS)
+                && level.getBlockState(origin.offset(0,
+                        3 + finalZ - firstZ, finalZ))
+                        .is(Blocks.POLISHED_BLACKSTONE_BRICK_STAIRS)
+                && level.getBlockState(origin.offset(0,
+                        OBSERVATION_Y, OBSERVATION_Z)).is(Blocks.LODESTONE);
+    }
+
+    /** Removes the superseded floating v18 overlook at Z=100. */
+    private static void clearLegacyObservationDeck(ServerLevel level,
+                                                    BlockPos origin)
+    {
+        final int oldZ = 100;
+        BlockPos centre = origin.offset(0, 0, oldZ);
+        if (!level.getBlockState(centre.offset(0, OBSERVATION_Y, 0))
+                .is(Blocks.LODESTONE))
+        {
+            return;
+        }
+        for (int y = 1; y <= OBSERVATION_Y; y++)
+        {
+            for (int x : new int[] {-5, 5})
+            {
+                for (int z : new int[] {-5, 5})
+                {
+                    BlockPos support = centre.offset(x, y, z);
+                    if (level.getBlockState(support).is(Blocks.IRON_BLOCK))
+                    {
+                        set(level, support, Blocks.AIR.defaultBlockState());
+                    }
+                }
+            }
+        }
+        for (int x = -8; x <= 8; x++)
+        {
+            for (int z = -8; z <= 8; z++)
+            {
+                BlockPos floor = centre.offset(x, OBSERVATION_Y, z);
+                if (level.getBlockState(floor).is(Blocks.SMOOTH_STONE)
+                        || level.getBlockState(floor).is(Blocks.LODESTONE))
+                {
+                    set(level, floor, Blocks.AIR.defaultBlockState());
+                }
+            }
+            for (BlockPos rail : new BlockPos[] {
+                    centre.offset(-8, OBSERVATION_Y + 1, x),
+                    centre.offset(8, OBSERVATION_Y + 1, x),
+                    centre.offset(x, OBSERVATION_Y + 1, -8),
+                    centre.offset(x, OBSERVATION_Y + 1, 8)})
+            {
+                if (level.getBlockState(rail).is(Blocks.IRON_BARS))
+                {
+                    set(level, rail, Blocks.AIR.defaultBlockState());
+                }
+            }
+        }
+    }
     private static boolean isCavernStone(BlockState state)
     {
         return state.is(Blocks.DEEPSLATE) || state.is(Blocks.CALCITE)
@@ -1142,6 +1512,44 @@ public final class GeoFrontBuilder
                 set(level, centre.offset(x, y, z), state);
             }
         }
+    }
+
+    private static void clearStaleNaturalColumn(ServerLevel level,
+                                                BlockPos base,
+                                                int minimumY, int maximumY)
+    {
+        for (int y = minimumY; y <= maximumY; y++)
+        {
+            BlockPos stale = base.above(y);
+            BlockState above = level.getBlockState(stale);
+            if (isNaturalTerrain(above)
+                    || above.is(Blocks.GRASS)
+                    || above.is(Blocks.TALL_GRASS)
+                    || above.is(Blocks.FERN)
+                    || above.is(Blocks.LARGE_FERN)
+                    || above.is(Blocks.SNOW)
+                    || above.is(Blocks.DANDELION)
+                    || above.is(Blocks.POPPY)
+                    || above.is(Blocks.BLUE_ORCHID)
+                    || above.is(Blocks.ALLIUM)
+                    || above.is(Blocks.AZURE_BLUET)
+                    || above.is(Blocks.OXEYE_DAISY)
+                    || above.is(Blocks.CORNFLOWER)
+                    || above.is(Blocks.LILY_OF_THE_VALLEY))
+            {
+                set(level, stale, Blocks.AIR.defaultBlockState());
+            }
+        }
+    }
+    private static boolean isNaturalTerrain(BlockState state)
+    {
+        return state.is(Blocks.GRASS_BLOCK) || state.is(Blocks.DIRT)
+                || state.is(Blocks.MOSS_BLOCK) || state.is(Blocks.STONE)
+                || state.is(Blocks.GRAVEL) || state.is(Blocks.SAND)
+                || state.is(Blocks.COARSE_DIRT)
+                || state.is(Blocks.ROOTED_DIRT)
+                || state.is(Blocks.PODZOL) || state.is(Blocks.MYCELIUM)
+                || state.is(Blocks.MUD) || state.is(Blocks.CLAY);
     }
 
     private static void set(ServerLevel level, BlockPos position, BlockState state)

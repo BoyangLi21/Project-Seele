@@ -28,6 +28,8 @@ def main() -> int:
     commands = source("src/main/java/com/projectseele/visual/ThirdTokyoCommands.java")
     capture = source(
         "src/main/java/com/projectseele/client/visual/VisualCaptureManager.java")
+    local_assets = source(
+        "src/main/java/com/projectseele/world/LocalMapAssetLoader.java")
     automation = source("src/main/java/com/projectseele/visual/VisualLabAutomation.java")
     blockstates = json.loads(source(
         "src/main/resources/assets/projectseele/blockstates/"
@@ -44,7 +46,7 @@ def main() -> int:
                     or (x, z) in private_lots):
                 continue
             height = 22 + ((x // 40 * 31 + z // 40 * 17) % 6) * 4
-            inner.append((x, z, height))
+            inner.append((x, z, height, 12))
 
     outer = []
     for x in range(-200, 201, 40):
@@ -52,22 +54,25 @@ def main() -> int:
             if max(abs(x), abs(z)) != 200 or x == 200:
                 continue
             height = 18 + ((x * 13 + z * 29) % 5) * 5
-            outer.append((x, z, height))
+            outer.append((x, z, height, 9))
     buildings = inner + outer
 
-    def ceiling_roof(x: int, z: int) -> int:
-        rise = int((320 * 320 - x * x - z * z) ** 0.5)
+    def ceiling_roof(x: int, z: int, half_size: int) -> int:
+        farthest_x = abs(x) + half_size
+        farthest_z = abs(z) + half_size
+        rise = int((320 * 320 - farthest_x * farthest_x
+                    - farthest_z * farthest_z) ** 0.5)
         return -416 + rise
 
-    travel = [max(height, -ceiling_roof(x, z))
-              for x, z, height in buildings]
+    travel = [max(height, -ceiling_roof(x, z, half_size))
+              for x, z, height, half_size in buildings]
     maximum = max(start + height
-                  for start, (_, _, height) in zip(travel, buildings))
+                  for start, (_, _, height, _) in zip(travel, buildings))
     depths = range(maximum + 1)
-    surface = [[max(0, height - depth) for _, _, height in buildings]
+    surface = [[max(0, height - depth) for _, _, height, _ in buildings]
                for depth in depths]
     ceiling = [[max(0, min(height, depth - start))
-                for start, (_, _, height) in zip(travel, buildings)]
+                for start, (_, _, height, _) in zip(travel, buildings)]
                for depth in depths]
     monotonic_surface = all(
         all(after <= before
@@ -80,7 +85,7 @@ def main() -> int:
     checks = [
         require("layout.complete_catalog",
                 len(inner) == 66 and len(outer) == 29
-                and len(buildings) == 95 and maximum == 285
+                and len(buildings) == 95 and maximum == 312
                 and all(token in builder for token in (
                     "OUTER_WARD_TOWERS", "MOVABLE_BUILDINGS",
                     "createOuterWardTowers", "ceilingRoofRelativeY")),
@@ -89,7 +94,7 @@ def main() -> int:
         require("motion.physical_cycle",
                 monotonic_surface and monotonic_ceiling
                 and all(value == 0 for value in surface[-1])
-                and ceiling[-1] == [height for _, _, height in buildings],
+                and ceiling[-1] == [height for _, _, height, _ in buildings],
                 "surface skyline descends to zero while all 95 buildings "
                 "materialise below the curved GeoFront ceiling"),
         require("motion.one_layer_per_second",
@@ -108,18 +113,46 @@ def main() -> int:
                 all(token in builder for token in (
                     "emergeCeilingLayer", "withdrawCeilingLayer",
                     "ceilingStateMatches", "ceilingBuildings",
+                    "ceilingRoofRelativeYForBounds",
+                    "Math.max(Math.abs(minimumX), Math.abs(maximumX))",
+                    "Math.max(Math.abs(minimumZ), Math.abs(maximumZ))",
                     "Blocks.SEA_LANTERN")),
                 "the audit rejects a vanished city and requires moving "
                 "undersides plus real ceiling-city walls"),
         require("motion.private_skyscrapers",
-                all(token in source(
-                    "src/main/java/com/projectseele/world/LocalMapAssetLoader.java")
-                    for token in (
-                        "applyTokyo3RetractionDepth",
-                        "SKYSCRAPER_MOVE_QUANTUM = 12",
-                        "skyscraperDrop", "NETHERITE_BLOCK")),
-                "three local NBT high-rises move as whole structures in "
-                "bounded twelve-block steps"),
+                all(token in local_assets for token in (
+                    "applyTokyo3RetractionDepth",
+                    "SKYSCRAPER_MOVE_QUANTUM = 12",
+                    "addTokyo3SkyscraperTravelChunks",
+                    "ceilingRoofRelativeYForBounds",
+                    "inspectTokyo3Skyscrapers(BlockGetter level,",
+                    "int retractionDepth)",
+                    "skyscraperMarker(base, index)",
+                    "skyscraperBodyPresent",
+                    "SKYSCRAPER_SIGNATURES",
+                    "Blocks.REDSTONE_LAMP", "Blocks.END_ROD",
+                    "Blocks.LIGHTNING_ROD",
+                    "restoredOld={}",
+                    "|| skyscraperBodyPresent("))
+                and local_assets.count(
+                    "set(level, stateMarker, Blocks.AIR.defaultBlockState())") >= 3
+                and all(token in capture for token in (
+                    "Tokyo3RetractionDirector.depth",
+                    "currentRetractionDepth",
+                    "this.origin, currentRetractionDepth")),
+                "three local NBT high-rises move in bounded twelve-block "
+                "steps inside explicitly ticketed rotated footprints; "
+                "current-depth travel receipts plus seven internal blocks "
+                "reject stale state markers and failed moves stay retryable"),
+        require("motion.long_lived_chunk_tickets",
+                "maximumRetractionDepth() + 20" in director
+                and "if (claimed >= chunks.length)" in director
+                and "LocalMapAssetLoader.addTokyo3SkyscraperTravelChunks" in director
+                and "reconcilePrivateSkyscrapers" in director
+                and "for (long packed : travelChunks(origin))" in director
+                and "claimed >= chunks.length ? 0 : claimed" not in director,
+                "one batched ticket claim covers the complete 312-layer route; "
+                "large-building chunks are not synchronously re-ticketed every layer"),
         require("persistence.versioned",
                 "extends SavedData" in saved
                 and "DATA_VERSION = 2" in saved
@@ -150,7 +183,7 @@ def main() -> int:
                     "cameraPos = base.add(0.0D, -250.0D, 260.0D)"))
                 and 'CAPTURE_UNIT.equals("tokyo3_retraction")' in automation
                 and "ticks > 15000" in automation,
-                "surface and GeoFront cameras gate a complete 285-layer cycle"),
+                "surface and GeoFront cameras gate a complete 312-layer cycle"),
     ]
     if all(checks):
         print("Tokyo-3 retraction contract: PASS")

@@ -527,10 +527,13 @@ def build_entry_plug(output, pivots, objects):
         "parts": {"entry_plug": plug_part, **hatch_parts},
         "triangle_count": triangles,
     })
-    # TV-like neutral plug treatment plus Tiger-compatible dorsal armour.
+    # TV-like white pressure capsule: cool metal panels and one restrained
+    # orange safety stripe.  The old purple/green atlas panels made the
+    # suspended plug read as a piece of EVA armour instead of independent
+    # NERV equipment.
     save_palette(output / "textures/entity/entry_plug.png",
-                 ((232, 235, 239), (52, 55, 61), (226, 102, 18),
-                  (50, 25, 79), (17, 20, 27), (45, 181, 85)))
+                 ((238, 241, 244), (77, 82, 89), (226, 102, 18),
+                  (202, 211, 218), (24, 28, 34), (224, 229, 232)))
     return triangles
 
 

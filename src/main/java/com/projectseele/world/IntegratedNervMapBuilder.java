@@ -22,7 +22,7 @@ import net.minecraft.world.level.block.state.BlockState;
  */
 public final class IntegratedNervMapBuilder
 {
-    public static final int MAP_VERSION = 17;
+    public static final int MAP_VERSION = 18;
     /**
      * The 640-block Skyweave sphere is buried below a normal Tokyo-3 surface.
      * The lower NERV floor stays south of the city centre so the three launch
@@ -74,14 +74,22 @@ public final class IntegratedNervMapBuilder
                         + "local world staged={} and native buried GeoFront topology active",
                 TOKYO3_ORIGIN, skyscrapers, stagedEvaWorld);
 
+        Tokyo3RecoveryConsole.build(level, TOKYO3_ORIGIN);
+
         GeoFrontBuilder.build(level, GEOFRONT_ORIGIN, false);
         GeoFrontLandscapeBuilder.build(level, GEOFRONT_ORIGIN);
+        EvaHangarBuilder.build(level, GEOFRONT_ORIGIN);
         GeoFrontBuilder.repairCavernLighting(level, GEOFRONT_ORIGIN);
         for (LiftLink link : LIFT_LINKS)
         {
             buildContinuousShaft(level, link);
             buildSurfaceHead(level, link);
         }
+        // Launch shafts deliberately cut the carrier portal last. Repaint the
+        // bounded human route after that cut; its S-bypass stays outside the
+        // audited 15x15 shaft shells.
+        NervOperationsCentreBuilder.repairRuntimeAccess(
+                level, GEOFRONT_ORIGIN);
         ensurePowerPylons(level);
         ensureArmamentRacks(level);
         buildControlMarkers(level);
@@ -97,6 +105,15 @@ public final class IntegratedNervMapBuilder
 
         if (isInstalled(level))
         {
+            GeoFrontBuilder.ensurePyramidRevision(level, GEOFRONT_ORIGIN);
+            EvaHangarBuilder.ensure(level, GEOFRONT_ORIGIN);
+            repairLowerLiftInterfaces(level);
+            repairInterruptedShafts(level);
+            Tokyo3RecoveryConsole.ensure(level, TOKYO3_ORIGIN);
+            repairInterruptedCityRestoration(level);
+            repairMissingStreetLevelDistrict(level);
+            ThirdTokyoSurfaceBuilder.repairSubstationCores(level, TOKYO3_ORIGIN);
+            repairMissingTokyo3Landscape(level);
             // Text displays and button labels can enter the entity manager a
             // few ticks after their chunks. Repair those bounded runtime
             // layers before judging the immutable 640-block map, otherwise
@@ -134,10 +151,21 @@ public final class IntegratedNervMapBuilder
         if (!installed)
         {
             return new RuntimeAudit(false, false, false, false,
-                    0, 0, 0, 0, false, false, 0,
+                    false, false, 0, 0, 0, 0, false, false, 0,
                     elapsedMilliseconds(startedAt));
         }
 
+        GeoFrontBuilder.ensurePyramidRevision(level, GEOFRONT_ORIGIN);
+        EvaHangarBuilder.HangarAudit hangars =
+                EvaHangarBuilder.ensure(level, GEOFRONT_ORIGIN);
+        repairLowerLiftInterfaces(level);
+        repairInterruptedShafts(level);
+        Tokyo3RecoveryConsole.RecoveryConsoleAudit recoveryConsole =
+                Tokyo3RecoveryConsole.ensure(level, TOKYO3_ORIGIN);
+        repairInterruptedCityRestoration(level);
+        repairMissingStreetLevelDistrict(level);
+        ThirdTokyoSurfaceBuilder.repairSubstationCores(level, TOKYO3_ORIGIN);
+        repairMissingTokyo3Landscape(level);
         ensurePowerPylons(level);
         ensureArmamentRacks(level);
         boolean lowerBayWindows = lowerBayWindowsPresent(level);
@@ -181,21 +209,49 @@ public final class IntegratedNervMapBuilder
             }
         }
         boolean controlMarkers = controlMarkersPresent(level);
+        boolean operationsPhysical = operations.runtimePhysicalValid();
         boolean valid = controlMarkers && lowerBayWindows
+                && hangars.valid() && recoveryConsole.valid()
                 && powerPylonsPresent(level)
                 && armamentRacksPresent(level)
                 && lowerBeds == LIFT_LINKS.size()
                 && surfaceBeds == LIFT_LINKS.size()
                 && continuousShafts == LIFT_LINKS.size()
                 && clearExits == LIFT_LINKS.size()
-                && operations.valid() && magiStructure;
+                && operationsPhysical && magiStructure;
         RuntimeAudit audit = new RuntimeAudit(valid, true, controlMarkers,
-                lowerBayWindows, lowerBeds, surfaceBeds, continuousShafts,
-                clearExits, operations.valid(), magiStructure, magi.labels(),
+                lowerBayWindows, hangars.valid(), recoveryConsole.valid(),
+                lowerBeds, surfaceBeds, continuousShafts, clearExits,
+                operationsPhysical, magiStructure, magi.labels(),
                 elapsedMilliseconds(startedAt));
         ProjectSeele.LOGGER.info("Integrated NERV runtime gate: {}",
                 audit.summary());
         return audit;
+    }
+
+    /**
+     * Audits immutable map topology while an EVA is physically deployed.
+     * The wet cage is intentionally non-parked at this point: its bridge is
+     * retracted, LCL drained, plug absent and carrier parked at the silo.
+     * Final recovery still uses IntegratedAudit.valid() and therefore proves
+     * that every hangar fixture was restored.
+     */
+    public static boolean continuousMapValidDuringSortie(
+            ServerLevel level, IntegratedAudit audit)
+    {
+        return audit.geoFront().valid()
+                && audit.geoFrontLandscape().valid()
+                && audit.tokyo3().valid()
+                && audit.tokyo3Landscape().valid()
+                && audit.deeplyBuried()
+                && audit.controlMarkers()
+                && powerPylonsPresent(level)
+                && armamentRacksPresent(level)
+                && audit.recoveryConsole()
+                && audit.lowerBeds() == LIFT_LINKS.size()
+                && audit.surfaceBeds() == LIFT_LINKS.size()
+                && audit.continuousShafts() == LIFT_LINKS.size()
+                && audit.clearExits() == LIFT_LINKS.size();
     }
 
     public static IntegratedAudit inspect(ServerLevel level)
@@ -236,6 +292,10 @@ public final class IntegratedNervMapBuilder
         }
         boolean controlMarkers = controlMarkersPresent(level);
         boolean powerPylons = powerPylonsPresent(level);
+        EvaHangarBuilder.HangarAudit hangars =
+                EvaHangarBuilder.inspect(level, GEOFRONT_ORIGIN);
+        Tokyo3RecoveryConsole.RecoveryConsoleAudit recoveryConsole =
+                Tokyo3RecoveryConsole.inspect(level, TOKYO3_ORIGIN);
         int sphereTop = GEOFRONT_ORIGIN.getY()
                 + GeoFrontBuilder.CAVERN_TOP_Y;
         int rockCover = TOKYO3_ORIGIN.getY() - sphereTop;
@@ -246,6 +306,7 @@ public final class IntegratedNervMapBuilder
         boolean valid = geoFront.valid() && geoFrontLandscape.valid()
                 && tokyo3.valid() && tokyo3Landscape.valid() && controlMarkers
                 && powerPylons && armamentRacksPresent(level)
+                && hangars.valid() && recoveryConsole.valid()
                 && deeplyBuried
                 && lowerBeds == LIFT_LINKS.size()
                 && surfaceBeds == LIFT_LINKS.size()
@@ -253,8 +314,8 @@ public final class IntegratedNervMapBuilder
                 && clearExits == LIFT_LINKS.size();
         return new IntegratedAudit(valid, geoFront, geoFrontLandscape, tokyo3,
                 tokyo3Landscape, deeplyBuried, rockCover, bedrockClearance,
-                controlMarkers, lowerBeds, surfaceBeds, continuousShafts,
-                clearExits);
+                controlMarkers, hangars.valid(), recoveryConsole.valid(),
+                lowerBeds, surfaceBeds, continuousShafts, clearExits);
     }
 
     /**
@@ -264,8 +325,31 @@ public final class IntegratedNervMapBuilder
     public static boolean isInstalled(ServerLevel level)
     {
         level.getChunkAt(lowerControlMarker());
+        level.getChunkAt(legacyLowerControlMarker());
         level.getChunkAt(surfaceControlMarker());
-        return controlMarkersPresent(level);
+        if (controlMarkersPresent(level))
+        {
+            return true;
+        }
+        if (legacyControlMarkersPresent(level))
+        {
+            buildControlMarkers(level);
+            ProjectSeele.LOGGER.info(
+                    "Migrated NERV installation receipt away from the EVA-01 carrier rail");
+            return true;
+        }
+        if (surfaceControlMarkerPresent(level) && liftMarkersPresent(level))
+        {
+            // Old saves can already have lost the lower receipt because it sat
+            // directly on EVA-01's carrier rail. The surviving surface receipt
+            // plus all six lift endpoints is a sufficiently strict legacy
+            // fingerprint to repair receipts without rebuilding the map.
+            buildControlMarkers(level);
+            ProjectSeele.LOGGER.info(
+                    "Repaired missing NERV lower installation receipt from lift endpoints");
+            return true;
+        }
+        return false;
     }
 
     public static BlockPos geoFrontOrigin()
@@ -343,6 +427,14 @@ public final class IntegratedNervMapBuilder
 
     public static BlockPos lowerControlMarker()
     {
+        // Keep the persistent installation receipt away from Unit-01's moving
+        // hangar carrier. The former x=0/z=-104 position lay directly in the
+        // central rail bed and was overwritten every time the carrier passed.
+        return GEOFRONT_ORIGIN.offset(96, 1, -104);
+    }
+
+    private static BlockPos legacyLowerControlMarker()
+    {
         return GEOFRONT_ORIGIN.offset(0, 1, -104);
     }
 
@@ -351,6 +443,30 @@ public final class IntegratedNervMapBuilder
         return TOKYO3_ORIGIN.offset(0, -2, 16);
     }
 
+    /** Hard exclusion used by every Tokyo-3 terrain and building write path. */
+    public static boolean isCityMovementProtected(BlockPos position)
+    {
+        for (LiftLink link : LIFT_LINKS)
+        {
+            if (position.getY() >= link.lowerBed().getY()
+                    && position.getY() <= link.surfaceBed().getY() + SURFACE_HEADROOM
+                    && Math.abs(position.getX() - link.x()) <= SHAFT_OUTER_RADIUS
+                    && Math.abs(position.getZ() - link.z()) <= SHAFT_OUTER_RADIUS)
+            {
+                return true;
+            }
+        }
+        for (BlockPos marker : new BlockPos[] {lowerControlMarker(),
+                legacyLowerControlMarker(), surfaceControlMarker()})
+        {
+            if (position.equals(marker) || position.equals(marker.east())
+                    || position.equals(marker.west()))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
     private static List<LiftLink> createLiftLinks()
     {
         List<LiftLink> links = new ArrayList<>(LIFT_X.length);
@@ -398,12 +514,22 @@ public final class IntegratedNervMapBuilder
                     }
                     else if (edge == SHAFT_OUTER_RADIUS)
                     {
+                        boolean lowerCarrierDoor = relativeY <= 31
+                                && z == -SHAFT_OUTER_RADIUS
+                                && Math.abs(x) <= SHAFT_CLEAR_RADIUS;
                         boolean lowerObservationWindow = relativeY <= 27
                                 && z == SHAFT_OUTER_RADIUS
                                 && Math.abs(x) <= SHAFT_CLEAR_RADIUS;
-                        set(level, position, lowerObservationWindow
-                                ? Blocks.GRAY_STAINED_GLASS.defaultBlockState()
-                                : shaftWall(relativeY, x, z, accent));
+                        if (lowerCarrierDoor)
+                        {
+                            clear(level, position);
+                        }
+                        else
+                        {
+                            set(level, position, lowerObservationWindow
+                                    ? Blocks.GRAY_STAINED_GLASS.defaultBlockState()
+                                    : shaftWall(relativeY, x, z, accent));
+                        }
                     }
                     else
                     {
@@ -433,7 +559,7 @@ public final class IntegratedNervMapBuilder
         {
             for (int y = accessDeckY + 1; y <= accessDeckY + 3; y++)
             {
-                clear(level, new BlockPos(link.x() + x, y, link.z() + 7));
+                clear(level, new BlockPos(link.x() + x, y, link.z() - 7));
             }
         }
 
@@ -453,6 +579,133 @@ public final class IntegratedNervMapBuilder
         }
     }
 
+    /**
+     * Repairs the bounded hand-off between each wet cage carrier tunnel and
+     * its launch shaft. Prototype maps could lose the lodestone carrier bed or
+     * retain a tunnel roof across the shaft core, while rebuilding all 524
+     * vertical blocks would cause a large synchronous stall.
+     */
+    private static void repairLowerLiftInterfaces(ServerLevel level)
+    {
+        int repaired = 0;
+        for (LiftLink link : LIFT_LINKS)
+        {
+            if (lowerLiftInterfaceValid(level, link))
+            {
+                continue;
+            }
+            rebuildLowerLiftInterface(level, link);
+            repaired++;
+        }
+        if (repaired > 0)
+        {
+            ProjectSeele.LOGGER.info(
+                    "Repaired {}/{} lower EVA carrier/launch-shaft interfaces",
+                    repaired, LIFT_LINKS.size());
+        }
+    }
+
+    /** Repairs only the three interrupted physical shafts on an installed map. */
+    private static void repairInterruptedShafts(ServerLevel level)
+    {
+        int repaired = 0;
+        for (LiftLink link : LIFT_LINKS)
+        {
+            if (shaftIsContinuous(level, link)
+                    && surfaceExitIsClear(level, link))
+            {
+                continue;
+            }
+            buildContinuousShaft(level, link);
+            buildSurfaceHead(level, link);
+            repaired++;
+        }
+        if (repaired > 0)
+        {
+            ProjectSeele.LOGGER.info(
+                    "Repaired {}/{} interrupted EVA launch shafts without rebuilding the map",
+                    repaired, LIFT_LINKS.size());
+        }
+    }
+
+    private static boolean lowerLiftInterfaceValid(ServerLevel level,
+                                                   LiftLink link)
+    {
+        if (!level.getBlockState(link.lowerBed()).is(Blocks.LODESTONE))
+        {
+            return false;
+        }
+        int bottomY = link.lowerBed().getY() + 1;
+        for (int y = bottomY; y <= bottomY + 33; y++)
+        {
+            if (!shaftLayerIsClear(level, link, y))
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static void rebuildLowerLiftInterface(ServerLevel level,
+                                                  LiftLink link)
+    {
+        set(level, link.lowerBed(), Blocks.LODESTONE.defaultBlockState());
+        BlockState accent = accent(link.index());
+        int bottomY = link.lowerBed().getY() + 1;
+        for (int y = bottomY; y <= bottomY + 33; y++)
+        {
+            int relativeY = y - bottomY;
+            for (int x = -SHAFT_OUTER_RADIUS; x <= SHAFT_OUTER_RADIUS; x++)
+            {
+                for (int z = -SHAFT_OUTER_RADIUS; z <= SHAFT_OUTER_RADIUS; z++)
+                {
+                    BlockPos position = new BlockPos(
+                            link.x() + x, y, link.z() + z);
+                    int edge = Math.max(Math.abs(x), Math.abs(z));
+                    if (edge <= SHAFT_CLEAR_RADIUS)
+                    {
+                        clear(level, position);
+                    }
+                    else if (edge == SHAFT_OUTER_RADIUS)
+                    {
+                        boolean carrierDoor = relativeY <= 31
+                                && z == -SHAFT_OUTER_RADIUS
+                                && Math.abs(x) <= SHAFT_CLEAR_RADIUS;
+                        boolean observationWindow = relativeY <= 27
+                                && z == SHAFT_OUTER_RADIUS
+                                && Math.abs(x) <= SHAFT_CLEAR_RADIUS;
+                        if (carrierDoor)
+                        {
+                            clear(level, position);
+                        }
+                        else
+                        {
+                            set(level, position, observationWindow
+                                    ? Blocks.GRAY_STAINED_GLASS.defaultBlockState()
+                                    : shaftWall(relativeY, x, z, accent));
+                        }
+                    }
+                    else
+                    {
+                        clear(level, position);
+                    }
+                }
+            }
+
+            for (int x : new int[] {-6, 6})
+            {
+                for (int z : new int[] {-6, 6})
+                {
+                    set(level, new BlockPos(
+                                    link.x() + x, y, link.z() + z),
+                            Blocks.POLISHED_BASALT.defaultBlockState());
+                }
+            }
+            set(level, new BlockPos(link.x(), y, link.z() + 6),
+                    Blocks.LADDER.defaultBlockState()
+                            .setValue(LadderBlock.FACING, Direction.NORTH));
+        }
+    }
     private static BlockState shaftWall(int relativeY, int x, int z,
                                         BlockState accent)
     {
@@ -616,14 +869,45 @@ public final class IntegratedNervMapBuilder
 
     private static boolean controlMarkersPresent(ServerLevel level)
     {
-        BlockPos lower = lowerControlMarker();
-        BlockPos surface = surfaceControlMarker();
+        return lowerControlMarkerPresent(level, lowerControlMarker())
+                && surfaceControlMarkerPresent(level);
+    }
+
+    private static boolean legacyControlMarkersPresent(ServerLevel level)
+    {
+        return lowerControlMarkerPresent(level, legacyLowerControlMarker())
+                && surfaceControlMarkerPresent(level);
+    }
+
+    private static boolean lowerControlMarkerPresent(ServerLevel level,
+                                                     BlockPos lower)
+    {
         return level.getBlockState(lower).is(Blocks.CHISELED_DEEPSLATE)
                 && level.getBlockState(lower.east()).is(Blocks.ORANGE_CONCRETE)
-                && level.getBlockState(lower.west()).is(Blocks.BLACK_CONCRETE)
-                && level.getBlockState(surface).is(Blocks.CHISELED_QUARTZ_BLOCK)
+                && level.getBlockState(lower.west()).is(Blocks.BLACK_CONCRETE);
+    }
+
+    private static boolean surfaceControlMarkerPresent(ServerLevel level)
+    {
+        BlockPos surface = surfaceControlMarker();
+        return level.getBlockState(surface).is(Blocks.CHISELED_QUARTZ_BLOCK)
                 && level.getBlockState(surface.east()).is(Blocks.ORANGE_CONCRETE)
                 && level.getBlockState(surface.west()).is(Blocks.BLACK_CONCRETE);
+    }
+
+    private static boolean liftMarkersPresent(ServerLevel level)
+    {
+        for (LiftLink link : LIFT_LINKS)
+        {
+            level.getChunkAt(link.lowerBed());
+            level.getChunkAt(link.surfaceBed());
+            if (!level.getBlockState(link.lowerBed()).is(Blocks.LODESTONE)
+                    || !level.getBlockState(link.surfaceBed()).is(Blocks.LODESTONE))
+            {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static boolean shaftIsContinuous(ServerLevel level, LiftLink link)
@@ -654,14 +938,20 @@ public final class IntegratedNervMapBuilder
                 }
             }
         }
-        boolean northWall = isShaftWall(level.getBlockState(
+        boolean southWall = isShaftWall(level.getBlockState(
                         new BlockPos(link.x(), y,
-                                link.z() + SHAFT_OUTER_RADIUS)));
+                                link.z() - SHAFT_OUTER_RADIUS)));
         int accessDeckY = GEOFRONT_ORIGIN.getY() + 27;
         boolean auditedGantryDoor = y >= accessDeckY + 1
                 && y <= accessDeckY + 3
                 && level.getBlockState(new BlockPos(
-                        link.x(), y, link.z() + SHAFT_OUTER_RADIUS)).isAir();
+                        link.x(), y, link.z() - SHAFT_OUTER_RADIUS)).isAir();
+        int carrierPortalBottom = link.lowerBed().getY() + 1;
+        int carrierPortalTop = carrierPortalBottom + 31;
+        boolean auditedCarrierDoor = y >= carrierPortalBottom
+                && y <= carrierPortalTop
+                && level.getBlockState(new BlockPos(
+                        link.x(), y, link.z() - SHAFT_OUTER_RADIUS)).isAir();
         return isShaftWall(level.getBlockState(
                         new BlockPos(link.x() - SHAFT_OUTER_RADIUS,
                                 y, link.z())))
@@ -670,10 +960,9 @@ public final class IntegratedNervMapBuilder
                                 y, link.z())))
                 && isShaftWall(level.getBlockState(
                         new BlockPos(link.x(), y,
-                                link.z() - SHAFT_OUTER_RADIUS)))
-                && (northWall || auditedGantryDoor);
+                                link.z() + SHAFT_OUTER_RADIUS)))
+                && (southWall || auditedGantryDoor || auditedCarrierDoor);
     }
-
     private static boolean surfaceExitIsClear(ServerLevel level, LiftLink link)
     {
         for (int y = TOKYO3_ORIGIN.getY();
@@ -730,6 +1019,66 @@ public final class IntegratedNervMapBuilder
         return true;
     }
 
+    private static void repairMissingStreetLevelDistrict(ServerLevel level)
+    {
+        Tokyo3RetractionDirector.Status city = Tokyo3RetractionDirector.status(
+                level, TOKYO3_ORIGIN);
+        if (city.depth() != 0 || city.targetDepth() != 0)
+        {
+            return;
+        }
+        ThirdTokyoSurfaceBuilder.DistrictAudit audit =
+                ThirdTokyoSurfaceBuilder.inspect(level, TOKYO3_ORIGIN, 0);
+        if (audit.valid())
+        {
+            return;
+        }
+        ProjectSeele.LOGGER.warn(
+                "Tokyo-3 street-level structures are incomplete despite depth=0; rebuilding once: {}",
+                audit.summary());
+        ThirdTokyoSurfaceBuilder.buildDistrict(level, TOKYO3_ORIGIN);
+        // District reconstruction replaces whole street lots. Repaint the
+        // connected highway, railway, station and protected recovery zones in
+        // the same repair transaction instead of leaving a visually complete
+        // skyline on top of an invalid landscape.
+        Tokyo3LandscapeBuilder.build(level, TOKYO3_ORIGIN);
+        LocalMapAssetLoader.placeTokyo3Skyscrapers(level, TOKYO3_ORIGIN, 0);
+        Tokyo3RecoveryConsole.ensure(level, TOKYO3_ORIGIN);
+    }
+    private static void repairMissingTokyo3Landscape(ServerLevel level)
+    {
+        Tokyo3RetractionDirector.Status city = Tokyo3RetractionDirector.status(
+                level, TOKYO3_ORIGIN);
+        if (city.depth() != 0 || city.targetDepth() != 0)
+        {
+            return;
+        }
+        Tokyo3LandscapeBuilder.LandscapeAudit audit =
+                Tokyo3LandscapeBuilder.inspect(level, TOKYO3_ORIGIN);
+        if (audit.valid())
+        {
+            return;
+        }
+        ProjectSeele.LOGGER.warn(
+                "Tokyo-3 connected landscape is incomplete; rebuilding bounded surface infrastructure: {}",
+                audit.summary());
+        Tokyo3LandscapeBuilder.build(level, TOKYO3_ORIGIN);
+        LocalMapAssetLoader.placeTokyo3Skyscrapers(level, TOKYO3_ORIGIN, 0);
+        Tokyo3RecoveryConsole.ensure(level, TOKYO3_ORIGIN);
+    }
+
+    private static void repairInterruptedCityRestoration(ServerLevel level)
+    {
+        Tokyo3RetractionDirector.Status city = Tokyo3RetractionDirector.status(
+                level, TOKYO3_ORIGIN);
+        if (city.depth() > 0 && city.targetDepth() == 0)
+        {
+            ProjectSeele.LOGGER.warn(
+                    "Interrupted Tokyo-3 restoration detected at depth={}; completing physical repair now",
+                    city.depth());
+            Tokyo3RetractionDirector.forceDepth(level, TOKYO3_ORIGIN, false);
+        }
+    }
     private static long elapsedMilliseconds(long startedAt)
     {
         return (System.nanoTime() - startedAt) / 1_000_000L;
@@ -821,7 +1170,8 @@ public final class IntegratedNervMapBuilder
 
     public record RuntimeAudit(boolean valid, boolean installed,
                                boolean controlMarkers,
-                               boolean lowerBayWindows, int lowerBeds,
+                               boolean lowerBayWindows, boolean hangars,
+                               boolean recoveryConsole, int lowerBeds,
                                int surfaceBeds, int continuousShafts,
                                int clearExits, boolean operations,
                                boolean magi, int magiLabels,
@@ -831,12 +1181,14 @@ public final class IntegratedNervMapBuilder
         {
             return String.format(Locale.ROOT,
                     "valid=%s installed=%s controlMarkers=%s windows=%s "
+                            + "hangars=%s recoveryConsole=%s "
                             + "lowerBeds=%d/3 surfaceBeds=%d/3 "
                             + "continuousShafts=%d/3 clearExits=%d/3 "
                             + "operations=%s magi=%s magiLabels=%d/3 "
                             + "elapsed=%dms",
                     this.valid, this.installed, this.controlMarkers,
-                    this.lowerBayWindows, this.lowerBeds, this.surfaceBeds,
+                    this.lowerBayWindows, this.hangars,
+                    this.recoveryConsole, this.lowerBeds, this.surfaceBeds,
                     this.continuousShafts, this.clearExits, this.operations,
                     this.magi, this.magiLabels, this.elapsedMilliseconds);
         }
@@ -849,7 +1201,8 @@ public final class IntegratedNervMapBuilder
                                    Tokyo3LandscapeBuilder.LandscapeAudit tokyo3Landscape,
                                    boolean deeplyBuried, int rockCover,
                                    int bedrockClearance,
-                                   boolean controlMarkers, int lowerBeds,
+                                   boolean controlMarkers, boolean hangars,
+                                  boolean recoveryConsole, int lowerBeds,
                                   int surfaceBeds, int continuousShafts,
                                   int clearExits)
     {
@@ -857,13 +1210,15 @@ public final class IntegratedNervMapBuilder
         {
             return String.format(Locale.ROOT,
                     "valid=%s mapVersion=%d deeplyBuried=%s rockCover=%d "
-                            + "bedrockClearance=%d controlMarkers=%s lowerBeds=%d/3 "
+                            + "bedrockClearance=%d controlMarkers=%s "
+                            + "hangars=%s recoveryConsole=%s lowerBeds=%d/3 "
                             + "surfaceBeds=%d/3 continuousShafts=%d/3 clearExits=%d/3 "
                             + "geoFront={%s} geoFrontLandscape={%s} tokyo3={%s} "
                             + "tokyo3Landscape={%s}",
                     this.valid, MAP_VERSION, this.deeplyBuried, this.rockCover,
-                    this.bedrockClearance, this.controlMarkers, this.lowerBeds,
-                    this.surfaceBeds, this.continuousShafts, this.clearExits,
+                    this.bedrockClearance, this.controlMarkers, this.hangars,
+                    this.recoveryConsole, this.lowerBeds, this.surfaceBeds,
+                    this.continuousShafts, this.clearExits,
                     this.geoFront.summary(), this.geoFrontLandscape.summary(),
                     this.tokyo3.summary(), this.tokyo3Landscape.summary());
         }

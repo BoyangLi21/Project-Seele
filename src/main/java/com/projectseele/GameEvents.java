@@ -10,6 +10,10 @@ import com.projectseele.event.ThirdImpactDirector;
 import com.projectseele.world.MagiDeepLabBuilder;
 import com.projectseele.world.NervCommandTelemetry;
 import com.projectseele.world.NervOperationsConsole;
+import com.projectseele.world.EvaLogisticsDirector;
+import com.projectseele.world.EntryPlugDirector;
+import com.projectseele.world.NervCarrierVisuals;
+import com.projectseele.world.TrainingPilotDirector;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
@@ -24,6 +28,7 @@ import net.minecraftforge.event.entity.living.LivingDeathEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.event.entity.player.PlayerInteractEvent;
 import net.minecraftforge.event.entity.EntityTravelToDimensionEvent;
+import net.minecraftforge.event.entity.EntityJoinLevelEvent;
 import net.minecraftforge.event.server.ServerStoppedEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
@@ -88,6 +93,7 @@ public class GameEvents
             NervCommandTelemetry.tick(event.getServer());
             MagiDeepLabBuilder.tick(event.getServer());
         }
+        TrainingPilotDirector.tickFeeds(event.getServer());
         if (event.getServer().getTickCount() % 20 == 0)
         {
             AngelAlarmSystem.validate(event.getServer());
@@ -151,11 +157,24 @@ public class GameEvents
             // click sound are the physical acknowledgement for the operator.
             if (!NervOperationsConsole.handleUse(player, event.getPos()))
             {
-                MagiDeepLabBuilder.handleUse(player, event.getPos());
+                if (!EvaLogisticsDirector.handleUse(player, event.getPos()))
+                {
+                    MagiDeepLabBuilder.handleUse(player, event.getPos());
+                }
             }
         }
     }
 
+    @SubscribeEvent
+    public static void onEntityJoinLevel(EntityJoinLevelEvent event)
+    {
+        if (!event.getLevel().isClientSide
+                && event.getEntity() instanceof EvaUnit01Entity unit
+                && !EvaLogisticsDirector.validateCanonical(unit))
+        {
+            event.setCanceled(true);
+        }
+    }
     @SubscribeEvent
     public static void onEntityTravelToDimension(EntityTravelToDimensionEvent event)
     {
@@ -173,5 +192,8 @@ public class GameEvents
         AngelAlarmSystem.reset();
         NervCommandTelemetry.reset();
         NervOperationsConsole.reset();
+        EntryPlugDirector.resetRuntime();
+        NervCarrierVisuals.resetRuntime();
+        EvaLogisticsDirector.resetRuntime();
     }
 }

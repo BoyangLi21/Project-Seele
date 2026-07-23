@@ -40,14 +40,16 @@ public final class Tokyo3RetractionDirector
      */
     private static final int LAYER_SPREAD_TICKS = 5;
     /**
-     * Self-expiring, non-persistent load ticket. The order is given from the
+     * Long-lived, non-persistent load ticket. The order is given from the
      * GeoFront command centre some five hundred blocks below the skyline,
      * where none of the district is resident: without a ticket the travel
      * either never starts or makes every placement block on a chunk load.
+     * One claim covers the complete 312-layer route and is released at the end.
      */
     private static final TicketType<ChunkPos> TRAVEL_TICKET = TicketType.create(
             "projectseele_tokyo3_travel", Comparator.comparingLong(ChunkPos::toLong),
-            TICKS_PER_LAYER * 3);
+            TICKS_PER_LAYER
+                    * (ThirdTokyoSurfaceBuilder.maximumRetractionDepth() + 20));
     private static final int TICKET_CLAIMS_PER_TICK = 12;
     private static final Map<Long, long[]> TRAVEL_CHUNKS = new ConcurrentHashMap<>();
     /** How much of {@link #travelChunks} each district has claimed so far. */
@@ -85,6 +87,7 @@ public final class Tokyo3RetractionDirector
         int target = retract ? ThirdTokyoSurfaceBuilder.maximumRetractionDepth() : 0;
         if (current.depth() == target && current.targetDepth() == target)
         {
+            reconcilePrivateSkyscrapers(level, origin, target);
             return new RequestResult(false, retract
                     ? "Tokyo-3 armour towers are already fully retracted."
                     : "Tokyo-3 armour towers are already at street level.");
@@ -107,6 +110,90 @@ public final class Tokyo3RetractionDirector
         return new RequestResult(true, retract
                 ? "Tokyo-3 emergency configuration: armour towers descending."
                 : "Tokyo-3 all-clear configuration: armour towers rising.");
+    }
+
+    /**
+     * Completes an operator-requested city movement in one bounded maintenance
+     * pass. This is intentionally separate from the cinematic tick director:
+     * it repairs interrupted saves without asking the player to wait several
+     * minutes while an apparently empty skyline rises one block per second.
+     */
+    public static RequestResult forceDepth(ServerLevel level, BlockPos origin,
+                                           boolean retract)
+    {
+        StoredDistrict current = settleLayer(level, ensure(level, origin));
+        int target = retract ? ThirdTokyoSurfaceBuilder.maximumRetractionDepth() : 0;
+        if (current.depth() == target)
+        {
+            reconcilePrivateSkyscrapers(level, origin, target);
+            Tokyo3RetractionSavedData.get(level).put(new StoredDistrict(
+                    origin, target, target, level.getGameTime()));
+            updateCoreStates(level, origin, retract);
+            return new RequestResult(false, retract
+                    ? "Tokyo-3 armour towers are already fully retracted."
+                    : "Tokyo-3 armour towers are already at street level.");
+        }
+
+        acquireAllTravelTickets(level, origin);
+        for (long packed : travelChunks(origin))
+        {
+            ChunkPos chunk = new ChunkPos(packed);
+            level.getChunk(chunk.x, chunk.z);
+        }
+
+        long started = System.nanoTime();
+        int depth = current.depth();
+        int direction = Integer.signum(target - depth);
+        int layers = 0;
+        while (depth != target)
+        {
+            int nextDepth = depth + direction;
+            if (direction < 0 && restorationOccupied(level, origin, depth, nextDepth))
+            {
+                Tokyo3RetractionSavedData.get(level).put(new StoredDistrict(
+                        origin, depth, target, level.getGameTime() + TICKS_PER_LAYER));
+                releaseTravelTickets(level, origin);
+                return new RequestResult(false,
+                        "Tokyo-3 rapid restoration stopped: an EVA or operator occupies a rising tower lot at depth "
+                                + depth + ".");
+            }
+            ThirdTokyoSurfaceBuilder.applyRetractionDepth(
+                    level, origin, depth, nextDepth);
+            LocalMapAssetLoader.applyTokyo3RetractionDepth(
+                    level, origin, depth, nextDepth);
+            depth = nextDepth;
+            layers++;
+        }
+        reconcilePrivateSkyscrapers(level, origin, target);
+        Tokyo3RetractionSavedData.get(level).put(new StoredDistrict(
+                origin, target, target, level.getGameTime()));
+        updateCoreStates(level, origin, retract);
+        releaseTravelTickets(level, origin);
+        level.playSound(null, origin, SoundEvents.IRON_DOOR_CLOSE,
+                SoundSource.BLOCKS, 5.0F, retract ? 0.55F : 0.85F);
+        ProjectSeele.LOGGER.info(
+                "Tokyo-3 rapid maintenance {} at {} layers={} elapsed={}ms",
+                retract ? "retraction" : "restoration", origin.toShortString(),
+                layers, (System.nanoTime() - started) / 1_000_000L);
+        return new RequestResult(true, retract
+                ? "Tokyo-3 rapid maintenance: all towers are now below the armoured ceiling."
+                : "Tokyo-3 rapid maintenance: all towers are physically restored at street level.");
+    }
+    private static void reconcilePrivateSkyscrapers(ServerLevel level,
+                                                     BlockPos origin, int depth)
+    {
+        if (!LocalMapAssetLoader.skyscraperAvailable())
+        {
+            return;
+        }
+        int privateSkyscrapers = LocalMapAssetLoader.placeTokyo3Skyscrapers(
+                level, origin, depth);
+        if (privateSkyscrapers != 3)
+        {
+            ProjectSeele.LOGGER.error(
+                    "Tokyo-3 completed travel with only {}/3 private skyscrapers at depth {}",
+                    privateSkyscrapers, depth);
+        }
     }
 
     public static RequestResult toggleNearest(ServerLevel level, BlockPos position)
@@ -219,6 +306,7 @@ public final class Tokyo3RetractionDirector
             cost.closeLayer();
             if (nextDepth == district.targetDepth())
             {
+                reconcilePrivateSkyscrapers(level, district.origin(), nextDepth);
                 boolean retracted = nextDepth > 0;
                 updateCoreStates(level, district.origin(), retracted);
                 releaseTravelTickets(level, district.origin());
@@ -261,6 +349,7 @@ public final class Tokyo3RetractionDirector
                     }
                 }
             }
+            LocalMapAssetLoader.addTokyo3SkyscraperTravelChunks(origin, chunks);
             return chunks.stream().mapToLong(Long::longValue).toArray();
         });
     }
@@ -275,12 +364,13 @@ public final class Tokyo3RetractionDirector
     {
         long[] chunks = travelChunks(origin);
         int claimed = TICKET_CURSOR.getOrDefault(origin.asLong(), 0);
-        int end = claimed >= chunks.length
-                ? chunks.length
-                : Math.min(chunks.length, claimed + TICKET_CLAIMS_PER_TICK);
-        // Re-ticketing a resident chunk is free, and the ticket has to outlive
-        // the layer period, so a settled district refreshes the whole set.
-        for (int index = claimed >= chunks.length ? 0 : claimed; index < end; index++)
+        if (claimed >= chunks.length)
+        {
+            return;
+        }
+        int end = Math.min(chunks.length,
+                claimed + TICKET_CLAIMS_PER_TICK);
+        for (int index = claimed; index < end; index++)
         {
             ChunkPos chunk = new ChunkPos(chunks[index]);
             level.getChunkSource().addRegionTicket(TRAVEL_TICKET, chunk, 0, chunk);
@@ -288,6 +378,16 @@ public final class Tokyo3RetractionDirector
         TICKET_CURSOR.put(origin.asLong(), end);
     }
 
+    private static void acquireAllTravelTickets(ServerLevel level, BlockPos origin)
+    {
+        long[] chunks = travelChunks(origin);
+        for (long packed : chunks)
+        {
+            ChunkPos chunk = new ChunkPos(packed);
+            level.getChunkSource().addRegionTicket(TRAVEL_TICKET, chunk, 0, chunk);
+        }
+        TICKET_CURSOR.put(origin.asLong(), chunks.length);
+    }
     private static void releaseTravelTickets(ServerLevel level, BlockPos origin)
     {
         TICKET_CURSOR.remove(origin.asLong());
