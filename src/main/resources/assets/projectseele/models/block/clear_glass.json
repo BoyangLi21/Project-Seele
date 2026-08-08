@@ -1,7 +1,8 @@
 {
   "ambientocclusion": false,
+  "parent": "minecraft:block/cube_all",
   "textures": {
-    "particle": "minecraft:block/glass"
+    "all": "projectseele:block/clear_glass"
   },
-  "elements": []
+  "render_type": "translucent"
 }
