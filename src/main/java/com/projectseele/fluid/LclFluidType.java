@@ -34,7 +34,7 @@ public final class LclFluidType extends FluidType
                 .canDrown(false)
                 .fallDistanceModifier(0.0F)
                 .canExtinguish(false)
-                .canConvertToSource(true)
+                .canConvertToSource(false)
                 .supportsBoating(false)
                 .canHydrate(false)
                 .lightLevel(4)

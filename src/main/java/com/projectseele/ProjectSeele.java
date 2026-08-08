@@ -10,7 +10,10 @@ import com.projectseele.registry.ModEntities;
 import com.projectseele.registry.ModItems;
 import com.projectseele.registry.ModFluids;
 import com.projectseele.registry.ModSounds;
+import com.projectseele.registry.ModWorldgen;
+import com.projectseele.world.NervRuntimeMaintenance;
 import net.minecraftforge.eventbus.api.IEventBus;
+import net.minecraftforge.common.world.ForgeChunkManager;
 import net.minecraftforge.fml.ModLoadingContext;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.config.ModConfig;
@@ -38,6 +41,7 @@ public class ProjectSeele
         ModEntities.ENTITY_TYPES.register(modEventBus);
         ModCreativeTabs.TABS.register(modEventBus);
         ModSounds.SOUNDS.register(modEventBus);
+        ModWorldgen.CHUNK_GENERATORS.register(modEventBus);
 
         ModLoadingContext.get().registerConfig(ModConfig.Type.COMMON, SeeleConfig.COMMON_SPEC);
         ModLoadingContext.get().registerConfig(ModConfig.Type.CLIENT, SeeleConfig.CLIENT_SPEC);
@@ -47,7 +51,12 @@ public class ProjectSeele
 
     private void commonSetup(final FMLCommonSetupEvent event)
     {
-        event.enqueueWork(SeeleNetwork::register);
+        event.enqueueWork(() ->
+        {
+            SeeleNetwork.register();
+            ForgeChunkManager.setForcedChunkLoadingCallback(MODID,
+                    NervRuntimeMaintenance::validateForcedChunkTickets);
+        });
         LOGGER.info("Project SEELE initialized. God's in his heaven, all's right with the world.");
     }
 }

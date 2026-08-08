@@ -75,6 +75,9 @@ public final class MagiDeepLabBuilder
 
     public static MagiAudit build(ServerLevel level, BlockPos origin)
     {
+        FacilityWorldPolicy.requireLegacyGenerationAllowed(
+                level.getServer(), "MagiDeepLabBuilder.build");
+        PerformanceCounters.recordBuilderCall();
         boolean[] online = new boolean[CORE_NAMES.length];
         for (int index = 0; index < online.length; index++)
         {
@@ -106,6 +109,11 @@ public final class MagiDeepLabBuilder
     public static MagiAudit repairRuntimeLabels(ServerLevel level,
                                                 BlockPos origin)
     {
+        if (FacilityWorldPolicy.isS20Rebuild(level.getServer()))
+        {
+            return inspect(level, origin);
+        }
+        PerformanceCounters.recordRepairCall();
         for (int index = 0; index < CORE_NAMES.length; index++)
         {
             BlockPos control = controlPosition(origin, index);
@@ -121,12 +129,25 @@ public final class MagiDeepLabBuilder
     /** Restores missing cosmetic labels only while the deep lab is active. */
     public static void tick(MinecraftServer server)
     {
+        if (FacilityWorldPolicy.isS20Rebuild(server))
+        {
+            return;
+        }
         ServerLevel level = server.getLevel(GeoFrontCommands.GEOFRONT);
         if (level == null || level.players().isEmpty())
         {
             return;
         }
         BlockPos origin = IntegratedNervMapBuilder.GEOFRONT_ORIGIN;
+        Vec3 labCentre = Vec3.atCenterOf(origin.offset(
+                LAB_CENTRE_X, LAB_FLOOR_Y + 5, LAB_CENTRE_Z));
+        boolean occupied = level.players().stream().anyMatch(
+                player -> player.position().distanceToSqr(labCentre)
+                        <= 96.0D * 96.0D);
+        if (!occupied)
+        {
+            return;
+        }
         for (int index = 0; index < CORE_NAMES.length; index++)
         {
             if (!level.hasChunkAt(controlPosition(origin, index)))
@@ -203,6 +224,10 @@ public final class MagiDeepLabBuilder
     /** Handles only the three exact maintenance buttons. */
     public static boolean handleUse(ServerPlayer player, BlockPos position)
     {
+        if (FacilityWorldPolicy.isS20Rebuild(player.getServer()))
+        {
+            return false;
+        }
         if (!player.serverLevel().dimension().equals(GeoFrontCommands.GEOFRONT))
         {
             return false;
@@ -238,6 +263,49 @@ public final class MagiDeepLabBuilder
                 consensus, position.toShortString());
         NervCommandTelemetry.install(level, origin);
         return true;
+    }
+
+    /**
+     * Removes only the three retired deep-lab TextDisplay labels after R28.
+     * The accepted MAGI presentation in Central Tactical Command uses other
+     * tags and is deliberately outside this bounded query.
+     */
+    public static void retireS20DuplicatePresentation(MinecraftServer server)
+    {
+        if (!FacilityWorldPolicy.isR28Approved(server))
+        {
+            return;
+        }
+        ServerLevel level = server.getLevel(GeoFrontCommands.GEOFRONT);
+        if (level == null || level.players().isEmpty())
+        {
+            return;
+        }
+        BlockPos origin = IntegratedNervMapBuilder.GEOFRONT_ORIGIN;
+        Vec3 labCentre = Vec3.atCenterOf(origin.offset(
+                LAB_CENTRE_X, LAB_FLOOR_Y + 6, LAB_CENTRE_Z));
+        boolean nearby = level.players().stream().anyMatch(
+                player -> player.position().distanceToSqr(labCentre)
+                        <= 128.0D * 128.0D);
+        if (!nearby)
+        {
+            return;
+        }
+        int removed = 0;
+        for (String id : CORE_IDS)
+        {
+            for (Display.TextDisplay label : labels(
+                    level, origin, LABEL_TAG_PREFIX + id))
+            {
+                label.discard();
+                removed++;
+            }
+        }
+        if (removed > 0)
+        {
+            ProjectSeele.LOGGER.info(
+                    "R28 retired {} duplicate deep-MAGI labels", removed);
+        }
     }
 
     public static int onlineCount(ServerLevel level, BlockPos origin)
@@ -691,7 +759,10 @@ public final class MagiDeepLabBuilder
     private static void set(ServerLevel level, BlockPos position,
                             BlockState state)
     {
-        level.setBlock(position, state, UPDATE_CLIENTS);
+        if (level.setBlock(position, state, UPDATE_CLIENTS))
+        {
+            PerformanceCounters.recordWorldBlockWrites(1);
+        }
     }
 
     private static void clear(ServerLevel level, BlockPos position)

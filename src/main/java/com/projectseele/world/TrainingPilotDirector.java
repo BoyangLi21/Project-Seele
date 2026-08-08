@@ -4,12 +4,17 @@ import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.zip.CRC32;
 import java.util.zip.DeflaterOutputStream;
 
 import com.projectseele.ProjectSeele;
+import com.projectseele.config.SeeleConfig;
 import com.projectseele.entity.EntryPlugCarrierEntity;
 import com.projectseele.entity.EvaUnit01Entity;
 import com.projectseele.entity.TrainingPilotEntity;
@@ -36,7 +41,10 @@ import net.minecraft.world.phys.Vec3;
 /** Drives visible dummy boarding and a server-rendered training optical feed. */
 public final class TrainingPilotDirector
 {
-    private static final int FEED_INTERVAL_TICKS = 10;
+    private static final int FEED_INTERVAL_TICKS = 40;
+    // Ray-cast grid, upscaled to the transmitted frame. Four times the pixels
+    // of the original 40x23 thumbnail; the cost is bounded because this only
+    // runs for dummy-piloted airframes while somebody is watching a screen.
     private static final int SAMPLE_WIDTH = 40;
     private static final int SAMPLE_HEIGHT = 23;
     private static final double FEED_RANGE = 160.0D;
@@ -45,13 +53,54 @@ public final class TrainingPilotDirector
     private static final int[] UNIT_COLOURS = {
             0xE88F26, 0x903ECD, 0xD22D34
     };
+    private static final int BOARDING_STALL_TICKS = 120;
+    private static final Map<Integer, Double> CLOSEST_APPROACH = new HashMap<>();
+    private static final Map<Integer, Integer> STALLED_TICKS = new HashMap<>();
+    private static final Map<Integer, Integer> BOARDING_LEG = new HashMap<>();
+    private static final Set<Integer> ACTIVE_REMOTE_PILOTS = new HashSet<>();
 
     private TrainingPilotDirector() {}
 
     public static ActionResult start(ServerLevel level, int variant)
     {
-        EvaHangarBuilder.ensure(level, IntegratedNervMapBuilder.GEOFRONT_ORIGIN);
-        EvaLogisticsDirector.ensureFleet(level);
+        boolean compactS20 = FacilityWorldPolicy.isS20Rebuild(
+                level.getServer());
+        /*
+         * A parked S20 line releases its chunk ticket. Dispatching a dummy
+         * from command therefore loads only this line before the read-only
+         * readiness gate resolves its UUID. Never manufacture a replacement
+         * here: the canonical entity section may still be streaming in.
+         */
+        if (compactS20)
+        {
+            /*
+             * The approved S20 save deliberately freezes static world writers.
+             * Its old phase receipts live in a remote marker chunk, so using
+             * S20EvaPlantDirector.installed() as a runtime gate makes a healthy
+             * authored cage appear unfinished whenever that chunk is unloaded.
+             * Fleet UUID + loaded canonical entity are the runtime authority.
+             */
+            EvaLogisticsDirector.loadControlTarget(level, variant);
+        }
+        FacilityReadinessService.FacilityReadiness readiness =
+                FacilityReadinessService.read(level,
+                        FacilityReadinessService.Operation.DUMMY_DISPATCH,
+                        variant);
+        if (!readiness.accepted())
+        {
+            return new ActionResult(false,
+                    readiness.faultCode() + ": " + readiness.message());
+        }
+        boolean modern = FacilityV2EvaRuntime.ready(level, variant);
+        if (!modern && !compactS20)
+        {
+            EvaHangarBuilder.ensure(
+                    level, IntegratedNervMapBuilder.GEOFRONT_ORIGIN);
+        }
+        if (!compactS20)
+        {
+            EvaLogisticsDirector.ensureFleet(level);
+        }
         EvaUnit01Entity unit = EvaLogisticsDirector.canonicalUnit(level, variant);
         if (unit == null || !unit.isAlive())
         {
@@ -71,14 +120,19 @@ public final class TrainingPilotDirector
                     + " external entry plug is unavailable.");
         }
         stop(level, variant);
+        BOARDING_LEG.put(variant, 0);
         TrainingPilotEntity pilot = ModEntities.TRAINING_PILOT.get().create(level);
         if (pilot == null)
         {
             return new ActionResult(false, "Training pilot entity creation failed.");
         }
-        BlockPos origin = IntegratedNervMapBuilder.GEOFRONT_ORIGIN;
-        BlockPos start = origin.offset(0, EvaHangarBuilder.GALLERY_Y + 1,
-                EvaHangarBuilder.GALLERY_Z - 1);
+        BlockPos start = modern
+                ? FacilityV2EvaRuntime.statusControl(level, variant)
+                        .offset(0, 0, -5)
+                : IntegratedNervMapBuilder.GEOFRONT_ORIGIN.offset(
+                        IntegratedNervMapBuilder.LIFT_X[variant],
+                        EvaHangarBuilder.GALLERY_Y + 1,
+                        EvaHangarBuilder.GALLERY_Z - 1);
         pilot.assignVariant(variant);
         pilot.setTrainingStage(TrainingPilotEntity.STAGE_WALKING);
         pilot.moveTo(start.getX() + 0.5D, start.getY(), start.getZ() + 0.5D,
@@ -87,6 +141,10 @@ public final class TrainingPilotDirector
         {
             return new ActionResult(false, "Training pilot spawn was rejected.");
         }
+        // The operations room lies outside the wet-cage simulation distance.
+        // Keep this one route resident while its synthetic pilot is active;
+        // otherwise remote command makes the walking pilot freeze at spawn.
+        ACTIVE_REMOTE_PILOTS.add(variant);
         ProjectSeele.LOGGER.info(
                 "NERV training pilot dispatched: eva={} pilot={} start={}",
                 variant, pilot.getStringUUID(), start.toShortString());
@@ -105,13 +163,33 @@ public final class TrainingPilotDirector
             }
             pilot.stopRiding();
             pilot.discard();
+            BOARDING_LEG.remove(pilot.getAssignedVariant());
+            CLOSEST_APPROACH.remove(pilot.getAssignedVariant());
+            STALLED_TICKS.remove(pilot.getAssignedVariant());
             removed++;
+        }
+        if (variant >= 0)
+        {
+            ACTIVE_REMOTE_PILOTS.remove(variant);
+            BOARDING_LEG.remove(variant);
+            CLOSEST_APPROACH.remove(variant);
+            STALLED_TICKS.remove(variant);
+        }
+        else
+        {
+            ACTIVE_REMOTE_PILOTS.clear();
         }
         return removed;
     }
 
+    public static boolean requiresRouteTicket(int variant)
+    {
+        return ACTIVE_REMOTE_PILOTS.contains(variant);
+    }
+
     public static List<TrainingPilotEntity> pilots(ServerLevel level)
     {
+        PerformanceCounters.recordGlobalEntityScan();
         List<TrainingPilotEntity> result = new ArrayList<>();
         for (Entity entity : level.getAllEntities())
         {
@@ -139,7 +217,20 @@ public final class TrainingPilotDirector
                 return;
             }
             pilot.setInvisible(true);
-            pilot.setTrainingStage(TrainingPilotEntity.STAGE_IN_PLUG);
+            EvaUnit01Entity linked = plug.getLinkedEva();
+            if (linked != null)
+            {
+                pilot.setTrainingStage(TrainingPilotEntity.STAGE_LINKED);
+                float yaw = linked.getYRot();
+                pilot.setYRot(yaw);
+                pilot.setXRot(linked.getXRot());
+                pilot.yBodyRot = yaw;
+                pilot.yHeadRot = yaw;
+            }
+            else
+            {
+                pilot.setTrainingStage(TrainingPilotEntity.STAGE_IN_PLUG);
+            }
             return;
         }
         if (pilot.getVehicle() instanceof EvaUnit01Entity unit)
@@ -151,14 +242,13 @@ public final class TrainingPilotDirector
             }
             pilot.setInvisible(true);
             pilot.setTrainingStage(TrainingPilotEntity.STAGE_LINKED);
-            float scan = (float) Math.sin((pilot.tickCount + variant * 37)
-                    * 0.025D);
-            float pitchScan = (float) Math.sin((pilot.tickCount + variant * 19)
-                    * 0.017D);
-            float yaw = unit.getYRot() + scan * 34.0F;
-            float pitch = -4.0F + pitchScan * 12.0F;
+            // A synthetic pilot looks where the airframe looks. The former
+            // +/-34 degree sine sweep made the command-room feed pan
+            // continuously, which reads as a camera fault rather than as a
+            // pilot.
+            float yaw = unit.getYRot();
             pilot.setYRot(yaw);
-            pilot.setXRot(pitch);
+            pilot.setXRot(unit.getXRot());
             pilot.yBodyRot = yaw;
             pilot.yHeadRot = yaw;
             return;
@@ -175,14 +265,21 @@ public final class TrainingPilotDirector
             pilot.getNavigation().stop();
             return;
         }
-        BlockPos target = EvaHangarBuilder.boardingPosition(
-                IntegratedNervMapBuilder.GEOFRONT_ORIGIN, variant);
-        Vec3 destination = Vec3.atBottomCenterOf(target);
-        if (pilot.position().distanceToSqr(destination) <= 2.75D * 2.75D)
+        boolean modern = FacilityV2EvaRuntime.ready(level, variant);
+        BlockPos target = modern
+                ? FacilityV2EvaRuntime.boardingPosition(level, variant)
+                : EvaHangarBuilder.boardingPosition(
+                        IntegratedNervMapBuilder.GEOFRONT_ORIGIN, variant);
+        Vec3 finalDestination = Vec3.atBottomCenterOf(target);
+        if (pilot.position().distanceToSqr(finalDestination)
+                <= 2.75D * 2.75D)
         {
             pilot.getNavigation().stop();
             if (plug.boardPassenger(pilot))
             {
+                BOARDING_LEG.remove(variant);
+                CLOSEST_APPROACH.remove(variant);
+                STALLED_TICKS.remove(variant);
                 pilot.setInvisible(true);
                 pilot.setTrainingStage(TrainingPilotEntity.STAGE_IN_PLUG);
                 level.playSound(null, target, SoundEvents.IRON_DOOR_CLOSE,
@@ -192,6 +289,84 @@ public final class TrainingPilotDirector
                         variant, pilot.getStringUUID(), target.toShortString());
             }
             return;
+        }
+
+        /*
+         * The observation window lies directly between the gallery spawn and
+         * the capsule. Asking vanilla navigation for the final point alone
+         * made the dummy walk into the middle pane forever. Follow the same
+         * authored orthogonal route a player uses: side pressure door,
+         * shoulder catwalk, rear gantry, then the extended bridge.
+         */
+        BlockPos origin = IntegratedNervMapBuilder.GEOFRONT_ORIGIN;
+        BlockPos routeTarget = target;
+        if (!modern)
+        {
+            int leg = BOARDING_LEG.getOrDefault(variant, 0);
+            int previousLeg = leg;
+            while (leg < 4)
+            {
+                BlockPos waypoint = EvaHangarBuilder.boardingRouteWaypoint(
+                        origin, variant, leg);
+                Vec3 point = Vec3.atBottomCenterOf(waypoint);
+                if (pilot.position().distanceToSqr(point) > 2.0D * 2.0D)
+                {
+                    routeTarget = waypoint;
+                    break;
+                }
+                leg++;
+            }
+            BOARDING_LEG.put(variant, leg);
+            if (leg != previousLeg)
+            {
+                CLOSEST_APPROACH.remove(variant);
+                STALLED_TICKS.remove(variant);
+            }
+        }
+        Vec3 destination = Vec3.atBottomCenterOf(routeTarget);
+
+        // Boarding is now one flat floor from the gallery to the plug, so the
+        // pilot simply walks there. The only lift left is a rescue if it falls
+        // off the walkway into the flooded cage.
+        boolean submerged = pilot.isInWater()
+                || pilot.level().getFluidState(pilot.blockPosition())
+                        .getFluidType() == ModFluids.LCL_TYPE.get();
+        if (submerged)
+        {
+            BlockPos foot = modern
+                    ? FacilityV2EvaRuntime.rescueFootPosition(level, variant)
+                    : EvaHangarBuilder.ladderFootPosition(
+                            IntegratedNervMapBuilder.GEOFRONT_ORIGIN,
+                            variant);
+            pilot.getNavigation().stop();
+            pilot.teleportTo(foot.getX() + 0.5D, foot.getY(),
+                    foot.getZ() + 0.5D);
+            pilot.setDeltaMovement(Vec3.ZERO);
+            CLOSEST_APPROACH.remove(variant);
+            STALLED_TICKS.remove(variant);
+            BOARDING_LEG.put(variant, modern ? 0 : 2);
+            return;
+        }
+
+        double dx = pilot.getX() - destination.x;
+        double dz = pilot.getZ() - destination.z;
+        double flatSqr = dx * dx + dz * dz;
+        Double best = CLOSEST_APPROACH.get(variant);
+        if (best == null || flatSqr < best - 0.25D)
+        {
+            CLOSEST_APPROACH.put(variant, flatSqr);
+            STALLED_TICKS.put(variant, 0);
+        }
+        else if (STALLED_TICKS.merge(variant, 1, Integer::sum)
+                >= BOARDING_STALL_TICKS)
+        {
+            STALLED_TICKS.put(variant, 0);
+            CLOSEST_APPROACH.remove(variant);
+            pilot.getNavigation().stop();
+            ProjectSeele.LOGGER.warn(
+                    "NERV training pilot cannot reach the plug: eva={} at {} target={}",
+                    variant, pilot.blockPosition().toShortString(),
+                    target.toShortString());
         }
         if (pilot.tickCount % 20 == 1 || pilot.getNavigation().isDone())
         {
@@ -203,7 +378,8 @@ public final class TrainingPilotDirector
 
     public static void tickFeeds(MinecraftServer server)
     {
-        if (server.getTickCount() % FEED_INTERVAL_TICKS != 0)
+        if (!SeeleConfig.dummyPilotVideoEnabled()
+                || server.getTickCount() % FEED_INTERVAL_TICKS != 0)
         {
             return;
         }
@@ -215,8 +391,8 @@ public final class TrainingPilotDirector
         }
         for (TrainingPilotEntity pilot : pilots(level))
         {
-            if (!(pilot.getVehicle() instanceof EvaUnit01Entity unit)
-                    || unit.getFirstPassenger() != pilot
+            EvaUnit01Entity unit = EvaPilotResolver.controlTarget(pilot);
+            if (unit == null || EvaPilotResolver.pilot(unit) != pilot
                     || ServerboundEvaVideoFramePacket.isHumanFeedActive(
                             level, unit.getUnitVariant()))
             {
@@ -240,6 +416,8 @@ public final class TrainingPilotDirector
         right = right.lengthSqr() < 1.0E-6D
                 ? new Vec3(1.0D, 0.0D, 0.0D) : right.normalize();
         Vec3 up = right.cross(forward).normalize();
+        PerformanceCounters.recordRaycasts(
+                (long) SAMPLE_WIDTH * SAMPLE_HEIGHT);
         for (int row = 0; row < SAMPLE_HEIGHT; row++)
         {
             double vertical = (1.0D - (row + 0.5D)
@@ -422,6 +600,7 @@ public final class TrainingPilotDirector
             writeChunk(output, "IDAT", compressed.toByteArray());
             writeChunk(output, "IEND", new byte[0]);
             output.flush();
+            PerformanceCounters.recordPngEncode();
             return png.toByteArray();
         }
         catch (IOException exception)

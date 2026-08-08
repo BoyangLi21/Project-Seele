@@ -6,18 +6,23 @@ import java.util.UUID;
 
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.projectseele.ProjectSeele;
+import com.projectseele.config.SeeleConfig;
+import com.projectseele.entity.EntryPlugCarrierEntity;
 import com.projectseele.entity.EvaUnit01Entity;
 import com.projectseele.event.Tokyo3RamielBattleDirector;
 import com.projectseele.network.ClientboundGeoFrontSortieCapturePacket;
 import com.projectseele.network.ClientboundSiloCapturePacket;
 import com.projectseele.network.ClientboundGeoFrontCapturePacket;
+import com.projectseele.network.ClientboundS20CapturePacket;
 import com.projectseele.network.ClientboundTokyo3CapturePacket;
 import com.projectseele.network.SeeleNetwork;
 import com.projectseele.world.Tokyo3RetractionDirector;
 import com.projectseele.world.IntegratedNervMapBuilder;
+import com.projectseele.world.EvaHangarBuilder;
 import com.projectseele.world.EvaLogisticsDirector;
 import com.projectseele.world.EntryPlugDirector;
 import com.projectseele.world.TrainingPilotDirector;
+import com.projectseele.world.FacilityWorldPolicy;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -60,6 +65,9 @@ public final class VisualLabAutomation
     private static final boolean TOKYO3_RAMIEL_CAPTURE =
             CAPTURE_UNIT.equals("tokyo3_battle");
     private static final boolean GEOFRONT_CAPTURE = CAPTURE_UNIT.equals("geofront");
+    private static final boolean S20_CAPTURE = CAPTURE_UNIT.equals("s20");
+    private static final boolean S20_PLUG_CAPTURE =
+            CAPTURE_UNIT.equals("s20_plug");
     private static final boolean GEOFRONT_SORTIE_CAPTURE =
             CAPTURE_UNIT.equals("geofront_sortie");
     private static final String[] POSES = REQUESTED_POSE.equals("all")
@@ -84,6 +92,8 @@ public final class VisualLabAutomation
     private static boolean geoFrontSortieObserverInOperations;
     private static boolean geoFrontSortieObserverReturned;
     private static String geoFrontSortieLastPhase;
+    private static boolean s20PlugPilotRequested;
+    private static boolean s20PlugPrepareRequested;
     private static final Set<String> GEOFRONT_LOGISTICS_PHASES = new HashSet<>();
 
     private VisualLabAutomation() {}
@@ -91,7 +101,8 @@ public final class VisualLabAutomation
     @SubscribeEvent
     public static void onLogin(PlayerEvent.PlayerLoggedInEvent event)
     {
-        if (ENABLED && event.getEntity() instanceof ServerPlayer player)
+        if (ENABLED && !SeeleConfig.rescueMode()
+                && event.getEntity() instanceof ServerPlayer player)
         {
             // A previous unattended run may have closed while its client-only
             // camera was below the cavern. Always begin automation from a
@@ -127,6 +138,8 @@ public final class VisualLabAutomation
             geoFrontSortieObserverInOperations = false;
             geoFrontSortieObserverReturned = false;
             geoFrontSortieLastPhase = "";
+            s20PlugPilotRequested = false;
+            s20PlugPrepareRequested = false;
             GEOFRONT_LOGISTICS_PHASES.clear();
             ProjectSeele.LOGGER.info("Visual Lab automation armed for {}", player.getGameProfile().getName());
         }
@@ -152,7 +165,8 @@ public final class VisualLabAutomation
     @SubscribeEvent
     public static void onServerTick(TickEvent.ServerTickEvent event)
     {
-        if (!ENABLED || event.phase != TickEvent.Phase.END || playerId == null)
+        if (!ENABLED || SeeleConfig.rescueMode()
+                || event.phase != TickEvent.Phase.END || playerId == null)
         {
             return;
         }
@@ -167,7 +181,45 @@ public final class VisualLabAutomation
         {
             if (ticks == 40)
             {
-                if (GEOFRONT_SORTIE_CAPTURE)
+                if (S20_CAPTURE || S20_PLUG_CAPTURE)
+                {
+                    if (!FacilityWorldPolicy.isS20Rebuild(server))
+                    {
+                        throw new IllegalStateException(
+                                "S20 capture requires SEELE_S20_REBUILD");
+                    }
+                    ServerLevel geoFront = server.getLevel(
+                            GeoFrontCommands.GEOFRONT);
+                    if (geoFront == null)
+                    {
+                        throw new IllegalStateException(
+                                "S20 capture GeoFront dimension is unavailable");
+                    }
+                    player.stopRiding();
+                    player.setNoGravity(true);
+                    if (S20_CAPTURE)
+                    {
+                        player.teleportTo(geoFront,
+                                28.0D, -416.0D, 342.0D,
+                                180.0F, 0.0F);
+                        SeeleNetwork.CHANNEL.send(
+                                PacketDistributor.PLAYER.with(() -> player),
+                                new ClientboundS20CapturePacket());
+                        ProjectSeele.LOGGER.info(
+                                "Visual Lab armed read-only S20 rebuild capture");
+                        playerId = null;
+                    }
+                    else
+                    {
+                        player.teleportTo(geoFront,
+                                12.0D, -388.0D, 177.0D,
+                                90.0F, 12.0F);
+                        EvaLogisticsDirector.loadControlTarget(geoFront, 1);
+                        ProjectSeele.LOGGER.info(
+                                "Visual Lab preloaded the S20 Unit-01 cage for focused entry-plug capture");
+                    }
+                }
+                else if (GEOFRONT_SORTIE_CAPTURE)
                 {
                     player.stopRiding();
                     player.teleportTo(server.overworld(), 0.5D, 97.0D, 0.5D,
@@ -205,6 +257,72 @@ public final class VisualLabAutomation
                                 expectedUnit, subjectId);
                     }
                 }
+            }
+            if (S20_PLUG_CAPTURE)
+            {
+                ServerLevel geoFront = server.getLevel(
+                        GeoFrontCommands.GEOFRONT);
+                if (geoFront == null)
+                {
+                    throw new IllegalStateException(
+                            "S20 entry-plug capture lost GeoFront");
+                }
+                if (!s20PlugPilotRequested && ticks >= 70)
+                {
+                    TrainingPilotDirector.ActionResult result =
+                            TrainingPilotDirector.start(geoFront, 1);
+                    if (result.accepted())
+                    {
+                        s20PlugPilotRequested = true;
+                        ProjectSeele.LOGGER.info(
+                                "Visual Lab armed focused S20 entry-plug insertion capture");
+                    }
+                    else if (ticks >= 180)
+                    {
+                        throw new IllegalStateException(
+                                "S20 entry-plug dummy dispatch failed: "
+                                        + result.message());
+                    }
+                }
+                EvaUnit01Entity unit =
+                        EvaLogisticsDirector.canonicalUnit(geoFront, 1);
+                if (s20PlugPilotRequested && !s20PlugPrepareRequested
+                        && unit != null
+                        && EntryPlugDirector.hasBoardedPilot(
+                                geoFront, 1, unit))
+                {
+                    EvaLogisticsDirector.ActionResult result =
+                            EvaLogisticsDirector.requestPrepare(geoFront, 1);
+                    if (!result.accepted())
+                    {
+                        throw new IllegalStateException(
+                                "S20 entry-plug preparation failed: "
+                                        + result.message());
+                    }
+                    s20PlugPrepareRequested = true;
+                }
+                EntryPlugCarrierEntity plug =
+                        EntryPlugDirector.canonical(geoFront, 1);
+                if (s20PlugPrepareRequested && plug != null
+                        && plug.getInsertionStage()
+                                == EntryPlugCarrierEntity.STAGE_INSERTING
+                        && plug.getInsertionProgress() >= 45
+                        && plug.getInsertionProgress() <= 68)
+                {
+                    SeeleNetwork.CHANNEL.send(
+                            PacketDistributor.PLAYER.with(() -> player),
+                            new ClientboundS20CapturePacket());
+                    ProjectSeele.LOGGER.info(
+                            "Visual Lab captured S20 entry-plug alignment at {}%",
+                            plug.getInsertionProgress());
+                    playerId = null;
+                }
+                else if (ticks > 900)
+                {
+                    throw new IllegalStateException(
+                            "S20 entry-plug capture exceeded 900 ticks");
+                }
+                return;
             }
             if (GEOFRONT_SORTIE_CAPTURE)
             {
@@ -366,12 +484,37 @@ public final class VisualLabAutomation
                                         "Visual GeoFront command release failed after SILO_READY");
                             }
                             geoFrontSortieReleaseAuthorized = true;
+                            BlockPos central =
+                                    IntegratedNervMapBuilder.lowerLiftBed(1);
+                            player.setNoGravity(true);
+                            player.setDeltaMovement(0.0D, 0.0D, 0.0D);
+                            player.teleportTo(geoFront,
+                                    central.getX() + 0.5D,
+                                    central.getY()
+                                            + IntegratedNervMapBuilder
+                                                    .ascentDistance() * 0.50D,
+                                    central.getZ() + 6.5D,
+                                    180.0F, -8.0F);
                             ProjectSeele.LOGGER.info(
-                                    "Visual Lab authorized Unit-01 catapult only after dummy lock and physical rail transfer");
+                                    "Visual Lab authorized Unit-01 catapult and moved the observer to the mid-shaft tracking section");
                         }
                     }
                     if (phase.equals("DEPLOYED") && !geoFrontSortieSurfaceAudited)
                     {
+                        EvaUnit01Entity surfaceUnit =
+                                EvaLogisticsDirector.canonicalUnit(geoFront, 1);
+                        if (surfaceUnit == null)
+                        {
+                            throw new IllegalStateException(
+                                    "Visual GeoFront surface EVA is not loaded");
+                        }
+                        player.setNoGravity(true);
+                        player.setDeltaMovement(0.0D, 0.0D, 0.0D);
+                        player.teleportTo(geoFront,
+                                surfaceUnit.getX() + 20.0D,
+                                surfaceUnit.getY() + 18.0D,
+                                surfaceUnit.getZ() + 20.0D,
+                                180.0F, -8.0F);
                         IntegratedNervMapBuilder.IntegratedAudit audit =
                                 IntegratedNervMapBuilder.inspect(geoFront);
                         if (!IntegratedNervMapBuilder.continuousMapValidDuringSortie(
@@ -382,7 +525,12 @@ public final class VisualLabAutomation
                                             + audit.summary());
                         }
                         geoFrontSortieSurfaceAudited = true;
-                        geoFrontSortieRecoveryAt = ticks + 40;
+                        // The client replaces/rebinds the high-detail entity
+                        // after the 522-block ascent and needs time to load the
+                        // surface render sections.  Forty ticks authorized
+                        // descent before the arrival evidence camera could
+                        // settle, even though the server sortie was valid.
+                        geoFrontSortieRecoveryAt = ticks + 120;
                         ProjectSeele.LOGGER.info(
                                 "Visual Lab verified same-dimension Tokyo-3 arrival after {} blocks",
                                 IntegratedNervMapBuilder.ascentDistance());
@@ -402,6 +550,22 @@ public final class VisualLabAutomation
                         ProjectSeele.LOGGER.info(
                                 "Visual Lab authorized Unit-01 physical recovery descent");
                     }
+                    if (geoFrontSortieRecoveryRequested
+                            && phase.equals("TO_HANGAR")
+                            && logistics.ticks() == 0)
+                    {
+                        BlockPos hangar = EvaHangarBuilder.hangarBed(
+                                GeoFrontCommands.ORIGIN, 1);
+                        player.setNoGravity(true);
+                        player.setDeltaMovement(0.0D, 0.0D, 0.0D);
+                        player.teleportTo(geoFront,
+                                hangar.getX() + 18.0D,
+                                hangar.getY() + 58.0D,
+                                hangar.getZ() - 25.0D,
+                                180.0F, 18.0F);
+                        ProjectSeele.LOGGER.info(
+                                "Visual Lab returned the observer to Unit-01 wet-cage tracking range");
+                    }
                     if (geoFrontSortieRecoveryRequested && phase.equals("PARKED")
                             && !geoFrontSortieCycleValidated)
                     {
@@ -414,15 +578,27 @@ public final class VisualLabAutomation
                                     "Visual GeoFront logistics skipped phases: observed="
                                             + GEOFRONT_LOGISTICS_PHASES);
                         }
+                        IntegratedNervMapBuilder.RuntimeAudit runtime =
+                                IntegratedNervMapBuilder.prepareRuntime(geoFront);
                         IntegratedNervMapBuilder.IntegratedAudit audit =
                                 IntegratedNervMapBuilder.inspect(geoFront);
-                        if (!audit.valid())
+                        if (!runtime.launchReady()
+                                || !IntegratedNervMapBuilder
+                                .continuousMapValidDuringSortie(
+                                        geoFront, audit))
                         {
                             throw new IllegalStateException(
-                                    "Post-recovery continuous-map audit failed: "
-                                            + audit.summary());
+                                    "Post-recovery runtime/map audit failed: runtime={"
+                                            + runtime.summary() + "} map={"
+                                            + audit.summary() + "}");
                         }
                         geoFrontSortieCycleValidated = true;
+                        // noGravity is persistent player data. Never let the
+                        // unattended tracking camera poison the next manual
+                        // login or leave creative descent controls inert.
+                        player.setNoGravity(false);
+                        player.setDeltaMovement(0.0D, 0.0D, 0.0D);
+                        player.fallDistance = 0.0F;
                         ProjectSeele.LOGGER.info(
                                 "VISUAL GEOFRONT LOGISTICS CYCLE VALID: phases={} audit={}",
                                 GEOFRONT_LOGISTICS_PHASES, audit.summary());

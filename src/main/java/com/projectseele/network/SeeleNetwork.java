@@ -12,7 +12,7 @@ import net.minecraftforge.network.simple.SimpleChannel;
  */
 public final class SeeleNetwork
 {
-    private static final String PROTOCOL_VERSION = "13";
+    private static final String PROTOCOL_VERSION = "16";
 
     public static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(
             new ResourceLocation(ProjectSeele.MODID, "main"),
@@ -78,6 +78,11 @@ public final class SeeleNetwork
                 .decoder(ClientboundGeoFrontCapturePacket::new)
                 .consumerMainThread(ClientboundGeoFrontCapturePacket::handle)
                 .add();
+        CHANNEL.messageBuilder(ClientboundS20CapturePacket.class, id++, NetworkDirection.PLAY_TO_CLIENT)
+                .encoder(ClientboundS20CapturePacket::encode)
+                .decoder(ClientboundS20CapturePacket::new)
+                .consumerMainThread(ClientboundS20CapturePacket::handle)
+                .add();
         CHANNEL.messageBuilder(ClientboundGeoFrontSortieCapturePacket.class, id++, NetworkDirection.PLAY_TO_CLIENT)
                 .encoder(ClientboundGeoFrontSortieCapturePacket::encode)
                 .decoder(ClientboundGeoFrontSortieCapturePacket::new)
@@ -112,6 +117,21 @@ public final class SeeleNetwork
                 .encoder(ClientboundEvaVideoFramePacket::encode)
                 .decoder(ClientboundEvaVideoFramePacket::new)
                 .consumerMainThread(ClientboundEvaVideoFramePacket::handle)
+                .add();
+        CHANNEL.messageBuilder(ClientboundEvaVideoDemandPacket.class, id++, NetworkDirection.PLAY_TO_CLIENT)
+                .encoder(ClientboundEvaVideoDemandPacket::encode)
+                .decoder(ClientboundEvaVideoDemandPacket::new)
+                .consumerMainThread(ClientboundEvaVideoDemandPacket::handle)
+                .add();
+        CHANNEL.messageBuilder(ClientboundCommandScreenStatePacket.class, id++, NetworkDirection.PLAY_TO_CLIENT)
+                .encoder(ClientboundCommandScreenStatePacket::encode)
+                .decoder(ClientboundCommandScreenStatePacket::new)
+                .consumerMainThread(ClientboundCommandScreenStatePacket::handle)
+                .add();
+        CHANNEL.messageBuilder(ClientboundPilotStatusPacket.class, id++, NetworkDirection.PLAY_TO_CLIENT)
+                .encoder(ClientboundPilotStatusPacket::encode)
+                .decoder(ClientboundPilotStatusPacket::new)
+                .consumerMainThread(ClientboundPilotStatusPacket::handle)
                 .add();
     }
 }

@@ -6,6 +6,7 @@ import java.util.List;
 
 import com.projectseele.ProjectSeele;
 import com.projectseele.config.SeeleConfig;
+import com.projectseele.world.PerformanceCounters;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
@@ -196,6 +197,7 @@ public final class StrategicExplosionDirector
                 if (!state.isAir() && !protectedBlock(level, position, state))
                 {
                     level.setBlock(position, Blocks.AIR.defaultBlockState(), UPDATE_FLAGS);
+                    PerformanceCounters.recordWorldBlockWrites(1);
                 }
             }
             return used;
@@ -293,6 +295,7 @@ public final class StrategicExplosionDirector
             BlockState scorched = this.columnNormalisedRadius < 0.72D
                     ? Blocks.BASALT.defaultBlockState() : Blocks.BLACKSTONE.defaultBlockState();
             level.setBlock(floor, scorched, UPDATE_FLAGS);
+            PerformanceCounters.recordWorldBlockWrites(1);
         }
     }
 }

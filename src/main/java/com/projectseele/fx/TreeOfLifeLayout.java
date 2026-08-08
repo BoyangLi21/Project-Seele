@@ -12,11 +12,12 @@ public final class TreeOfLifeLayout
 {
     /** Ritual-space orientation; semantic indices remain Keter through Malkuth. */
     public static final String TABLEAU_ORIENTATION = "EOE_INVERTED";
-    // The old 84 x 179 block diagram overwhelmed the entities and often ran
-    // outside the player's view. This 62 x 134 block field is paired with
-    // equal-height ritual vessels and reads as one complete glyph.
-    public static final float COLUMN_X = 31.0F;
-    public static final float ROW_Y = 21.0F;
+    // Unit-01 now uses the approved 2x airframe. Keep the ritual bodies at
+    // humanly readable spacing in world space, then frame the whole tableau
+    // from farther away; compressing the old 62 x 134 field made the central
+    // cruciform airframe physically intersect six Mass-Production Evas.
+    public static final float COLUMN_X = 48.0F;
+    public static final float ROW_Y = 40.0F;
     public static final int KETER = 0;
     public static final int TIFERET = 5;
     public static final int MALKUTH = 9;
@@ -30,13 +31,13 @@ public final class TreeOfLifeLayout
             {0.0F, 0.0F},   // 1 Keter (inverted nadir)
             {-1.0F, 1.0F},  // 2 Chokmah
             {1.0F, 1.0F},   // 3 Binah
-            {-1.0F, 2.6F},  // 4 Chesed
-            {1.0F, 2.6F},   // 5 Gevurah
-            {0.0F, 3.2F},   // 6 Tiferet (centre: Unit-01)
-            {-1.0F, 4.4F},  // 7 Netzach
-            {1.0F, 4.4F},   // 8 Hod
-            {0.0F, 4.8F},   // 9 Yesod
-            {0.0F, 6.4F}    // 10 Malkuth (inverted crown)
+            {-1.0F, 2.2F},  // 4 Chesed
+            {1.0F, 2.2F},   // 5 Gevurah
+            {0.0F, 3.4F},   // 6 Tiferet (centre: Unit-01)
+            {-1.0F, 4.6F},  // 7 Netzach
+            {1.0F, 4.6F},   // 8 Hod
+            {0.0F, 5.8F},   // 9 Yesod
+            {0.0F, 6.8F}    // 10 Malkuth (inverted crown)
     };
 
     /** The canonical 22 paths (verified against the traditional diagram). */

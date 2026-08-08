@@ -6,12 +6,14 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 
 import com.projectseele.ProjectSeele;
 import com.projectseele.client.EvaCommandFeedClient;
 import com.projectseele.client.render.EvaUnit01Renderer;
 import com.projectseele.client.render.LocalTriangleMeshLayer;
 import com.projectseele.client.render.LocalVisualAssetFingerprint;
+import com.projectseele.entity.EntryPlugCarrierEntity;
 import com.projectseele.entity.EvaUnit01Entity;
 import com.projectseele.entity.MassProductionEvaEntity;
 import com.projectseele.entity.RamielEntity;
@@ -83,6 +85,8 @@ public final class VisualCaptureManager
     private static Tokyo3RetractionSession tokyo3RetractionSession;
     private static GeoFrontSession geoFrontSession;
     private static GeoFrontSortieSession geoFrontSortieSession;
+    private static S20Session s20Session;
+    private static S20PlugSession s20PlugSession;
     private static int shutdownTicks = -1;
 
     private VisualCaptureManager() {}
@@ -401,6 +405,44 @@ public final class VisualCaptureManager
                 Component.literal("GeoFront visual capture started"), false);
     }
 
+    /** Starts a read-only review of the clean S20 command and EVA plant. */
+    public static void startS20()
+    {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft.level == null || minecraft.player == null)
+        {
+            return;
+        }
+        if (s20Session != null)
+        {
+            s20Session.restore(minecraft);
+        }
+        shutdownTicks = -1;
+        s20Session = new S20Session(minecraft);
+        minecraft.player.displayClientMessage(
+                Component.literal("S20 clean-rebuild visual capture started"),
+                false);
+    }
+
+    /** Captures only the live S20 entry-plug pitch and dorsal alignment. */
+    public static void startS20Plug()
+    {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft.level == null || minecraft.player == null)
+        {
+            return;
+        }
+        if (s20PlugSession != null)
+        {
+            s20PlugSession.restore(minecraft);
+        }
+        shutdownTicks = -1;
+        s20PlugSession = new S20PlugSession(minecraft);
+        minecraft.player.displayClientMessage(
+                Component.literal("S20 entry-plug visual capture started"),
+                false);
+    }
+
     /** Starts a synchronized GeoFront-to-Tokyo-3 cross-dimension sortie capture. */
     public static void startGeoFrontSortie(int entityId, BlockPos origin)
     {
@@ -463,6 +505,8 @@ public final class VisualCaptureManager
                 || tokyo3RetractionSession != null
                 || geoFrontSession != null
                 || geoFrontSortieSession != null
+                || s20Session != null
+                || s20PlugSession != null
                 || session != null && session.isCleanFirstPerson();
     }
 
@@ -490,6 +534,24 @@ public final class VisualCaptureManager
             {
                 impactSession.restore(minecraft);
                 impactSession = null;
+            }
+            return;
+        }
+        if (s20Session != null)
+        {
+            if (!s20Session.tick(minecraft))
+            {
+                s20Session.restore(minecraft);
+                s20Session = null;
+            }
+            return;
+        }
+        if (s20PlugSession != null)
+        {
+            if (!s20PlugSession.tick(minecraft))
+            {
+                s20PlugSession.restore(minecraft);
+                s20PlugSession = null;
             }
             return;
         }
@@ -549,13 +611,326 @@ public final class VisualCaptureManager
         }
     }
 
-    /** Seven state-gated frames spanning one complete hangar-sortie-recovery cycle. */
+    /** One immediate engineering view; the server already gated the pose. */
+    private static final class S20PlugSession
+    {
+        private static final Vec3 CAMERA =
+                new Vec3(49.0D, -388.0D, 177.0D);
+        private static final AABB PLUG_SEARCH =
+                new AABB(0.0D, -430.0D, 130.0D,
+                        60.0D, -360.0D, 210.0D);
+        private static final int SETTLE_TICKS = 6;
+
+        private final Entity originalCamera;
+        private final CameraType originalCameraType;
+        private final boolean originalHideGui;
+        private final CloudStatus originalCloudStatus;
+        private ArmorStand camera;
+        private int settleTicks = SETTLE_TICKS;
+
+        S20PlugSession(Minecraft minecraft)
+        {
+            this.originalCamera = minecraft.getCameraEntity();
+            this.originalCameraType = minecraft.options.getCameraType();
+            this.originalHideGui = minecraft.options.hideGui;
+            this.originalCloudStatus = minecraft.options.cloudStatus().get();
+        }
+
+        boolean tick(Minecraft minecraft)
+        {
+            if (minecraft.level == null || minecraft.player == null)
+            {
+                return true;
+            }
+            EntryPlugCarrierEntity plug = minecraft.level
+                    .getEntitiesOfClass(EntryPlugCarrierEntity.class,
+                            PLUG_SEARCH,
+                            candidate -> candidate.getAssignedVariant() == 1)
+                    .stream().findFirst().orElse(null);
+            if (plug == null)
+            {
+                if (--this.settleTicks < -40)
+                {
+                    ProjectSeele.LOGGER.error(
+                            "S20 entry-plug capture could not track Unit-01 plug");
+                    shutdownTicks = 20;
+                    return false;
+                }
+                return true;
+            }
+            this.position(minecraft, plug.position());
+            if (this.settleTicks-- > 0)
+            {
+                return true;
+            }
+            try
+            {
+                File batch = new File(minecraft.gameDirectory,
+                        "screenshots/projectseele_visual/" + CAPTURE_BATCH);
+                Files.createDirectories(batch.toPath());
+                String filename = "s20_entry_plug_insertion.png";
+                Screenshot.grab(minecraft.gameDirectory,
+                        "projectseele_visual/" + CAPTURE_BATCH + "/"
+                                + filename,
+                        minecraft.getMainRenderTarget(),
+                        message -> ProjectSeele.LOGGER.info(
+                                "S20 focused visual capture {}/{}: {}",
+                                CAPTURE_BATCH, filename,
+                                message.getString()));
+            }
+            catch (Exception exception)
+            {
+                ProjectSeele.LOGGER.error(
+                        "S20 entry-plug screenshot failed", exception);
+            }
+            shutdownTicks = 20;
+            return false;
+        }
+
+        private void position(Minecraft minecraft, Vec3 target)
+        {
+            minecraft.options.setCameraType(CameraType.FIRST_PERSON);
+            minecraft.options.hideGui = true;
+            minecraft.options.cloudStatus().set(CloudStatus.OFF);
+            minecraft.options.fov().set(82);
+            if (this.camera == null)
+            {
+                this.camera = EntityType.ARMOR_STAND.create(minecraft.level);
+                if (this.camera == null)
+                {
+                    throw new IllegalStateException(
+                            "S20 entry-plug camera creation failed");
+                }
+                this.camera.setInvisible(true);
+                this.camera.setNoGravity(true);
+            }
+            this.camera.setPos(CAMERA.x,
+                    CAMERA.y - this.camera.getEyeHeight(), CAMERA.z);
+            lookAt(this.camera, CAMERA, target);
+            this.camera.xo = this.camera.getX();
+            this.camera.yo = this.camera.getY();
+            this.camera.zo = this.camera.getZ();
+            this.camera.yRotO = this.camera.getYRot();
+            this.camera.xRotO = this.camera.getXRot();
+            minecraft.setCameraEntity(this.camera);
+        }
+
+        void restore(Minecraft minecraft)
+        {
+            minecraft.setCameraEntity(this.originalCamera != null
+                    ? this.originalCamera : minecraft.player);
+            minecraft.options.setCameraType(this.originalCameraType);
+            minecraft.options.hideGui = this.originalHideGui;
+            minecraft.options.cloudStatus().set(this.originalCloudStatus);
+        }
+    }
+
+    /**
+     * Ten fixed views of S20 only. This session never calls a builder or
+     * writes a block; the server packet merely keeps the real chunk window
+     * underneath the client-only camera.
+     */
+    private static final class S20Session
+    {
+        private static final String[] NAMES = {
+                "command_hierarchy", "command_screens",
+                 "command_rear_route", "b40_personnel_bridge",
+                 "wet_cages_front", "wet_cages_rear",
+                 "unit01_plug_side", "launch_interface",
+                 "surface_lift_lower", "surface_lift_pavilion"
+        };
+        private static final Vec3[] CAMERAS = {
+                new Vec3(44.0D, -412.0D, 303.0D),
+                new Vec3(28.0D, -414.0D, 302.0D),
+                new Vec3(28.0D, -405.0D, 246.0D),
+                new Vec3(50.0D, -439.0D, 273.0D),
+                new Vec3(39.0D, -388.0D, 137.0D),
+                new Vec3(30.0D, -389.0D, 184.0D),
+                 new Vec3(49.0D, -392.0D, 176.0D),
+                 new Vec3(30.0D, -392.0D, 243.0D),
+                 new Vec3(90.0D, -440.0D, 273.0D),
+                 new Vec3(108.0D, 87.0D, 285.0D),
+        };
+        private static final Vec3[] TARGETS = {
+                new Vec3(28.0D, -414.0D, 286.0D),
+                new Vec3(28.0D, -416.0D, 330.0D),
+                new Vec3(28.0D, -406.0D, 270.0D),
+                new Vec3(87.0D, -442.0D, 273.0D),
+                new Vec3(30.0D, -396.0D, 160.0D),
+                new Vec3(30.0D, -406.0D, 160.0D),
+                 new Vec3(30.0D, -397.0D, 168.0D),
+                 new Vec3(30.0D, -397.0D, 220.0D),
+                 new Vec3(130.0D, -440.0D, 273.0D),
+                 new Vec3(130.0D, 83.0D, 273.0D),
+        };
+        private static final int INITIAL_SETTLE_TICKS = 120;
+        private static final int VIEW_SETTLE_TICKS = 50;
+        private static final int MAX_WAIT_TICKS = 240;
+
+        private final Entity originalCamera;
+        private final CameraType originalCameraType;
+        private final boolean originalHideGui;
+        private final CloudStatus originalCloudStatus;
+        private ArmorStand camera;
+        private int view;
+        private int settleTicks = INITIAL_SETTLE_TICKS;
+        private int waitTicks;
+        private boolean positioned;
+
+        S20Session(Minecraft minecraft)
+        {
+            this.originalCamera = minecraft.getCameraEntity();
+            this.originalCameraType = minecraft.options.getCameraType();
+            this.originalHideGui = minecraft.options.hideGui;
+            this.originalCloudStatus = minecraft.options.cloudStatus().get();
+            ProjectSeele.LOGGER.info(
+                    "S20 visual capture batch {} armed with {} read-only views",
+                    CAPTURE_BATCH, NAMES.length);
+        }
+
+        boolean tick(Minecraft minecraft)
+        {
+            if (minecraft.level == null || minecraft.player == null)
+            {
+                return true;
+            }
+            boolean correctDimension =
+                    minecraft.level.dimension().location().equals(
+                            new ResourceLocation(ProjectSeele.MODID,
+                                    "geofront"));
+            if (!correctDimension || minecraft.screen != null)
+            {
+                return waitOrFail("dimension");
+            }
+            if (!this.positioned)
+            {
+                SeeleNetwork.CHANNEL.sendToServer(
+                        new ServerboundGeoFrontCameraPacket(
+                                ServerboundGeoFrontCameraPacket.S20_VIEW_BASE
+                                        + this.view));
+                this.position(minecraft);
+                this.positioned = true;
+                return true;
+            }
+            this.maintainCamera(minecraft);
+            if (this.settleTicks-- > 0)
+            {
+                return true;
+            }
+            if (!minecraft.level.hasChunkAt(
+                    BlockPos.containing(CAMERAS[this.view]))
+                    || !minecraft.level.hasChunkAt(
+                    BlockPos.containing(TARGETS[this.view])))
+            {
+                return waitOrFail("chunks");
+            }
+            this.capture(minecraft);
+            this.view++;
+            if (this.view >= NAMES.length)
+            {
+                ProjectSeele.LOGGER.info(
+                        "S20 visual matrix finished: {} read-only views captured",
+                        NAMES.length);
+                shutdownTicks = 30;
+                return false;
+            }
+            this.positioned = false;
+            this.settleTicks = VIEW_SETTLE_TICKS;
+            this.waitTicks = 0;
+            return true;
+        }
+
+        private boolean waitOrFail(String gate)
+        {
+            if (++this.waitTicks <= MAX_WAIT_TICKS)
+            {
+                return true;
+            }
+            ProjectSeele.LOGGER.error(
+                    "S20 visual capture stopped: {} did not settle for {}",
+                    NAMES[this.view], gate);
+            shutdownTicks = 20;
+            return false;
+        }
+
+        private void position(Minecraft minecraft)
+        {
+            minecraft.options.setCameraType(CameraType.FIRST_PERSON);
+            minecraft.options.hideGui = true;
+            minecraft.options.cloudStatus().set(CloudStatus.OFF);
+            if (this.camera == null)
+            {
+                this.camera = EntityType.ARMOR_STAND.create(minecraft.level);
+                if (this.camera == null)
+                {
+                    throw new IllegalStateException(
+                            "S20 visual camera creation failed");
+                }
+                this.camera.setInvisible(true);
+                this.camera.setNoGravity(true);
+            }
+            this.maintainCamera(minecraft);
+            minecraft.setCameraEntity(this.camera);
+        }
+
+        private void maintainCamera(Minecraft minecraft)
+        {
+            Vec3 eye = CAMERAS[this.view];
+            this.camera.setPos(eye.x,
+                    eye.y - this.camera.getEyeHeight(), eye.z);
+            lookAt(this.camera, eye, TARGETS[this.view]);
+            this.camera.xo = this.camera.getX();
+            this.camera.yo = this.camera.getY();
+            this.camera.zo = this.camera.getZ();
+            this.camera.yRotO = this.camera.getYRot();
+            this.camera.xRotO = this.camera.getXRot();
+            minecraft.setCameraEntity(this.camera);
+        }
+
+        private void capture(Minecraft minecraft)
+        {
+            try
+            {
+                File batch = new File(minecraft.gameDirectory,
+                        "screenshots/projectseele_visual/" + CAPTURE_BATCH);
+                Files.createDirectories(batch.toPath());
+                String filename = "s20_" + NAMES[this.view] + ".png";
+                Screenshot.grab(minecraft.gameDirectory,
+                        "projectseele_visual/" + CAPTURE_BATCH + "/"
+                                + filename,
+                        minecraft.getMainRenderTarget(),
+                        message -> ProjectSeele.LOGGER.info(
+                                "S20 visual capture {}/{}: {}",
+                                CAPTURE_BATCH, filename,
+                                message.getString()));
+            }
+            catch (Exception exception)
+            {
+                ProjectSeele.LOGGER.error(
+                        "S20 visual screenshot failed", exception);
+            }
+        }
+
+        void restore(Minecraft minecraft)
+        {
+            SeeleNetwork.CHANNEL.sendToServer(
+                    new ServerboundGeoFrontCameraPacket(
+                            ServerboundGeoFrontCameraPacket.S20_RESTORE_VIEW));
+            minecraft.setCameraEntity(this.originalCamera != null
+                    ? this.originalCamera : minecraft.player);
+            minecraft.options.setCameraType(this.originalCameraType);
+            minecraft.options.hideGui = this.originalHideGui;
+            minecraft.options.cloudStatus().set(this.originalCloudStatus);
+        }
+    }
+
+    /** Eight state-gated frames spanning one complete hangar-sortie-recovery cycle. */
     private static final class GeoFrontSortieSession
     {
         private static final String[] STAGES = {
-                "three_units_ready", "entry_plug_locked", "live_pilot_sensor",
-                "ascent_mid", "tokyo3_surface_arrival", "recovery_descent",
-                "wet_cage_return"
+                "three_units_ready", "entry_plug_insertion",
+                "entry_plug_locked", "live_pilot_sensor", "ascent_mid",
+                "tokyo3_surface_arrival", "recovery_descent", "wet_cage_return"
         };
         private static final int TIMEOUT_TICKS = 2400;
 
@@ -564,8 +939,11 @@ public final class VisualCaptureManager
         private final CameraType originalCameraType;
         private final boolean originalHideGui;
         private final CloudStatus originalCloudStatus;
+        private final int originalFov;
         private final LocalVisualAssetFingerprint.Fingerprint bodyFingerprint;
         private final String modelTag;
+        @Nullable
+        private UUID unitUuid;
         private ArmorStand camera;
         private int stage;
         private int settleTicks;
@@ -579,9 +957,14 @@ public final class VisualCaptureManager
             this.originalCameraType = minecraft.options.getCameraType();
             this.originalHideGui = minecraft.options.hideGui;
             this.originalCloudStatus = minecraft.options.cloudStatus().get();
+            this.originalFov = minecraft.options.fov().get();
             Entity entity = minecraft.level.getEntity(entityId);
             int variant = entity instanceof EvaUnit01Entity unit
                     ? unit.getUnitVariant() : EvaUnit01Entity.UNIT_01;
+            if (entity instanceof EvaUnit01Entity unit)
+            {
+                this.unitUuid = unit.getUUID();
+            }
             this.bodyFingerprint = EvaUnit01Renderer.visualFingerprintForVariant(variant);
             this.modelTag = this.bodyFingerprint.compactTag();
             ProjectSeele.LOGGER.info(
@@ -616,7 +999,7 @@ public final class VisualCaptureManager
             // client's tracking set during that interval, therefore the
             // sensor evidence frame must not depend on resolving the distant
             // airframe a second time.
-            if (this.stage == 2)
+            if (this.stage == 3)
             {
                 return this.tickSensorStage(minecraft);
             }
@@ -628,7 +1011,7 @@ public final class VisualCaptureManager
                 // authoritative instead of treating that expected gap as a failure.
                 return true;
             }
-            if (this.stage == 4 && this.elapsedTicks % 40 == 0)
+            if (this.stage == 5 && this.elapsedTicks % 40 == 0)
             {
                 ProjectSeele.LOGGER.info(
                         "GeoFront sortie arrival client gate: dimension={} phase={} y={} "
@@ -641,7 +1024,7 @@ public final class VisualCaptureManager
                         unit.getId());
             }
             boolean ready = this.stageReady(minecraft, unit);
-            if (this.stage == 3 && !ready
+            if (this.stage == 4 && !ready
                     && (unit.getLaunchPhase() == EvaUnit01Entity.LAUNCH_LOCKED
                         || unit.getLaunchPhase() == EvaUnit01Entity.LAUNCH_ASCENT))
             {
@@ -660,12 +1043,16 @@ public final class VisualCaptureManager
                 this.positioned = true;
                 this.settleTicks = switch (this.stage)
                 {
-                    case 0 -> 20;
-                    case 6 -> 100;
-                    case 5 -> 10;
-                    case 4 -> 15;
-                    case 3 -> 1;
-                    case 2 -> 20;
+                    // The high-detail airframe arrives a few sections after
+                    // the observation room. Twenty ticks consistently caught
+                    // the cage and plug but not the EVA; use the same proven
+                    // warm-up as the return frame.
+                    case 0 -> 100;
+                    case 7 -> 100;
+                    case 6 -> 10;
+                    case 5 -> 30;
+                    case 4 -> 1;
+                    case 3 -> 20;
                     default -> 5;
                 };
             }
@@ -688,7 +1075,7 @@ public final class VisualCaptureManager
             if (this.stage >= STAGES.length)
             {
                 ProjectSeele.LOGGER.info(
-                        "GeoFront sortie visual matrix finished: seven synchronized logistics stages captured");
+                        "GeoFront sortie visual matrix finished: eight synchronized logistics stages captured");
                 shutdownTicks = 20;
                 return false;
             }
@@ -697,6 +1084,21 @@ public final class VisualCaptureManager
 
         private boolean tickSensorStage(Minecraft minecraft)
         {
+            BlockPos videoWall = this.origin.offset(0, 21, 58);
+            boolean observerInOperations = minecraft.player.position()
+                    .distanceToSqr(Vec3.atCenterOf(videoWall)) <= 48.0D * 48.0D;
+            if (!observerInOperations)
+            {
+                // A detached client camera does not load server chunks and is
+                // not a command-room viewer.  Starting the old six-second
+                // deadline here made the capture crash while the EVA was still
+                // draining in its cage, well before automation moved the real
+                // observer to operations. Keep the player's genuine tracking
+                // centre until the command room is physically occupied.
+                minecraft.setCameraEntity(minecraft.player);
+                this.positioned = false;
+                return true;
+            }
             if (!this.positioned)
             {
                 this.positioned = true;
@@ -736,6 +1138,7 @@ public final class VisualCaptureManager
             minecraft.options.setCameraType(CameraType.FIRST_PERSON);
             minecraft.options.hideGui = true;
             minecraft.options.cloudStatus().set(CloudStatus.OFF);
+            minecraft.options.fov().set(84);
             if (this.camera == null || this.camera.level() != minecraft.level)
             {
                 this.camera = EntityType.ARMOR_STAND.create(minecraft.level);
@@ -752,7 +1155,10 @@ public final class VisualCaptureManager
             // on the upper diagnostic wing and is a separate fallback panel.
             BlockPos videoWall = this.origin.offset(0, 21, 58);
             Vec3 target = Vec3.atCenterOf(videoWall);
-            Vec3 cameraPos = Vec3.atCenterOf(videoWall.offset(0, 0, 12));
+            // Operator-eye view from the console tier. The former camera was
+            // level with the old hanging light truss and photographed that
+            // fixture instead of the three live EVA screens.
+            Vec3 cameraPos = Vec3.atCenterOf(videoWall.offset(0, -4, 14));
             this.camera.setPos(cameraPos.x,
                     cameraPos.y - this.camera.getEyeHeight(), cameraPos.z);
             lookAt(this.camera, cameraPos, target);
@@ -794,10 +1200,71 @@ public final class VisualCaptureManager
             if (minecraft.player.getVehicle() instanceof EvaUnit01Entity ridden)
             {
                 this.entityId = ridden.getId();
+                this.unitUuid = ridden.getUUID();
                 return ridden;
             }
             Entity entity = minecraft.level.getEntity(this.entityId);
-            return entity instanceof EvaUnit01Entity unit ? unit : null;
+            if (entity instanceof EvaUnit01Entity unit)
+            {
+                this.unitUuid = unit.getUUID();
+                return unit;
+            }
+            // Chunk unload/reload preserves the canonical EVA UUID but assigns
+            // a new runtime entity id. The command-room detour intentionally
+            // unloads the launch column, so recover the airframe near the real
+            // observer instead of waiting forever on that stale integer id.
+            AABB trackingArea = minecraft.player.getBoundingBox()
+                    .inflate(144.0D, 300.0D, 144.0D);
+            EvaUnit01Entity recovered = minecraft.level.getEntitiesOfClass(
+                            EvaUnit01Entity.class, trackingArea,
+                            candidate -> candidate.isAlive()
+                                    && candidate.getUnitVariant()
+                                            == EvaUnit01Entity.UNIT_01
+                                    && (this.unitUuid == null
+                                        || this.unitUuid.equals(
+                                                candidate.getUUID())))
+                    .stream()
+                    .findFirst()
+                    .orElse(null);
+            if (recovered == null && this.unitUuid != null)
+            {
+                recovered = minecraft.level.getEntitiesOfClass(
+                                EvaUnit01Entity.class, trackingArea,
+                                candidate -> candidate.isAlive()
+                                        && candidate.getUnitVariant()
+                                                == EvaUnit01Entity.UNIT_01)
+                        .stream()
+                        .findFirst()
+                        .orElse(null);
+            }
+            if (recovered != null)
+            {
+                this.entityId = recovered.getId();
+                this.unitUuid = recovered.getUUID();
+                ProjectSeele.LOGGER.info(
+                        "GeoFront sortie client rebound canonical Unit-01 tracking id to {}",
+                        this.entityId);
+            }
+            return recovered;
+        }
+
+        @Nullable
+        private EntryPlugCarrierEntity resolvePlug(Minecraft minecraft,
+                                                   EvaUnit01Entity unit)
+        {
+            BlockPos hangar = EvaHangarBuilder.hangarBed(this.origin,
+                    unit.getUnitVariant());
+            AABB search = new AABB(hangar).inflate(32.0D, 72.0D, 48.0D);
+            return minecraft.level.getEntitiesOfClass(
+                            EntryPlugCarrierEntity.class, search,
+                            plug -> plug.isAlive()
+                                    && plug.getAssignedVariant()
+                                            == unit.getUnitVariant())
+                    .stream()
+                    .min((left, right) -> Double.compare(
+                            left.distanceToSqr(unit),
+                            right.distanceToSqr(unit)))
+                    .orElse(null);
         }
 
         private boolean stageReady(Minecraft minecraft, EvaUnit01Entity unit)
@@ -807,31 +1274,62 @@ public final class VisualCaptureManager
             boolean riding = minecraft.player.getVehicle() == unit;
             boolean occupied = riding || unit.isTrainingPilotActive();
             double ascent = IntegratedNervMapBuilder.ascentDistance();
+            EntryPlugCarrierEntity plug = this.resolvePlug(minecraft, unit);
             return switch (this.stage)
             {
                 case 0 -> inGeoFront && unit.getLaunchPhase() == EvaUnit01Entity.LAUNCH_IDLE
-                        && !riding;
-                case 1 -> inGeoFront && unit.getLaunchPhase() == EvaUnit01Entity.LAUNCH_LOCKED
+                        && !riding && !unit.isPoweredOn()
+                        && !unit.isUmbilicalConnected()
+                        && unit.getPowerTicks() == 0;
+                case 1 -> inGeoFront && plug != null
+                        && plug.getInsertionStage()
+                                == EntryPlugCarrierEntity.STAGE_INSERTING
+                        // Capture the actual pitch/alignment phase.  The old
+                        // 15-30% window showed only the nearly vertical
+                        // overhead trolley travel and could not prove that the
+                        // capsule ever approached the dorsal socket diagonally.
+                        && plug.getInsertionProgress() >= 55
+                        && plug.getInsertionProgress() <= 68;
+                case 2 -> inGeoFront
+                        // The capsule is locked in the wet cage long before the
+                        // airframe reaches the launch bed.  LAUNCH_LOCKED is
+                        // therefore the later silo state and made this frame
+                        // impossible to observe.  The meaningful visual gate is
+                        // the seated pilot, consumed external carrier and the
+                        // logistics interlock that holds the airframe still.
+                        && unit.getLaunchPhase() == EvaUnit01Entity.LAUNCH_IDLE
+                        && unit.isEntryPlugInserted() && occupied
+                        && unit.isNervLogisticsLocked() && plug == null
+                        && unit.isPoweredOn() && unit.isUmbilicalConnected()
+                        && unit.getPowerTicks() > 0;
+                case 3 -> inGeoFront && unit.getLaunchPhase() == EvaUnit01Entity.LAUNCH_LOCKED
                         && unit.getActivationTicks() > 65 && occupied;
-                case 2 -> inGeoFront && unit.getLaunchPhase() == EvaUnit01Entity.LAUNCH_LOCKED
-                        && unit.getActivationTicks() > 65 && occupied;
-                case 3 -> inGeoFront && unit.getLaunchPhase() == EvaUnit01Entity.LAUNCH_ASCENT
-                        && unit.getLaunchTicks() >= 45 && unit.getLaunchTicks() <= 100
-                        && unit.getY() >= this.origin.getY() + ascent * 0.40D
-                        && unit.getY() <= this.origin.getY() + ascent + 8.0D && occupied;
-                case 4 -> inGeoFront
+                case 4 -> inGeoFront && unit.getLaunchPhase() == EvaUnit01Entity.LAUNCH_ASCENT
+                        && unit.getY() >= IntegratedNervMapBuilder.lowerLiftBed(
+                                unit.getUnitVariant()).getY() + ascent * 0.35D
+                        && unit.getY() <= IntegratedNervMapBuilder.lowerLiftBed(
+                                unit.getUnitVariant()).getY() + ascent * 0.68D;
+                case 5 -> inGeoFront
                         && (unit.getLaunchPhase() == EvaUnit01Entity.LAUNCH_CLEAR
                             || unit.getLaunchPhase() == EvaUnit01Entity.LAUNCH_IDLE)
-                        && unit.getY() >= this.origin.getY() + ascent + 1.5D && occupied;
-                case 5 -> inGeoFront && occupied && unit.isNervLogisticsLocked()
+                        // The physical carrier stops with the EVA origin one
+                        // block above the surface bed (Y=80 for a Y=79 bed).
+                        // The old origin+rise+1.5 gate demanded Y>=80.5, so the
+                        // valid arrival could never satisfy this stage.
+                        && unit.getY() >= IntegratedNervMapBuilder.surfaceLiftBed(
+                                unit.getUnitVariant()).getY() + 0.5D;
+                case 6 -> inGeoFront && unit.isNervLogisticsLocked()
                         && unit.getLaunchPhase() == EvaUnit01Entity.LAUNCH_IDLE
                         && unit.getY() <= IntegratedNervMapBuilder.surfaceLiftBed(1).getY() - 64.0D
                         && unit.getY() >= IntegratedNervMapBuilder.lowerLiftBed(1).getY() + 48.0D;
-                case 6 ->
+                case 7 ->
                 {
                     BlockPos hangar = EvaHangarBuilder.hangarBed(this.origin, 1);
-                    yield inGeoFront && occupied && unit.isNervLogisticsLocked()
+                    yield inGeoFront && unit.isNervLogisticsLocked()
                             && unit.getLaunchPhase() == EvaUnit01Entity.LAUNCH_IDLE
+                            && plug != null
+                            && plug.getInsertionStage()
+                                    == EntryPlugCarrierEntity.STAGE_SUSPENDED
                             && unit.position().distanceToSqr(hangar.getCenter().add(0.0D, 1.0D, 0.0D))
                             <= 2.25D;
                 }
@@ -859,28 +1357,53 @@ public final class VisualCaptureManager
             Vec3 forward = new Vec3(-Mth.sin(yaw), 0.0D, Mth.cos(yaw));
             Vec3 right = new Vec3(-forward.z, 0.0D, forward.x);
             Vec3 rear = forward.scale(-1.0D);
+            BlockPos hangar = EvaHangarBuilder.hangarBed(this.origin,
+                    unit.getUnitVariant());
             Vec3 target;
             Vec3 cameraPos;
             switch (this.stage)
             {
                 case 0 ->
                 {
-                    // Start inside Unit-01's wet cage instead of above the
-                    // command-centre roof.  The old overview was physically
-                    // blocked by the pyramid and proved only that a ceiling
-                    // existed.  This angle sees the parked airframe, LCL line,
-                    // extended dorsal bridge and suspended external plug.
-                    target = unit.getEntryPlugSocketPosition().add(0.0D, 1.2D, 0.0D);
-                    cameraPos = target.add(rear.scale(4.0D))
-                            .add(right.scale(5.25D)).add(0.0D, 3.8D, 0.0D);
+                    // Establish all three wet cages through their aligned
+                    // observation windows. Unit-relative cameras became a
+                    // shoulder close-up after the 2x scale conversion and
+                    // could never prove the three-airframe fleet was present.
+                    minecraft.options.fov().set(110);
+                    target = new Vec3(hangar.getX() + 0.5D,
+                            hangar.getY() + 49.0D, hangar.getZ() + 0.5D);
+                    cameraPos = new Vec3(hangar.getX() + 0.5D,
+                            hangar.getY() + 54.0D, hangar.getZ() - 28.5D);
                 }
                 case 1 ->
                 {
-                    target = unit.getEntryPlugSocketPosition().add(0.0D, 1.2D, 0.0D);
-                    cameraPos = target.add(rear.scale(4.0D))
-                            .add(right.scale(5.25D)).add(0.0D, 3.8D, 0.0D);
+                    minecraft.options.fov().set(82);
+                    EntryPlugCarrierEntity plug = this.resolvePlug(minecraft,
+                            unit);
+                    target = plug == null
+                            ? unit.getEntryPlugSocketPosition()
+                            : plug.position();
+                    // Human-height side-deck view: show the capsule pitching
+                    // into the dorsal socket instead of flattening the whole
+                    // mechanism into an overhead diagram.
+                    cameraPos = new Vec3(hangar.getX() - 18.0D,
+                            hangar.getY() + 55.0D, hangar.getZ() + 17.0D);
                 }
                 case 2 ->
+                {
+                    minecraft.options.fov().set(78);
+                    Vec3 cableMount = unit.getUmbilicalMountPosition();
+                    Vec3 cableSocket = unit.getUmbilicalSocketPosition();
+                    target = cableMount.lerp(cableSocket, 0.55D);
+                    // Rear three-quarter engineering view.  The previous high
+                    // cage camera photographed the EVA's roof and could not
+                    // prove whether the entry cover or umbilical adapter met
+                    // the back armour.  This view records the canonical
+                    // centre-back adapter, lumbar collar and first cable span.
+                    cameraPos = cableMount.add(rear.scale(18.0D))
+                            .add(right.scale(12.0D)).add(0.0D, 5.0D, 0.0D);
+                }
+                case 3 ->
                 {
                     // A training pilot has no independent render client, so
                     // this frame deliberately audits the server-sampled live
@@ -891,50 +1414,58 @@ public final class VisualCaptureManager
                     target = Vec3.atCenterOf(sensor);
                     cameraPos = Vec3.atCenterOf(sensor.offset(0, 0, 10));
                 }
-                case 3 ->
-                {
-                    // The shaft cannot provide an external side camera.  Look
-                    // down from the clear column, offset toward the EVA's face,
-                    // so the frame shows its head/shoulders and upward travel
-                    // instead of the black underside of the carrier platform.
-                    BlockPos shaft = IntegratedNervMapBuilder.lowerLiftBed(
-                            unit.getUnitVariant());
-                    double evidenceY = this.origin.getY()
-                            + IntegratedNervMapBuilder.ascentDistance() * 0.46D;
-                    target = new Vec3(shaft.getX() + 0.5D,
-                            evidenceY + 13.5D, shaft.getZ() + 0.5D);
-                    // The physical shaft has only a five-block clear radius.
-                    // This fixed, prewarmed camera stays in the shaft core and
-                    // watches the airframe pass instead of chasing it through
-                    // unloaded vertical render sections.
-                    cameraPos = target.add(forward.scale(1.4D))
-                            .add(right.scale(0.7D)).add(0.0D, 30.0D, 0.0D);
-                }
                 case 4 ->
+                {
+                    // Keep the camera inside the clear 31x31 core and close
+                    // enough for the 60-block airframe to read. A camera 75
+                    // blocks above the carrier reduced the full-bright EVA to
+                    // a few pixels in an almost-black shaft and failed image
+                    // validation. The diagonal engineering view stays outside
+                    // its 17-block body but inside the 31x31 clear core.
+                    minecraft.options.fov().set(102);
+                    target = unit.position().add(0.0D, 30.0D, 0.0D);
+                    cameraPos = unit.position().add(rear.scale(13.0D))
+                            .add(right.scale(13.0D)).add(0.0D, 38.0D, 0.0D);
+                }
+                case 5 ->
                 {
                     // The imported 1.7 world can carry a night timestamp.
                     // Pin only the unattended evidence frame to noon so the
                     // surface geometry remains inspectable; gameplay time is
                     // still server-authoritative outside this capture.
                     minecraft.level.setDayTime(6000L);
-                    target = unit.position().add(0.0D, 14.0D, 0.0D);
-                    cameraPos = target.add(forward.scale(52.0D))
-                            .add(right.scale(28.0D)).add(0.0D, 18.0D, 0.0D);
+                    minecraft.level.setRainLevel(0.0F);
+                    minecraft.level.setThunderLevel(0.0F);
+                    minecraft.options.fov().set(86);
+                    target = unit.position().add(0.0D, 30.0D, 0.0D);
+                    // Street-height three-quarter view. The former camera sat
+                    // forty-eight blocks above the carrier bed and reduced
+                    // Tokyo-3 to a flat test grid; looking slightly upward
+                    // preserves EVA scale while keeping the hatch district,
+                    // control cells and distant city infrastructure in frame.
+                    cameraPos = unit.position().add(forward.scale(44.0D))
+                            .add(right.scale(24.0D)).add(0.0D, 20.0D, 0.0D);
                 }
-                case 5 ->
+                case 6 ->
                 {
-                    target = unit.position().add(0.0D, 13.5D, 0.0D);
-                    cameraPos = target.add(right.scale(3.0D))
-                            .add(rear.scale(3.0D)).add(0.0D, 34.0D, 0.0D);
+                    minecraft.options.fov().set(96);
+                    target = unit.position().add(0.0D, 30.0D, 0.0D);
+                    // Look down from below the sealed surface bed. Looking up
+                    // only proved that the carrier has a floor; looking from
+                    // target+52 could enter the Y=79 station cap.
+                    cameraPos = unit.position().add(right.scale(3.0D))
+                            .add(rear.scale(3.0D)).add(0.0D, 68.0D, 0.0D);
                 }
                 default ->
                 {
-                    // Remain inside the chamber.  The former +18 X position
-                    // sat behind the reinforced side wall, producing a nearly
-                    // black "return" frame even though restoration succeeded.
-                    target = unit.getEntryPlugSocketPosition().add(0.0D, 1.2D, 0.0D);
-                    cameraPos = target.add(rear.scale(4.0D))
-                            .add(right.scale(5.25D)).add(0.0D, 3.8D, 0.0D);
+                    // Return evidence is a human observation-booth view of the
+                    // central cage, with the whole airframe and shoulder-level
+                    // LCL visible rather than another dorsal close-up.
+                    minecraft.options.fov().set(100);
+                    target = new Vec3(hangar.getX() + 0.5D,
+                            hangar.getY() + 49.0D, hangar.getZ() + 0.5D);
+                    cameraPos = new Vec3(hangar.getX() + 0.5D,
+                            hangar.getY() + 54.0D, hangar.getZ() - 28.5D);
                 }
             }
             this.camera.setPos(cameraPos.x, cameraPos.y - this.camera.getEyeHeight(), cameraPos.z);
@@ -952,9 +1483,11 @@ public final class VisualCaptureManager
             String stageName = STAGES[this.stage];
             ProjectSeele.LOGGER.info(
                     "GeoFront sortie visual stage {}: dimension={} phase={} activation={} "
-                            + "launchTicks={} y={}",
+                            + "launchTicks={} power={}/{} umbilical={} powered={} y={}",
                     stageName, minecraft.level.dimension().location(),
                     unit.getLaunchPhase(), unit.getActivationTicks(), unit.getLaunchTicks(),
+                    unit.getPowerTicks(), unit.getPowerCapacityTicks(),
+                    unit.isUmbilicalConnected(), unit.isPoweredOn(),
                     String.format(java.util.Locale.ROOT, "%.3f", unit.getY()));
             try
             {
@@ -982,6 +1515,7 @@ public final class VisualCaptureManager
             minecraft.options.setCameraType(this.originalCameraType);
             minecraft.options.hideGui = this.originalHideGui;
             minecraft.options.cloudStatus().set(this.originalCloudStatus);
+            minecraft.options.fov().set(this.originalFov);
         }
     }
 
@@ -1000,7 +1534,7 @@ public final class VisualCaptureManager
                 "central_dogma_descent", "terminal_dogma",
                 "lcl_lake", "lift_terminals"
         };
-        private static final int[] LIFT_X = {-28, 0, 28};
+        private static final int[] LIFT_X = {-42, 0, 42};
 
         private final BlockPos origin;
         private final Entity originalCamera;
@@ -2184,7 +2718,7 @@ public final class VisualCaptureManager
     private static final class ImpactSession
     {
         private static final int SETTLE_TICKS = 150;
-        private static final double CAMERA_DISTANCE = 180.0D;
+        private static final double CAMERA_DISTANCE = 300.0D;
         private static final double FRAME_BOTTOM = -15.0D;
         private static final double FRAME_TOP_MARGIN = 38.0D;
         private static final String[] IMPACT_VIEWS = {

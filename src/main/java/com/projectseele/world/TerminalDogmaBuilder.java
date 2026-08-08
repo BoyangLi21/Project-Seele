@@ -32,34 +32,112 @@ public final class TerminalDogmaBuilder
     public static final int SHAFT_TOP_Y = 65;
     public static final int SHAFT_BOTTOM_Y = -59;
     public static final int CHAMBER_CENTRE_Y = -58;
-    public static final int CHAMBER_RADIUS_X = 24;
-    public static final int CHAMBER_RADIUS_Y = 22;
-    public static final int CHAMBER_RADIUS_Z = 28;
+    /*
+     * Terminal Dogma must read as a buried containment cathedral, not a room
+     * wrapped tightly around Lilith. The specimen and crucifix retain their
+     * reviewed scale while the shell recedes into darkness around them.
+     */
+    public static final int CHAMBER_RADIUS_X = 38;
+    public static final int CHAMBER_RADIUS_Y = 30;
+    public static final int CHAMBER_RADIUS_Z = 46;
     public static final int OBSERVATION_Y = -59;
-    public static final int OBSERVATION_Z = 22;
+    public static final int OBSERVATION_Z = 34;
     public static final int LCL_SURFACE_Y = -75;
-    public static final int MIN_RELATIVE_Y = -81;
+    public static final int MIN_RELATIVE_Y =
+            CHAMBER_CENTRE_Y - CHAMBER_RADIUS_Y;
 
     private static final int UPDATE_CLIENTS = Block.UPDATE_CLIENTS;
     private static final int SHAFT_RADIUS = 5;
+    private static final BlockPos LEGACY_REVISION_MARKER =
+            new BlockPos(26, SHAFT_BOTTOM_Y, 8);
+    private static final BlockPos REVISION_MARKER =
+            new BlockPos(34, SHAFT_BOTTOM_Y, 8);
 
     private TerminalDogmaBuilder() {}
 
     public static TerminalDogmaAudit build(ServerLevel level, BlockPos origin)
     {
+        PerformanceCounters.recordBuilderCall();
         BlockPos facilityOrigin = origin.offset(0, FACILITY_Y_OFFSET, 0);
         buildChamber(level, facilityOrigin);
         buildLclSealLake(level, facilityOrigin);
         buildContainmentCross(level, facilityOrigin);
         spawnLilith(level, facilityOrigin);
         buildObservationCatwalk(level, facilityOrigin);
+        buildQuarantineVestibule(level, facilityOrigin);
         buildContainmentLighting(level, facilityOrigin);
         buildCentralDogmaShaft(level, facilityOrigin);
         buildTopAccess(level, facilityOrigin);
         buildDeepAccess(level, facilityOrigin);
+        clear(level, facilityOrigin.offset(LEGACY_REVISION_MARKER));
+        clear(level, facilityOrigin.offset(LEGACY_REVISION_MARKER).west());
+        clear(level, facilityOrigin.offset(LEGACY_REVISION_MARKER).east());
+        set(level, facilityOrigin.offset(REVISION_MARKER),
+                Blocks.NETHERITE_BLOCK.defaultBlockState());
+        set(level, facilityOrigin.offset(REVISION_MARKER).west(),
+                Blocks.MAGENTA_CONCRETE.defaultBlockState());
+        set(level, facilityOrigin.offset(REVISION_MARKER).east(),
+                Blocks.LODESTONE.defaultBlockState());
         return inspect(level, origin);
     }
 
+    /** Applies the canonical chamber/secure-access revision to an old save once. */
+    public static TerminalDogmaAudit ensureRevision(ServerLevel level,
+                                                    BlockPos origin)
+    {
+        TerminalDogmaAudit audit = inspect(level, origin);
+        if (!audit.revision())
+        {
+            audit = build(level, origin);
+        }
+        return audit;
+    }
+
+    /**
+     * Restores the bounded access pieces which shared NERV corridor builders
+     * are allowed to touch.  The containment cavern itself is intentionally
+     * not regenerated here: doing so during a launch check rewrites hundreds
+     * of thousands of blocks and used to make Operations appear frozen.
+     */
+    public static TerminalDogmaAudit repairRuntimeAccess(ServerLevel level,
+                                                          BlockPos origin)
+    {
+        TerminalDogmaAudit audit = ensureRevision(level, origin);
+        if (audit.valid())
+        {
+            return audit;
+        }
+
+        BlockPos facilityOrigin = origin.offset(0, FACILITY_Y_OFFSET, 0);
+        if (!audit.shaft() || !audit.topAccess() || !audit.deepAccess())
+        {
+            buildCentralDogmaShaft(level, facilityOrigin);
+            buildTopAccess(level, facilityOrigin);
+            buildDeepAccess(level, facilityOrigin);
+        }
+        if (!audit.observation())
+        {
+            buildObservationCatwalk(level, facilityOrigin);
+        }
+        if (!audit.secureVestibule())
+        {
+            buildQuarantineVestibule(level, facilityOrigin);
+        }
+        if (!audit.lclSeal())
+        {
+            buildLclSealLake(level, facilityOrigin);
+        }
+        if (!audit.containmentCross())
+        {
+            buildContainmentCross(level, facilityOrigin);
+        }
+        if (!audit.chamber())
+        {
+            repairChamberAuditAnchors(level, facilityOrigin);
+        }
+        repairRuntimeSpecimen(level, origin);
+        return inspect(level, origin);
+    }
 
     /**
      * Upgrades an installed save without rebuilding the complete chamber.
@@ -70,6 +148,12 @@ public final class TerminalDogmaBuilder
                                                 BlockPos origin)
     {
         BlockPos facilityOrigin = origin.offset(0, FACILITY_Y_OFFSET, 0);
+        // Entity queries only see loaded sections. Runtime repairs used to
+        // interpret an unloaded specimen chunk as "Lilith missing" and create
+        // another persistent 11k-triangle entity at the same coordinates.
+        // Old test saves accumulated more than one hundred identical Liliths,
+        // producing severe FPS loss while the player merely stood in NERV.
+        level.getChunkAt(facilityOrigin.offset(0, LCL_SURFACE_Y, -22));
         AABB bounds = specimenBounds(facilityOrigin);
         boolean missing = level.getEntitiesOfClass(
                 LilithEntity.class, bounds).isEmpty();
@@ -89,6 +173,12 @@ public final class TerminalDogmaBuilder
     public static TerminalDogmaAudit inspect(ServerLevel level, BlockPos origin)
     {
         origin = origin.offset(0, FACILITY_Y_OFFSET, 0);
+        boolean revision = level.getBlockState(origin.offset(REVISION_MARKER))
+                .is(Blocks.NETHERITE_BLOCK)
+                && level.getBlockState(origin.offset(REVISION_MARKER).west())
+                .is(Blocks.MAGENTA_CONCRETE)
+                && level.getBlockState(origin.offset(REVISION_MARKER).east())
+                .is(Blocks.LODESTONE);
         boolean topAccess = isWalkable(level,
                 origin.offset(34, SHAFT_TOP_Y, SHAFT_Z));
         int ladders = 0;
@@ -131,14 +221,19 @@ public final class TerminalDogmaBuilder
         boolean observation = level.getBlockState(origin.offset(
                 0, OBSERVATION_Y, OBSERVATION_Z)).is(Blocks.LODESTONE)
                 && level.getBlockState(origin.offset(
-                23, -68, 18)).is(Blocks.LADDER);
-        boolean valid = topAccess && shaft && deepAccess && chamber
+                35, -68, 28)).is(Blocks.LADDER);
+        boolean secureVestibule = isWalkable(level,
+                origin.offset(24, SHAFT_BOTTOM_Y, 10))
+                && level.getBlockState(origin.offset(
+                20, SHAFT_BOTTOM_Y + 3, 10))
+                .is(Blocks.RED_STAINED_GLASS);
+        boolean valid = revision && topAccess && shaft && deepAccess && chamber
                 && lclSeal && containmentCross && sealedSpecimen
-                && observation;
-        return new TerminalDogmaAudit(valid, topAccess, ladders,
+                && observation && secureVestibule;
+        return new TerminalDogmaAudit(valid, revision, topAccess, ladders,
                 shaftApertures, shaft,
                 deepAccess, chamber, lclSeal, containmentCross,
-                sealedSpecimen, observation);
+                sealedSpecimen, observation, secureVestibule);
     }
 
     private static boolean isWalkable(ServerLevel level, BlockPos floor)
@@ -203,11 +298,11 @@ public final class TerminalDogmaBuilder
 
     private static void buildLclSealLake(ServerLevel level, BlockPos origin)
     {
-        final int radiusX = 18;
-        final int radiusZ = 13;
-        for (int x = -20; x <= 20; x++)
+        final int radiusX = 28;
+        final int radiusZ = 20;
+        for (int x = -30; x <= 30; x++)
         {
-            for (int z = -15; z <= 15; z++)
+            for (int z = -22; z <= 22; z++)
             {
                 double distance = square(x / (double) radiusX)
                         + square(z / (double) radiusZ);
@@ -216,8 +311,8 @@ public final class TerminalDogmaBuilder
                     BlockState bed = Math.floorMod(x * 19 + z * 29, 17) == 0
                             ? Blocks.SEA_LANTERN.defaultBlockState()
                             : Blocks.ORANGE_CONCRETE.defaultBlockState();
-                    set(level, origin.offset(x, -79, z), bed);
-                    for (int y = -78; y <= LCL_SURFACE_Y; y++)
+                    set(level, origin.offset(x, -83, z), bed);
+                    for (int y = -82; y <= LCL_SURFACE_Y; y++)
                     {
                         set(level, origin.offset(x, y, z),
                                 ModFluids.LCL_SOURCE.get().defaultFluidState()
@@ -262,84 +357,11 @@ public final class TerminalDogmaBuilder
             set(level, origin.offset(x, -50, -24),
                     Blocks.SHROOMLIGHT.defaultBlockState());
         }
-        // White sealed giant: a block-built static structure, deliberately
-        // separate from EVA animation/rendering until a reviewed model exists.
-        for (int x = -4; x <= 4; x++)
-        {
-            for (int y = -5; y <= 5; y++)
-            {
-                for (int z = -2; z <= 2; z++)
-                {
-                    if (square(x / 4.5D) + square(y / 5.5D)
-                            + square(z / 2.5D) <= 1.0D)
-                    {
-                        set(level, origin.offset(x, -43 + y, -22 + z),
-                                Blocks.SMOOTH_QUARTZ.defaultBlockState());
-                    }
-                }
-            }
-        }
-        // Crucified shoulders and arms are segmented and taper toward the
-        // wrists instead of reading as one rectangular white crossbar.
-        fillBox(level, origin, -6, 6, -51, -48, -23, -21,
-                Blocks.CALCITE.defaultBlockState());
-        for (int x = 7; x <= 18; x++)
-        {
-            int lift = (x - 7) / 6;
-            fillBox(level, origin, x, x, -51 + lift, -49 + lift,
-                    -23, -21, Blocks.SMOOTH_QUARTZ.defaultBlockState());
-            fillBox(level, origin, -x, -x, -51 + lift, -49 + lift,
-                    -23, -21, Blocks.SMOOTH_QUARTZ.defaultBlockState());
-        }
-        set(level, origin.offset(-19, -48, -21),
-                Blocks.REDSTONE_BLOCK.defaultBlockState());
-        set(level, origin.offset(19, -48, -21),
-                Blocks.REDSTONE_BLOCK.defaultBlockState());
-        for (int y = -48; y >= -63; y--)
-        {
-            int half = y >= -55 ? 6 - (-48 - y) / 2
-                    : 3 + Math.max(0, (-59 - y) / 2);
-            fillBox(level, origin, -half, half, y, y, -23, -21,
-                    Math.floorMod(y, 4) == 0
-                            ? Blocks.QUARTZ_BLOCK.defaultBlockState()
-                            : Blocks.SMOOTH_QUARTZ.defaultBlockState());
-        }
-        for (int y = -64; y >= -75; y--)
-        {
-            int spread = Math.min(3, (-64 - y) / 4);
-            fillBox(level, origin, -4 - spread, -2 - spread,
-                    y, y, -23, -21,
-                    Blocks.SMOOTH_QUARTZ.defaultBlockState());
-            fillBox(level, origin, 2 + spread, 4 + spread,
-                    y, y, -23, -21,
-                    Blocks.SMOOTH_QUARTZ.defaultBlockState());
-        }
-
-        int[][] eyes = {
-                {-2, -44}, {0, -45}, {2, -44},
-                {-2, -42}, {0, -43}, {2, -42}, {0, -40}
-        };
-        for (int[] eye : eyes)
-        {
-            set(level, origin.offset(eye[0], eye[1], -19),
-                    Blocks.REDSTONE_BLOCK.defaultBlockState());
-        }
-        set(level, origin.offset(0, -55, -22),
-                Blocks.SEA_LANTERN.defaultBlockState());
-        set(level, origin.offset(0, -55, -21),
-                Blocks.RED_STAINED_GLASS.defaultBlockState());
-
-        // A red forked sealing spear enters the chest from the east balcony.
-        buildLine(level, origin, 22, -45, -18,
-                0, -55, -20, Blocks.REDSTONE_BLOCK.defaultBlockState());
-        buildLine(level, origin, 22, -45, -18,
-                19, -41, -18, Blocks.REDSTONE_BLOCK.defaultBlockState());
-        buildLine(level, origin, 22, -45, -18,
-                19, -49, -18, Blocks.REDSTONE_BLOCK.defaultBlockState());
-
-        // Remove the former block-built humanoid and block spear. The red
-        // crucifix backing at z=-26..-24 remains; its front glass is restored
-        // after the bounded clear so existing saves upgrade without overlap.
+        // Remove every legacy block-built humanoid and spear. The reviewed local
+        // Lilith mesh now supplies the mask, nails, body and Longinus restraint;
+        // leaving the old quartz dummy behind it produced two overlapping
+        // silhouettes. The bounded clear is intentionally retained as an
+        // installed-world migration.
         for (int x = -22; x <= 22; x++)
         {
             for (int y = -77; y <= -36; y++)
@@ -359,11 +381,16 @@ public final class TerminalDogmaBuilder
     private static void buildObservationCatwalk(ServerLevel level,
                                                 BlockPos origin)
     {
-        for (int x = -24; x <= 24; x++)
+        final int outerX = 36;
+        final int innerX = 33;
+        final int outerNorthZ = -40;
+        final int innerSouthZ = 33;
+        final int outerSouthZ = 36;
+        for (int x = -outerX; x <= outerX; x++)
         {
-            for (int z = -24; z <= 24; z++)
+            for (int z = outerNorthZ; z <= outerSouthZ; z++)
             {
-                boolean deck = z >= 20 || Math.abs(x) >= 20;
+                boolean deck = z >= innerSouthZ || Math.abs(x) >= innerX;
                 if (!deck)
                 {
                     continue;
@@ -379,17 +406,38 @@ public final class TerminalDogmaBuilder
                 }
             }
         }
-        for (int x = -24; x <= 24; x++)
+        // Rails on both the pressure-shell edge and the open containment edge
+        // make the full U-shaped gallery survivable without reducing the
+        // central crucifix to a view through a solid wall.
+        for (int x = -outerX; x <= outerX; x++)
         {
-            set(level, origin.offset(x, OBSERVATION_Y + 1, 25),
+            set(level, origin.offset(x, OBSERVATION_Y + 1,
+                            outerSouthZ + 1),
                     Blocks.IRON_BARS.defaultBlockState());
+            if (Math.abs(x) <= innerX)
+            {
+                set(level, origin.offset(x, OBSERVATION_Y + 1,
+                                innerSouthZ - 1),
+                        Blocks.IRON_BARS.defaultBlockState());
+            }
         }
-        for (int z = -24; z <= 25; z++)
+        for (int z = outerNorthZ; z <= outerSouthZ + 1; z++)
         {
-            set(level, origin.offset(-25, OBSERVATION_Y + 1, z),
+            set(level, origin.offset(-outerX - 1,
+                            OBSERVATION_Y + 1, z),
                     Blocks.IRON_BARS.defaultBlockState());
-            set(level, origin.offset(25, OBSERVATION_Y + 1, z),
+            set(level, origin.offset(outerX + 1,
+                            OBSERVATION_Y + 1, z),
                     Blocks.IRON_BARS.defaultBlockState());
+            if (z <= innerSouthZ - 1)
+            {
+                set(level, origin.offset(-innerX + 1,
+                                OBSERVATION_Y + 1, z),
+                        Blocks.IRON_BARS.defaultBlockState());
+                set(level, origin.offset(innerX - 1,
+                                OBSERVATION_Y + 1, z),
+                        Blocks.IRON_BARS.defaultBlockState());
+            }
         }
         set(level, origin.offset(0, OBSERVATION_Y, OBSERVATION_Z),
                 Blocks.LODESTONE.defaultBlockState());
@@ -399,20 +447,78 @@ public final class TerminalDogmaBuilder
                 .setValue(LadderBlock.FACING, Direction.WEST);
         for (int y = -77; y <= OBSERVATION_Y + 1; y++)
         {
-            set(level, origin.offset(24, y, 18),
+            set(level, origin.offset(36, y, 28),
                     Blocks.BLACK_CONCRETE.defaultBlockState());
             if (y > -77)
             {
-                set(level, origin.offset(23, y, 18), ladder);
+                set(level, origin.offset(35, y, 28), ladder);
             }
         }
-        for (int x = 18; x <= 23; x++)
+        for (int x = 28; x <= 35; x++)
         {
-            for (int z = 15; z <= 21; z++)
+            for (int z = 24; z <= 31; z++)
             {
                 set(level, origin.offset(x, -77, z),
                         Blocks.POLISHED_BLACKSTONE.defaultBlockState());
             }
+        }
+    }
+
+    /**
+     * Three open security frames turn the route from Central Dogma into a
+     * readable high-clearance sequence without ever stranding a survival
+     * player behind an unpowered iron door. The western glass looks directly
+     * into the LCL production chamber; the eastern wall remains pressure-rated.
+     */
+    private static void buildQuarantineVestibule(ServerLevel level,
+                                                 BlockPos origin)
+    {
+        int floorY = SHAFT_BOTTOM_Y;
+        for (int z = 3; z <= 19; z++)
+        {
+            for (int x = 21; x <= 27; x++)
+            {
+                set(level, origin.offset(x, floorY, z),
+                        Math.floorMod(z, 6) == 0
+                                ? Blocks.RED_CONCRETE.defaultBlockState()
+                                : Blocks.POLISHED_DEEPSLATE.defaultBlockState());
+                for (int y = floorY + 1; y <= floorY + 6; y++)
+                {
+                    clear(level, origin.offset(x, y, z));
+                }
+                set(level, origin.offset(x, floorY + 7, z),
+                        Math.floorMod(z, 4) == 0
+                                ? Blocks.REDSTONE_LAMP.defaultBlockState()
+                                : Blocks.REINFORCED_DEEPSLATE.defaultBlockState());
+            }
+            for (int y = floorY + 1; y <= floorY + 6; y++)
+            {
+                set(level, origin.offset(20, y, z),
+                        y >= floorY + 2 && y <= floorY + 5
+                                ? Blocks.RED_STAINED_GLASS.defaultBlockState()
+                                : Blocks.REINFORCED_DEEPSLATE.defaultBlockState());
+                set(level, origin.offset(28, y, z),
+                        Blocks.REINFORCED_DEEPSLATE.defaultBlockState());
+            }
+        }
+
+        for (int gateZ : new int[] {3, 11, 19})
+        {
+            for (int x = 20; x <= 28; x++)
+            {
+                for (int y = floorY + 1; y <= floorY + 6; y++)
+                {
+                    boolean aperture = x >= 22 && x <= 26
+                            && y <= floorY + 5;
+                    set(level, origin.offset(x, y, gateZ), aperture
+                            ? Blocks.AIR.defaultBlockState()
+                            : (x == 20 || x == 28
+                            ? Blocks.RED_CONCRETE.defaultBlockState()
+                            : Blocks.IRON_BLOCK.defaultBlockState()));
+                }
+            }
+            set(level, origin.offset(24, floorY + 6, gateZ),
+                    Blocks.REDSTONE_LAMP.defaultBlockState());
         }
     }
 
@@ -422,21 +528,21 @@ public final class TerminalDogmaBuilder
         // Invisible light blocks preserve the black sealed-chamber material
         // while making the white giant, red cross and orange LCL readable.
         // They have no collision and therefore do not interrupt the gallery.
-        for (int x = -18; x <= 18; x += 6)
+        for (int x = -30; x <= 30; x += 6)
         {
-            for (int y : new int[] {-70, -58, -46})
+            for (int y : new int[] {-78, -68, -58, -48, -38})
             {
-                set(level, origin.offset(x, y, -12),
+                set(level, origin.offset(x, y, -18),
                         Blocks.LIGHT.defaultBlockState());
-                set(level, origin.offset(x, y, 10),
+                set(level, origin.offset(x, y, 18),
                         Blocks.LIGHT.defaultBlockState());
             }
         }
-        for (int z = -18; z <= 12; z += 6)
+        for (int z = -34; z <= 28; z += 6)
         {
-            set(level, origin.offset(-16, -54, z),
+            set(level, origin.offset(-30, -54, z),
                     Blocks.LIGHT.defaultBlockState());
-            set(level, origin.offset(16, -54, z),
+            set(level, origin.offset(30, -54, z),
                     Blocks.LIGHT.defaultBlockState());
         }
         for (int x : new int[] {-14, -9, 9, 14})
@@ -447,6 +553,31 @@ public final class TerminalDogmaBuilder
                         Blocks.LIGHT.defaultBlockState());
             }
         }
+        // Stable interior witness used by the structural audit.  This point is
+        // outside the specimen mesh and pedestrian deck, so later facility
+        // passes have no legitimate reason to replace it.
+        set(level, origin.offset(0, -58, -12),
+                Blocks.LIGHT.defaultBlockState());
+    }
+
+    private static void repairChamberAuditAnchors(ServerLevel level,
+                                                   BlockPos origin)
+    {
+        BlockPos crown = origin.offset(0,
+                CHAMBER_CENTRE_Y + CHAMBER_RADIUS_Y, 0);
+        BlockPos northRib = origin.offset(0, CHAMBER_CENTRE_Y,
+                -CHAMBER_RADIUS_Z);
+        if (level.getBlockState(crown).isAir()
+                || level.getBlockState(northRib).isAir())
+        {
+            // A missing pressure-shell anchor means this is not merely a light
+            // overwritten by a route pass; restore the complete sealed shell.
+            buildChamber(level, origin);
+        }
+        set(level, crown, Blocks.CALCITE.defaultBlockState());
+        set(level, northRib, Blocks.POLISHED_BASALT.defaultBlockState());
+        set(level, origin.offset(0, -58, -12),
+                Blocks.LIGHT.defaultBlockState());
     }
 
     private static void buildCentralDogmaShaft(ServerLevel level,
@@ -619,6 +750,7 @@ public final class TerminalDogmaBuilder
     private static void spawnLilith(ServerLevel level, BlockPos origin)
     {
         BlockPos anchor = origin.offset(0, LCL_SURFACE_Y, -22);
+        level.getChunkAt(anchor);
         AABB bounds = specimenBounds(origin);
         var specimens = level.getEntitiesOfClass(LilithEntity.class, bounds);
         LilithEntity specimen;
@@ -708,30 +840,33 @@ public final class TerminalDogmaBuilder
         if (!level.getBlockState(position).equals(state))
         {
             level.setBlock(position, state, UPDATE_CLIENTS);
+            PerformanceCounters.recordWorldBlockWrites(1);
         }
     }
 
-    public record TerminalDogmaAudit(boolean valid, boolean topAccess,
+    public record TerminalDogmaAudit(boolean valid, boolean revision,
+                                     boolean topAccess,
                                      int ladders, boolean shaftApertures,
                                      boolean shaft,
                                      boolean deepAccess, boolean chamber,
                                      boolean lclSeal,
                                      boolean containmentCross,
                                      boolean sealedSpecimen,
-                                     boolean observation)
+                                     boolean observation,
+                                     boolean secureVestibule)
     {
         public String summary()
         {
             return String.format(Locale.ROOT,
-                    "valid=%s topAccess=%s ladder=%d/%d apertures=%s shaft=%s "
+                    "valid=%s revision=%s topAccess=%s ladder=%d/%d apertures=%s shaft=%s "
                             + "deepAccess=%s chamber=%s lclSeal=%s "
-                            + "cross=%s specimen=%s observation=%s",
-                    this.valid, this.topAccess, this.ladders,
+                            + "cross=%s specimen=%s observation=%s vestibule=%s",
+                    this.valid, this.revision, this.topAccess, this.ladders,
                     SHAFT_TOP_Y - SHAFT_BOTTOM_Y + 1,
                     this.shaftApertures, this.shaft,
                     this.deepAccess, this.chamber, this.lclSeal,
                     this.containmentCross, this.sealedSpecimen,
-                    this.observation);
+                    this.observation, this.secureVestibule);
         }
     }
 }

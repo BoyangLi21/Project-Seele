@@ -19,10 +19,12 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.projectseele.ProjectSeele;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.LightTexture;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.packs.resources.Resource;
+import net.minecraft.server.packs.resources.ResourceManager;
 import org.joml.Matrix3f;
 import org.joml.Matrix4f;
 import software.bernie.geckolib.cache.object.GeoBone;
@@ -41,18 +43,20 @@ public final class LocalTriangleMeshLayer<T extends GeoAnimatable> extends GeoRe
     private final Function<T, ResourceLocation> meshSelector;
     private final Function<T, ResourceLocation> textureSelector;
     private final BiPredicate<T, GeoBone> partVisibility;
+    private final boolean fullBright;
 
     public LocalTriangleMeshLayer(GeoRenderer<T> renderer,
                                   Function<T, ResourceLocation> meshSelector)
     {
-        this(renderer, meshSelector, null, (entity, bone) -> true);
+        this(renderer, meshSelector, null, (entity, bone) -> true, false);
     }
 
     public LocalTriangleMeshLayer(GeoRenderer<T> renderer,
                                   Function<T, ResourceLocation> meshSelector,
                                   Function<T, ResourceLocation> textureSelector)
     {
-        this(renderer, meshSelector, textureSelector, (entity, bone) -> true);
+        this(renderer, meshSelector, textureSelector,
+                (entity, bone) -> true, false);
     }
 
     public LocalTriangleMeshLayer(GeoRenderer<T> renderer,
@@ -60,10 +64,20 @@ public final class LocalTriangleMeshLayer<T extends GeoAnimatable> extends GeoRe
                                   Function<T, ResourceLocation> textureSelector,
                                   BiPredicate<T, GeoBone> partVisibility)
     {
+        this(renderer, meshSelector, textureSelector, partVisibility, false);
+    }
+
+    public LocalTriangleMeshLayer(GeoRenderer<T> renderer,
+                                  Function<T, ResourceLocation> meshSelector,
+                                  Function<T, ResourceLocation> textureSelector,
+                                  BiPredicate<T, GeoBone> partVisibility,
+                                  boolean fullBright)
+    {
         super(renderer);
         this.meshSelector = meshSelector;
         this.textureSelector = textureSelector;
         this.partVisibility = partVisibility;
+        this.fullBright = fullBright;
     }
 
     @Override
@@ -94,17 +108,20 @@ public final class LocalTriangleMeshLayer<T extends GeoAnimatable> extends GeoRe
                         this.textureSelector.apply(animatable)));
         float[] values = part.vertices();
         int stride = mesh.stride();
+        int vertexLight = this.fullBright
+                ? LightTexture.FULL_BRIGHT : packedLight;
         for (int index = 0; index + stride * 3 <= values.length; index += stride * 3)
         {
-            emitVertex(targetBuffer, pose, normal, values, index, part, packedLight, packedOverlay);
+            emitVertex(targetBuffer, pose, normal, values, index, part,
+                    vertexLight, packedOverlay);
             emitVertex(targetBuffer, pose, normal, values, index + stride, part,
-                    packedLight, packedOverlay);
+                    vertexLight, packedOverlay);
             emitVertex(targetBuffer, pose, normal, values, index + stride * 2, part,
-                    packedLight, packedOverlay);
+                    vertexLight, packedOverlay);
             // Gecko's entity cutout buffer is QUADS. A repeated third point
             // makes each OBJ triangle an independent degenerate quad.
             emitVertex(targetBuffer, pose, normal, values, index + stride * 2, part,
-                    packedLight, packedOverlay);
+                    vertexLight, packedOverlay);
         }
     }
 
@@ -132,10 +149,100 @@ public final class LocalTriangleMeshLayer<T extends GeoAnimatable> extends GeoRe
         LOAD_ATTEMPTED.clear();
     }
 
+    /**
+     * Parses the large local EVA shells while the resource reload screen still
+     * owns the render thread. Lazy parsing after an EVA first enters view can
+     * otherwise create multi-second frame stalls in an ordinary route walk.
+     */
+    public static void prewarm(ResourceManager resourceManager,
+                               ResourceLocation... meshResources)
+    {
+        long startedAt = System.nanoTime();
+        int loaded = 0;
+        for (ResourceLocation meshResource : meshResources)
+        {
+            if (getMesh(resourceManager, meshResource) != null)
+            {
+                loaded++;
+            }
+        }
+        ProjectSeele.LOGGER.info(
+                "Prewarmed local triangle meshes: loaded={}/{} elapsedMs={}",
+                loaded, meshResources.length,
+                (System.nanoTime() - startedAt) / 1_000_000L);
+    }
+
     public static boolean hasPart(ResourceLocation meshResource, String boneName)
     {
         MeshData mesh = getMesh(meshResource);
         return mesh != null && mesh.parts().containsKey(boneName);
+    }
+
+    /**
+     * Renders a local attachment mesh as one independent world object.
+     * Weapon elevators use this path so the payload stays a real persistent
+     * entity before it is handed to the EVA skeleton.  The mesh is centred on
+     * X/Z and rests on local Y=0; caller scale/orientation remains explicit.
+     */
+    public static boolean renderStandalone(PoseStack poseStack,
+                                           MultiBufferSource bufferSource,
+                                           ResourceLocation meshResource,
+                                           ResourceLocation textureResource,
+                                           int packedLight,
+                                           int packedOverlay)
+    {
+        MeshData mesh = getMesh(meshResource);
+        if (mesh == null)
+        {
+            return false;
+        }
+        VertexConsumer target = bufferSource.getBuffer(
+                RenderType.entityCutoutNoCull(textureResource));
+        Matrix4f pose = poseStack.last().pose();
+        Matrix3f normal = poseStack.last().normal();
+        for (MeshPart part : mesh.parts().values())
+        {
+            float[] values = part.vertices();
+            for (int index = 0; index + mesh.stride() * 3 <= values.length;
+                 index += mesh.stride() * 3)
+            {
+                emitStandaloneVertex(target, pose, normal, values, index,
+                        part, mesh, packedLight, packedOverlay);
+                emitStandaloneVertex(target, pose, normal, values,
+                        index + mesh.stride(), part, mesh,
+                        packedLight, packedOverlay);
+                emitStandaloneVertex(target, pose, normal, values,
+                        index + mesh.stride() * 2, part, mesh,
+                        packedLight, packedOverlay);
+                emitStandaloneVertex(target, pose, normal, values,
+                        index + mesh.stride() * 2, part, mesh,
+                        packedLight, packedOverlay);
+            }
+        }
+        return true;
+    }
+
+    private static void emitStandaloneVertex(VertexConsumer buffer,
+                                             Matrix4f pose, Matrix3f normal,
+                                             float[] values, int index,
+                                             MeshPart part, MeshData mesh,
+                                             int packedLight,
+                                             int packedOverlay)
+    {
+        float absoluteX = values[index] + part.pivotX();
+        float absoluteY = values[index + 1] + part.pivotY();
+        float absoluteZ = values[index + 2] + part.pivotZ();
+        float x = -(absoluteX - mesh.centreX()) / 16.0F;
+        float y = (absoluteY - mesh.minimumY()) / 16.0F;
+        float z = (absoluteZ - mesh.centreZ()) / 16.0F;
+        buffer.vertex(pose, x, y, z)
+                .color(255, 255, 255, 255)
+                .uv(values[index + 3], values[index + 4])
+                .overlayCoords(packedOverlay)
+                .uv2(packedLight)
+                .normal(normal, -values[index + 5], values[index + 6],
+                        values[index + 7])
+                .endVertex();
     }
 
     public static String captureTag(ResourceLocation meshResource)
@@ -146,13 +253,19 @@ public final class LocalTriangleMeshLayer<T extends GeoAnimatable> extends GeoRe
 
     private static MeshData getMesh(ResourceLocation meshLocation)
     {
+        return getMesh(Minecraft.getInstance().getResourceManager(),
+                meshLocation);
+    }
+
+    private static MeshData getMesh(ResourceManager resourceManager,
+                                    ResourceLocation meshLocation)
+    {
         if (LOAD_ATTEMPTED.contains(meshLocation))
         {
             return CACHE.get(meshLocation);
         }
         LOAD_ATTEMPTED.add(meshLocation);
-        Optional<Resource> resource = Minecraft.getInstance().getResourceManager()
-                .getResource(meshLocation);
+        Optional<Resource> resource = resourceManager.getResource(meshLocation);
         if (resource.isEmpty())
         {
             return null;
@@ -200,8 +313,30 @@ public final class LocalTriangleMeshLayer<T extends GeoAnimatable> extends GeoRe
             crc.update(bytes);
             String captureTag = String.format("triangle-mesh-%d-p%d-%08x",
                     triangleCount, parts.size(), crc.getValue());
-            MeshData mesh = new MeshData(stride, Map.copyOf(parts), triangleCount,
-                    captureTag);
+            float minimumX = Float.POSITIVE_INFINITY;
+            float minimumY = Float.POSITIVE_INFINITY;
+            float minimumZ = Float.POSITIVE_INFINITY;
+            float maximumX = Float.NEGATIVE_INFINITY;
+            float maximumZ = Float.NEGATIVE_INFINITY;
+            for (MeshPart part : parts.values())
+            {
+                float[] values = part.vertices();
+                for (int index = 0; index < values.length; index += stride)
+                {
+                    float x = values[index] + part.pivotX();
+                    float y = values[index + 1] + part.pivotY();
+                    float z = values[index + 2] + part.pivotZ();
+                    minimumX = Math.min(minimumX, x);
+                    minimumY = Math.min(minimumY, y);
+                    minimumZ = Math.min(minimumZ, z);
+                    maximumX = Math.max(maximumX, x);
+                    maximumZ = Math.max(maximumZ, z);
+                }
+            }
+            MeshData mesh = new MeshData(stride, Map.copyOf(parts),
+                    triangleCount, captureTag,
+                    (minimumX + maximumX) * 0.5F, minimumY,
+                    (minimumZ + maximumZ) * 0.5F);
             CACHE.put(meshLocation, mesh);
             ProjectSeele.LOGGER.info("Loaded local triangle mesh {}: {}",
                     meshLocation, captureTag);
@@ -215,8 +350,10 @@ public final class LocalTriangleMeshLayer<T extends GeoAnimatable> extends GeoRe
         }
     }
 
-    private record MeshData(int stride, Map<String, MeshPart> parts, int triangleCount,
-                            String captureTag) {}
+    private record MeshData(int stride, Map<String, MeshPart> parts,
+                            int triangleCount, String captureTag,
+                            float centreX, float minimumY,
+                            float centreZ) {}
 
     private record MeshPart(float pivotX, float pivotY, float pivotZ, float[] vertices) {}
 }

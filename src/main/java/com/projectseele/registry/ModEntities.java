@@ -2,9 +2,12 @@ package com.projectseele.registry;
 
 import com.projectseele.ProjectSeele;
 import com.projectseele.entity.EntryPlugCarrierEntity;
+import com.projectseele.entity.EvaScale;
 import com.projectseele.entity.EvaUnit01Entity;
+import com.projectseele.entity.EvaWeaponEntity;
 import com.projectseele.entity.LilithEntity;
 import com.projectseele.entity.NervCarrierPlatformEntity;
+import com.projectseele.entity.NervCommandSeatEntity;
 import com.projectseele.entity.RamielEntity;
 import com.projectseele.entity.SachielEntity;
 import com.projectseele.entity.MassProductionEvaEntity;
@@ -34,21 +37,21 @@ public class ModEntities
     // entities hundreds of blocks up the Tree of Life.
     public static final RegistryObject<EntityType<EvaUnit01Entity>> EVA_UNIT01 = ENTITY_TYPES.register("eva_unit01",
             () -> EntityType.Builder.of(EvaUnit01Entity::new, MobCategory.MISC)
-                    .sized(8.5F, 30.0F)
+                    .sized(EvaScale.NORMAL_WIDTH, EvaScale.NORMAL_HEIGHT)
                     .fireImmune()
                     .clientTrackingRange(64)
                     .build("eva_unit01"));
 
     public static final RegistryObject<EntityType<EvaUnit01Entity>> EVA_UNIT00 = ENTITY_TYPES.register("eva_unit00",
             () -> EntityType.Builder.of(EvaUnit01Entity::new, MobCategory.MISC)
-                    .sized(8.5F, 30.0F)
+                    .sized(EvaScale.NORMAL_WIDTH, EvaScale.NORMAL_HEIGHT)
                     .fireImmune()
                     .clientTrackingRange(12)
                     .build("eva_unit00"));
 
     public static final RegistryObject<EntityType<EvaUnit01Entity>> EVA_UNIT02 = ENTITY_TYPES.register("eva_unit02",
             () -> EntityType.Builder.of(EvaUnit01Entity::new, MobCategory.MISC)
-                    .sized(8.5F, 30.0F)
+                    .sized(EvaScale.NORMAL_WIDTH, EvaScale.NORMAL_HEIGHT)
                     .fireImmune()
                     .clientTrackingRange(12)
                     .build("eva_unit02"));
@@ -57,11 +60,23 @@ public class ModEntities
             ENTITY_TYPES.register("entry_plug_carrier",
                     () -> EntityType.Builder.of(EntryPlugCarrierEntity::new,
                                     MobCategory.MISC)
-                            .sized(1.5F, 6.0F)
+                            .sized(EvaScale.ENTRY_PLUG_WIDTH,
+                                    EvaScale.ENTRY_PLUG_LENGTH)
                             .fireImmune()
                             .clientTrackingRange(24)
                             .updateInterval(1)
                             .build("entry_plug_carrier"));
+
+    public static final RegistryObject<EntityType<EvaWeaponEntity>>
+            EVA_WEAPON = ENTITY_TYPES.register("eva_weapon",
+                    () -> EntityType.Builder.of(EvaWeaponEntity::new,
+                                    MobCategory.MISC)
+                            .sized(3.0F, 20.0F)
+                            .fireImmune()
+                            .clientTrackingRange(64)
+                            .updateInterval(1)
+                            .setShouldReceiveVelocityUpdates(false)
+                            .build("eva_weapon"));
 
     public static final RegistryObject<EntityType<NervCarrierPlatformEntity>>
             NERV_CARRIER_PLATFORM = ENTITY_TYPES.register(
@@ -69,11 +84,35 @@ public class ModEntities
                     () -> EntityType.Builder.of(NervCarrierPlatformEntity::new,
                                     MobCategory.MISC)
                             .noSave()
-                            .sized(11.0F, 0.6F)
+                            .sized(EvaScale.CARRIER_WIDTH, 0.6F)
                             .clientTrackingRange(32)
                             .updateInterval(1)
                             .setShouldReceiveVelocityUpdates(false)
                             .build("nerv_carrier_platform"));
+
+    public static final RegistryObject<EntityType<NervCarrierPlatformEntity>>
+            NERV_LIFT_CABIN = ENTITY_TYPES.register(
+                    "nerv_lift_cabin",
+                    () -> EntityType.Builder.of(NervCarrierPlatformEntity::new,
+                                    MobCategory.MISC)
+                            .sized(5.0F, 4.0F)
+                            .fireImmune()
+                            .clientTrackingRange(64)
+                            .updateInterval(1)
+                            .setShouldReceiveVelocityUpdates(false)
+                            .build("nerv_lift_cabin"));
+
+    public static final RegistryObject<EntityType<NervCommandSeatEntity>>
+            NERV_COMMAND_SEAT = ENTITY_TYPES.register(
+                    "nerv_command_seat",
+                    () -> EntityType.Builder.of(NervCommandSeatEntity::new,
+                                    MobCategory.MISC)
+                            .noSave()
+                            .sized(0.55F, 0.35F)
+                            .clientTrackingRange(12)
+                            .updateInterval(20)
+                            .setShouldReceiveVelocityUpdates(false)
+                            .build("nerv_command_seat"));
 
     public static final RegistryObject<EntityType<TrainingPilotEntity>> TRAINING_PILOT =
             ENTITY_TYPES.register("training_pilot",

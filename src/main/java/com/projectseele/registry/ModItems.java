@@ -50,6 +50,16 @@ public class ModItems
             () -> new BlockItem(ModBlocks.UMBILICAL_PYLON.get(),
                     new Item.Properties().fireResistant()));
 
+    public static final RegistryObject<Item> CLEAR_GLASS = ITEMS.register(
+            "clear_glass",
+            () -> new BlockItem(ModBlocks.CLEAR_GLASS.get(),
+                    new Item.Properties()));
+
+    public static final RegistryObject<Item> COMMAND_SEAT_BACK = ITEMS.register(
+            "command_seat_back",
+            () -> new BlockItem(ModBlocks.COMMAND_SEAT_BACK.get(),
+                    new Item.Properties()));
+
     public static final RegistryObject<Item> POSITRON_RIFLE = ITEMS.register("positron_rifle",
             () -> new PositronRifleItem(new Item.Properties().stacksTo(1)));
 

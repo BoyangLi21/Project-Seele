@@ -12,6 +12,17 @@ public final class SeeleConfig
     public static final ForgeConfigSpec COMMON_SPEC;
     public static final ForgeConfigSpec CLIENT_SPEC;
 
+    // ----- common: performance rescue -----
+    public static final ForgeConfigSpec.BooleanValue RESCUE_MODE;
+    public static final ForgeConfigSpec.BooleanValue LIVE_COCKPIT_VIDEO;
+    public static final ForgeConfigSpec.BooleanValue DUMMY_PILOT_VIDEO;
+    public static final ForgeConfigSpec.BooleanValue VIDEO_FRAME_RELAY;
+    public static final ForgeConfigSpec.BooleanValue DYNAMIC_TOKYO3_RETRACTION;
+    public static final ForgeConfigSpec.BooleanValue DYNAMIC_LCL_BLOCKS;
+    public static final ForgeConfigSpec.BooleanValue DYNAMIC_BRIDGE_BLOCKS;
+    public static final ForgeConfigSpec.BooleanValue RUNTIME_WORLD_REPAIR;
+    public static final ForgeConfigSpec.BooleanValue TRANSPARENT_GEOFRONT_SHELL;
+
     // ----- common: Ramiel -----
     public static final ForgeConfigSpec.DoubleValue RAMIEL_MAX_HEALTH;
     public static final ForgeConfigSpec.DoubleValue RAMIEL_ARMOR;
@@ -82,6 +93,12 @@ public final class SeeleConfig
     // ----- common: EVA armament logistics -----
     public static final ForgeConfigSpec.BooleanValue EVA_ARMAMENT_RACK_ENFORCES_LOADOUT;
 
+    public static final ForgeConfigSpec.DoubleValue PLUG_SOCKET_HEIGHT;
+    public static final ForgeConfigSpec.DoubleValue PLUG_SOCKET_REAR_OFFSET;
+    public static final ForgeConfigSpec.DoubleValue PLUG_APPROACH_CLEARANCE;
+    public static final ForgeConfigSpec.DoubleValue PLUG_APPROACH_HEIGHT;
+    public static final ForgeConfigSpec.BooleanValue PLUG_MECHANICAL_ARM;
+
     // ----- client -----
     public static final ForgeConfigSpec.BooleanValue ALARM_VIGNETTE;
     public static final ForgeConfigSpec.DoubleValue FX_INTENSITY;
@@ -89,6 +106,45 @@ public final class SeeleConfig
     static
     {
         ForgeConfigSpec.Builder common = new ForgeConfigSpec.Builder();
+
+        common.push("performance");
+        RESCUE_MODE = common
+                .comment("Master safety switch for legacy Project SEELE worlds.",
+                        "When true, all expensive runtime features below stay off even if an old config enables them.")
+                .define("rescueMode", false);
+        LIVE_COCKPIT_VIDEO = common
+                .comment("Allow a real pilot client to read back and upload cockpit frames.",
+                        "Ignored while rescueMode is true.")
+                .define("liveCockpitVideo", true);
+        DUMMY_PILOT_VIDEO = common
+                .comment("Allow the server to raycast and encode synthetic pilot frames.",
+                        "Ignored while rescueMode is true.")
+                .define("dummyPilotVideo", true);
+        VIDEO_FRAME_RELAY = common
+                .comment("Allow the server to relay cockpit PNG frames to command-room viewers.",
+                        "Ignored while rescueMode is true.")
+                .define("videoFrameRelay", true);
+        DYNAMIC_TOKYO3_RETRACTION = common
+                .comment("Allow Tokyo-3 towers to rewrite world blocks while moving.",
+                        "Ignored while rescueMode is true.")
+                .define("dynamicTokyo3Retraction", true);
+        DYNAMIC_LCL_BLOCKS = common
+                .comment("Allow cage LCL levels to be animated with block writes.",
+                        "Ignored while rescueMode is true.")
+                .define("dynamicLclBlocks", true);
+        DYNAMIC_BRIDGE_BLOCKS = common
+                .comment("Allow boarding bridges and EVA carriers to animate with block writes.",
+                        "Ignored while rescueMode is true.")
+                .define("dynamicBridgeBlocks", true);
+        RUNTIME_WORLD_REPAIR = common
+                .comment("Allow gameplay paths to repair or rebuild facility geometry.",
+                        "Keep false; explicit administrator setup commands own generation.")
+                .define("runtimeWorldRepair", false);
+        TRANSPARENT_GEOFRONT_SHELL = common
+                .comment("Allow future generators to build the legacy transparent GeoFront sphere.",
+                        "The rescue pass does not rewrite an existing save; migration removes it later.")
+                .define("transparentGeoFrontShell", false);
+        common.pop();
 
         common.push("ramiel");
         RAMIEL_MAX_HEALTH = common
@@ -279,6 +335,30 @@ public final class SeeleConfig
                 .define("requireRackLoadout", false);
         common.pop();
 
+        // Where the capsule visibly sits and travels. The mesh is authored in the
+        // airframe's own space, so these are the numbers to tune by eye in game
+        // rather than in code; they take effect on the next world load.
+        common.push("entry_plug");
+        PLUG_SOCKET_HEIGHT = common
+                .comment("Legacy 30-block authoring height of the dorsal entry-plug socket.",
+                        "Runtime multiplies this by the shared 2.0 EVA world scale.")
+                .defineInRange("socketHeight", 21.5D, 0.0D, 64.0D);
+        PLUG_SOCKET_REAR_OFFSET = common
+                .comment("Legacy authoring offset behind the EVA centre.",
+                        "Runtime multiplies this by the shared 2.0 EVA world scale.")
+                .defineInRange("socketRearOffset", 2.0D, 0.0D, 32.0D);
+        PLUG_APPROACH_CLEARANCE = common
+                .comment("Clear space the crane holds behind the socket before it drives the plug in.")
+                .defineInRange("approachClearance", 7.0D, 0.0D, 32.0D);
+        PLUG_APPROACH_HEIGHT = common
+                .comment("How far above the socket the crane carries the plug before lowering it in.",
+                        "Zero drives it in flat; larger values arrive from overhead like a gantry hoist.")
+                .defineInRange("approachHeight", 6.0D, 0.0D, 32.0D);
+        PLUG_MECHANICAL_ARM = common
+                .comment("Draw the physical crane arm and cables that carry the plug.")
+                .define("mechanicalArm", true);
+        common.pop();
+
         COMMON_SPEC = common.build();
 
         ForgeConfigSpec.Builder client = new ForgeConfigSpec.Builder();
@@ -291,6 +371,42 @@ public final class SeeleConfig
                 .defineInRange("fxIntensity", 1.0D, 0.0D, 1.0D);
         client.pop();
         CLIENT_SPEC = client.build();
+    }
+
+    public static boolean rescueMode()
+    {
+        return RESCUE_MODE.get();
+    }
+
+    public static boolean liveCockpitVideoEnabled()
+    {
+        return !rescueMode() && LIVE_COCKPIT_VIDEO.get();
+    }
+
+    public static boolean dummyPilotVideoEnabled()
+    {
+        return !rescueMode() && DUMMY_PILOT_VIDEO.get();
+    }
+
+    public static boolean videoFrameRelayEnabled()
+    {
+        return !rescueMode() && VIDEO_FRAME_RELAY.get();
+    }
+
+    public static boolean dynamicTokyo3RetractionEnabled()
+    {
+        return !rescueMode() && DYNAMIC_TOKYO3_RETRACTION.get();
+    }
+
+    public static boolean dynamicEvaFacilityBlocksEnabled()
+    {
+        return !rescueMode() && DYNAMIC_LCL_BLOCKS.get()
+                && DYNAMIC_BRIDGE_BLOCKS.get();
+    }
+
+    public static boolean runtimeWorldRepairEnabled()
+    {
+        return !rescueMode() && RUNTIME_WORLD_REPAIR.get();
     }
 
     private SeeleConfig() {}

@@ -22,6 +22,8 @@ public class ModCreativeTabs
                         output.accept(ModItems.S2_ENGINE_FRAGMENT.get());
                         output.accept(ModItems.RETRACTABLE_BUILDING_CORE.get());
                         output.accept(ModItems.UMBILICAL_PYLON.get());
+                        output.accept(ModItems.CLEAR_GLASS.get());
+                        output.accept(ModItems.COMMAND_SEAT_BACK.get());
                         output.accept(ModItems.EVA_ARMAMENT_RACK.get());
                         output.accept(ModItems.EVA_PROGRESSIVE_KNIFE.get());
                         output.accept(ModItems.EVA_PALLET_RIFLE.get());

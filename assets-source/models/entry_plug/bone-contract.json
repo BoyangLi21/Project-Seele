@@ -1,0 +1,28 @@
+{
+  "format_version": 2,
+  "model_dimensions": [8.0, 8.0, 50.0],
+  "render_scale": 3.2,
+  "coordinate_frame": {
+    "origin": "insertion_tip",
+    "right_axis": "+X",
+    "hatch_top_axis": "+Y",
+    "outward_axis": "+Z",
+    "insertion_axis": "-Z"
+  },
+  "parts": {
+    "entry_plug": {
+      "pivot": [0.0, 0.0, 0.0],
+      "role": "pressure shell, real opening and cockpit"
+    },
+    "plug_hatch_l": {
+      "pivot": [0.0, 0.0, 0.0],
+      "role": "left sliding pressure door"
+    },
+    "plug_hatch_r": {
+      "pivot": [0.0, 0.0, 0.0],
+      "role": "right sliding pressure door"
+    }
+  },
+  "carrier_collision_blocks": [2.0, 10.0],
+  "interaction_range_blocks": 14.0
+}

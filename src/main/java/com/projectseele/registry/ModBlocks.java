@@ -1,11 +1,13 @@
 package com.projectseele.registry;
 
 import com.projectseele.ProjectSeele;
+import com.projectseele.world.CommandSeatBackBlock;
 import com.projectseele.world.EvaArmamentRackBlock;
 import com.projectseele.world.RetractableBuildingCoreBlock;
 import com.projectseele.world.UmbilicalPylonBlock;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.GlassBlock;
 import net.minecraft.world.level.block.LiquidBlock;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraftforge.registries.DeferredRegister;
@@ -36,6 +38,31 @@ public final class ModBlocks
             () -> new UmbilicalPylonBlock(BlockBehaviour.Properties.copy(
                     Blocks.POLISHED_DEEPSLATE).strength(8.0F, 1200.0F)
                     .lightLevel(state -> 6).noOcclusion()));
+
+    /** Scratch-free structural glazing for command-room sight lines. */
+    public static final RegistryObject<Block> CLEAR_GLASS = BLOCKS.register(
+            "clear_glass",
+            () -> new GlassBlock(BlockBehaviour.Properties.copy(Blocks.GLASS)
+                    .strength(1.2F, 8.0F).noOcclusion()
+                    .isValidSpawn((state, level, position, type) -> false)
+                    .isRedstoneConductor((state, level, position) -> false)
+                    .isSuffocating((state, level, position) -> false)
+                    .isViewBlocking((state, level, position) -> false)));
+
+    /**
+     * Inert two-block command-chair backrest.  Replaces the iron trapdoors the
+     * command dais used to lean on, which every redstone pulse in the console
+     * bank swung open.
+     */
+    public static final RegistryObject<Block> COMMAND_SEAT_BACK = BLOCKS.register(
+            "command_seat_back",
+            () -> new CommandSeatBackBlock(BlockBehaviour.Properties.copy(
+                    Blocks.POLISHED_DEEPSLATE).strength(2.0F, 12.0F)
+                    .noOcclusion()
+                    .isRedstoneConductor((state, level, position) -> false)
+                    .isSuffocating((state, level, position) -> false)
+                    .isViewBlocking((state, level, position) -> false)));
+
     public static final RegistryObject<LiquidBlock> LCL_BLOCK = BLOCKS.register(
             "lcl",
             () -> new LiquidBlock(ModFluids.LCL_SOURCE,
