@@ -1,0 +1,14 @@
+{
+  "parent": "projectseele:block/command_seat_back_lower",
+  "display": {
+    "gui": {
+      "rotation": [30, 200, 0],
+      "translation": [0, 1, 0],
+      "scale": [0.7, 0.7, 0.7]
+    },
+    "fixed": {
+      "rotation": [0, 180, 0],
+      "scale": [0.6, 0.6, 0.6]
+    }
+  }
+}

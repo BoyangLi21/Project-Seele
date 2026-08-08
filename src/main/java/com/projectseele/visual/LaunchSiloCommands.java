@@ -51,10 +51,9 @@ public final class LaunchSiloCommands
             source.sendFailure(Component.literal("Dismount before constructing a launch complex."));
             return 0;
         }
-        int minSurface = level.getMinBuildHeight() + 36;
-        // Launched base rests two blocks above the surface; the 30-block
-        // hitbox therefore needs 32 blocks plus a small ceiling margin.
-        int maxSurface = level.getMaxBuildHeight() - 34;
+        int minSurface = level.getMinBuildHeight() + 52;
+        // The 60-block frame and carrier require the shaft through origin+22.
+        int maxSurface = level.getMaxBuildHeight() - 72;
         if (maxSurface < minSurface)
         {
             source.sendFailure(Component.literal("This dimension is too shallow for the launch complex."));
@@ -62,7 +61,7 @@ public final class LaunchSiloCommands
         }
         int surfaceY = Math.max(minSurface, Math.min(maxSurface, player.blockPosition().getY() - 1));
         BlockPos origin = new BlockPos(player.blockPosition().getX(), surfaceY, player.blockPosition().getZ());
-        AABB buildArea = new AABB(origin).inflate(52.0D, 40.0D, 52.0D);
+        AABB buildArea = new AABB(origin).inflate(80.0D, 64.0D, 80.0D);
         boolean existingComplex = !level.getEntitiesOfClass(EvaUnit01Entity.class, buildArea,
                 unit -> unit.isAlive() && unit.findLaunchBed() != null).isEmpty();
         if (existingComplex)
@@ -83,9 +82,9 @@ public final class LaunchSiloCommands
         }
 
         // Unit-01 is the centre bay. Leave the tester on its high dorsal
-        // gantry, not at the launch bed thirty blocks below ground.
-        player.teleportTo(level, origin.getX() + 0.5D, origin.getY() - 3.0D,
-                origin.getZ() + 6.5D, 180.0F, 16.0F);
+        // gantry, not at the launch bed forty-five blocks below ground.
+        player.teleportTo(level, origin.getX() + 0.5D, origin.getY() + 4.0D,
+                origin.getZ() + 14.5D, 180.0F, 16.0F);
         source.sendSuccess(() -> Component.literal(
                 "NERV launch complex ready. Use /seele silo board to start insertion."), false);
         return 1;
@@ -97,8 +96,8 @@ public final class LaunchSiloCommands
         ServerPlayer player = source.getPlayerOrException();
         ServerLevel level = player.serverLevel();
         player.stopRiding();
-        int minSurface = level.getMinBuildHeight() + 36;
-        int maxSurface = level.getMaxBuildHeight() - 34;
+        int minSurface = level.getMinBuildHeight() + 52;
+        int maxSurface = level.getMaxBuildHeight() - 72;
         int surfaceY = Math.max(minSurface, Math.min(maxSurface, 96));
         BlockPos origin = new BlockPos(0, surfaceY, 0);
 
@@ -122,8 +121,8 @@ public final class LaunchSiloCommands
             throw new IllegalStateException(
                     "Visual launch complex failed structural audit: " + setupAudit.summary());
         }
-        player.teleportTo(level, origin.getX() + 0.5D, origin.getY() - 3.0D,
-                origin.getZ() + 6.5D, 180.0F, 16.0F);
+        player.teleportTo(level, origin.getX() + 0.5D, origin.getY() + 4.0D,
+                origin.getZ() + 14.5D, 180.0F, 16.0F);
         source.sendSuccess(() -> Component.literal(
                 "Repeatable NERV launch complex ready for visual capture."), false);
         return 1;
@@ -144,11 +143,12 @@ public final class LaunchSiloCommands
             throw new IllegalStateException("Nearest EVA is not on a NERV launch bed");
         }
 
-        // The floor is bed+26 and the pilot stands at bed+27 beside the
+        // The floor is bed+48 and the pilot stands at bed+49 beside the
         // Tiger synthetic plug pivot. The command bypasses only the aim cone;
         // physical rear/height/distance/line-of-sight gates still run.
-        player.teleportTo(player.serverLevel(), bed.getX() + 0.5D, bed.getY() + 27.0D,
-                bed.getZ() + 6.5D, 180.0F, -8.0F);
+        player.teleportTo(player.serverLevel(), bed.getX() + 0.5D,
+                bed.getY() + 49.0D, bed.getZ() + 16.5D,
+                180.0F, -8.0F);
         unit.tryEnterFromPlug(player, false);
         if (player.getVehicle() != unit)
         {
@@ -228,18 +228,19 @@ public final class LaunchSiloCommands
                 validBeds++;
             }
 
-            // Bed is origin-30. The catwalk floor is origin-4 (bed+26),
-            // with the player standing at bed+27 and the lift spanning +4..27.
-            boolean gantryFloor = !level.getBlockState(bed.offset(0, 26, 6)).isAir();
+            // Bed is origin-45. The catwalk floor is origin+3 (bed+48),
+            // with the player standing at bed+49 and the lift spanning +5..49.
+            boolean gantryFloor = !level.getBlockState(
+                    bed.offset(0, 48, 16)).isAir();
             boolean ladderContinuous = true;
             BlockPos firstMissingLadder = null;
-            for (int y = 4; y <= 27; y++)
+            for (int y = 5; y <= 49; y++)
             {
-                if (!level.getBlockState(bed.offset(0, y, 13))
+                if (!level.getBlockState(bed.offset(0, y, 30))
                         .is(net.minecraft.world.level.block.Blocks.LADDER))
                 {
                     ladderContinuous = false;
-                    firstMissingLadder = bed.offset(0, y, 13);
+                    firstMissingLadder = bed.offset(0, y, 30);
                     break;
                 }
             }
@@ -258,13 +259,13 @@ public final class LaunchSiloCommands
             }
 
             boolean clear = true;
-            // The Unit is 8.5 blocks wide. Audit an 11x11 carrier envelope,
-            // not just the centreline, for the full rise to the surface deck.
-            for (int y = 1; y <= 31 && clear; y++)
+            // Audit the complete 29x29 moving carrier, not just the airframe,
+            // for the full rise to the surface deck.
+            for (int y = 1; y <= 64 && clear; y++)
             {
-                for (int x = -5; x <= 5 && clear; x++)
+                for (int x = -14; x <= 14 && clear; x++)
                 {
-                    for (int z = -5; z <= 5; z++)
+                    for (int z = -14; z <= 14; z++)
                     {
                         if (!level.getBlockState(bed.offset(x, y, z)).isAir())
                         {

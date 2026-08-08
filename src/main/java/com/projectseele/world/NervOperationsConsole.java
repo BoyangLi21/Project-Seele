@@ -39,6 +39,90 @@ import net.minecraft.world.phys.Vec3;
 public final class NervOperationsConsole
 {
     public static final int CONTROL_COUNT = 7;
+    public static final int S20_CONTROL_COUNT = 15;
+
+    /**
+     * Exact controls physically authored by the human on the S20 glass dais.
+     * The map positions, coloured unit glass and button types are authority;
+     * no runtime installer is allowed to move or replace these blocks.
+     */
+    private static final BlockPos[] S20_CONTROLS = {
+            new BlockPos(28, -405, 277), // city rise
+            new BlockPos(29, -405, 277), // city lower
+            new BlockPos(28, -407, 288), // EVA-00 screen
+            new BlockPos(29, -407, 288), // EVA-01 screen
+            new BlockPos(30, -407, 288), // EVA-02 screen
+            new BlockPos(31, -407, 288), // lower tactical screen
+            new BlockPos(31, -406, 286), // EVA-02 prepare, red
+            new BlockPos(30, -406, 286), // EVA-01 prepare, purple
+            new BlockPos(29, -406, 286), // EVA-00 prepare, yellow
+            new BlockPos(31, -407, 286), // EVA-02 launch, red
+            new BlockPos(30, -407, 286), // EVA-01 launch, purple
+            new BlockPos(29, -407, 286), // EVA-00 launch, yellow
+            new BlockPos(28, -407, 286), // EVA-02 recover, red
+            new BlockPos(27, -407, 286), // EVA-01 recover, purple
+            new BlockPos(26, -407, 286)  // EVA-00 recover, yellow
+    };
+    /**
+     * Current physical controls on the human-authored glass command dais.
+     *
+     * <p>The dais was rebuilt by hand after the original coordinate contract
+     * above was recorded.  The blocks themselves are now the authority: two
+     * city keys, four display keys and three three-key EVA banks.  Keep the
+     * former coordinates as compatibility aliases, but bind these real
+     * buttons without moving or regenerating a single map block.</p>
+     */
+    private static final BlockPos[] S20_AUTHORED_CONTROLS = {
+            new BlockPos(26, -405, 277), // city rise, warped
+            new BlockPos(30, -405, 277), // city lower, crimson
+            /*
+             * The display keys moved one course down and one block in, to the
+             * row the operator can reach from the chair at (28,-409,288).  The
+             * user rebuilt the same five button types in the same x order, so
+             * the mapping carries over unchanged; the old row at y=-408 z=290
+             * is still physically there but is no longer bound to anything.
+             */
+            new BlockPos(30, -409, 289), // EVA-00 screen, oak
+            new BlockPos(29, -409, 289), // EVA-01 screen, warped
+            new BlockPos(27, -409, 289), // EVA-02 screen, crimson
+            new BlockPos(26, -409, 289), // lower tactical screen, bamboo
+            new BlockPos(32, -408, 285), // EVA-02 prepare
+            new BlockPos(32, -408, 286), // EVA-01 prepare
+            new BlockPos(32, -408, 287), // EVA-00 prepare
+            new BlockPos(32, -407, 285), // EVA-02 launch
+            new BlockPos(32, -407, 286), // EVA-01 launch
+            new BlockPos(32, -407, 287), // EVA-00 launch
+            new BlockPos(24, -408, 285), // EVA-02 recover
+            new BlockPos(24, -408, 286), // EVA-01 recover
+            new BlockPos(24, -408, 287)  // EVA-00 recover
+    };
+    /**
+     * Latest human-authored ground-recovery row.  Unlike the older red-to-
+     * yellow bank, this row is ordered EVA-00, EVA-01, EVA-02 along +Z.
+     * These are aliases only; runtime must never replace the map blocks.
+     */
+    private static final BlockPos[] S20_GROUND_RECOVERY_CONTROLS = {
+            new BlockPos(24, -407, 285), // EVA-00 recover
+            new BlockPos(24, -407, 286), // EVA-01 recover
+            new BlockPos(24, -407, 287)  // EVA-02 recover
+    };
+    /**
+     * Human-added fifth display key, a stone button dropped in the middle of
+     * the four screen keys.  It is kept out of the two parallel control arrays
+     * on purpose: actions 6..14 are positional, so appending a sixteenth entry
+     * there would renumber the whole EVA bank.
+     */
+    private static final BlockPos S20_CITY_SCREEN_CONTROL =
+            new BlockPos(28, -409, 289);
+    private static final int S20_CITY_SCREEN_ACTION = 15;
+    private static final String[] S20_IDS = {
+            "city_rise", "city_lower",
+            "screen_unit00", "screen_unit01", "screen_unit02",
+            "screen_tactical",
+            "unit02_prepare", "unit01_prepare", "unit00_prepare",
+            "unit02_launch", "unit01_launch", "unit00_launch",
+            "unit02_recover", "unit01_recover", "unit00_recover"
+    };
 
     private static final int UPDATE_CLIENTS = Block.UPDATE_CLIENTS;
     private static final int CONTROL_Y = 15;
@@ -48,6 +132,21 @@ public final class NervOperationsConsole
     private static final int LEGACY_CONTROL_Z = 52;
     private static final int FIRST_CONTROL_X = -12;
     private static final int CONTROL_SPACING = 4;
+    /*
+     * Seven real polished-blackstone switches already present on the three
+     * operator desks in nerv_command_left.nbt.  Keeping the semantic controls
+     * on these authored consoles avoids the floating coloured test plinth
+     * that the first Facility-v2 adapter produced.
+     */
+    private static final int[][] IMPORTED_V2_CONTROL_LOCAL = {
+            {25, 43, 64}, // sortie preparation
+            {15, 43, 68}, // Unit-00 launch
+            {25, 43, 68}, // Unit-01 launch
+            {37, 43, 68}, // Unit-02 launch
+            {27, 43, 64}, // facility navigation / status
+            {22, 43, 71}, // battle start
+            {30, 43, 71}  // battle abort
+    };
     private static final String LABEL_TAG_PREFIX =
             "projectseele.nerv_control.";
     private static final String[] IDS = {
@@ -151,6 +250,71 @@ public final class NervOperationsConsole
         }
     }
 
+    /**
+     * Binds seven controls already authored into the 1:1 imported command
+     * module.  The asset is rotated 180 degrees and raised by 97 blocks, so
+     * listening at the retired coordinates made every visible key inert.
+     *
+     * <p>This deliberately does not build another platform: the imported
+     * Gendo/operator dais remains the visual authority.</p>
+     */
+    public static void installImportedV2Controls(ServerLevel level,
+                                                 BlockPos centre)
+    {
+        BlockState button = Blocks.POLISHED_BLACKSTONE_BUTTON
+                .defaultBlockState()
+                .setValue(ButtonBlock.FACE, AttachFace.FLOOR)
+                .setValue(ButtonBlock.FACING, Direction.SOUTH);
+        for (int index = 0; index < CONTROL_COUNT; index++)
+        {
+            BlockPos position = importedV2ControlPosition(centre, index);
+            BlockPos support = position.below();
+            if (!(level.getBlockState(position).getBlock()
+                    instanceof ButtonBlock))
+            {
+                if (level.getBlockState(support).isAir())
+                {
+                    setIfDifferent(level, support,
+                            Blocks.POLISHED_BLACKSTONE.defaultBlockState(),
+                            UPDATE_CLIENTS);
+                }
+                setIfDifferent(level, position, button, UPDATE_CLIENTS);
+            }
+
+            String tag = LABEL_TAG_PREFIX + "v2." + IDS[index];
+            List<Display.TextDisplay> matches = importedLabels(
+                    level, centre, tag);
+            Display.TextDisplay label;
+            boolean created = matches.isEmpty();
+            if (created)
+            {
+                label = EntityType.TEXT_DISPLAY.create(level);
+                if (label == null)
+                {
+                    continue;
+                }
+                label.addTag(tag);
+                label.setNoGravity(true);
+                label.setInvulnerable(true);
+                label.setSilent(true);
+            }
+            else
+            {
+                label = matches.get(0);
+                for (int duplicate = 1; duplicate < matches.size();
+                     duplicate++)
+                {
+                    matches.get(duplicate).discard();
+                }
+            }
+            updateLabel(label, position, index);
+            if (created)
+            {
+                level.addFreshEntity(label);
+            }
+        }
+    }
+
     /** Continuous supported dais and stair approach for every command key. */
     private static void buildControlPlatform(ServerLevel level, BlockPos origin)
     {
@@ -212,6 +376,64 @@ public final class NervOperationsConsole
                 }
             }
         }
+        railPlatformEdges(level, origin, minX, maxX, floorY);
+    }
+
+    /**
+     * Rails and skirts the command dais.
+     *
+     * <p>The dais is an elevated deck with a seven-wide approach stair; the
+     * rest of its rim was an unguarded five-block drop, which is why walking
+     * off the back of the operator row dropped the player out of the room.
+     * Only rim cells that have no floor of their own are closed, so the
+     * imported command module's own geometry is never overwritten.
+     */
+    private static void railPlatformEdges(ServerLevel level, BlockPos origin,
+                                           int minX, int maxX, int floorY)
+    {
+        int minZ = CONTROL_Z - 3;
+        int maxZ = CONTROL_Z + 3;
+        for (int x = minX - 1; x <= maxX + 1; x++)
+        {
+            for (int z = minZ - 1; z <= maxZ + 1; z++)
+            {
+                boolean onDeck = x >= minX && x <= maxX && z >= minZ && z <= maxZ;
+                boolean adjacent = x >= minX - 1 && x <= maxX + 1
+                        && z >= minZ - 1 && z <= maxZ + 1;
+                if (onDeck || !adjacent)
+                {
+                    continue;
+                }
+                // The authored approach stair is the one intended way off.
+                if (z == maxZ + 1 && Math.abs(x) <= 3)
+                {
+                    continue;
+                }
+                BlockPos rim = origin.offset(x, floorY, z);
+                if (level.getBlockState(rim).isFaceSturdy(level, rim, Direction.UP))
+                {
+                    continue;
+                }
+                for (int y = 1; y <= 2; y++)
+                {
+                    setIfDifferent(level, rim.above(y),
+                            Blocks.IRON_BARS.defaultBlockState(), UPDATE_CLIENTS);
+                }
+                // Skirt the exposed underside so the dais reads as built into
+                // the room rather than as a slab hanging in mid-air.
+                for (int y = 0; y >= -4; y--)
+                {
+                    BlockPos skirt = rim.above(y);
+                    if (!level.getBlockState(skirt).isAir())
+                    {
+                        break;
+                    }
+                    setIfDifferent(level, skirt,
+                            Blocks.POLISHED_BLACKSTONE_BRICKS.defaultBlockState(),
+                            UPDATE_CLIENTS);
+                }
+            }
+        }
     }
 
     private static boolean isControlColumn(int relativeX, int relativeZ)
@@ -232,14 +454,70 @@ public final class NervOperationsConsole
         {
             return false;
         }
-        BlockPos origin = IntegratedNervMapBuilder.GEOFRONT_ORIGIN;
-        int action = actionAt(origin, position);
+        ServerLevel level = player.serverLevel();
+        if (FacilityWorldPolicy.isS20Rebuild(level.getServer()))
+        {
+            int s20Action = s20ActionAt(position);
+            if (s20Action >= 0)
+            {
+                return handleS20Action(player, level, s20Action, position);
+            }
+        }
+        /*
+         * The imported command asset is placed relative to Facility-v2's
+         * manifest centre (Y=0), not the legacy mechanical origin (Y=-444).
+         * X/Z happen to match, which concealed this as a pure vertical
+         * 444-block miss and made every correctly rendered desk switch inert.
+         */
+        BlockPos origin = FacilityWorldPolicy.isCleanRebuild(
+                level.getServer())
+                ? FacilityV2SavedData.get(level).manifest().centre()
+                : IntegratedNervMapBuilder.GEOFRONT_ORIGIN;
+        int action = actionAt(level, origin, position);
         if (action < 0)
         {
             return false;
         }
 
-        ServerLevel level = player.serverLevel();
+        FacilityReadinessService.Operation operation = switch (action)
+        {
+            case 0 -> FacilityReadinessService.Operation.PREPARE;
+            case 1, 2, 3 -> FacilityReadinessService.Operation.LAUNCH;
+            case 4 -> FacilityReadinessService.Operation.NAVIGATE;
+            case 5 -> FacilityReadinessService.Operation.BATTLE_START;
+            case 6 -> FacilityReadinessService.Operation.BATTLE_ABORT;
+            default -> FacilityReadinessService.Operation.NAVIGATE;
+        };
+        int variant = action >= 1 && action <= 3 ? action - 1 : -1;
+        if (variant >= 0
+                && FacilityWorldPolicy.isS20Rebuild(level.getServer()))
+        {
+            /*
+             * A command-room operator is several chunks away from the compact
+             * plant. Resolve the requested line before the read-only gate
+             * checks its canonical UUID; otherwise a correctly parked or
+             * silo-locked EVA looks missing only because its chunk slept.
+             */
+            EvaLogisticsDirector.loadControlTarget(level, variant);
+        }
+        FacilityReadinessService.FacilityReadiness readiness =
+                FacilityReadinessService.read(level, operation, variant);
+        if (!readiness.accepted())
+        {
+            ActionResult result = new ActionResult(false,
+                    readiness.faultCode() + ": " + readiness.message());
+            record(level, IDS[action] + ": " + result.message());
+            player.displayClientMessage(Component.literal(
+                    "[NERV] " + result.message())
+                    .withStyle(ChatFormatting.RED), false);
+            ProjectSeele.LOGGER.info(
+                    "Retired NERV console rejected action: player={} action={} "
+                            + "fault={} position={}",
+                    player.getGameProfile().getName(), IDS[action],
+                    readiness.faultCode(), position.toShortString());
+            return true;
+        }
+
         ActionResult result = switch (action)
         {
             case 0 -> prepareSortie(level);
@@ -259,7 +537,130 @@ public final class NervOperationsConsole
                 "NERV console action: player={} action={} accepted={} position={} result={}",
                 player.getGameProfile().getName(), IDS[action],
                 result.accepted(), position.toShortString(), result.message());
-        NervCommandTelemetry.install(level, origin);
+        return true;
+    }
+
+    private static int s20ActionAt(BlockPos position)
+    {
+        if (S20_CITY_SCREEN_CONTROL.equals(position))
+        {
+            return S20_CITY_SCREEN_ACTION;
+        }
+        for (int index = 0; index < S20_GROUND_RECOVERY_CONTROLS.length;
+             index++)
+        {
+            if (S20_GROUND_RECOVERY_CONTROLS[index].equals(position))
+            {
+                // Action 14 is EVA-00 recovery, 13 EVA-01, 12 EVA-02.
+                return 14 - index;
+            }
+        }
+        for (int index = 0; index < S20_CONTROLS.length; index++)
+        {
+            if (S20_CONTROLS[index].equals(position)
+                    || S20_AUTHORED_CONTROLS[index].equals(position))
+            {
+                return index;
+            }
+        }
+        return -1;
+    }
+
+    private static boolean handleS20Action(ServerPlayer player,
+                                           ServerLevel level,
+                                           int action,
+                                           BlockPos position)
+    {
+        ActionResult result;
+        if (action == 0 || action == 1)
+        {
+            boolean retract = action == 1;
+            Tokyo3RetractionDirector.RequestResult city =
+                    Tokyo3RetractionDirector.request(level,
+                            IntegratedNervMapBuilder.TOKYO3_ORIGIN,
+                            retract);
+            result = new ActionResult(city.accepted(), city.message());
+        }
+        else if ((action >= 2 && action <= 5)
+                || action == S20_CITY_SCREEN_ACTION)
+        {
+            int screen = action == S20_CITY_SCREEN_ACTION
+                    ? NervCommandDisplayState.CITY_SCREEN : action - 2;
+            NervCommandDisplayState displays =
+                    NervCommandDisplayState.get(level.getServer());
+            boolean visible = displays.toggle(screen);
+            displays.broadcast(level);
+            String label = switch (screen)
+            {
+                case 0, 1, 2 -> "EVA-0" + screen + " cockpit screen";
+                case 3 -> "lower tactical screen";
+                default -> "Tokyo-3 city status wall";
+            };
+            result = new ActionResult(true,
+                    label + (visible ? " powering on." : " shutting down."));
+        }
+        else
+        {
+            int variant = switch (action)
+            {
+                case 6, 9, 12 -> EvaUnit01Entity.UNIT_02;
+                case 7, 10, 13 -> EvaUnit01Entity.UNIT_01;
+                case 8, 11, 14 -> EvaUnit01Entity.UNIT_00;
+                default -> throw new IllegalStateException(
+                        "Unknown S20 unit action " + action);
+            };
+            int operationIndex = action <= 8 ? 0 : action <= 11 ? 1 : 2;
+            EvaLogisticsDirector.loadControlTarget(level, variant);
+            FacilityReadinessService.Operation operation =
+                    switch (operationIndex)
+                    {
+                        case 0 -> FacilityReadinessService.Operation.PREPARE;
+                        case 1 -> FacilityReadinessService.Operation.LAUNCH;
+                        default -> FacilityReadinessService.Operation.RECOVERY;
+                    };
+            FacilityReadinessService.FacilityReadiness readiness =
+                    FacilityReadinessService.read(level, operation, variant);
+            if (!readiness.accepted())
+            {
+                result = new ActionResult(false,
+                        readiness.faultCode() + ": "
+                                + readiness.message());
+            }
+            else if (operationIndex == 0)
+            {
+                EvaLogisticsDirector.ActionResult requested =
+                        EvaLogisticsDirector.requestPrepare(level, variant);
+                result = new ActionResult(requested.accepted(),
+                        requested.message());
+            }
+            else if (operationIndex == 1)
+            {
+                EvaLogisticsDirector.ActionResult requested =
+                        EvaLogisticsDirector.requestLaunch(level, variant);
+                result = new ActionResult(requested.accepted(),
+                        requested.message());
+            }
+            else
+            {
+                EvaLogisticsDirector.ActionResult requested =
+                        EvaLogisticsDirector.requestRecovery(level, variant);
+                result = new ActionResult(requested.accepted(),
+                        requested.message());
+            }
+        }
+
+        String id = action == S20_CITY_SCREEN_ACTION
+                ? "screen_city" : S20_IDS[action];
+        record(level, id + ": " + result.message());
+        player.displayClientMessage(Component.literal(
+                        "[NERV S20] " + result.message())
+                .withStyle(result.accepted()
+                        ? ChatFormatting.GREEN : ChatFormatting.RED), false);
+        ProjectSeele.LOGGER.info(
+                "S20 command control: player={} action={} accepted={} "
+                        + "position={} result={}",
+                player.getGameProfile().getName(), id, result.accepted(),
+                position.toShortString(), result.message());
         return true;
     }
 
@@ -344,17 +745,26 @@ public final class NervOperationsConsole
 
     private static ActionResult prepareSortie(ServerLevel level)
     {
-        IntegratedNervMapBuilder.RuntimeAudit map =
-                IntegratedNervMapBuilder.prepareRuntime(level);
-        if (!map.valid())
+        boolean modern = FacilityWorldPolicy.isCleanRebuild(
+                level.getServer());
+        boolean compact = FacilityWorldPolicy.isS20Rebuild(
+                level.getServer());
+        boolean plantReady = compact
+                ? EvaHangarBuilder.runtimeInfrastructurePresent(
+                        level, IntegratedNervMapBuilder.GEOFRONT_ORIGIN)
+                : modern ? FacilityV2EvaRuntime.readyAll(level)
+                : IntegratedNervMapBuilder.prepareRuntime(level).launchReady();
+        if (!plantReady)
         {
             return new ActionResult(false,
-                    "MAGI sortie gate failed; run /seele geofront audit for details.");
+                    "MAGI sortie gate failed: the three-line plant "
+                            + "has not completed its facility receipts.");
         }
         try
         {
-            List<EvaUnit01Entity> units =
-                    GeoFrontCommands.ensureContinuousSortieUnits(level);
+            List<EvaUnit01Entity> units = modern || compact
+                    ? EvaLogisticsDirector.ensureFleet(level)
+                    : GeoFrontCommands.ensureContinuousSortieUnits(level);
             int started = 0;
             for (int variant = 0; variant < 3; variant++)
             {
@@ -365,11 +775,22 @@ public final class NervOperationsConsole
                     started++;
                 }
             }
-            return new ActionResult(units.size() == 3,
-                    units.size() == 3
-                            ? "MAGI check complete; wet-cage drain/transfer started for "
-                                    + started + " EVA airframes."
-                            : "MAGI check found only " + units.size() + "/3 airframes.");
+            if (units.size() != 3)
+            {
+                return new ActionResult(false,
+                        "MAGI check found only " + units.size()
+                                + "/3 canonical airframes.");
+            }
+            if (started == 0)
+            {
+                return new ActionResult(false,
+                        "MAGI check complete; no insertion sequence started. "
+                                + "Board a suspended entry plug first.");
+            }
+            return new ActionResult(true,
+                    "MAGI check complete; insertion/transfer started for "
+                            + started + "/3 EVA airframes. Remaining cages "
+                            + "require a boarded pilot.");
         }
         catch (IllegalStateException exception)
         {
@@ -379,16 +800,27 @@ public final class NervOperationsConsole
 
     private static ActionResult releaseUnit(ServerLevel level, int variant)
     {
-        EvaUnit01Entity unit = evaUnits(level).stream()
-                .filter(candidate -> candidate.getUnitVariant() == variant)
-                .sorted(Comparator
-                        .comparing((EvaUnit01Entity candidate) ->
-                                candidate.getLaunchPhase()
-                                        != EvaUnit01Entity.LAUNCH_LOCKED)
-                        .thenComparingDouble(candidate -> candidate.distanceToSqr(
-                                IntegratedNervMapBuilder.lowerLiftBed(variant)
-                                        .getCenter())))
-                .findFirst().orElse(null);
+        boolean compact = FacilityWorldPolicy.isS20Rebuild(
+                level.getServer());
+        if (compact
+                ? !compactLaunchMarkersPresent(level, variant)
+                : FacilityWorldPolicy.isCleanRebuild(level.getServer())
+                ? !FacilityV2EvaRuntime.ready(level, variant)
+                : !IntegratedNervMapBuilder.ensureLowerSortieInterface(
+                        level, variant))
+        {
+            return new ActionResult(false,
+                    String.format(Locale.ROOT,
+                            "EVA-%02d release inhibited: lower carrier route is obstructed.",
+                            variant));
+        }
+        /*
+         * Release the SavedData-authoritative airframe only.  Searching the
+         * whole map and sorting by distance let a retired duplicate absorb a
+         * perfectly valid command-room launch after a save migration.
+         */
+        EvaUnit01Entity unit =
+                EvaLogisticsDirector.canonicalUnit(level, variant);
         if (unit == null)
         {
             return new ActionResult(false,
@@ -409,6 +841,24 @@ public final class NervOperationsConsole
 
     private static ActionResult toggleArmour(ServerLevel level)
     {
+        if (FacilityWorldPolicy.isS20Rebuild(level.getServer()))
+        {
+            return new ActionResult(false,
+                    "S20 preserves the approved Tokyo-3 city blocks; its "
+                            + "retraction actuator has not been recommissioned.");
+        }
+        if (FacilityWorldPolicy.isCleanRebuild(level.getServer()))
+        {
+            /*
+             * Tokyo3RetractionDirector still owns the retired integrated-map
+             * coordinate frame.  Calling it from S19 would paint the old city
+             * into the clean world.  Keep the physical key fail-closed until
+             * the S19 surface-head/city contract gains its own moving owners.
+             */
+            return new ActionResult(false,
+                    "S19 city-armour actuators are not commissioned yet; "
+                            + "no legacy geometry was changed.");
+        }
         Tokyo3RetractionDirector.Status status =
                 Tokyo3RetractionDirector.status(level,
                         IntegratedNervMapBuilder.TOKYO3_ORIGIN);
@@ -422,9 +872,23 @@ public final class NervOperationsConsole
     private static ActionResult startYashima(ServerLevel level,
                                              ServerPlayer commander)
     {
-        IntegratedNervMapBuilder.RuntimeAudit map =
-                IntegratedNervMapBuilder.prepareRuntime(level);
-        if (!map.valid())
+        if (FacilityWorldPolicy.isS20Rebuild(level.getServer()))
+        {
+            return new ActionResult(false,
+                    "Operation Yashima is held until the compact plant's "
+                            + "Tokyo-3 battle anchor is recommissioned.");
+        }
+        if (FacilityWorldPolicy.isCleanRebuild(level.getServer()))
+        {
+            return new ActionResult(false,
+                    "Operation Yashima is waiting for its S19 Tokyo-3 battle "
+                            + "anchor; the retired battlefield was not spawned.");
+        }
+        boolean launchReady = FacilityV2RescueDirector.isTargetWorld(
+                level.getServer())
+                ? IntegratedNervMapBuilder.rescueMechanicalReady(level)
+                : IntegratedNervMapBuilder.prepareRuntime(level).launchReady();
+        if (!launchReady)
         {
             return new ActionResult(false,
                     "Operation Yashima inhibited: live sortie route failed its gate.");
@@ -436,6 +900,16 @@ public final class NervOperationsConsole
 
     private static ActionResult abortYashima(ServerLevel level)
     {
+        if (FacilityWorldPolicy.isS20Rebuild(level.getServer()))
+        {
+            return new ActionResult(false,
+                    "No S20 Yashima operation is active.");
+        }
+        if (FacilityWorldPolicy.isCleanRebuild(level.getServer()))
+        {
+            return new ActionResult(false,
+                    "No S19 Yashima operation is active.");
+        }
         BattleResult result = Tokyo3RamielBattleDirector.abort(level,
                 IntegratedNervMapBuilder.TOKYO3_ORIGIN);
         return new ActionResult(result.accepted(), result.message());
@@ -459,16 +933,48 @@ public final class NervOperationsConsole
         lastActionAt = level.getGameTime();
     }
 
-    private static int actionAt(BlockPos origin, BlockPos position)
+    private static int actionAt(ServerLevel level, BlockPos origin,
+                                BlockPos position)
     {
+        boolean s20 = FacilityWorldPolicy.isS20Rebuild(
+                level.getServer());
+        boolean imported = FacilityWorldPolicy.isCleanRebuild(
+                level.getServer());
         for (int index = 0; index < CONTROL_COUNT; index++)
         {
-            if (controlPosition(origin, index).equals(position))
+            int[] local = IMPORTED_V2_CONTROL_LOCAL[index];
+            BlockPos expected = s20
+                    ? S20CommandPresentationDirector.authoredLocalToWorld(
+                            new BlockPos(local[0], local[1], local[2]))
+                    : imported
+                    ? importedV2ControlPosition(origin, index)
+                    : controlPosition(origin, index);
+            /*
+             * The authored command desks use a two-block-high switch bank:
+             * each selected local coordinate has an otherwise identical real
+             * button directly below it. Listening only to the upper half made
+             * the visible control appear randomly dead depending on which
+             * pixel the operator clicked.
+             */
+            if (expected.equals(position)
+                    || (imported || s20)
+                    && expected.below().equals(position))
             {
                 return index;
             }
         }
         return -1;
+    }
+
+    private static boolean compactLaunchMarkersPresent(
+            ServerLevel level, int variant)
+    {
+        return level.getBlockState(
+                        IntegratedNervMapBuilder.lowerLiftBed(variant))
+                .is(Blocks.LODESTONE)
+                && level.getBlockState(
+                        IntegratedNervMapBuilder.surfaceLiftBed(variant))
+                .is(Blocks.LODESTONE);
     }
 
     private static void setIfDifferent(ServerLevel level, BlockPos position,
@@ -477,6 +983,7 @@ public final class NervOperationsConsole
         if (!level.getBlockState(position).equals(state))
         {
             level.setBlock(position, state, flags);
+            PerformanceCounters.recordWorldBlockWrites(1);
         }
     }
     private static void removeLegacyRow(ServerLevel level, BlockPos origin)
@@ -516,6 +1023,24 @@ public final class NervOperationsConsole
                 CONTROL_Y, CONTROL_Z);
     }
 
+    /**
+     * Exact transform of an authored NBT-local operator-console switch through
+     * nerv_command_left.nbt's Facility-v2 CLOCKWISE_180 placement.
+     */
+    public static BlockPos importedV2ControlPosition(BlockPos centre,
+                                                      int index)
+    {
+        if (index < 0 || index >= CONTROL_COUNT)
+        {
+            throw new IllegalArgumentException(
+                    "NERV control index must be within 0.."
+                            + (CONTROL_COUNT - 1));
+        }
+        int[] local = IMPORTED_V2_CONTROL_LOCAL[index];
+        return centre.offset(27 - local[0],
+                -368 + local[1], 64 - local[2]);
+    }
+
     private static int countControls(ServerLevel level, BlockPos origin)
     {
         int count = 0;
@@ -550,6 +1075,19 @@ public final class NervOperationsConsole
         AABB bounds = AABB.ofSize(
                 Vec3.atCenterOf(origin.offset(0, CONTROL_Y + 1, CONTROL_Z)),
                 80.0D, 32.0D, 40.0D);
+        List<Display.TextDisplay> result = new ArrayList<>(
+                level.getEntitiesOfClass(Display.TextDisplay.class, bounds,
+                        display -> display.getTags().contains(tag)));
+        result.sort(Comparator.comparingInt(Entity::getId));
+        return result;
+    }
+
+    private static List<Display.TextDisplay> importedLabels(
+            ServerLevel level, BlockPos centre, String tag)
+    {
+        AABB bounds = AABB.ofSize(
+                Vec3.atCenterOf(centre.offset(0, -325, -4)),
+                96.0D, 40.0D, 96.0D);
         List<Display.TextDisplay> result = new ArrayList<>(
                 level.getEntitiesOfClass(Display.TextDisplay.class, bounds,
                         display -> display.getTags().contains(tag)));

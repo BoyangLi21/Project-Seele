@@ -277,7 +277,7 @@ public final class VisualLabCommands
         // Keep the real player inside the view-distance square so all nine
         // vessel chunks remain tracked. The client uses its own farther
         // screenshot camera and does not need the server player at that point.
-        Vec3 camera = origin.add(front.scale(120.0D))
+        Vec3 camera = origin.add(front.scale(300.0D))
                 .add(0.0D, TreeOfLifeLayout.localY(TreeOfLifeLayout.TIFERET), 0.0D);
         Vec3 sight = tiferet.subtract(camera);
         float cameraYaw = (float) (Mth.atan2(sight.z, sight.x) * Mth.RAD_TO_DEG) - 90.0F;

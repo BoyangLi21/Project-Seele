@@ -15,6 +15,7 @@ import com.projectseele.world.ThirdTokyoSurfaceBuilder;
 import com.projectseele.world.ThirdTokyoSurfaceBuilder.DistrictAudit;
 import com.projectseele.world.IntegratedNervMapBuilder;
 import com.projectseele.world.EvaLogisticsDirector;
+import com.projectseele.world.FacilityWorldPolicy;
 import com.projectseele.world.Tokyo3RetractionDirector;
 import com.projectseele.world.Tokyo3RetractionDirector.RequestResult;
 import com.projectseele.world.Tokyo3RetractionDirector.Status;
@@ -85,6 +86,10 @@ public final class ThirdTokyoCommands
 
     static int setup(CommandSourceStack source) throws CommandSyntaxException
     {
+        if (rejectRetiredAliasInCleanWorld(source, "setup"))
+        {
+            return 0;
+        }
         ServerPlayer player = source.getPlayerOrException();
         if (player.isPassenger())
         {
@@ -118,7 +123,14 @@ public final class ThirdTokyoCommands
         level.setWeatherParameters(12000, 0, false, false);
         // Do not let a prior manual CITY ARMOUR toggle make this fixed
         // visual fixture audit a different skyline on the next run.
-        Tokyo3RetractionDirector.forceDepth(level, origin, false);
+        RequestResult cityReset = Tokyo3RetractionDirector.forceDepth(
+                level, origin, false);
+        if (cityReset.accepted())
+        {
+            throw new IllegalStateException(
+                    "Tokyo-3 restoration is running as a bounded transaction; "
+                            + "rerun the visual capture after /seele tokyo3 status reports DEPLOYED");
+        }
         IntegratedNervMapBuilder.IntegratedAudit mapAudit =
                 IntegratedNervMapBuilder.ensure(level);
         if (!mapAudit.valid())
@@ -173,6 +185,10 @@ public final class ThirdTokyoCommands
 
     private static int audit(CommandSourceStack source) throws CommandSyntaxException
     {
+        if (rejectRetiredAliasInCleanWorld(source, "audit"))
+        {
+            return 0;
+        }
         ServerPlayer player = source.getPlayerOrException();
         BlockPos origin = findOrigin(player);
         int depth = Tokyo3RetractionDirector.depth(player.serverLevel(), origin);
@@ -197,6 +213,11 @@ public final class ThirdTokyoCommands
     private static int setRetraction(CommandSourceStack source, boolean retract)
             throws CommandSyntaxException
     {
+        if (rejectRetiredAliasInCleanWorld(
+                source, retract ? "retract" : "restore"))
+        {
+            return 0;
+        }
         ServerPlayer player = source.getPlayerOrException();
         BlockPos origin = findOrigin(player);
         RequestResult result = Tokyo3RetractionDirector.request(
@@ -208,10 +229,13 @@ public final class ThirdTokyoCommands
     private static int forceRetraction(CommandSourceStack source, boolean retract)
             throws CommandSyntaxException
     {
+        if (rejectRetiredAliasInCleanWorld(
+                source, retract ? "retract_now" : "restore_now"))
+        {
+            return 0;
+        }
         ServerPlayer player = source.getPlayerOrException();
         BlockPos origin = findOrigin(player);
-        source.sendSuccess(() -> Component.literal(
-                "Tokyo-3 rapid maintenance started; the server may pause briefly."), false);
         RequestResult result = Tokyo3RetractionDirector.forceDepth(
                 player.serverLevel(), origin, retract);
         source.sendSuccess(() -> Component.literal(result.message()), false);
@@ -219,6 +243,10 @@ public final class ThirdTokyoCommands
     }
     private static int status(CommandSourceStack source) throws CommandSyntaxException
     {
+        if (rejectRetiredAliasInCleanWorld(source, "status"))
+        {
+            return 0;
+        }
         ServerPlayer player = source.getPlayerOrException();
         BlockPos origin = findOrigin(player);
         Status status = Tokyo3RetractionDirector.status(player.serverLevel(), origin);
@@ -232,6 +260,10 @@ public final class ThirdTokyoCommands
     private static int ramielStart(CommandSourceStack source)
             throws CommandSyntaxException
     {
+        if (rejectRetiredAliasInCleanWorld(source, "ramiel start"))
+        {
+            return 0;
+        }
         ServerPlayer player = source.getPlayerOrException();
         ServerLevel level = player.serverLevel();
         if (!level.dimension().equals(GeoFrontCommands.GEOFRONT))
@@ -263,6 +295,10 @@ public final class ThirdTokyoCommands
     private static int ramielStatus(CommandSourceStack source)
             throws CommandSyntaxException
     {
+        if (rejectRetiredAliasInCleanWorld(source, "ramiel status"))
+        {
+            return 0;
+        }
         ServerPlayer player = source.getPlayerOrException();
         BattleStatus status = Tokyo3RamielBattleDirector.status(
                 player.serverLevel(), IntegratedNervMapBuilder.TOKYO3_ORIGIN);
@@ -273,6 +309,10 @@ public final class ThirdTokyoCommands
     private static int ramielAbort(CommandSourceStack source)
             throws CommandSyntaxException
     {
+        if (rejectRetiredAliasInCleanWorld(source, "ramiel abort"))
+        {
+            return 0;
+        }
         ServerPlayer player = source.getPlayerOrException();
         BattleResult result = Tokyo3RamielBattleDirector.abort(
                 player.serverLevel(), IntegratedNervMapBuilder.TOKYO3_ORIGIN);
@@ -312,6 +352,10 @@ public final class ThirdTokyoCommands
 
     private static int overview(CommandSourceStack source) throws CommandSyntaxException
     {
+        if (rejectRetiredAliasInCleanWorld(source, "overview"))
+        {
+            return 0;
+        }
         ServerPlayer player = source.getPlayerOrException();
         BlockPos origin = findOrigin(player);
         player.stopRiding();
@@ -332,8 +376,13 @@ public final class ThirdTokyoCommands
 
     private static BlockPos findOrigin(ServerPlayer player)
     {
-        if (player.serverLevel().dimension().equals(GeoFrontCommands.GEOFRONT)
-                && IntegratedNervMapBuilder.inspect(player.serverLevel()).tokyo3().valid())
+        /*
+         * The integrated dimension has one immutable Tokyo-3 datum.  Do not
+         * derive it from a deployed EVA's launch bed when a tower is moving or
+         * a visual audit is temporarily incomplete: that turned a surface bed
+         * at Y=79 into a second, bogus city origin at Y=109.
+         */
+        if (player.serverLevel().dimension().equals(GeoFrontCommands.GEOFRONT))
         {
             return IntegratedNervMapBuilder.TOKYO3_ORIGIN;
         }
@@ -376,6 +425,20 @@ public final class ThirdTokyoCommands
                         && (!requireParkedFormation || parkedFormation),
                 district, units.size(), variants, parkedFormation,
                 requireParkedFormation);
+    }
+
+    private static boolean rejectRetiredAliasInCleanWorld(
+            CommandSourceStack source, String alias)
+    {
+        if (!FacilityWorldPolicy.isCleanRebuild(source.getServer()))
+        {
+            return false;
+        }
+        source.sendFailure(Component.literal(
+                "/seele tokyo3 " + alias
+                        + " belongs to the retired overlapping map pipeline "
+                        + "and is disabled in SEELE_S19_CLEAN."));
+        return true;
     }
 
     private static void logAudit(String stage, TokyoAudit result)

@@ -74,6 +74,14 @@ public final class NervCommandTelemetry
 
     public static void tick(MinecraftServer server)
     {
+        if (FacilityWorldPolicy.isS20Rebuild(server))
+        {
+            // S20 renders its live feeds directly on the two measured sloped
+            // screen planes.  The legacy five TextDisplay wall lives almost
+            // one hundred blocks behind those planes and must not be spawned
+            // into the clean command master.
+            return;
+        }
         ServerLevel level = server.getLevel(GEOFRONT);
         if (level == null || level.players().isEmpty())
         {
@@ -82,6 +90,13 @@ public final class NervCommandTelemetry
         BlockPos origin = IntegratedNervMapBuilder.GEOFRONT_ORIGIN;
         BlockPos anchor = screenAnchor(level, origin);
         if (!level.hasChunkAt(anchor) || !operationsPresent(level, origin))
+        {
+            return;
+        }
+        // No player can see these entities outside the command complex. Avoid
+        // five display queries, global angel scans and text synchronization
+        // merely because somebody is idling elsewhere in GeoFront.
+        if (!ServerboundEvaVideoFramePacket.hasCommandViewers(level))
         {
             return;
         }
@@ -96,6 +111,10 @@ public final class NervCommandTelemetry
     /** Creates missing screens and refreshes every value from live entities. */
     public static void install(ServerLevel level, BlockPos origin)
     {
+        if (FacilityWorldPolicy.isS20Rebuild(level.getServer()))
+        {
+            return;
+        }
         // Explicit installs (map setup and the operations shortcut) must work
         // even when the player starts in another dimension. The regular tick
         // path already checks hasChunkAt(), so it never keeps this chunk alive.
@@ -312,6 +331,7 @@ public final class NervCommandTelemetry
     {
         List<Entity> angels = new ArrayList<>();
         RamielEntity ramiel = null;
+        PerformanceCounters.recordGlobalEntityScan();
         for (Entity entity : level.getAllEntities())
         {
             if (entity.isAlive() && entity instanceof Angel)
@@ -529,6 +549,7 @@ public final class NervCommandTelemetry
     {
         Entity nearest = null;
         double nearestDistance = Double.MAX_VALUE;
+        PerformanceCounters.recordGlobalEntityScan();
         for (Entity entity : level.getAllEntities())
         {
             if (!(entity instanceof Angel) || !entity.isAlive())
@@ -576,10 +597,9 @@ public final class NervCommandTelemetry
         {
             return null;
         }
-        Entity passenger = unit.getFirstPassenger();
-        return passenger instanceof ServerPlayer
-                || passenger instanceof TrainingPilotEntity
-                ? (LivingEntity) passenger : null;
+        LivingEntity pilot = EvaPilotResolver.pilot(unit);
+        return pilot instanceof ServerPlayer
+                || pilot instanceof TrainingPilotEntity ? pilot : null;
     }
 
     private static ChatFormatting sensorColour(BlockState state,
