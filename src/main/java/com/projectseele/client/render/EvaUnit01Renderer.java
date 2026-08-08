@@ -8,12 +8,15 @@ import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.projectseele.ProjectSeele;
 import com.projectseele.client.ClientForgeEvents;
 import com.projectseele.entity.EvaUnit01Entity;
+import com.projectseele.entity.EvaScale;
+import com.projectseele.world.EvaPilotResolver;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.LightTexture;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.culling.Frustum;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.packs.resources.ResourceManager;
 import org.jetbrains.annotations.Nullable;
 import software.bernie.geckolib.cache.object.BakedGeoModel;
 import software.bernie.geckolib.cache.object.GeoBone;
@@ -43,6 +46,12 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
             new ResourceLocation(ProjectSeele.MODID, "textures/entity/eva_unit01.png");
     private static final ResourceLocation TEXTURE_02 =
             new ResourceLocation(ProjectSeele.MODID, "textures/entity/eva_unit02.png");
+    private static final ResourceLocation EYES_00 =
+            new ResourceLocation(ProjectSeele.MODID, "textures/entity/eva_unit00_eyes.png");
+    private static final ResourceLocation EYES_01 =
+            new ResourceLocation(ProjectSeele.MODID, "textures/entity/eva_unit01_eyes.png");
+    private static final ResourceLocation EYES_02 =
+            new ResourceLocation(ProjectSeele.MODID, "textures/entity/eva_unit02_eyes.png");
     private static final ResourceLocation POSITRON_MESH =
             new ResourceLocation(ProjectSeele.MODID, "mesh/positron_cannon.mesh.json");
     private static final ResourceLocation POSITRON_TEXTURE =
@@ -88,6 +97,11 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
                 entity -> textureResourceForVariant(entity.getUnitVariant()),
                 this::shouldRenderBodyMesh));
         this.addRenderLayer(new LocalTriangleMeshLayer<>(this,
+                entity -> meshResourceForVariant(entity.getUnitVariant()),
+                entity -> eyeTextureResourceForVariant(entity.getUnitVariant()),
+                (entity, bone) -> !this.pilotView && entity.isPoweredOn()
+                        && "head".equals(bone.getName()), true));
+        this.addRenderLayer(new LocalTriangleMeshLayer<>(this,
                 EvaUnit01Renderer::knifeMeshResource,
                 EvaUnit01Renderer::knifeTextureResource,
                 (entity, bone) -> entity.getWeapon() == EvaUnit01Entity.WEAPON_KNIFE
@@ -113,8 +127,15 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
                 entity -> ENTRY_PLUG_MESH, entity -> ENTRY_PLUG_TEXTURE,
                 (entity, bone) -> !this.pilotView
                         && isEntryHardwareVisible(entity, bone.getName())));
-        this.shadowRadius = 3.6F;
-        this.withScale(2.5F);
+        this.shadowRadius = 5.4F;
+        this.withScale(EvaScale.RENDER_SCALE);
+    }
+
+    /** Loads the three route-visible airframes before live frame sampling. */
+    public static void prewarmLocalBodyMeshes(ResourceManager resourceManager)
+    {
+        LocalTriangleMeshLayer.prewarm(resourceManager,
+                MESH_00, MESH_01, MESH_02);
     }
 
     @Override
@@ -134,9 +155,7 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
             return;
         }
         Minecraft minecraft = Minecraft.getInstance();
-        this.pilotView = minecraft.options.getCameraType().isFirstPerson()
-                && minecraft.getCameraEntity() != null
-                && minecraft.getCameraEntity().getVehicle() == entity;
+        this.pilotView = isLocalPilotView(minecraft, entity);
         // Wet cages and launch shafts use dedicated NERV floodlights.  Keeping
         // the airframe full-bright only while logistics-locked prevents a
         // 24-block model from sampling one dark centre voxel and becoming a
@@ -157,13 +176,20 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
         // gameplay AABB while hands and weapon remain in front of the camera.
         // Do not let frustum culling make the shared body disappear only in
         // first person; every other observer keeps the normal culling path.
-        if (minecraft.options.getCameraType().isFirstPerson()
-                && minecraft.getCameraEntity() != null
-                && minecraft.getCameraEntity().getVehicle() == entity)
+        if (isLocalPilotView(minecraft, entity))
         {
             return true;
         }
         return super.shouldRender(entity, frustum, cameraX, cameraY, cameraZ);
+    }
+
+    private static boolean isLocalPilotView(Minecraft minecraft,
+                                             EvaUnit01Entity entity)
+    {
+        return minecraft.options.getCameraType().isFirstPerson()
+                && minecraft.getCameraEntity() != null
+                && EvaPilotResolver.controlTarget(
+                        minecraft.getCameraEntity()) == entity;
     }
 
     @Override
@@ -243,14 +269,13 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
                 || (animatable.getUnitVariant() == EvaUnit01Entity.UNIT_00
                     && animatable.getVisualPose() == EvaUnit01Entity.VISUAL_CROUCH);
         setWeaponVisibility(model, "shield", shieldBrace);
-        // Only the travelling portion of the plug is outside the armour.  At
-        // the end of insertion it is physically below the dorsal socket; the
-        // closed hatch remains visible, but rendering the full 38px capsule at
-        // its zero transform made it stick out of the EVA forever.
-        boolean plugTravelling = !this.pilotView && isEntryPlugTravelling(animatable);
-        setWeaponVisibility(model, "entry_plug", plugTravelling);
-        setWeaponVisibility(model, "plug_hatch_l", !this.pilotView);
-        setWeaponVisibility(model, "plug_hatch_r", !this.pilotView);
+        // The external carrier owns the entire visible insertion. Once seated,
+        // the capsule is inside the artificial spine and the dorsal armour
+        // reseals; no duplicate capsule or generic hatch may protrude from the
+        // body rig.
+        setWeaponVisibility(model, "entry_plug", false);
+        setWeaponVisibility(model, "plug_hatch_l", false);
+        setWeaponVisibility(model, "plug_hatch_r", false);
     }
 
     private static void setWeaponVisibility(BakedGeoModel model, String name, boolean active)
@@ -303,21 +328,9 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
                 red, green, blue, alpha);
     }
 
-    /**
-     * The 6s activation clip seats the capsule at 3.15s, then spends the
-     * remaining time closing the hatch and bringing the EVA online.  Keeping
-     * the plug rendered for all 120 ticks exposes it through seams after it is
-     * already internal, so stop drawing it at that authored seating frame.
-     */
-    private static boolean isEntryPlugTravelling(EvaUnit01Entity entity)
-    {
-        return entity.getActivationTicks() > 57;
-    }
-
     private static boolean isEntryHardwareVisible(EvaUnit01Entity entity, String boneName)
     {
-        return "plug_hatch_l".equals(boneName) || "plug_hatch_r".equals(boneName)
-                || ("entry_plug".equals(boneName) && isEntryPlugTravelling(entity));
+        return false;
     }
 
     public static ResourceLocation meshResourceForVariant(int variant)
@@ -338,6 +351,16 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
             case EvaUnit01Entity.UNIT_00 -> TEXTURE_00;
             case EvaUnit01Entity.UNIT_02 -> TEXTURE_02;
             default -> TEXTURE_01;
+        };
+    }
+
+    private static ResourceLocation eyeTextureResourceForVariant(int variant)
+    {
+        return switch (variant)
+        {
+            case EvaUnit01Entity.UNIT_00 -> EYES_00;
+            case EvaUnit01Entity.UNIT_02 -> EYES_02;
+            default -> EYES_01;
         };
     }
 

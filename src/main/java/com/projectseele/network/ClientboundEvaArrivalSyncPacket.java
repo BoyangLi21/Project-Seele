@@ -50,9 +50,12 @@ public final class ClientboundEvaArrivalSyncPacket
 
     public void handle(Supplier<NetworkEvent.Context> context)
     {
-        DistExecutor.unsafeRunWhenOn(Dist.CLIENT,
-                () -> () -> com.projectseele.client.ClientEvaArrivalSync.apply(
-                        this.entityId, this.x, this.y, this.z, this.yaw, this.pitch));
-        context.get().setPacketHandled(true);
+        NetworkEvent.Context networkContext = context.get();
+        networkContext.enqueueWork(() ->
+                DistExecutor.unsafeRunWhenOn(Dist.CLIENT,
+                        () -> () -> com.projectseele.client.ClientEvaArrivalSync.apply(
+                                this.entityId, this.x, this.y, this.z,
+                                this.yaw, this.pitch)));
+        networkContext.setPacketHandled(true);
     }
 }

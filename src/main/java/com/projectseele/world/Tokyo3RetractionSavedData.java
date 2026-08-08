@@ -1,7 +1,9 @@
 package com.projectseele.world;
 
 import java.util.Collection;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -17,7 +19,7 @@ import net.minecraft.world.level.saveddata.SavedData;
 public final class Tokyo3RetractionSavedData extends SavedData
 {
     private static final String DATA_NAME = "projectseele_tokyo3_retraction";
-    private static final int DATA_VERSION = 2;
+    private static final int DATA_VERSION = 6;
 
     private final Map<Long, StoredDistrict> districts = new LinkedHashMap<>();
 
@@ -63,12 +65,21 @@ public final class Tokyo3RetractionSavedData extends SavedData
             // Absent in districts written before the layer was spread across
             // ticks; restarting a partial layer from tower zero is harmless
             // because every tower write is idempotent.
-            int cursor = version == DATA_VERSION
+            int totalTowers = ThirdTokyoSurfaceBuilder.movableBuildings().size()
+                    + LocalMapAssetLoader.tokyo3SkyscraperCount();
+            int cursor = version >= 2
                     ? clamp(entry.getInt("Cursor"), 0,
-                            ThirdTokyoSurfaceBuilder.movableBuildings().size())
+                            totalTowers)
                     : 0;
+            int voxelCursor = version >= 4
+                    ? Math.max(0, entry.getInt("VoxelCursor"))
+                    : 0;
+            int queuedTargetDepth = version >= 5
+                    ? clampQueuedTarget(entry.getInt("QueuedTargetDepth"), maximum)
+                    : -1;
+            String fault = version >= 6 ? entry.getString("Fault") : "";
             StoredDistrict district = new StoredDistrict(origin, depth, targetDepth,
-                    nextStepAt, cursor);
+                    nextStepAt, cursor, voxelCursor, queuedTargetDepth, fault);
             data.districts.put(origin.asLong(), district);
         }
         if (version == 1 && !data.districts.isEmpty())
@@ -76,6 +87,26 @@ public final class Tokyo3RetractionSavedData extends SavedData
             ProjectSeele.LOGGER.warn(
                     "Migrated Tokyo-3 retraction state from surface-only v1 "
                             + "to physical GeoFront ceiling-city v2");
+        }
+        if (version == 2 && !data.districts.isEmpty())
+        {
+            ProjectSeele.LOGGER.info(
+                    "Migrated Tokyo-3 layer cursor v2 -> v3; imported high-rise progress is now durable");
+        }
+        if (version == 3 && !data.districts.isEmpty())
+        {
+            ProjectSeele.LOGGER.info(
+                    "Migrated Tokyo-3 travel v3 -> v4; imported towers now resume inside a bounded voxel transaction");
+        }
+        if (version == 4 && !data.districts.isEmpty())
+        {
+            ProjectSeele.LOGGER.info(
+                    "Migrated Tokyo-3 travel v4 -> v5; reversals now wait for the active layer transaction");
+        }
+        if (version == 5 && !data.districts.isEmpty())
+        {
+            ProjectSeele.LOGGER.info(
+                    "Migrated Tokyo-3 travel v5 -> v6; failed layers now persist fail-closed diagnostics");
         }
         return data;
     }
@@ -105,6 +136,32 @@ public final class Tokyo3RetractionSavedData extends SavedData
         this.setDirty();
     }
 
+    /**
+     * Removes retired district controllers without touching any world block.
+     * S20 has one authored Tokyo-3 origin; carrying the legacy prototype
+     * origin beside it leaves a second independent movement transaction in
+     * SavedData and can make old controls move the wrong skyline.
+     */
+    public List<StoredDistrict> removeAllExcept(BlockPos retainedOrigin)
+    {
+        ArrayList<StoredDistrict> removed = new ArrayList<>();
+        long retained = retainedOrigin.asLong();
+        this.districts.entrySet().removeIf(entry ->
+        {
+            if (entry.getKey() == retained)
+            {
+                return false;
+            }
+            removed.add(entry.getValue());
+            return true;
+        });
+        if (!removed.isEmpty())
+        {
+            this.setDirty();
+        }
+        return List.copyOf(removed);
+    }
+
     @Override
     public CompoundTag save(CompoundTag tag)
     {
@@ -118,6 +175,9 @@ public final class Tokyo3RetractionSavedData extends SavedData
             entry.putInt("TargetDepth", district.targetDepth());
             entry.putLong("NextStepAt", district.nextStepAt());
             entry.putInt("Cursor", district.cursor());
+            entry.putInt("VoxelCursor", district.voxelCursor());
+            entry.putInt("QueuedTargetDepth", district.queuedTargetDepth());
+            entry.putString("Fault", district.fault());
             entries.add(entry);
         }
         tag.put("Districts", entries);
@@ -129,22 +189,57 @@ public final class Tokyo3RetractionSavedData extends SavedData
         return Math.max(minimum, Math.min(maximum, value));
     }
 
+    private static int clampQueuedTarget(int value, int maximum)
+    {
+        return value < 0 ? -1 : clamp(value, 0, maximum);
+    }
+
     /**
      * @param cursor how many towers of the layer in flight have already been
      *               stepped; zero whenever no layer is mid-flight.
+     * @param voxelCursor next ordered voxel within the imported tower at
+     *                    {@code cursor}; zero for generated towers and between
+     *                    imported towers.
      */
     public record StoredDistrict(BlockPos origin, int depth, int targetDepth,
-                                 long nextStepAt, int cursor)
+                                 long nextStepAt, int cursor, int voxelCursor,
+                                 int queuedTargetDepth, String fault)
     {
         public StoredDistrict
         {
             origin = origin.immutable();
+            fault = fault == null ? "" : fault;
         }
 
         public StoredDistrict(BlockPos origin, int depth, int targetDepth,
                               long nextStepAt)
         {
-            this(origin, depth, targetDepth, nextStepAt, 0);
+            this(origin, depth, targetDepth, nextStepAt, 0, 0, -1, "");
+        }
+
+        public StoredDistrict(BlockPos origin, int depth, int targetDepth,
+                              long nextStepAt, int cursor)
+        {
+            this(origin, depth, targetDepth, nextStepAt, cursor, 0, -1, "");
+        }
+
+        public StoredDistrict(BlockPos origin, int depth, int targetDepth,
+                              long nextStepAt, int cursor, int voxelCursor)
+        {
+            this(origin, depth, targetDepth, nextStepAt, cursor, voxelCursor, -1, "");
+        }
+
+        public StoredDistrict(BlockPos origin, int depth, int targetDepth,
+                              long nextStepAt, int cursor, int voxelCursor,
+                              int queuedTargetDepth)
+        {
+            this(origin, depth, targetDepth, nextStepAt, cursor, voxelCursor,
+                    queuedTargetDepth, "");
+        }
+
+        public boolean faulted()
+        {
+            return !this.fault.isBlank();
         }
     }
 }

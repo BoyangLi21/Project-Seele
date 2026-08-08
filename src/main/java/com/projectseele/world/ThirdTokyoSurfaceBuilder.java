@@ -4,12 +4,19 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
+import com.projectseele.ProjectSeele;
 import com.projectseele.registry.ModBlocks;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.DoorBlock;
+import net.minecraft.world.level.block.LeverBlock;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.AttachFace;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
+import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
 import net.minecraft.world.level.levelgen.Heightmap;
 
 /**
@@ -25,6 +32,16 @@ public final class ThirdTokyoSurfaceBuilder
     public static final int OBSERVATION_Z = 216;
     public static final int OBSERVATION_Y = 38;
     public static final int ARMOURED_LOT_HALF_SIZE = 12;
+    public static final int WEAPON_LIFT_X = 0;
+    public static final int WEAPON_LIFT_Z = 80;
+
+    private static final int WEAPON_STATION_HALF_X = 12;
+    private static final int WEAPON_STATION_HALF_Z = 8;
+    private static final int WEAPON_STATION_HEIGHT = 21;
+    private static final int WEAPON_DOOR_HALF_X = 9;
+    private static final int WEAPON_DOOR_BOTTOM = 3;
+    private static final int WEAPON_DOOR_TOP = 17;
+    private static final int WEAPON_SHAFT_BOTTOM = -24;
 
     private static final int ROAD_SPACING = 40;
     private static final int ROAD_OFFSET = 20;
@@ -59,6 +76,13 @@ public final class ThirdTokyoSurfaceBuilder
     // thousands of blocks a single layer rewrites.
     private static final int UPDATE_TRAVEL =
             Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE;
+    /**
+     * A buried receipt for the facade/retraction contract. It deliberately sits
+     * outside the playable road grid, so upgrading an old save cannot replace a
+     * tower core or a player-facing control.
+     */
+    private static final BlockPos REVISION_MARKER =
+            new BlockPos(219, -5, 219);
 
     private ThirdTokyoSurfaceBuilder() {}
 
@@ -84,6 +108,7 @@ public final class ThirdTokyoSurfaceBuilder
                 else if (x == 0 && z == 80)
                 {
                     buildBattlePlaza(level, centre);
+                    buildWeaponLiftStation(level, centre);
                 }
                 else
                 {
@@ -113,7 +138,71 @@ public final class ThirdTokyoSurfaceBuilder
         connectPowerGrid(level, origin, -100);
         connectPowerGrid(level, origin, 100);
         buildSortieGate(level, origin.offset(0, 1, 52));
+        ensureLaunchControlQuarter(level, origin);
         buildObservationDeck(level, origin.offset(0, 0, OBSERVATION_Z));
+        set(level, origin.offset(REVISION_MARKER),
+                Blocks.NETHERITE_BLOCK.defaultBlockState());
+        set(level, origin.offset(REVISION_MARKER).above(),
+                Blocks.WAXED_OXIDIZED_COPPER.defaultBlockState());
+        set(level, origin.offset(REVISION_MARKER).north(),
+                Blocks.LODESTONE.defaultBlockState());
+    }
+
+    /**
+     * One-time installed-world migration for the real descending facade
+     * sequence and the four distinct Tokyo-3 tower families.
+     */
+    public static boolean ensureDistrictRevision(ServerLevel level,
+                                                 BlockPos origin,
+                                                 int retractionDepth)
+    {
+        if (districtRevisionPresent(level, origin))
+        {
+            return false;
+        }
+        buildDistrict(level, origin);
+        int depth = Math.max(0, Math.min(MAX_RETRACTION_DEPTH,
+                retractionDepth));
+        for (int step = 1; step <= depth; step++)
+        {
+            applyRetractionDepth(level, origin, step - 1, step);
+        }
+        ProjectSeele.LOGGER.info(
+                "Tokyo-3 district migrated to translated-building revision at {} depth={}",
+                origin.toShortString(), depth);
+        return true;
+    }
+
+    private static boolean districtRevisionPresent(ServerLevel level,
+                                                   BlockPos origin)
+    {
+        return level.getBlockState(origin.offset(REVISION_MARKER))
+                .is(Blocks.NETHERITE_BLOCK)
+                && level.getBlockState(origin.offset(REVISION_MARKER).above())
+                .is(Blocks.WAXED_OXIDIZED_COPPER)
+                && level.getBlockState(origin.offset(REVISION_MARKER).north())
+                .is(Blocks.LODESTONE);
+    }
+
+    /**
+     * Restores the four permanent NERV control blocks around the open launch
+     * court without rebuilding the retractable skyline.
+     */
+    public static void ensureLaunchControlQuarter(ServerLevel level,
+                                                  BlockPos origin)
+    {
+        for (int x : new int[] {-40, 40})
+        {
+            for (int z : new int[] {-40, 40})
+            {
+                BlockPos centre = origin.offset(x, 0, z);
+                if (!level.getBlockState(centre.above(11))
+                        .is(Blocks.REDSTONE_LAMP))
+                {
+                    buildLaunchControlBlock(level, centre, x, z);
+                }
+            }
+        }
     }
 
     public static DistrictAudit inspect(ServerLevel level, BlockPos origin)
@@ -306,69 +395,333 @@ public final class ThirdTokyoSurfaceBuilder
     }
 
     /**
-     * One block of descent. The order matters far more than the block count:
-     * vanilla rescans a column downwards whenever the block it removes was
-     * that column's surface, and a tower is up to forty blocks of hollow
-     * shell. Laying the lower cap before stripping the upper one turns six
-     * hundred forty-block rescans into six hundred one-block rescans.
+     * Translates the complete visible building down by one real block.
+     *
+     * <p>The old implementation shortened the tower from its roof. That made
+     * the antenna and roof appear to descend while the door and first floor
+     * stayed frozen until the final tick. Moving bottom-to-top is safe because
+     * every destination is below its unread source; the ground-floor doorway
+     * now enters the armour hatch first, exactly like a telescoping Tokyo-3
+     * building.</p>
      */
     private static void descendTowerLayer(ServerLevel level, BlockPos centre,
                                           TowerSpec tower,
                                           int oldVisible, int newVisible)
     {
-        if (newVisible > 0)
-        {
-            fillSquare(level, centre, newVisible + 1, tower.halfSize(),
-                    Blocks.SMOOTH_STONE.defaultBlockState(), UPDATE_TRAVEL);
-            if (!tower.outerWard())
-            {
-                set(level, centre.offset(0, newVisible, 0),
-                        Blocks.REDSTONE_BLOCK.defaultBlockState(), UPDATE_TRAVEL);
-            }
-            set(level, centre.offset(0, newVisible + 1, 0),
-                    Blocks.REDSTONE_LAMP.defaultBlockState(), UPDATE_TRAVEL);
-        }
+        BlockState core = level.getBlockState(centre);
+        boolean preserveCore = core.is(
+                ModBlocks.RETRACTABLE_BUILDING_CORE.get());
+        int half = tower.halfSize();
         setRoofMasts(level, centre, tower, oldVisible + 2,
                 Blocks.AIR.defaultBlockState());
-        fillSquare(level, centre, oldVisible + 1, tower.halfSize(),
+        fillSquare(level, centre, oldVisible + 1, half,
                 Blocks.AIR.defaultBlockState(), UPDATE_TRAVEL);
+        for (int y = 1; y <= oldVisible; y++)
+        {
+            copyTowerWallAndCentre(level, centre, half, y, y - 1);
+        }
+
+        paintRetractedHatch(level, centre, half, tower.outerWard());
+        if (preserveCore)
+        {
+            set(level, centre, core, UPDATE_TRAVEL);
+        }
+
         if (newVisible > 0)
         {
+            fillSquare(level, centre, newVisible + 1, half,
+                    Blocks.SMOOTH_STONE.defaultBlockState(), UPDATE_TRAVEL);
+            set(level, centre.offset(0, newVisible + 1, 0),
+                    Blocks.REDSTONE_LAMP.defaultBlockState(), UPDATE_TRAVEL);
             setRoofMasts(level, centre, tower, newVisible + 2,
                     Blocks.LIGHTNING_ROD.defaultBlockState());
             return;
         }
-        // The last layer lays no cap, so its wall ring and beacon survive the
-        // roof sweep and have to go explicitly.
-        clearTowerWallLayer(level, centre, oldVisible, tower.halfSize());
-        set(level, centre.offset(0, oldVisible, 0), Blocks.AIR.defaultBlockState(),
-                UPDATE_TRAVEL);
+
+        // The final one-block building still carried its roof and antenna at
+        // Y=1..2 after translation. Remove that complete last silhouette.
+        for (int y = 1; y <= 3; y++)
+        {
+            fillSquare(level, centre, y, half,
+                    Blocks.AIR.defaultBlockState(), UPDATE_TRAVEL);
+        }
     }
 
-    /** One block of ascent, raising the new cap before dissolving the old. */
+    /**
+     * Deletes lightning rods left standing in a mast column.
+     *
+     * <p>Until the ascent path learned to clear the previous layer's masts, a
+     * restored district grew one rod per lot corner per layer travelled — a
+     * three-hundred-block spike out of every building. The rods are the only
+     * thing removed, and only inside the four known mast columns of each lot,
+     * so nothing else in the district can be touched by this.
+     *
+     * @return how many stale rods were removed.
+     */
+    public static int sweepStrayMasts(ServerLevel level, BlockPos origin,
+                                       int currentDepth)
+    {
+        int removed = 0;
+        for (TowerSpec tower : MOVABLE_BUILDINGS)
+        {
+            BlockPos centre = origin.offset(tower.x(), 0, tower.z());
+            int keepAt = Math.max(0, tower.height() - currentDepth) + 2;
+            int ceilingY = ceilingRoofRelativeY(tower);
+            for (int y = Math.min(ceilingY, -1); y <= tower.height() + 3; y++)
+            {
+                if (y == keepAt)
+                {
+                    continue;
+                }
+                for (BlockPos mast : mastColumn(centre, tower, y))
+                {
+                    if (level.getBlockState(mast).is(Blocks.LIGHTNING_ROD))
+                    {
+                        set(level, mast, Blocks.AIR.defaultBlockState(),
+                                UPDATE_TRAVEL);
+                        removed++;
+                    }
+                }
+            }
+        }
+        if (removed > 0)
+        {
+            ProjectSeele.LOGGER.info(
+                    "Tokyo-3 swept {} stale tower masts at {} depth={}",
+                    removed, origin.toShortString(), currentDepth);
+        }
+        return removed;
+    }
+
+    /**
+     * Removes only complete roof/hatch planes left by the retired surface-Y
+     * origin.  Older saves moved the same deterministic X/Z tower grid from a
+     * higher street datum; retiring its SavedData stopped the mover but left
+     * smooth-stone roofs and pressure hatches floating above the new city.
+     *
+     * <p>A candidate must match more than ninety percent of one canonical
+     * generated plane, and the current district's legitimate roof is always
+     * excluded.  This deliberately cannot recognise roads, hand-built
+     * structures or imported skyscrapers.</p>
+     *
+     * @return number of stale planes removed.
+     */
+    public static int sweepLegacySurfaceCaps(ServerLevel level,
+                                              BlockPos origin,
+                                              int currentDepth)
+    {
+        int removedPlanes = 0;
+        int minimumY = origin.getY() + 1;
+        int maximumY = origin.getY() + 90;
+        for (TowerSpec tower : MOVABLE_BUILDINGS)
+        {
+            BlockPos centre = origin.offset(tower.x(), 0, tower.z());
+            int half = tower.halfSize();
+            int visible = Math.max(0, tower.height() - currentDepth);
+            int currentRoofY = origin.getY() + visible + 1;
+            for (int worldY = minimumY; worldY <= maximumY; worldY++)
+            {
+                if (worldY == currentRoofY)
+                {
+                    continue;
+                }
+                BlockPos planeCentre = new BlockPos(
+                        centre.getX(), worldY, centre.getZ());
+                if (legacyRoofCap(level, planeCentre, half))
+                {
+                    clearLegacyPlane(level, planeCentre, half);
+                    removedPlanes++;
+                    continue;
+                }
+                if (legacyRetractedHatch(level, planeCentre, half,
+                        tower.outerWard()))
+                {
+                    clearLegacyPlane(level, planeCentre, half);
+                    removedPlanes++;
+                }
+            }
+        }
+        if (removedPlanes > 0)
+        {
+            ProjectSeele.LOGGER.info(
+                    "Tokyo-3 removed {} signed legacy roof/hatch planes at {} depth={}",
+                    removedPlanes, origin.toShortString(), currentDepth);
+        }
+        return removedPlanes;
+    }
+
+    private static boolean legacyRoofCap(ServerLevel level, BlockPos centre,
+                                         int half)
+    {
+        if (!level.getBlockState(centre).is(Blocks.REDSTONE_LAMP))
+        {
+            return false;
+        }
+        int area = (half * 2 + 1) * (half * 2 + 1);
+        int matching = 0;
+        for (int x = -half; x <= half; x++)
+        {
+            for (int z = -half; z <= half; z++)
+            {
+                BlockState state = level.getBlockState(centre.offset(x, 0, z));
+                if (state.is(Blocks.SMOOTH_STONE)
+                        || x == 0 && z == 0
+                        && state.is(Blocks.REDSTONE_LAMP))
+                {
+                    matching++;
+                }
+            }
+        }
+        return matching * 10 >= area * 9;
+    }
+
+    private static boolean legacyRetractedHatch(ServerLevel level,
+                                                 BlockPos centre, int half,
+                                                 boolean outerWard)
+    {
+        for (int x : new int[] {-half, half})
+        {
+            for (int z : new int[] {-half, half})
+            {
+                if (!level.getBlockState(centre.offset(x, 0, z))
+                        .is(Blocks.POLISHED_DEEPSLATE))
+                {
+                    return false;
+                }
+            }
+        }
+        int area = (half * 2 + 1) * (half * 2 + 1);
+        int matching = 0;
+        for (int x = -half; x <= half; x++)
+        {
+            for (int z = -half; z <= half; z++)
+            {
+                BlockState expected = retractedHatchState(
+                        x, z, half, outerWard);
+                if (level.getBlockState(centre.offset(x, 0, z))
+                        .getBlock() == expected.getBlock())
+                {
+                    matching++;
+                }
+            }
+        }
+        return matching * 10 >= area * 9;
+    }
+
+    private static void clearLegacyPlane(ServerLevel level, BlockPos centre,
+                                         int half)
+    {
+        fillSquare(level, centre, 0, half,
+                Blocks.AIR.defaultBlockState(), UPDATE_TRAVEL);
+        for (int y = 1; y <= 2; y++)
+        {
+            for (int x = -half; x <= half; x++)
+            {
+                for (int z = -half; z <= half; z++)
+                {
+                    BlockPos position = centre.offset(x, y, z);
+                    BlockState state = level.getBlockState(position);
+                    if (state.is(Blocks.LIGHTNING_ROD)
+                            || state.is(Blocks.SNOW)
+                            || state.is(Blocks.SNOW_BLOCK))
+                    {
+                        set(level, position, Blocks.AIR.defaultBlockState(),
+                                UPDATE_TRAVEL);
+                    }
+                }
+            }
+        }
+    }
+
+    private static List<BlockPos> mastColumn(BlockPos centre, TowerSpec tower,
+                                              int y)
+    {
+        if (tower.outerWard())
+        {
+            return List.of(centre.offset(0, y, 0));
+        }
+        return List.of(centre.offset(-8, y, -8), centre.offset(-8, y, 8),
+                centre.offset(8, y, -8), centre.offset(8, y, 8));
+    }
+
+    /**
+     * Exact visual inverse of descent: move the visible stack upward, then
+     * reveal the next original wall layer at street level.
+     *
+     * <p>The source layer runs from the roof down to floor one. Consequently
+     * the lobby doorway is the last feature to emerge during restoration.</p>
+     */
     private static void ascendTowerLayer(ServerLevel level, BlockPos centre,
                                          TowerSpec tower,
                                          int oldVisible, int newVisible)
     {
-        fillSquare(level, centre, newVisible + 1, tower.halfSize(),
+        BlockState core = level.getBlockState(centre);
+        boolean preserveCore = core.is(
+                ModBlocks.RETRACTABLE_BUILDING_CORE.get());
+        int half = tower.halfSize();
+        if (oldVisible > 0)
+        {
+            setRoofMasts(level, centre, tower, oldVisible + 2,
+                    Blocks.AIR.defaultBlockState());
+            fillSquare(level, centre, oldVisible + 1, half,
+                    Blocks.AIR.defaultBlockState(), UPDATE_TRAVEL);
+            for (int y = oldVisible; y >= 1; y--)
+            {
+                copyTowerWallAndCentre(level, centre, half, y, y + 1);
+            }
+            clearTowerWallLayer(level, centre, 1, half);
+            set(level, centre.offset(0, 1, 0),
+                    Blocks.AIR.defaultBlockState(), UPDATE_TRAVEL);
+        }
+
+        int sourceY = tower.height() - newVisible + 1;
+        buildTowerWallLayer(level, centre, tower, sourceY, 1);
+        fillSquare(level, centre, newVisible + 1, half,
                 Blocks.SMOOTH_STONE.defaultBlockState(), UPDATE_TRAVEL);
         set(level, centre.offset(0, newVisible + 1, 0),
                 Blocks.REDSTONE_LAMP.defaultBlockState(), UPDATE_TRAVEL);
         setRoofMasts(level, centre, tower, newVisible + 2,
                 Blocks.LIGHTNING_ROD.defaultBlockState());
-        if (oldVisible > 0)
+
+        paintRetractedHatch(level, centre, half, tower.outerWard());
+        if (preserveCore)
         {
-            fillSquare(level, centre, oldVisible + 1, tower.halfSize(),
-                    Blocks.AIR.defaultBlockState(), UPDATE_TRAVEL);
-            set(level, centre.offset(0, oldVisible, 0),
-                    Blocks.AIR.defaultBlockState(), UPDATE_TRAVEL);
+            set(level, centre, core, UPDATE_TRAVEL);
         }
-        buildTowerWallLayer(level, centre, tower, newVisible, newVisible);
         if (!tower.outerWard())
         {
             set(level, centre.offset(0, newVisible, 0),
                     Blocks.REDSTONE_BLOCK.defaultBlockState(), UPDATE_TRAVEL);
         }
+    }
+
+    /**
+     * Copies only the inhabited shell and its centre marker. Towers are hollow,
+     * so translating every interior air cell would turn one animation layer
+     * into tens of thousands of needless block updates.
+     */
+    private static void copyTowerWallAndCentre(ServerLevel level,
+                                               BlockPos centre, int half,
+                                               int sourceY, int targetY)
+    {
+        for (int span = -half; span <= half; span++)
+        {
+            set(level, centre.offset(-half, targetY, span),
+                    level.getBlockState(centre.offset(-half, sourceY, span)),
+                    UPDATE_TRAVEL);
+            set(level, centre.offset(half, targetY, span),
+                    level.getBlockState(centre.offset(half, sourceY, span)),
+                    UPDATE_TRAVEL);
+            set(level, centre.offset(span, targetY, -half),
+                    level.getBlockState(centre.offset(span, sourceY, -half)),
+                    UPDATE_TRAVEL);
+            set(level, centre.offset(span, targetY, half),
+                    level.getBlockState(centre.offset(span, sourceY, half)),
+                    UPDATE_TRAVEL);
+        }
+        set(level, centre.offset(0, targetY, 0),
+                level.getBlockState(centre.offset(0, sourceY, 0)),
+                UPDATE_TRAVEL);
     }
 
     private static void setRoofMasts(ServerLevel level, BlockPos centre,
@@ -549,14 +902,7 @@ public final class ThirdTokyoSurfaceBuilder
     private static void buildArmouredTower(ServerLevel level, BlockPos centre,
                                            int height, int gridX, int gridZ)
     {
-        BlockState armor = Blocks.GRAY_CONCRETE.defaultBlockState();
-        BlockState dark = Blocks.DEEPSLATE_TILES.defaultBlockState();
-        BlockState glass = Math.floorMod(gridX + gridZ, 80) == 0
-                ? Blocks.LIGHT_BLUE_STAINED_GLASS.defaultBlockState()
-                : Blocks.CYAN_STAINED_GLASS.defaultBlockState();
-        BlockState nervStripe = Blocks.ORANGE_CONCRETE.defaultBlockState();
-
-        fillSquare(level, centre, 0, LOT_HALF_SIZE, Blocks.POLISHED_DEEPSLATE.defaultBlockState());
+        paintRetractedHatch(level, centre, LOT_HALF_SIZE, false);
         set(level, centre, ModBlocks.RETRACTABLE_BUILDING_CORE.get()
                 .defaultBlockState().setValue(RetractableBuildingCoreBlock.ARMED, false));
         for (int y = 1; y <= height; y++)
@@ -564,13 +910,13 @@ public final class ThirdTokyoSurfaceBuilder
             for (int i = -LOT_HALF_SIZE; i <= LOT_HALF_SIZE; i++)
             {
                 set(level, centre.offset(-LOT_HALF_SIZE, y, i),
-                        towerWall(y, i, armor, dark, glass, nervStripe));
+                        towerWall(y, i, gridX, gridZ));
                 set(level, centre.offset(LOT_HALF_SIZE, y, i),
-                        towerWall(y, i, armor, dark, glass, nervStripe));
+                        towerWall(y, i, gridX, gridZ));
                 set(level, centre.offset(i, y, -LOT_HALF_SIZE),
-                        towerWall(y, i, armor, dark, glass, nervStripe));
+                        towerWall(y, i, gridX, gridZ));
                 set(level, centre.offset(i, y, LOT_HALF_SIZE),
-                        towerWall(y, i, armor, dark, glass, nervStripe));
+                        towerWall(y, i, gridX, gridZ));
             }
         }
         cutInnerDoor(level, centre, gridX, gridZ);
@@ -598,8 +944,7 @@ public final class ThirdTokyoSurfaceBuilder
         BlockState glass = Math.floorMod(gridX + gridZ, 3) == 0
                 ? Blocks.LIGHT_BLUE_STAINED_GLASS.defaultBlockState()
                 : Blocks.CYAN_STAINED_GLASS.defaultBlockState();
-        fillSquare(level, centre, 0, half,
-                Blocks.POLISHED_DEEPSLATE.defaultBlockState());
+        paintRetractedHatch(level, centre, half, true);
         for (int y = 1; y <= height; y++)
         {
             for (int span = -half; span <= half; span++)
@@ -627,23 +972,55 @@ public final class ThirdTokyoSurfaceBuilder
         }
     }
 
-    private static BlockState towerWall(int y, int span, BlockState armor,
-                                        BlockState dark, BlockState glass,
-                                        BlockState nervStripe)
+    private static BlockState towerWall(int y, int span, int gridX, int gridZ)
     {
+        int style = Math.floorMod(gridX / ROAD_SPACING * 31
+                + gridZ / ROAD_SPACING * 17, 4);
+        BlockState armor = switch (style)
+        {
+            case 1 -> Blocks.LIGHT_GRAY_CONCRETE.defaultBlockState();
+            case 2 -> Blocks.POLISHED_DEEPSLATE.defaultBlockState();
+            case 3 -> Blocks.WHITE_CONCRETE.defaultBlockState();
+            default -> Blocks.GRAY_CONCRETE.defaultBlockState();
+        };
+        BlockState dark = style == 3
+                ? Blocks.GRAY_CONCRETE.defaultBlockState()
+                : Blocks.DEEPSLATE_TILES.defaultBlockState();
+        BlockState glass = switch (style)
+        {
+            case 1 -> Blocks.BLUE_STAINED_GLASS.defaultBlockState();
+            case 2 -> Blocks.BLACK_STAINED_GLASS.defaultBlockState();
+            case 3 -> Blocks.LIGHT_BLUE_STAINED_GLASS.defaultBlockState();
+            default -> Blocks.CYAN_STAINED_GLASS.defaultBlockState();
+        };
         if (y <= 5)
         {
             return dark;
         }
-        if (y == 6 || y % 12 == 0)
+        if (y == 6 || (style == 2 ? y % 16 == 0 : y % 12 == 0))
         {
-            return nervStripe;
+            return style == 1
+                    ? Blocks.YELLOW_CONCRETE.defaultBlockState()
+                    : Blocks.ORANGE_CONCRETE.defaultBlockState();
         }
         if (Math.abs(span) >= LOT_HALF_SIZE - 1)
         {
             return armor;
         }
-        return y % 4 == 1 || y % 4 == 2 ? glass : armor;
+        return switch (style)
+        {
+            // Long horizontal office bands.
+            case 0 -> y % 4 == 1 || y % 4 == 2 ? glass : armor;
+            // Narrow vertical window bays with bright structural mullions.
+            case 1 -> Math.floorMod(span, 5) <= 2
+                    && y % 5 != 0 ? glass : armor;
+            // Heavy NERV bunker tower with restrained slit windows.
+            case 2 -> y % 6 == 2
+                    && Math.floorMod(span, 4) <= 1 ? glass : armor;
+            // Pale residential facade: paired windows and broad floor plates.
+            default -> y % 7 >= 2 && y % 7 <= 4
+                    && Math.floorMod(span + 1, 6) <= 2 ? glass : armor;
+        };
     }
 
     private static void cutInnerDoor(ServerLevel level, BlockPos centre, int gridX, int gridZ)
@@ -680,18 +1057,12 @@ public final class ThirdTokyoSurfaceBuilder
                                             TowerSpec tower,
                                             int sourceY, int targetY)
     {
-        BlockState armor = Blocks.GRAY_CONCRETE.defaultBlockState();
-        BlockState dark = Blocks.DEEPSLATE_TILES.defaultBlockState();
-        BlockState glass = Math.floorMod(tower.x() + tower.z(), 80) == 0
-                ? Blocks.LIGHT_BLUE_STAINED_GLASS.defaultBlockState()
-                : Blocks.CYAN_STAINED_GLASS.defaultBlockState();
-        BlockState nervStripe = Blocks.ORANGE_CONCRETE.defaultBlockState();
         int half = tower.halfSize();
         for (int i = -half; i <= half; i++)
         {
             BlockState state = tower.outerWard()
                     ? outerWardWall(sourceY, i, tower)
-                    : towerWall(sourceY, i, armor, dark, glass, nervStripe);
+                    : towerWall(sourceY, i, tower.x(), tower.z());
             set(level, centre.offset(-half, targetY, i), state, UPDATE_TRAVEL);
             set(level, centre.offset(half, targetY, i), state, UPDATE_TRAVEL);
             set(level, centre.offset(i, targetY, -half), state, UPDATE_TRAVEL);
@@ -713,6 +1084,156 @@ public final class ThirdTokyoSurfaceBuilder
                 : Blocks.CYAN_STAINED_GLASS.defaultBlockState();
         return y <= 4 || y % 10 == 0
                 || Math.abs(span) >= tower.halfSize() - 1 ? frame : glass;
+    }
+
+    /**
+     * Flush mechanical cover left behind when a Tokyo-3 tower descends. It is
+     * intentionally readable from EVA height: a dark pressure rim, striped
+     * interlock band and segmented steel leaves replace the old featureless
+     * smooth-stone test grid.
+     */
+    private static void paintRetractedHatch(ServerLevel level, BlockPos centre,
+                                            int halfSize,
+                                            boolean outerWard)
+    {
+        for (int x = -halfSize; x <= halfSize; x++)
+        {
+            for (int z = -halfSize; z <= halfSize; z++)
+            {
+                if (!outerWard && x == 0 && z == 0
+                        && level.getBlockState(centre)
+                                .is(ModBlocks.RETRACTABLE_BUILDING_CORE.get()))
+                {
+                    continue;
+                }
+                set(level, centre.offset(x, 0, z),
+                        retractedHatchState(x, z, halfSize, outerWard),
+                        UPDATE_TRAVEL);
+            }
+        }
+    }
+
+    private static BlockState retractedHatchState(int x, int z,
+                                                  int halfSize,
+                                                  boolean outerWard)
+    {
+        int edge = Math.max(Math.abs(x), Math.abs(z));
+        BlockState state;
+        if (edge >= halfSize - 1)
+        {
+            state = Blocks.POLISHED_DEEPSLATE.defaultBlockState();
+        }
+        else if (edge == halfSize - 2)
+        {
+            state = Math.floorMod(x + z, 4) < 2
+                    ? Blocks.ORANGE_CONCRETE.defaultBlockState()
+                    : Blocks.BLACK_CONCRETE.defaultBlockState();
+        }
+        else if (Math.floorMod(x, 6) == 0
+                || Math.floorMod(z, 6) == 0)
+        {
+            state = Blocks.IRON_BLOCK.defaultBlockState();
+        }
+        else
+        {
+            state = outerWard
+                    ? Blocks.LIGHT_GRAY_CONCRETE.defaultBlockState()
+                    : Blocks.GRAY_CONCRETE.defaultBlockState();
+        }
+        if (Math.abs(x) == halfSize - 3
+                && Math.abs(z) == halfSize - 3)
+        {
+            state = Blocks.SEA_LANTERN.defaultBlockState();
+        }
+        return state;
+    }
+
+    /**
+     * Low permanent launch-control architecture. Civilian high-rises travel
+     * into the GeoFront, but these armoured observer cells remain around the
+     * three shaft heads so battle configuration still reads as a real city
+     * defence complex rather than an empty creative-mode platform.
+     */
+    private static void buildLaunchControlBlock(ServerLevel level,
+                                                BlockPos centre,
+                                                int gridX, int gridZ)
+    {
+        final int halfX = 7;
+        final int halfZ = 7;
+        final int height = 10;
+        for (int x = -halfX; x <= halfX; x++)
+        {
+            for (int z = -halfZ; z <= halfZ; z++)
+            {
+                set(level, centre.offset(x, 0, z),
+                        Blocks.POLISHED_DEEPSLATE.defaultBlockState());
+                for (int y = 1; y <= height; y++)
+                {
+                    boolean shell = Math.abs(x) == halfX
+                            || Math.abs(z) == halfZ;
+                    if (!shell)
+                    {
+                        clear(level, centre.offset(x, y, z));
+                        continue;
+                    }
+                    BlockState wall;
+                    if (y == 3)
+                    {
+                        wall = Blocks.ORANGE_CONCRETE.defaultBlockState();
+                    }
+                    else if (y >= 5 && y <= 7
+                            && Math.abs(x) < halfX - 1)
+                    {
+                        wall = Blocks.GRAY_STAINED_GLASS.defaultBlockState();
+                    }
+                    else if (Math.abs(x) == halfX
+                            && Math.abs(z) == halfZ)
+                    {
+                        wall = Blocks.POLISHED_DEEPSLATE.defaultBlockState();
+                    }
+                    else
+                    {
+                        wall = Blocks.GRAY_CONCRETE.defaultBlockState();
+                    }
+                    set(level, centre.offset(x, y, z), wall);
+                }
+                BlockState roof = Math.floorMod(x + z, 6) == 0
+                        ? Blocks.SEA_LANTERN.defaultBlockState()
+                        : Blocks.SMOOTH_STONE.defaultBlockState();
+                set(level, centre.offset(x, height + 1, z), roof);
+            }
+        }
+
+        int inwardWall = gridZ < 0 ? halfZ : -halfZ;
+        for (int x = -1; x <= 1; x++)
+        {
+            for (int y = 1; y <= 3; y++)
+            {
+                clear(level, centre.offset(x, y, inwardWall));
+            }
+        }
+        set(level, centre.above(height + 1),
+                Blocks.REDSTONE_LAMP.defaultBlockState());
+        for (int y = height + 2; y <= height + 15; y++)
+        {
+            set(level, centre.above(y), y % 4 == 0
+                    ? Blocks.REDSTONE_LAMP.defaultBlockState()
+                    : Blocks.IRON_BARS.defaultBlockState());
+        }
+        set(level, centre.above(height + 16),
+                Blocks.LIGHTNING_ROD.defaultBlockState());
+
+        // Roof identification bars make the four cells legible in an
+        // overhead command view and give each shaft a NERV-coloured quadrant.
+        BlockState quadrant = gridX < 0
+                ? Blocks.ORANGE_CONCRETE.defaultBlockState()
+                : Blocks.RED_CONCRETE.defaultBlockState();
+        for (int offset = -5; offset <= 5; offset++)
+        {
+            set(level, centre.offset(offset, height + 1, 0), quadrant);
+        }
+        set(level, centre.above(height + 1),
+                Blocks.REDSTONE_LAMP.defaultBlockState());
     }
 
     private static void buildSubstation(ServerLevel level, BlockPos centre)
@@ -788,8 +1309,170 @@ public final class ThirdTokyoSurfaceBuilder
                 set(level, centre.offset(i, 0, ring), warning);
             }
         }
-        set(level, centre.above(), Blocks.BEACON.defaultBlockState());
-        set(level, centre.above(2), Blocks.RED_STAINED_GLASS.defaultBlockState());
+    }
+
+    /**
+     * One TV Episode-3-inspired physical Palette Rifle station.  The facade
+     * follows the confirmed visual hierarchy (armoured shell, front rolling
+     * shutter, four guide posts, roof locks and warning lamps); shaft depth
+     * and maintenance access remain Project SEELE engineering.
+     */
+    private static void buildWeaponLiftStation(ServerLevel level,
+                                               BlockPos centre)
+    {
+        BlockState armor = Blocks.POLISHED_DEEPSLATE.defaultBlockState();
+        BlockState frame = Blocks.IRON_BLOCK.defaultBlockState();
+        BlockState dark = Blocks.BLACK_CONCRETE.defaultBlockState();
+
+        // Clear only the authored building interior.  Roads and neighbouring
+        // lots remain untouched.
+        for (int x = -WEAPON_STATION_HALF_X + 1;
+             x < WEAPON_STATION_HALF_X; x++)
+        {
+            for (int z = -WEAPON_STATION_HALF_Z + 1;
+                 z < WEAPON_STATION_HALF_Z; z++)
+            {
+                for (int y = 1; y < WEAPON_STATION_HEIGHT; y++)
+                {
+                    clear(level, centre.offset(x, y, z));
+                }
+            }
+        }
+
+        for (int y = 1; y <= WEAPON_STATION_HEIGHT; y++)
+        {
+            for (int x = -WEAPON_STATION_HALF_X;
+                 x <= WEAPON_STATION_HALF_X; x++)
+            {
+                set(level, centre.offset(x, y, -WEAPON_STATION_HALF_Z),
+                        y % 6 == 0 ? dark : armor);
+                boolean doorway = Math.abs(x) <= WEAPON_DOOR_HALF_X
+                        && y >= WEAPON_DOOR_BOTTOM
+                        && y <= WEAPON_DOOR_TOP;
+                set(level, centre.offset(x, y, WEAPON_STATION_HALF_Z),
+                        doorway ? frame : (y % 6 == 0 ? dark : armor));
+            }
+            for (int z = -WEAPON_STATION_HALF_Z;
+                 z <= WEAPON_STATION_HALF_Z; z++)
+            {
+                set(level, centre.offset(-WEAPON_STATION_HALF_X, y, z),
+                        y % 6 == 0 ? dark : armor);
+                set(level, centre.offset(WEAPON_STATION_HALF_X, y, z),
+                        y % 6 == 0 ? dark : armor);
+            }
+        }
+        for (int x = -WEAPON_STATION_HALF_X;
+             x <= WEAPON_STATION_HALF_X; x++)
+        {
+            for (int z = -WEAPON_STATION_HALF_Z;
+                 z <= WEAPON_STATION_HALF_Z; z++)
+            {
+                set(level, centre.offset(x, WEAPON_STATION_HEIGHT, z),
+                        Math.abs(x) == WEAPON_STATION_HALF_X
+                                || Math.abs(z) == WEAPON_STATION_HALF_Z
+                                ? frame : armor);
+            }
+        }
+
+        // Reinforced 19x13 clear lift shaft; its vertical payload route never
+        // shares a block with the rear personnel maintenance door.
+        for (int y = WEAPON_SHAFT_BOTTOM; y <= 1; y++)
+        {
+            for (int x = -10; x <= 10; x++)
+            {
+                for (int z = -7; z <= 7; z++)
+                {
+                    boolean shell = Math.abs(x) == 10 || Math.abs(z) == 7;
+                    set(level, centre.offset(x, y, z), shell
+                            ? Blocks.REINFORCED_DEEPSLATE.defaultBlockState()
+                            : Blocks.AIR.defaultBlockState());
+                }
+            }
+        }
+        for (int x = -10; x <= 10; x++)
+        {
+            for (int z = -7; z <= 7; z++)
+            {
+                if (Math.abs(x) >= 9 || Math.abs(z) >= 6)
+                {
+                    set(level, centre.offset(x, 0, z), frame);
+                }
+            }
+        }
+
+        // Rear manual service door and a reachable rack/control pedestal.
+        BlockPos door = centre.offset(0, 1, -WEAPON_STATION_HALF_Z);
+        set(level, door, Blocks.IRON_DOOR.defaultBlockState()
+                .setValue(DoorBlock.FACING, Direction.NORTH)
+                .setValue(DoorBlock.HALF, DoubleBlockHalf.LOWER));
+        set(level, door.above(), Blocks.IRON_DOOR.defaultBlockState()
+                .setValue(DoorBlock.FACING, Direction.NORTH)
+                .setValue(DoorBlock.HALF, DoubleBlockHalf.UPPER));
+        set(level, centre.offset(-2, 2, -WEAPON_STATION_HALF_Z - 1),
+                Blocks.LEVER.defaultBlockState()
+                        .setValue(LeverBlock.FACE, AttachFace.WALL)
+                        .setValue(LeverBlock.FACING, Direction.NORTH));
+        BlockPos rackPos = centre.offset(-10, 1, -6);
+        boolean newRack = !level.getBlockState(rackPos)
+                .is(ModBlocks.EVA_ARMAMENT_RACK.get());
+        set(level, rackPos,
+                ModBlocks.EVA_ARMAMENT_RACK.get().defaultBlockState());
+        if (level.getBlockEntity(rackPos)
+                instanceof EvaArmamentRackBlockEntity rack)
+        {
+            rack.configurePhysicalLift(centre.offset(0, -22, 0),
+                    centre.offset(0, 5, 0), centre);
+            if (newRack)
+            {
+                rack.stockPalletRifleStation();
+            }
+        }
+        updateWeaponLiftFacade(level, centre, 0.0D, false);
+    }
+
+    /** Applies only changed shutter/lock cells, so lift motion does not spam. */
+    public static void updateWeaponLiftFacade(ServerLevel level,
+                                              BlockPos centre,
+                                              double openness,
+                                              boolean sequenceActive)
+    {
+        double clamped = Math.max(0.0D, Math.min(1.0D, openness));
+        int doorRows = WEAPON_DOOR_TOP - WEAPON_DOOR_BOTTOM + 1;
+        int openRows = (int)Math.floor(clamped * doorRows + 1.0E-6D);
+        for (int x = -WEAPON_DOOR_HALF_X; x <= WEAPON_DOOR_HALF_X; x++)
+        {
+            for (int row = 0; row < doorRows; row++)
+            {
+                set(level, centre.offset(x, WEAPON_DOOR_BOTTOM + row,
+                        WEAPON_STATION_HALF_Z), row < openRows
+                        ? Blocks.AIR.defaultBlockState()
+                        : Blocks.IRON_BLOCK.defaultBlockState());
+            }
+        }
+        int extension = (int)Math.round(clamped * 4.0D);
+        for (int x : new int[] {-11, 11})
+        {
+            for (int z : new int[] {-7, 7})
+            {
+                for (int step = 1; step <= 4; step++)
+                {
+                    set(level, centre.offset(x,
+                            WEAPON_STATION_HEIGHT + step, z),
+                            step <= extension
+                                    ? Blocks.IRON_BARS.defaultBlockState()
+                                    : Blocks.AIR.defaultBlockState());
+                }
+                set(level, centre.offset(x, WEAPON_STATION_HEIGHT, z),
+                        extension > 0 ? Blocks.PISTON.defaultBlockState()
+                                : Blocks.IRON_BLOCK.defaultBlockState());
+            }
+        }
+        BlockState warning = Blocks.REDSTONE_LAMP.defaultBlockState()
+                .setValue(BlockStateProperties.LIT, sequenceActive);
+        for (int x : new int[] {-10, 10})
+        {
+            set(level, centre.offset(x, 2, WEAPON_STATION_HALF_Z), warning);
+        }
     }
 
     private static void buildPowerPylon(ServerLevel level, BlockPos centre)
@@ -884,7 +1567,69 @@ public final class ThirdTokyoSurfaceBuilder
     {
         return x == -120 && z == -80
                 || x == 120 && z == -80
-                || x == 120 && z == 80;
+                || x == 120 && z == 80
+                // The local high-rise rotated into this neighbouring lot.
+                // Keeping the generated 22-block tower here made both shells
+                // intersect around world (120,100,294).
+                || x == 80 && z == 80
+                // Dedicated footprint for the S20 public surface lift. The
+                // former generated tower intersected the west pavilion wall.
+                || x == 80 && z == 40;
+    }
+
+    /**
+     * Removes one deterministic armoured tower without rebuilding the whole
+     * district. Used only by the bounded S20 migration which resolves old
+     * overlapping lots in an already-generated local world.
+     */
+    public static void removeArmouredTower(ServerLevel level, BlockPos origin,
+                                            int gridX, int gridZ,
+                                            boolean restoreGrass)
+    {
+        BlockPos centre = origin.offset(gridX, 0, gridZ);
+        int height = towerHeight(gridX, gridZ) + 3;
+        clearPrism(level, centre, LOT_HALF_SIZE, height, restoreGrass);
+    }
+
+    /** Removes one old outer-ward tower from a superseded district origin. */
+    public static void removeOuterWardTower(ServerLevel level, BlockPos origin,
+                                             int gridX, int gridZ,
+                                             boolean restoreGrass)
+    {
+        BlockPos centre = origin.offset(gridX, 0, gridZ);
+        int height = outerWardHeight(gridX, gridZ) + 2;
+        clearPrism(level, centre, 9, height, restoreGrass);
+    }
+
+    /** Removes one old pylon, including its widest cross-arms. */
+    public static void removePowerPylon(ServerLevel level, BlockPos origin,
+                                        int gridX, int gridZ,
+                                        boolean restoreGrass)
+    {
+        BlockPos centre = origin.offset(gridX, 0, gridZ);
+        clearPrism(level, centre, 5, 29, restoreGrass);
+    }
+
+    private static void clearPrism(ServerLevel level, BlockPos centre,
+                                   int halfSize, int height,
+                                   boolean restoreGrass)
+    {
+        for (int x = -halfSize; x <= halfSize; x++)
+        {
+            for (int z = -halfSize; z <= halfSize; z++)
+            {
+                if (restoreGrass)
+                {
+                    set(level, centre.offset(x, 0, z),
+                            Blocks.GRASS_BLOCK.defaultBlockState());
+                }
+                for (int y = 1; y <= height; y++)
+                {
+                    set(level, centre.offset(x, y, z),
+                            Blocks.AIR.defaultBlockState());
+                }
+            }
+        }
     }
 
     private static boolean reservedOuterTransitLot(int x, int z)
@@ -1056,6 +1801,14 @@ public final class ThirdTokyoSurfaceBuilder
         }
     }
 
+    private static void clear(ServerLevel level, BlockPos position)
+    {
+        if (!level.getBlockState(position).isAir())
+        {
+            set(level, position, Blocks.AIR.defaultBlockState());
+        }
+    }
+
     private static void fillSquare(ServerLevel level, BlockPos centre, int y,
                                    int halfSize, BlockState state)
     {
@@ -1085,6 +1838,7 @@ public final class ThirdTokyoSurfaceBuilder
         if (!level.getBlockState(position).equals(state))
         {
             level.setBlock(position, state, flags);
+            PerformanceCounters.recordWorldBlockWrites(1);
         }
     }
 

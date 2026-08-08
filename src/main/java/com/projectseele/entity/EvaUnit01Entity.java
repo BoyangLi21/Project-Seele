@@ -1,6 +1,7 @@
 package com.projectseele.entity;
 
 import java.util.List;
+import java.util.UUID;
 import java.util.function.Function;
 
 import com.projectseele.ProjectSeele;
@@ -19,13 +20,20 @@ import com.projectseele.registry.ModSounds;
 import com.projectseele.registry.ModEntities;
 import com.projectseele.world.IntegratedNervMapBuilder;
 import com.projectseele.world.EvaHangarBuilder;
+import com.projectseele.world.EvaLogisticsDirector;
+import com.projectseele.world.EntryPlugDirector;
+import com.projectseele.world.EntryPlugKinematics;
+import com.projectseele.world.FacilityV2EvaRuntime;
 import com.projectseele.world.NervCarrierVisuals;
+import com.projectseele.world.PerformanceCounters;
+import com.projectseele.world.RigidTransform;
 import com.projectseele.world.UmbilicalPylonBlockEntity;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.core.particles.DustParticleOptions;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.game.ClientboundTeleportEntityPacket;
 import net.minecraft.network.syncher.EntityDataAccessor;
@@ -44,6 +52,7 @@ import net.minecraft.world.DifficultyInstance;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.damagesource.DamageTypes;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityDimensions;
 import net.minecraft.world.entity.EntityType;
@@ -78,7 +87,7 @@ import software.bernie.geckolib.core.object.PlayState;
 import software.bernie.geckolib.util.GeckoLibUtil;
 
 /**
- * EVA Unit-01: rideable 30-block war machine and the pilot's body in every
+ * EVA Unit-01: rideable 60-block war machine and the pilot's body in every
  * Angel fight. Carries contact weapons, a positron cannon, automatic pallet
  * SMG and N2 self-destruct, plus an A.T. Field shield pool. All pilot input
  * arrives via {@code ServerboundEvaControlPacket}.
@@ -141,29 +150,29 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     private static final float MELEE_KNIFE_DAMAGE = 60.0F;
     private static final float MELEE_LANCE_DAMAGE = 120.0F;
     private static final int MELEE_COOLDOWN_TICKS = 12;
-    // Reach geometry for the 30-block frame.
-    private static final double MELEE_REACH = 10.0D;
-    private static final double MELEE_RADIUS = 7.5D;
+    // Reach geometry follows the shared 60-block frame.
+    private static final double MELEE_REACH = EvaScale.fromLegacy(10.0D);
+    private static final double MELEE_RADIUS = EvaScale.fromLegacy(7.5D);
     // Smash: crouch + attack. Slow, heavy, area knockdown.
     private static final float SMASH_FIST_DAMAGE = 35.0F;
     private static final float SMASH_KNIFE_DAMAGE = 80.0F;
     private static final float SMASH_LANCE_DAMAGE = 160.0F;
     private static final int SMASH_COOLDOWN_TICKS = 60;
-    private static final double SMASH_RADIUS = 11.0D;
+    private static final double SMASH_RADIUS = EvaScale.fromLegacy(11.0D);
     private static final float STOMP_DAMAGE = 50.0F;
     private static final int STOMP_COOLDOWN_TICKS = 50;
-    private static final double STOMP_RADIUS = 9.4D;
+    private static final double STOMP_RADIUS = EvaScale.fromLegacy(9.4D);
     private static final float AT_FIELD_MAX = 200.0F;
     private static final float AT_FIELD_REGEN = 0.4F;
     private static final int AT_FIELD_REGEN_DELAY = 100;
     private static final float AT_FIELD_MIN_TO_RAISE = 20.0F;
-    private static final float NORMAL_WIDTH = 8.5F;
-    private static final float NORMAL_HEIGHT = 30.0F;
-    private static final float CROUCH_HEIGHT = 21.0F;
+    private static final float NORMAL_WIDTH = EvaScale.NORMAL_WIDTH;
+    private static final float NORMAL_HEIGHT = EvaScale.NORMAL_HEIGHT;
+    private static final float CROUCH_HEIGHT = EvaScale.CROUCH_HEIGHT;
     // Z is a true belly-down crawl: wide and very low, distinct from the
     // Shift kneel / Unit-00 shield brace.
-    private static final float PRONE_WIDTH = 24.0F;
-    private static final float PRONE_HEIGHT = 8.5F;
+    private static final float PRONE_WIDTH = EvaScale.PRONE_WIDTH;
+    private static final float PRONE_HEIGHT = EvaScale.PRONE_HEIGHT;
     private static final float WALK_SPEED = 0.42F;
     private static final float CROUCH_SPEED = 0.18F;
     private static final float PRONE_SPEED = 0.10F;
@@ -174,27 +183,45 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     private static final int JUMP_COYOTE_TICKS = 5;
     private static final int LAUNCH_ASCENT_TICKS = 34;
     private static final int LAUNCH_CLEAR_TICKS = 18;
-    private static final double LAUNCH_TARGET_ABOVE_BED = 32.0D;
-    private static final double CONTINUOUS_ASCENT_BLOCKS_PER_TICK = 2.0D;
-    private static final int CONTINUOUS_EXIT_HEADROOM = 40;
-    // Keep exactly one authoritative surface tick for the locally controlled
-    // vehicle. Longer holds are visible as a carrier snag after the EVA has
-    // already cleared the street aperture.
-    private static final int CONTINUOUS_SURFACE_SYNC_TICKS = 1;
-    private static final double SILO_ENTRY_MIN_HEIGHT = 24.0D;
-    private static final double SILO_ENTRY_MAX_HEIGHT = 29.5D;
+    private static final double LAUNCH_TARGET_ABOVE_BED =
+            EvaScale.fromLegacy(32.0D);
+    private static final double CONTINUOUS_ASCENT_BLOCKS_PER_TICK = 3.0D;
+    private static final int CONTINUOUS_EXIT_HEADROOM = 82;
+    private static final int LAUNCH_CARRIER_HALF =
+            EvaHangarBuilder.CARRIER_HALF_EXTENT;
+    // The pilot is nested EVA -> entry plug -> player.  A locally controlled
+    // vehicle ignores the ordinary teleport correction at a shaft exit, so a
+    // single packet was vulnerable to the following client ride tick putting
+    // the camera back underground.  Three authoritative ticks are short
+    // enough to avoid a visible carrier pause while making the complete ride
+    // chain converge before control is returned.
+    /*
+     * Keep the authoritative sortie position alive for one full second.  A
+     * locally controlled nested pilot ignores ordinary vehicle teleport
+     * packets during a frame hitch; three ticks was too short and left the
+     * first-person camera trapped at the bottom of the launch shaft.
+     */
+    private static final int CONTINUOUS_SURFACE_SYNC_TICKS = 20;
+    private static final double SILO_ENTRY_MIN_HEIGHT =
+            EvaScale.fromLegacy(24.0D);
+    private static final double SILO_ENTRY_MAX_HEIGHT =
+            EvaScale.fromLegacy(29.5D);
     private static final double SILO_ENTRY_MIN_REAR_DOT = 0.62D;
-    private static final double SILO_ENTRY_MIN_DISTANCE = 0.75D;
-    private static final double SILO_ENTRY_MAX_DISTANCE = 9.5D;
-    private static final double ENTRY_PLUG_USE_REACH = 8.25D;
-    private static final double ENTRY_PLUG_AIM_RADIUS = 2.0D;
+    private static final double SILO_ENTRY_MIN_DISTANCE =
+            EvaScale.fromLegacy(0.75D);
+    private static final double SILO_ENTRY_MAX_DISTANCE =
+            EvaScale.fromLegacy(9.5D);
+    private static final double ENTRY_PLUG_USE_REACH =
+            EvaScale.fromLegacy(8.25D);
+    private static final double ENTRY_PLUG_AIM_RADIUS =
+            EvaScale.fromLegacy(2.0D);
     // Final entry-plug pivots in the reviewed 2.5x Tiger meshes. Keeping the
     // three sockets explicit makes interaction follow each airframe instead
     // of guessing from the entity AABB or a legacy cube body's chest.
     private static final double ENTRY_PLUG_HEIGHT_00 = 26.9164D;
     private static final double ENTRY_PLUG_HEIGHT_01 = 26.9170D;
     private static final double ENTRY_PLUG_HEIGHT_02 = 26.9178D;
-    private static final double ENTRY_PLUG_REAR_OFFSET = 1.25D;
+    public static final double ENTRY_PLUG_REAR_OFFSET = 1.25D;
     private static final int LAUNCH_PASSENGER_RESTORE_GRACE_TICKS = 40;
     private static final int NO_LAUNCH_CARRIER = Integer.MIN_VALUE;
     /** Mechanical elevation envelope of the shared cannon/body aim rig. */
@@ -203,29 +230,49 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     // Muzzle sockets measured from the reviewed 2.5x Tiger rig and the
     // locally installed TV Pallet Rifle. The ray still starts at the pilot's
     // eye for fair aiming; tracers and sound start at the visible muzzle.
-    private static final double RIFLE_STANDING_PIVOT_HEIGHT = 24.2201D;
-    private static final double RIFLE_STANDING_PIVOT_FORWARD = 0.0D;
-    private static final double RIFLE_STANDING_MUZZLE_FORWARD = 18.3308D;
-    private static final double RIFLE_STANDING_MUZZLE_UP = 0.6153D;
-    private static final double RIFLE_STANDING_MUZZLE_RIGHT = 1.2752D;
-    private static final double RIFLE_PRONE_PIVOT_HEIGHT = 3.9523D;
-    private static final double RIFLE_PRONE_PIVOT_FORWARD = 9.9317D;
-    private static final double RIFLE_PRONE_MUZZLE_FORWARD = 19.9715D;
-    private static final double RIFLE_PRONE_MUZZLE_UP = -0.4405D;
-    private static final double RIFLE_PRONE_MUZZLE_RIGHT = 0.7458D;
+    private static final double RIFLE_STANDING_PIVOT_HEIGHT =
+            EvaScale.fromLegacy(24.2201D);
+    private static final double RIFLE_STANDING_PIVOT_FORWARD =
+            EvaScale.fromLegacy(0.0D);
+    private static final double RIFLE_STANDING_MUZZLE_FORWARD =
+            EvaScale.fromLegacy(18.3308D);
+    private static final double RIFLE_STANDING_MUZZLE_UP =
+            EvaScale.fromLegacy(0.6153D);
+    private static final double RIFLE_STANDING_MUZZLE_RIGHT =
+            EvaScale.fromLegacy(1.2752D);
+    private static final double RIFLE_PRONE_PIVOT_HEIGHT =
+            EvaScale.fromLegacy(3.9523D);
+    private static final double RIFLE_PRONE_PIVOT_FORWARD =
+            EvaScale.fromLegacy(9.9317D);
+    private static final double RIFLE_PRONE_MUZZLE_FORWARD =
+            EvaScale.fromLegacy(19.9715D);
+    private static final double RIFLE_PRONE_MUZZLE_UP =
+            EvaScale.fromLegacy(-0.4405D);
+    private static final double RIFLE_PRONE_MUZZLE_RIGHT =
+            EvaScale.fromLegacy(0.7458D);
     // Far-cap coordinates measured from the installed Kantrophe positron
     // cannon after the final two-hand pose. The old 12.5-block approximation
     // began the beam inside the receiver, visibly behind the barrel.
-    private static final double CANNON_STANDING_PIVOT_HEIGHT = 24.2201D;
-    private static final double CANNON_STANDING_PIVOT_FORWARD = 0.0D;
-    private static final double CANNON_STANDING_MUZZLE_FORWARD = 22.4417D;
-    private static final double CANNON_STANDING_MUZZLE_UP = 0.5960D;
-    private static final double CANNON_STANDING_MUZZLE_RIGHT = 1.2263D;
-    private static final double CANNON_PRONE_PIVOT_HEIGHT = 3.9523D;
-    private static final double CANNON_PRONE_PIVOT_FORWARD = 9.9317D;
-    private static final double CANNON_PRONE_MUZZLE_FORWARD = 23.9289D;
-    private static final double CANNON_PRONE_MUZZLE_UP = -0.3676D;
-    private static final double CANNON_PRONE_MUZZLE_RIGHT = 0.6284D;
+    private static final double CANNON_STANDING_PIVOT_HEIGHT =
+            EvaScale.fromLegacy(24.2201D);
+    private static final double CANNON_STANDING_PIVOT_FORWARD =
+            EvaScale.fromLegacy(0.0D);
+    private static final double CANNON_STANDING_MUZZLE_FORWARD =
+            EvaScale.fromLegacy(22.4417D);
+    private static final double CANNON_STANDING_MUZZLE_UP =
+            EvaScale.fromLegacy(0.5960D);
+    private static final double CANNON_STANDING_MUZZLE_RIGHT =
+            EvaScale.fromLegacy(1.2263D);
+    private static final double CANNON_PRONE_PIVOT_HEIGHT =
+            EvaScale.fromLegacy(3.9523D);
+    private static final double CANNON_PRONE_PIVOT_FORWARD =
+            EvaScale.fromLegacy(9.9317D);
+    private static final double CANNON_PRONE_MUZZLE_FORWARD =
+            EvaScale.fromLegacy(23.9289D);
+    private static final double CANNON_PRONE_MUZZLE_UP =
+            EvaScale.fromLegacy(-0.3676D);
+    private static final double CANNON_PRONE_MUZZLE_RIGHT =
+            EvaScale.fromLegacy(0.6284D);
     /** Starts the visible tracer just beyond the barrel cap instead of inside it. */
     private static final double MUZZLE_SURFACE_CLEARANCE = 0.25D;
     // Full-cycle travel measured from the real animated foot contacts after
@@ -294,6 +341,8 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             SynchedEntityData.defineId(EvaUnit01Entity.class, EntityDataSerializers.INT);
     private static final EntityDataAccessor<Boolean> DATA_POWER_CONNECTED =
             SynchedEntityData.defineId(EvaUnit01Entity.class, EntityDataSerializers.BOOLEAN);
+    private static final EntityDataAccessor<Boolean> DATA_UMBILICAL_SEVERED =
+            SynchedEntityData.defineId(EvaUnit01Entity.class, EntityDataSerializers.BOOLEAN);
     private static final EntityDataAccessor<Integer> DATA_POWER_ANCHOR_X =
             SynchedEntityData.defineId(EvaUnit01Entity.class, EntityDataSerializers.INT);
     private static final EntityDataAccessor<Integer> DATA_POWER_ANCHOR_Y =
@@ -308,6 +357,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             SynchedEntityData.defineId(EvaUnit01Entity.class, EntityDataSerializers.INT);
 
     private static final RawAnimation ANIM_IDLE = RawAnimation.begin().thenLoop("animation.eva_unit01.idle");
+    private static final RawAnimation ANIM_DORMANT = RawAnimation.begin().thenLoop("animation.eva_unit01.dormant");
     private static final RawAnimation ANIM_WALK = RawAnimation.begin().thenLoop("animation.eva_unit01.walk");
     private static final RawAnimation ANIM_RUN = RawAnimation.begin().thenLoop("animation.eva_unit01.run");
     private static final RawAnimation ANIM_CROUCH = RawAnimation.begin().thenLoop("animation.eva_unit01.crouch");
@@ -424,6 +474,9 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     private int berserkRecoveryTicks;
     private int berserkAttackCooldown;
     private int berserkTargetSearchCooldown;
+    @Nullable
+    private UUID lockedEntryPlugUuid;
+    private boolean entryPlugLinkFaultLogged;
 
     public EvaUnit01Entity(EntityType<? extends EvaUnit01Entity> type, Level level)
     {
@@ -467,8 +520,9 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         this.entityData.define(DATA_VISUAL_POSE, VISUAL_NORMAL);
         this.entityData.define(DATA_LAUNCH_PHASE, LAUNCH_IDLE);
         this.entityData.define(DATA_LAUNCH_TICKS, 0);
-        this.entityData.define(DATA_POWER_TICKS, 6000);
+        this.entityData.define(DATA_POWER_TICKS, 0);
         this.entityData.define(DATA_POWER_CONNECTED, false);
+        this.entityData.define(DATA_UMBILICAL_SEVERED, false);
         this.entityData.define(DATA_POWER_ANCHOR_X, 0);
         this.entityData.define(DATA_POWER_ANCHOR_Y, 0);
         this.entityData.define(DATA_POWER_ANCHOR_Z, 0);
@@ -488,7 +542,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             this.setHealth(this.getMaxHealth());
         }
         this.entityData.set(DATA_AT_ENERGY, this.getAtFieldCapacity());
-        this.entityData.set(DATA_POWER_TICKS, this.getPowerCapacityTicks());
+        this.entityData.set(DATA_POWER_TICKS, 0);
         return super.finalizeSpawn(level, difficulty, reason, spawnData, dataTag);
     }
 
@@ -500,8 +554,13 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         tag.putInt("SeeleArmamentMask", this.getArmamentMask());
         tag.putBoolean("SeeleCrucified", this.isCrucified());
         tag.putBoolean("SeeleEntryPlugInserted", this.isEntryPlugInserted());
+        if (this.lockedEntryPlugUuid != null)
+        {
+            tag.putUUID("SeeleLockedEntryPlug", this.lockedEntryPlugUuid);
+        }
         tag.putBoolean("SeeleNervLogisticsLocked", this.isNervLogisticsLocked());
         tag.putInt("SeelePowerTicks", this.getPowerTicks());
+        tag.putBoolean("SeeleUmbilicalSevered", this.isUmbilicalSevered());
         tag.putFloat("SeelePilotSynchronization", this.getPilotSynchronization());
         tag.putBoolean("SeeleBerserk", this.isBerserk());
         tag.putInt("SeeleBerserkTicks", this.getBerserkTicks());
@@ -552,11 +611,16 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         this.entityData.set(DATA_CRUCIFIED, crucified);
         this.entityData.set(DATA_ENTRY_PLUG_INSERTED,
                 tag.getBoolean("SeeleEntryPlugInserted"));
+        this.lockedEntryPlugUuid = tag.hasUUID("SeeleLockedEntryPlug")
+                ? tag.getUUID("SeeleLockedEntryPlug") : null;
+        this.entryPlugLinkFaultLogged = false;
         this.entityData.set(DATA_NERV_LOGISTICS_LOCKED,
                 tag.getBoolean("SeeleNervLogisticsLocked"));
         this.entityData.set(DATA_POWER_TICKS, tag.contains("SeelePowerTicks")
                 ? Mth.clamp(tag.getInt("SeelePowerTicks"), 0, this.getPowerCapacityTicks())
-                : this.getPowerCapacityTicks());
+                : 0);
+        this.entityData.set(DATA_UMBILICAL_SEVERED,
+                tag.getBoolean("SeeleUmbilicalSevered"));
         this.entityData.set(DATA_PILOT_SYNCHRONIZATION,
                 tag.contains("SeelePilotSynchronization")
                         ? Mth.clamp(tag.getFloat("SeelePilotSynchronization"), 0.0F,
@@ -665,7 +729,33 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     public boolean canReceiveRackArmament()
     {
         return !this.isPilotControlLocked() && !this.isCrucified()
-                && this.getDeltaMovement().horizontalDistanceSqr() < 0.01D;
+                && this.getDeltaMovement().horizontalDistanceSqr() < 0.01D
+                && Math.abs(this.getDeltaMovement().y) < 0.02D;
+    }
+
+    /**
+     * Coarse server-authoritative proxy for a service hand.  Gecko hand bones
+     * are client render data and are deliberately not claimed as gameplay
+     * authority; the visible grip still comes from the shared FP/TP rig.
+     */
+    public Vec3 getArmamentServiceHandProxy(boolean rightHand)
+    {
+        Vec3 forward = Vec3.directionFromRotation(0.0F, this.getYRot())
+                .normalize();
+        Vec3 right = forward.yRot((float) (-Math.PI / 2.0D));
+        double side = this.getBbWidth() * 0.42D
+                * (rightHand ? 1.0D : -1.0D);
+        return this.position()
+                .add(0.0D, this.getBbHeight() * 0.42D, 0.0D)
+                .add(forward.scale(1.5D)).add(right.scale(side));
+    }
+
+    public Vec3 getNearestArmamentServiceHandProxy(Vec3 target)
+    {
+        Vec3 right = this.getArmamentServiceHandProxy(true);
+        Vec3 left = this.getArmamentServiceHandProxy(false);
+        return right.distanceToSqr(target) <= left.distanceToSqr(target)
+                ? right : left;
     }
 
     public boolean equipRackArmament(int weapon)
@@ -723,9 +813,55 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         return this.entityData.get(DATA_POWER_CONNECTED);
     }
 
+    public boolean isUmbilicalSevered()
+    {
+        return this.entityData.get(DATA_UMBILICAL_SEVERED);
+    }
+
+    /**
+     * Authoritative visual/mechanical power state. A charged battery alone
+     * cannot animate an empty airframe: a seated entry plug is part of the
+     * control circuit.
+     */
+    public boolean isPoweredOn()
+    {
+        return this.isBerserk()
+                || (this.isEntryPlugInserted()
+                    && this.getPilotEntity() != null
+                    && (this.isUmbilicalConnected()
+                        || this.getPowerTicks() > 0));
+    }
+
     public boolean isPowerDepleted()
     {
         return !this.isUmbilicalConnected() && this.getPowerTicks() <= 0;
+    }
+
+    /**
+     * Restores the canonical cold-cage contract after recovery or world load.
+     * It intentionally does nothing while a pilot remains seated.
+     */
+    public void enterHangarStandby()
+    {
+        if (this.level().isClientSide || this.getPilotEntity() != null)
+        {
+            return;
+        }
+        this.setUmbilicalAnchor(null);
+        this.entityData.set(DATA_UMBILICAL_SEVERED, false);
+        this.entityData.set(DATA_POWER_TICKS, 0);
+        this.entityData.set(DATA_ENTRY_PLUG_INSERTED, false);
+        this.entityData.set(DATA_AT_ON, false);
+        this.entityData.set(DATA_SPRINTING, false);
+        // A recovered airframe is stored unarmed. Leaving the previous sortie
+        // weapon selected made the dormant arm controller stop while the mesh
+        // attachment remained visibly suspended in an open hand.
+        this.selectWeapon(WEAPON_FISTS);
+        this.entityData.set(DATA_CANNON_CHARGE, 0);
+        this.entityData.set(DATA_N2_ARM_TICKS, 0);
+        this.chargingHeld = false;
+        this.clearPilotMotion();
+        this.setDeltaMovement(Vec3.ZERO);
     }
 
     @Nullable
@@ -852,6 +988,99 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         return this.entityData.get(DATA_ENTRY_PLUG_INSERTED);
     }
 
+    @Nullable
+    public EntryPlugCarrierEntity getLockedEntryPlug()
+    {
+        if (this.getFirstPassenger() instanceof EntryPlugCarrierEntity plug
+                && plug.isLockedToEva())
+        {
+            return plug;
+        }
+        if (!this.level().isClientSide && this.lockedEntryPlugUuid != null
+                && this.level() instanceof ServerLevel server)
+        {
+            Entity linked = server.getEntity(this.lockedEntryPlugUuid);
+            if (linked instanceof EntryPlugCarrierEntity plug
+                    && plug.isLockedToEva())
+            {
+                return plug;
+            }
+        }
+        return null;
+    }
+
+    @Nullable
+    public LivingEntity getPilotEntity()
+    {
+        Entity direct = this.getFirstPassenger();
+        if (direct instanceof Player player)
+        {
+            return player;
+        }
+        if (direct instanceof TrainingPilotEntity trainingPilot)
+        {
+            return trainingPilot;
+        }
+        EntryPlugCarrierEntity plug = direct instanceof EntryPlugCarrierEntity carrier
+                ? carrier : this.getLockedEntryPlug();
+        Entity seated = plug == null ? null : plug.getFirstPassenger();
+        return seated instanceof LivingEntity living ? living : null;
+    }
+
+    /**
+     * Completes insertion without transferring or recreating the pilot's
+     * capsule. The entity chain becomes EVA -> same plug -> same pilot.
+     */
+    public boolean bindEntryPlug(EntryPlugCarrierEntity plug,
+                                 int completedPercent)
+    {
+        if (this.level().isClientSide || plug.getVehicle() != this
+                || !plug.isLockedToEva()
+                || !(plug.getFirstPassenger() instanceof Player
+                    || plug.getFirstPassenger() instanceof TrainingPilotEntity))
+        {
+            return false;
+        }
+        int safeProgress = Mth.clamp(completedPercent, 0, 100);
+        int remainingTicks = Mth.clamp(
+                Mth.ceil(120.0F * (100 - safeProgress) / 100.0F), 1, 120);
+        this.lockedEntryPlugUuid = plug.getUUID();
+        this.entryPlugLinkFaultLogged = false;
+        this.entityData.set(DATA_ACTIVATION_TICKS, remainingTicks);
+        this.entityData.set(DATA_ENTRY_PLUG_INSERTED, true);
+        return true;
+    }
+
+    public void markEntryPlugLinkFault(EntryPlugCarrierEntity plug)
+    {
+        if (this.level().isClientSide
+                || this.lockedEntryPlugUuid == null
+                || !this.lockedEntryPlugUuid.equals(plug.getUUID()))
+        {
+            return;
+        }
+        this.entityData.set(DATA_ENTRY_PLUG_INSERTED, false);
+        if (!this.entryPlugLinkFaultLogged)
+        {
+            this.entryPlugLinkFaultLogged = true;
+            ProjectSeele.LOGGER.error(
+                    "NERV entry-plug link fault: eva={} plug={} stage={}",
+                    this.getStringUUID(), plug.getStringUUID(),
+                    plug.getInsertionStage());
+        }
+    }
+
+    public void clearEntryPlugLink(EntryPlugCarrierEntity plug)
+    {
+        if (this.lockedEntryPlugUuid == null
+                || this.lockedEntryPlugUuid.equals(plug.getUUID()))
+        {
+            this.lockedEntryPlugUuid = null;
+            this.entryPlugLinkFaultLogged = false;
+            this.entityData.set(DATA_ENTRY_PLUG_INSERTED, false);
+        }
+    }
+
     public boolean isNervLogisticsLocked()
     {
         return this.entityData.get(DATA_NERV_LOGISTICS_LOCKED);
@@ -865,19 +1094,46 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         }
     }
     /**
-     * World-space centre of this variant's reviewed dorsal entry socket.
-     * This is also the authoritative target for the extended right-click ray.
+     * Full world-space frame of this variant's reviewed dorsal socket.
+     */
+    public RigidTransform getEntryPlugSocketTransform()
+    {
+        return EntryPlugKinematics.socketTransform(this);
+    }
+
+    /**
+     * Compatibility projection for interaction and older visual diagnostics.
+     * Geometry authority is {@link #getEntryPlugSocketTransform()}.
      */
     public Vec3 getEntryPlugSocketPosition()
     {
-        double height = switch (this.getUnitVariant())
-        {
-            case UNIT_00 -> ENTRY_PLUG_HEIGHT_00;
-            case UNIT_02 -> ENTRY_PLUG_HEIGHT_02;
-            default -> ENTRY_PLUG_HEIGHT_01;
-        };
-        Vec3 rear = this.getForward().multiply(-1.0D, 0.0D, -1.0D).normalize();
-        return this.position().add(rear.scale(ENTRY_PLUG_REAR_OFFSET)).add(0.0D, height, 0.0D);
+        return this.getEntryPlugSocketTransform().translation();
+    }
+
+    /** World-space lower-back socket shared by cable rendering and sever FX. */
+    public Vec3 getUmbilicalSocketPosition()
+    {
+        Vec3 rear = this.getRearDirection();
+        return this.position()
+                .add(rear.scale(EvaScale.UMBILICAL_SOCKET_REAR_OFFSET))
+                .add(0.0D, EvaScale.UMBILICAL_SOCKET_HEIGHT, 0.0D);
+    }
+
+    /** Armour-side end of the rigid three-point umbilical adapter. */
+    public Vec3 getUmbilicalMountPosition()
+    {
+        Vec3 rear = this.getRearDirection();
+        return this.position()
+                .add(rear.scale(EvaScale.UMBILICAL_MOUNT_REAR_OFFSET))
+                .add(0.0D, EvaScale.UMBILICAL_MOUNT_HEIGHT, 0.0D);
+    }
+
+    /** Horizontal rear vector shared by dorsal hardware and its renderer. */
+    public Vec3 getRearDirection()
+    {
+        Vec3 rear = this.getForward().multiply(-1.0D, 0.0D, -1.0D);
+        return rear.lengthSqr() < 1.0E-6D
+                ? new Vec3(0.0D, 0.0D, 1.0D) : rear.normalize();
     }
 
     /** Client/server-identical narrow ray test for the dorsal plug hardware. */
@@ -923,7 +1179,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
      */
     public boolean releaseLaunchFromCommand()
     {
-        Entity occupant = this.getFirstPassenger();
+        Entity occupant = this.getPilotEntity();
         boolean human = occupant instanceof ServerPlayer;
         boolean training = occupant instanceof TrainingPilotEntity;
         if (this.level().isClientSide
@@ -952,10 +1208,82 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         return true;
     }
 
+    /**
+     * Test-stage pilot release. This deliberately shares the authoritative
+     * command-release gate instead of bypassing PREPARE, insertion, transport,
+     * occupancy, launch-bed or shaft validation.
+     */
+    public void releaseLaunchFromPilot(ServerPlayer pilot)
+    {
+        if (this.getPilotEntity() != pilot)
+        {
+            pilot.displayClientMessage(Component.translatable(
+                    "message.projectseele.self_launch_denied")
+                    .withStyle(ChatFormatting.RED), true);
+            return;
+        }
+        if (!this.releaseLaunchFromCommand())
+        {
+            pilot.displayClientMessage(Component.translatable(
+                    "message.projectseele.self_launch_denied")
+                    .withStyle(ChatFormatting.RED), true);
+            return;
+        }
+        pilot.displayClientMessage(Component.translatable(
+                "message.projectseele.self_launch_accepted")
+                .withStyle(ChatFormatting.GREEN, ChatFormatting.BOLD), true);
+        ProjectSeele.LOGGER.info(
+                "NERV test self-launch release: eva={} pilot={} bed={}",
+                this.getStringUUID(), pilot.getGameProfile().getName(),
+                this.launchBedPos == null ? "missing"
+                        : this.launchBedPos.toShortString());
+    }
+
     private boolean hasLaunchPassenger()
     {
-        return this.getFirstPassenger() instanceof Player
-                || this.getFirstPassenger() instanceof TrainingPilotEntity;
+        return this.getPilotEntity() instanceof Player
+                || this.getPilotEntity() instanceof TrainingPilotEntity;
+    }
+
+    /**
+     * Pilot-initiated launch abort from inside the airframe (the CANCEL_LAUNCH
+     * key). Delegates to the logistics state machine, which validates that the
+     * unit is silo-locked and not yet released before recalling it to the wet
+     * cage; the pilot is messaged either way.
+     */
+    public void cancelLaunchFromPilot(ServerPlayer pilot)
+    {
+        if (!(this.level() instanceof net.minecraft.server.level.ServerLevel serverLevel))
+        {
+            return;
+        }
+        EvaLogisticsDirector.ActionResult result =
+                EvaLogisticsDirector.requestCancel(serverLevel, this.getUnitVariant());
+        pilot.displayClientMessage(Component.literal(result.message())
+                .withStyle(result.accepted()
+                        ? ChatFormatting.GREEN : ChatFormatting.RED), true);
+    }
+
+    /**
+     * Cancels a sortie that is locked at the silo but not yet released, so the
+     * airframe can be slid back into its wet cage. Refused once command has
+     * authorized the catapult or the ascent has already begun. The seated pilot
+     * and inserted plug are kept — {@link #resetLaunchSequence()} only clears
+     * them when the plug was abandoned empty.
+     */
+    public boolean cancelPreparedLaunch()
+    {
+        if (this.level().isClientSide
+                || this.getLaunchPhase() != LAUNCH_LOCKED
+                || this.launchCommandReleased)
+        {
+            return false;
+        }
+        this.resetLaunchSequence();
+        this.setNoGravity(true);
+        ProjectSeele.LOGGER.info("NERV launch cancelled at silo: eva={}",
+                this.getStringUUID());
+        return true;
     }
 
     /** Arms a pilot who entered while the EVA was still inside its wet cage. */
@@ -963,14 +1291,24 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     {
         if (this.level().isClientSide || this.isLaunchSequenceActive()
                 || !this.hasLaunchPassenger()
-                || !IntegratedNervMapBuilder.isLowerStation(bed)
+                || !(this.level() instanceof ServerLevel serverLevel)
+                || !EvaLogisticsDirector.isAssignedLowerLaunchBed(
+                        serverLevel, this.getUnitVariant(), bed)
                 || !this.level().getBlockState(bed).is(Blocks.LODESTONE))
         {
             return false;
         }
         this.alignForSiloBoarding(bed);
-        this.entityData.set(DATA_ACTIVATION_TICKS, 120);
-        this.entityData.set(DATA_ENTRY_PLUG_INSERTED, true);
+        // Only an airframe that reached the silo WITHOUT the wet-cage insertion
+        // still needs the activation clip here. One that was already seated in
+        // its cage is inserted, and replaying the 120-tick capsule animation at
+        // the silo is the second insertion the pilot sees. Leave its activation
+        // where the cage clip left it; the launch lock below keeps it caged.
+        if (!this.isEntryPlugInserted())
+        {
+            this.entityData.set(DATA_ACTIVATION_TICKS, 120);
+            this.entityData.set(DATA_ENTRY_PLUG_INSERTED, true);
+        }
         this.armLaunchBed(bed);
         return true;
     }
@@ -991,9 +1329,19 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         this.fallDistance = 0.0F;
         this.setNoGravity(true);
         this.hasImpulse = true;
+        this.syncPassengerAssembly();
+    }
+
+    /** Keeps EVA -> entry plug -> pilot together after authoritative motion. */
+    private void syncPassengerAssembly()
+    {
         for (Entity passenger : this.getPassengers())
         {
             this.positionRider(passenger, Entity::setPos);
+            if (passenger instanceof EntryPlugCarrierEntity plug)
+            {
+                plug.syncPilotPositionNow();
+            }
         }
     }
 
@@ -1098,16 +1446,28 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         double nearestDistance = Double.MAX_VALUE;
         for (int depth = 0; depth <= 2; depth++)
         {
-            for (int x = -5; x <= 5; x++)
+            for (int x = -LAUNCH_CARRIER_HALF;
+                 x <= LAUNCH_CARRIER_HALF; x++)
             {
-                for (int z = -5; z <= 5; z++)
+                for (int z = -LAUNCH_CARRIER_HALF;
+                     z <= LAUNCH_CARRIER_HALF; z++)
                 {
                     BlockPos candidate = base.offset(x, -depth, z);
                     if (!this.level().getBlockState(candidate).is(Blocks.LODESTONE))
                     {
                         continue;
                     }
-                    if (EvaHangarBuilder.isHangarBed(candidate))
+                    if (this.level() instanceof ServerLevel server
+                            && FacilityV2EvaRuntime.ready(
+                            server, this.getUnitVariant()))
+                    {
+                        if (!EvaLogisticsDirector.isAssignedLowerLaunchBed(
+                                server, this.getUnitVariant(), candidate))
+                        {
+                            continue;
+                        }
+                    }
+                    else if (EvaHangarBuilder.isHangarBed(candidate))
                     {
                         continue;
                     }
@@ -1388,8 +1748,11 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         float baseDamage = lance ? SMASH_LANCE_DAMAGE : knife ? SMASH_KNIFE_DAMAGE : SMASH_FIST_DAMAGE;
         float damage = baseDamage * this.getMeleeMultiplier();
         Vec3 forward = this.getForward().multiply(1.0D, 0.0D, 1.0D).normalize();
-        Vec3 center = this.position().add(forward.scale(MELEE_REACH + 1.0D)).add(0.0D, 4.0D, 0.0D);
-        AABB zone = new AABB(center, center).inflate(SMASH_RADIUS, 8.5D, SMASH_RADIUS);
+        Vec3 center = this.position().add(forward.scale(
+                MELEE_REACH + EvaScale.fromLegacy(1.0D)))
+                .add(0.0D, EvaScale.fromLegacy(4.0D), 0.0D);
+        AABB zone = new AABB(center, center).inflate(SMASH_RADIUS,
+                EvaScale.fromLegacy(8.5D), SMASH_RADIUS);
         this.strikeZone(pilot, zone, damage, 2.0D, center);
         if (this.level() instanceof ServerLevel serverLevel)
         {
@@ -1413,7 +1776,8 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
 
         Vec3 forward = this.getForward().multiply(1.0D, 0.0D, 1.0D).normalize();
         Vec3 center = this.position().add(forward.scale(2.8D)).add(0.0D, 1.0D, 0.0D);
-        AABB zone = new AABB(center, center).inflate(STOMP_RADIUS, 3.5D, STOMP_RADIUS);
+        AABB zone = new AABB(center, center).inflate(STOMP_RADIUS,
+                EvaScale.fromLegacy(3.5D), STOMP_RADIUS);
         this.strikeZone(pilot, zone, STOMP_DAMAGE * this.getMeleeMultiplier(), 2.4D, center);
         if (this.level() instanceof ServerLevel serverLevel)
         {
@@ -1644,18 +2008,25 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     {
         if (this.getControllingPassenger() == pilot)
         {
-            if (this.isLaunchSequenceActive())
+            boolean inAssignedHangar = this.level() instanceof ServerLevel server
+                    && this.isInsideActiveAssignedHangar(server);
+            if (this.isLaunchSequenceActive() || this.isCrucified()
+                    || (this.isNervLogisticsLocked() && !inAssignedHangar))
             {
                 pilot.displayClientMessage(Component.translatable("message.projectseele.launch_interlock"), true);
                 return;
             }
-            pilot.stopRiding();
-            if (this.isCrucified())
+            // Eject the pilot inside the entry plug at the dorsal socket rather
+            // than dropping them at the airframe's feet. They then sneak to
+            // dismount and climb down from the plug.
+            if (this.level() instanceof ServerLevel serverLevel
+                    && this.isEntryPlugInserted()
+                    && EntryPlugDirector.ejectPilotToPlug(
+                            serverLevel, this.getUnitVariant(), this, pilot))
             {
-                // Stepping out of a cross hundreds of blocks up.
-                pilot.addEffect(new net.minecraft.world.effect.MobEffectInstance(
-                        net.minecraft.world.effect.MobEffects.SLOW_FALLING, 20 * 60, 0));
+                return;
             }
+            pilot.stopRiding();
         }
     }
 
@@ -1780,6 +2151,19 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             return;
         }
 
+        boolean controlCircuitClosed = this.isEntryPlugInserted()
+                && this.getPilotEntity() != null;
+        if (!controlCircuitClosed)
+        {
+            this.setUmbilicalAnchor(null);
+            if (this.isInsideActiveAssignedHangar(server))
+            {
+                this.entityData.set(DATA_POWER_TICKS, 0);
+                this.entityData.set(DATA_UMBILICAL_SEVERED, false);
+            }
+            return;
+        }
+
         int range = SeeleConfig.COMMON_SPEC.isLoaded()
                 ? SeeleConfig.UMBILICAL_RANGE.get() : 32;
         BlockPos anchor = this.getUmbilicalAnchor();
@@ -1788,23 +2172,33 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
                 && server.getBlockEntity(anchor) instanceof UmbilicalPylonBlockEntity
                 && this.position().distanceToSqr(Vec3.atCenterOf(anchor))
                 <= (double) range * range;
+        boolean wasConnected = this.isUmbilicalConnected();
         if (!anchorValid)
         {
             anchor = null;
         }
-        if (--this.powerCheckCooldown <= 0)
+        if (wasConnected && anchor == null
+                && !this.isNervLogisticsLocked())
+        {
+            // A cable that was pulled past its limit or lost its socket does
+            // not silently reconnect on the next one-second pylon scan.
+            this.entityData.set(DATA_UMBILICAL_SEVERED, true);
+        }
+        if (!this.isUmbilicalSevered() && --this.powerCheckCooldown <= 0)
         {
             anchor = UmbilicalPylonBlockEntity.findNearest(
                     server, this.position(), range);
             this.powerCheckCooldown = 20;
         }
 
-        boolean wasConnected = this.isUmbilicalConnected();
         int oldPower = this.getPowerTicks();
         this.setUmbilicalAnchor(anchor);
         if (anchor != null)
         {
-            this.entityData.set(DATA_POWER_TICKS, this.getPowerCapacityTicks());
+            int capacity = this.getPowerCapacityTicks();
+            int chargePerTick = Math.max(1, Mth.ceil(capacity / 100.0F));
+            this.entityData.set(DATA_POWER_TICKS,
+                    Math.min(capacity, oldPower + chargePerTick));
             if (this.tickCount % 20 == 0 && this.getHealth() < this.getMaxHealth())
             {
                 double repair = SeeleConfig.COMMON_SPEC.isLoaded()
@@ -1827,8 +2221,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             pilot.displayClientMessage(Component.translatable(
                     "msg.projectseele.power_disconnected"), true);
         }
-        boolean active = this.getControllingPassenger() != null || this.isAtFieldOn();
-        if (active && oldPower > 0)
+        if (oldPower > 0)
         {
             int nextPower = oldPower - 1;
             this.entityData.set(DATA_POWER_TICKS, nextPower);
@@ -1848,6 +2241,23 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
                 this.playSound(SoundEvents.REDSTONE_TORCH_BURNOUT, 2.5F, 0.55F);
             }
         }
+    }
+
+    /**
+     * Resolves the wet cage in the active facility coordinate frame. S19
+     * worlds must never test a parked airframe against the retired GeoFront
+     * origin, while legacy development worlds retain their original cage.
+     */
+    private boolean isInsideActiveAssignedHangar(ServerLevel level)
+    {
+        int variant = this.getUnitVariant();
+        if (FacilityV2EvaRuntime.ready(level, variant))
+        {
+            return FacilityV2EvaRuntime.isInsideAssignedCage(
+                    level, this.position(), variant);
+        }
+        return EvaHangarBuilder.isInsideAssignedCage(
+                level, this, variant);
     }
 
     private void tickPilotSynchronization()
@@ -2191,6 +2601,12 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         {
             return;
         }
+        // The pilot is sealed inside the entry plug within the airframe; keep
+        // the body hidden so it is never seen perched on the giant frame.
+        if (this.getControllingPassenger() instanceof ServerPlayer sealedPilot)
+        {
+            sealedPilot.setInvisible(true);
+        }
         if (this.meleeCooldown > 0)
         {
             this.meleeCooldown--;
@@ -2438,10 +2854,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         this.yRotO = this.yBodyRot = this.yHeadRot = this.launchLockedYaw;
         this.fallDistance = 0.0F;
         this.hasImpulse = true;
-        for (Entity passenger : this.getPassengers())
-        {
-            this.positionRider(passenger, Entity::setPos);
-        }
+        this.syncPassengerAssembly();
     }
 
     private void beginLaunchAscent()
@@ -2451,8 +2864,10 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             this.resetLaunchSequence();
             return;
         }
+        ServerLevel serverLevel = this.level() instanceof ServerLevel activeLevel
+                ? activeLevel : null;
         if (this.launchContinuousRoute
-                && (!(this.level() instanceof ServerLevel serverLevel)
+                && (serverLevel == null
                     || !this.isContinuousSortie()
                     || !isContinuousSortieRouteClear(serverLevel,
                             this.launchBedPos, this.sortieDestinationBed)))
@@ -2464,10 +2879,14 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
                         true);
             }
             ProjectSeele.LOGGER.error(
-                    "NERV continuous sortie preflight failed: eva={} lower={} upper={}",
+                    "NERV continuous sortie preflight failed: eva={} lower={} upper={} obstruction={}",
                     this.getStringUUID(), this.launchBedPos.toShortString(),
                     this.sortieDestinationBed == null ? "missing"
-                            : this.sortieDestinationBed.toShortString());
+                            : this.sortieDestinationBed.toShortString(),
+                    serverLevel == null || this.sortieDestinationBed == null ? "missing"
+                            : describeContinuousSortieObstruction(
+                            serverLevel, this.launchBedPos,
+                            this.sortieDestinationBed));
             this.resetLaunchSequence();
             return;
         }
@@ -2482,7 +2901,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         ProjectSeele.LOGGER.info("NERV launch ascent: eva={} ticks={}",
                 this.getStringUUID(), ascentTicks);
         this.playSound(SoundEvents.PISTON_EXTEND, 3.0F, 0.48F);
-        if (this.level() instanceof ServerLevel serverLevel)
+        if (serverLevel != null)
         {
             serverLevel.sendParticles(ParticleTypes.CLOUD, this.getX(), this.getY() + 0.4D, this.getZ(),
                     72, 4.2D, 0.7D, 4.2D, 0.16D);
@@ -2589,10 +3008,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             this.yRotO = this.yBodyRot = this.yHeadRot = this.launchLockedYaw;
             this.fallDistance = 0.0F;
             this.hasImpulse = true;
-            for (Entity passenger : this.getPassengers())
-            {
-                this.positionRider(passenger, Entity::setPos);
-            }
+            this.syncPassengerAssembly();
             if (!this.updateMovingCarrier())
             {
                 if (this.getControllingPassenger() instanceof ServerPlayer pilot)
@@ -2623,10 +3039,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
                 }
                 this.launchCarrierY = this.launchDeckY();
                 this.setPos(this.launchBedPos.getX() + 0.5D, targetY, this.launchBedPos.getZ() + 0.5D);
-                for (Entity passenger : this.getPassengers())
-                {
-                    this.positionRider(passenger, Entity::setPos);
-                }
+                this.syncPassengerAssembly();
                 // Close only after the complete EVA/passenger assembly has
                 // cleared the deck plane; otherwise a timeout could build
                 // 121 solid blocks through a still-rising body.
@@ -2757,7 +3170,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         int savedY = this.launchCarrierY;
         // Entity and chunk saves are not atomic, so either the stored layer or
         // the layer immediately around the restored feet may survive. Only an
-        // exact 11x11 carrier signature is eligible for removal; never sweep
+        // exact 29x29 carrier signature is eligible for removal; never sweep
         // an entire shaft merely because player blocks share its materials.
         for (int candidateY : new int[] {
                 savedY, savedY - 1, savedY + 1,
@@ -2786,13 +3199,14 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         {
             return false;
         }
-        for (int x = -5; x <= 5; x++)
+        for (int x = -LAUNCH_CARRIER_HALF; x <= LAUNCH_CARRIER_HALF; x++)
         {
-            for (int z = -5; z <= 5; z++)
+            for (int z = -LAUNCH_CARRIER_HALF; z <= LAUNCH_CARRIER_HALF; z++)
             {
                 BlockPos block = new BlockPos(this.launchBedPos.getX() + x, y,
                         this.launchBedPos.getZ() + z);
-                boolean rim = Math.abs(x) == 5 || Math.abs(z) == 5;
+                boolean rim = Math.abs(x) == LAUNCH_CARRIER_HALF
+                        || Math.abs(z) == LAUNCH_CARRIER_HALF;
                 if (rim ? !serverLevel.getBlockState(block).is(Blocks.IRON_BLOCK)
                         : !serverLevel.getBlockState(block).is(Blocks.LIGHT_GRAY_CONCRETE))
                 {
@@ -2809,9 +3223,9 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         {
             return false;
         }
-        for (int x = -5; x <= 5; x++)
+        for (int x = -LAUNCH_CARRIER_HALF; x <= LAUNCH_CARRIER_HALF; x++)
         {
-            for (int z = -5; z <= 5; z++)
+            for (int z = -LAUNCH_CARRIER_HALF; z <= LAUNCH_CARRIER_HALF; z++)
             {
                 BlockPos block = new BlockPos(this.launchBedPos.getX() + x, y,
                         this.launchBedPos.getZ() + z);
@@ -2830,13 +3244,14 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         {
             return;
         }
-        for (int x = -5; x <= 5; x++)
+        for (int x = -LAUNCH_CARRIER_HALF; x <= LAUNCH_CARRIER_HALF; x++)
         {
-            for (int z = -5; z <= 5; z++)
+            for (int z = -LAUNCH_CARRIER_HALF; z <= LAUNCH_CARRIER_HALF; z++)
             {
                 BlockPos block = new BlockPos(this.launchBedPos.getX() + x, y,
                         this.launchBedPos.getZ() + z);
-                boolean rim = Math.abs(x) == 5 || Math.abs(z) == 5;
+                boolean rim = Math.abs(x) == LAUNCH_CARRIER_HALF
+                        || Math.abs(z) == LAUNCH_CARRIER_HALF;
                 if (present)
                 {
                     var desired = rim ? Blocks.IRON_BLOCK.defaultBlockState()
@@ -2844,12 +3259,14 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
                     if (!serverLevel.getBlockState(block).equals(desired))
                     {
                         serverLevel.setBlock(block, desired, 2);
+                        PerformanceCounters.recordWorldBlockWrites(1);
                     }
                 }
                 else if (serverLevel.getBlockState(block).is(Blocks.IRON_BLOCK)
                         || serverLevel.getBlockState(block).is(Blocks.LIGHT_GRAY_CONCRETE))
                 {
                     serverLevel.setBlock(block, Blocks.AIR.defaultBlockState(), 2);
+                    PerformanceCounters.recordWorldBlockWrites(1);
                 }
             }
         }
@@ -2870,9 +3287,9 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
                                             int deckY, boolean closed)
     {
         boolean flushTokyo3Door = IntegratedNervMapBuilder.isSurfaceStation(bed);
-        for (int x = -5; x <= 5; x++)
+        for (int x = -LAUNCH_CARRIER_HALF; x <= LAUNCH_CARRIER_HALF; x++)
         {
-            for (int z = -5; z <= 5; z++)
+            for (int z = -LAUNCH_CARRIER_HALF; z <= LAUNCH_CARRIER_HALF; z++)
             {
                 BlockPos deck = new BlockPos(bed.getX() + x, deckY, bed.getZ() + z);
                 if (closed)
@@ -2882,18 +3299,21 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
                             ? Blocks.LODESTONE.defaultBlockState()
                             : flushTokyo3Door
                             ? Blocks.SMOOTH_STONE.defaultBlockState()
-                            : (Math.abs(x) == 5 || Math.abs(z) == 5)
+                            : (Math.abs(x) == LAUNCH_CARRIER_HALF
+                                    || Math.abs(z) == LAUNCH_CARRIER_HALF)
                             ? Blocks.IRON_BLOCK.defaultBlockState()
                             : Blocks.LIGHT_GRAY_CONCRETE.defaultBlockState();
                     if (!level.getBlockState(deck).equals(desired))
                     {
                         level.setBlock(deck, desired, 2);
+                        PerformanceCounters.recordWorldBlockWrites(1);
                     }
                 }
                 else if (level.getBlockState(deck).is(Blocks.IRON_BLOCK)
                         || level.getBlockState(deck).is(Blocks.LIGHT_GRAY_CONCRETE))
                 {
                     level.setBlock(deck, Blocks.AIR.defaultBlockState(), 2);
+                    PerformanceCounters.recordWorldBlockWrites(1);
                 }
             }
         }
@@ -2956,10 +3376,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
                     destinationBed.getY() + 1.0D,
                     destinationBed.getZ() + 0.5D);
             this.setPos(arrival.x, arrival.y, arrival.z);
-            for (Entity passenger : this.getPassengers())
-            {
-                this.positionRider(passenger, Entity::setPos);
-            }
+            this.syncPassengerAssembly();
             setSurfaceCarrierAt(sourceLevel, destinationBed,
                     destinationBed.getY(), true);
             this.beginContinuousSurfaceArrival(arrivalYaw);
@@ -3095,13 +3512,9 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         this.yRotO = this.yBodyRot = this.yHeadRot = this.launchLockedYaw;
         this.fallDistance = 0.0F;
         this.hasImpulse = true;
-        for (Entity passenger : this.getPassengers())
-        {
-            this.positionRider(passenger, Entity::setPos);
-        }
+        this.syncPassengerAssembly();
         if (this.level() instanceof ServerLevel serverLevel
-                && (this.getLaunchTicks() == CONTINUOUS_SURFACE_SYNC_TICKS
-                    || this.getLaunchTicks() % 4 == 0))
+                && this.getLaunchTicks() > 0)
         {
             serverLevel.getChunkSource().broadcastAndSend(this,
                     new ClientboundTeleportEntityPacket(this));
@@ -3155,6 +3568,10 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
                 entity.setDeltaMovement(Vec3.ZERO);
                 entity.fallDistance = 0.0F;
             });
+            if (passenger instanceof EntryPlugCarrierEntity plug)
+            {
+                plug.syncPilotPositionNow();
+            }
         }
     }
 
@@ -3162,9 +3579,11 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     {
         for (int y = 1; y <= (int) LAUNCH_TARGET_ABOVE_BED - 1; y++)
         {
-            for (int x = -5; x <= 5; x++)
+            for (int x = -LAUNCH_CARRIER_HALF;
+                 x <= LAUNCH_CARRIER_HALF; x++)
             {
-                for (int z = -5; z <= 5; z++)
+                for (int z = -LAUNCH_CARRIER_HALF;
+                     z <= LAUNCH_CARRIER_HALF; z++)
                 {
                     if (!level.getBlockState(bed.offset(x, y, z)).isAir())
                     {
@@ -3176,7 +3595,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         return true;
     }
 
-    /** Full 11x11 block audit between the two station markers. */
+    /** Full 29x29 block audit between the two station markers. */
     private static boolean isContinuousSortieShaftClear(ServerLevel level,
                                                          BlockPos lowerBed,
                                                          BlockPos upperBed)
@@ -3189,13 +3608,15 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         }
         for (int y = lowerBed.getY() + 1; y < upperBed.getY(); y++)
         {
-            for (int x = -5; x <= 5; x++)
+            for (int x = -LAUNCH_CARRIER_HALF;
+                 x <= LAUNCH_CARRIER_HALF; x++)
             {
-                for (int z = -5; z <= 5; z++)
+                for (int z = -LAUNCH_CARRIER_HALF;
+                     z <= LAUNCH_CARRIER_HALF; z++)
                 {
                     BlockPos position = new BlockPos(lowerBed.getX() + x, y,
                             lowerBed.getZ() + z);
-                    if (!level.getBlockState(position).isAir())
+                    if (!isSortieClearance(level, position))
                     {
                         return false;
                     }
@@ -3209,26 +3630,72 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
                                                          BlockPos lowerBed,
                                                          BlockPos upperBed)
     {
-        if (!isContinuousSortieShaftClear(level, lowerBed, upperBed))
+        return findContinuousSortieObstruction(level, lowerBed, upperBed)
+                == null;
+    }
+
+    private static String describeContinuousSortieObstruction(
+            ServerLevel level, BlockPos lowerBed, BlockPos upperBed)
+    {
+        BlockPos obstruction = findContinuousSortieObstruction(
+                level, lowerBed, upperBed);
+        return obstruction == null ? "none"
+                : obstruction.toShortString() + "="
+                + level.getBlockState(obstruction);
+    }
+
+    private static BlockPos findContinuousSortieObstruction(
+            ServerLevel level, BlockPos lowerBed, BlockPos upperBed)
+    {
+        if (lowerBed.getX() != upperBed.getX()
+                || lowerBed.getZ() != upperBed.getZ()
+                || upperBed.getY() <= lowerBed.getY())
         {
-            return false;
+            return lowerBed;
         }
-        for (int y = upperBed.getY() + 1;
-             y <= upperBed.getY() + CONTINUOUS_EXIT_HEADROOM; y++)
+        for (int y = lowerBed.getY() + 1; y < upperBed.getY(); y++)
         {
-            for (int x = -5; x <= 5; x++)
+            for (int x = -LAUNCH_CARRIER_HALF;
+                 x <= LAUNCH_CARRIER_HALF; x++)
             {
-                for (int z = -5; z <= 5; z++)
+                for (int z = -LAUNCH_CARRIER_HALF;
+                     z <= LAUNCH_CARRIER_HALF; z++)
                 {
-                    if (!level.getBlockState(new BlockPos(upperBed.getX() + x,
-                            y, upperBed.getZ() + z)).isAir())
+                    BlockPos position = new BlockPos(lowerBed.getX() + x, y,
+                            lowerBed.getZ() + z);
+                    if (!isSortieClearance(level, position))
                     {
-                        return false;
+                        return position;
                     }
                 }
             }
         }
-        return true;
+        for (int y = upperBed.getY() + 1;
+             y <= upperBed.getY() + CONTINUOUS_EXIT_HEADROOM; y++)
+        {
+            for (int x = -LAUNCH_CARRIER_HALF;
+                 x <= LAUNCH_CARRIER_HALF; x++)
+            {
+                for (int z = -LAUNCH_CARRIER_HALF;
+                     z <= LAUNCH_CARRIER_HALF; z++)
+                {
+                    BlockPos position = new BlockPos(upperBed.getX() + x,
+                            y, upperBed.getZ() + z);
+                    if (!isSortieClearance(level, position))
+                    {
+                        return position;
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    private static boolean isSortieClearance(ServerLevel level,
+                                              BlockPos position)
+    {
+        var state = level.getBlockState(position);
+        return state.isAir() || state.canBeReplaced();
     }
 
     private static ITeleporter directTeleporter(Vec3 position, Vec3 velocity,
@@ -3255,10 +3722,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             {
                 this.setPos(this.launchBedPos.getX() + 0.5D, this.launchBedPos.getY() + 1.0D,
                         this.launchBedPos.getZ() + 0.5D);
-                for (Entity passenger : this.getPassengers())
-                {
-                    this.positionRider(passenger, Entity::setPos);
-                }
+                this.syncPassengerAssembly();
                 this.setSurfaceCarrier(true);
             }
         }
@@ -3315,6 +3779,11 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     @Override
     public boolean hurt(DamageSource source, float amount)
     {
+        if ((this.isNervLogisticsLocked() || this.isLaunchSequenceActive())
+                && source.is(DamageTypes.IN_WALL))
+        {
+            return false;
+        }
         if (source.is(DamageTypeTags.BYPASSES_INVULNERABILITY))
         {
             return this.applyHullDamageWithFeedback(source, amount);
@@ -3355,6 +3824,11 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         float healthBefore = this.getHealth();
         boolean accepted = super.hurt(source, amount);
         float actualHullDamage = Math.max(0.0F, healthBefore - this.getHealth());
+        if (accepted && actualHullDamage >= this.getMaxHealth() * 0.15F
+                && this.isUmbilicalConnected())
+        {
+            this.severUmbilicalFromDamage();
+        }
         if (accepted && actualHullDamage > 0.0F
                 && this.getControllingPassenger() instanceof ServerPlayer pilot)
         {
@@ -3371,6 +3845,25 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             }
         }
         return accepted;
+    }
+
+    private void severUmbilicalFromDamage()
+    {
+        this.entityData.set(DATA_UMBILICAL_SEVERED, true);
+        this.setUmbilicalAnchor(null);
+        if (this.getControllingPassenger() instanceof ServerPlayer pilot)
+        {
+            pilot.displayClientMessage(Component.translatable(
+                    "msg.projectseele.power_cable_severed"), true);
+        }
+        this.playSound(SoundEvents.LIGHTNING_BOLT_IMPACT, 2.8F, 1.35F);
+        if (this.level() instanceof ServerLevel server)
+        {
+            Vec3 cableSocket = this.getUmbilicalSocketPosition();
+            server.sendParticles(ParticleTypes.ELECTRIC_SPARK,
+                    cableSocket.x, cableSocket.y, cableSocket.z, 28,
+                    1.2D, 1.4D, 1.2D, 0.16D);
+        }
     }
 
     private void rippleAt(DamageSource source)
@@ -3420,6 +3913,15 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         if (this.isVehicle() || player.isPassenger())
         {
             return InteractionResult.FAIL;
+        }
+        if (this.isNervLogisticsLocked())
+        {
+            // A canonical wet-cage EVA may only receive its pilot through the
+            // suspended physical capsule. Allowing the compatibility socket
+            // here skipped black standby, LCL fill and the visible insertion.
+            player.displayClientMessage(Component.translatable(
+                    "message.projectseele.board_external_entry_plug"), true);
+            return InteractionResult.CONSUME;
         }
         if (this.isLaunchSequenceActive())
         {
@@ -3515,6 +4017,19 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
 
     public boolean boardFromExternalPlug(Entity passenger)
     {
+        return this.boardFromExternalPlug(passenger,
+                EntryPlugCarrierEntity.CABIN_TRANSFER_PERCENT);
+    }
+
+    /**
+     * Transfers the pilot without restarting the cockpit sequence. The
+     * external capsule owns dark/LCL/A10 progress up to the dorsal socket; the
+     * airframe continues from that exact percentage while its optical feed
+     * clears.
+     */
+    public boolean boardFromExternalPlug(Entity passenger,
+                                         int completedPercent)
+    {
         if (this.level().isClientSide || this.isVehicle()
                 || passenger.isPassenger() || this.isLaunchSequenceActive()
                 || !(passenger instanceof Player
@@ -3522,10 +4037,10 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         {
             return false;
         }
-        // External travel has already finished. Continue from the authored
-        // hatch-lock half of the activation clip, without drawing a second
-        // capsule through the one that just reached the socket.
-        this.entityData.set(DATA_ACTIVATION_TICKS, 57);
+        int safeProgress = Mth.clamp(completedPercent, 0, 100);
+        int remainingTicks = Mth.clamp(
+                Mth.ceil(120.0F * (100 - safeProgress) / 100.0F), 1, 120);
+        this.entityData.set(DATA_ACTIVATION_TICKS, remainingTicks);
         this.entityData.set(DATA_ENTRY_PLUG_INSERTED, true);
         if (!passenger.startRiding(this, true))
         {
@@ -3538,7 +4053,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
 
     public boolean isTrainingPilotActive()
     {
-        return this.getFirstPassenger() instanceof TrainingPilotEntity;
+        return this.getPilotEntity() instanceof TrainingPilotEntity;
     }
 
     private void alignForSiloBoarding(BlockPos bed)
@@ -3557,14 +4072,33 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         BlockHitResult hit = this.level().clip(new ClipContext(
                 eye, socket, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, player));
         return hit.getType() == net.minecraft.world.phys.HitResult.Type.MISS
-                || hit.getLocation().distanceToSqr(socket) <= 0.75D * 0.75D;
+                || hit.getLocation().distanceToSqr(socket)
+                        <= EvaScale.fromLegacy(0.75D)
+                        * EvaScale.fromLegacy(0.75D);
     }
 
     @Nullable
     @Override
     public LivingEntity getControllingPassenger()
     {
-        return this.getFirstPassenger() instanceof Player player ? player : super.getControllingPassenger();
+        LivingEntity pilot = this.getPilotEntity();
+        return pilot != null ? pilot : super.getControllingPassenger();
+    }
+
+    /**
+     * Carrier rails and launch machinery own the chassis transform while their
+     * locks are active. Leaving local vehicle authority enabled made the pilot
+     * send a competing move packet for every rendered frame; the server then
+     * rejected and logged tens of thousands of "moved wrongly" packets during
+     * one sortie. Remote entity tracking still keeps the pilot's client on the
+     * server-authored carrier path.
+     */
+    @Override
+    public boolean isControlledByLocalInstance()
+    {
+        return !this.isNervLogisticsLocked()
+                && !this.isLaunchSequenceActive()
+                && super.isControlledByLocalInstance();
     }
 
     @Override
@@ -3607,6 +4141,14 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     protected void removePassenger(Entity passenger)
     {
         super.removePassenger(passenger);
+        if (passenger instanceof EntryPlugCarrierEntity plug)
+        {
+            this.clearEntryPlugLink(plug);
+        }
+        if (passenger instanceof ServerPlayer leavingPilot)
+        {
+            leavingPilot.setInvisible(false);
+        }
         this.clearJumpRequestState();
         this.chargingHeld = false;
         this.entityData.set(DATA_CANNON_CHARGE, 0);
@@ -3801,6 +4343,23 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         {
             return;
         }
+        if (passenger instanceof EntryPlugCarrierEntity plug
+                && plug.isLockedToEva())
+        {
+            Vec3 seated = EntryPlugKinematics.lockedTransform(this).translation();
+            move.accept(passenger, seated.x, seated.y, seated.z);
+            return;
+        }
+        Vec3 seat = this.getPilotCameraSeatPosition(passenger);
+        move.accept(passenger, seat.x, seat.y, seat.z);
+    }
+
+    /**
+     * Camera socket shared by direct legacy riders and the pilot nested inside
+     * the persistent entry plug.
+     */
+    public Vec3 getPilotCameraSeatPosition(Entity passenger)
+    {
         // The pilot rides at the animated rig's head socket. First person sees
         // the same world entity and the same evaluated bones as third person.
         float rad = (float) Math.toRadians(this.yBodyRot);
@@ -3824,16 +4383,19 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         // uses the same positive forward socket convention. Express Y as the
         // desired eye position because Camera adds the player's own eye height
         // after positionRider.
-        double targetEyeHeight = proneView ? 7.00D : crouchView ? 19.70D : 24.63D;
-        double forward = proneView ? 12.00D : crouchView ? 0.80D : 1.00D;
+        double targetEyeHeight = EvaScale.fromLegacy(
+                proneView ? 7.00D : crouchView ? 19.70D : 24.63D);
+        double forward = EvaScale.fromLegacy(
+                proneView ? 12.00D : crouchView ? 0.80D : 1.00D);
         // A right-shouldered rifle puts its receiver immediately beside the
         // EVA's face. Offset the optical eye toward the left eye by less than
         // one block so the stock sits at the screen edge like a human sight
         // picture instead of covering half the display. This moves only the
         // rider socket; weapon and arms remain the shared world skeleton.
-        double lateral = this.getWeapon() == WEAPON_RIFLE ? 0.90D : 0.0D;
+        double lateral = this.getWeapon() == WEAPON_RIFLE
+                ? EvaScale.fromLegacy(0.90D) : 0.0D;
         double seatHeight = targetEyeHeight - passenger.getEyeHeight();
-        move.accept(passenger,
+        return new Vec3(
                 this.getX() - Math.sin(rad) * forward + Math.cos(rad) * lateral,
                 this.getY() + seatHeight,
                 this.getZ() + Math.cos(rad) * forward + Math.sin(rad) * lateral);
@@ -3844,7 +4406,9 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     {
         // Step out at the Unit's feet instead of dropping from plug height.
         float rad = (float) Math.toRadians(this.yBodyRot);
-        return new Vec3(this.getX() + Math.sin(rad) * 5.5D, this.getY(), this.getZ() - Math.cos(rad) * 5.5D);
+        double dismount = EvaScale.fromLegacy(5.5D);
+        return new Vec3(this.getX() + Math.sin(rad) * dismount, this.getY(),
+                this.getZ() - Math.cos(rad) * dismount);
     }
 
     // ----- durability -----
@@ -3853,7 +4417,10 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     public boolean causeFallDamage(float distance, float multiplier, DamageSource source)
     {
         // A 40-metre war machine does not stub its toe.
-        return distance > 18.0F && super.causeFallDamage(distance - 18.0F, multiplier * 0.5F, source);
+        float safeFall = EvaScale.fromLegacy(18.0F);
+        return distance > safeFall
+                && super.causeFallDamage(distance - safeFall,
+                        multiplier * 0.5F, source);
     }
 
     @Override
@@ -3975,6 +4542,10 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
                 case VISUAL_LIVE_JUMP -> { return state.setAndContinue(ANIM_JUMP); }
                 default -> { }
             }
+            if (!this.isPoweredOn())
+            {
+                return state.setAndContinue(ANIM_DORMANT);
+            }
             if (this.getActivationTicks() > 0)
             {
                 return state.setAndContinue(ANIM_ACTIVATION);
@@ -4002,7 +4573,8 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         }).setAnimationSpeedHandler(entity -> entity.locomotionAnimationSpeed()));
         controllers.add(new AnimationController<>(this, "arms", 3, state ->
         {
-            if (this.isCrucified() || this.isBerserk())
+            if (this.isCrucified() || this.isBerserk()
+                    || !this.isPoweredOn())
             {
                 return PlayState.STOP;
             }
@@ -4044,7 +4616,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         }));
         controllers.add(new AnimationController<>(this, "strike", 3, state ->
         {
-            if (this.isCrucified())
+            if (this.isCrucified() || !this.isPoweredOn())
             {
                 state.getController().stop();
                 return PlayState.STOP;

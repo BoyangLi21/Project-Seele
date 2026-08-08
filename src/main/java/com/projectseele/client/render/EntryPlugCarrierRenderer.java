@@ -4,6 +4,9 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.projectseele.ProjectSeele;
 import com.projectseele.entity.EntryPlugCarrierEntity;
+import com.projectseele.entity.EvaScale;
+import com.projectseele.world.EntryPlugKinematics;
+import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.resources.ResourceLocation;
 import software.bernie.geckolib.cache.object.BakedGeoModel;
@@ -24,15 +27,43 @@ public final class EntryPlugCarrierRenderer
             resource("textures/entity/entry_plug.png");
     private static final ResourceLocation FALLBACK_TEXTURE =
             minecraftResource("textures/block/white_concrete.png");
-
     public EntryPlugCarrierRenderer(EntityRendererProvider.Context context)
     {
         super(context, new LocalAddonGeoModel<>(GEOMETRY,
                 FALLBACK_TEXTURE, ANIMATION));
         this.addRenderLayer(new LocalTriangleMeshLayer<>(this,
                 entity -> MESH, entity -> LOCAL_TEXTURE));
-        this.withScale(2.5F);
-        this.shadowRadius = 0.65F;
+        this.withScale(EvaScale.ENTRY_PLUG_RENDER_SCALE);
+        this.shadowRadius = 1.0F;
+    }
+
+    @Override
+    public void render(EntryPlugCarrierEntity animatable, float entityYaw,
+                       float partialTick, PoseStack poseStack,
+                       MultiBufferSource bufferSource, int packedLight)
+    {
+        // The persistent carrier still exists and holds the pilot while seated,
+        // but the external shell is physically inside the airframe.
+        if (!animatable.isShellVisible())
+        {
+            return;
+        }
+        super.render(animatable, entityYaw, partialTick, poseStack,
+                bufferSource, packedLight);
+    }
+
+    @Override
+    protected void applyRotations(EntryPlugCarrierEntity animatable,
+                                  PoseStack poseStack, float ageInTicks,
+                                  float rotationYaw, float partialTick)
+    {
+        if (!animatable.hasCanonicalPose())
+        {
+            super.applyRotations(animatable, poseStack, ageInTicks,
+                    rotationYaw, partialTick);
+            return;
+        }
+        poseStack.mulPose(animatable.getCanonicalRotation(partialTick));
     }
 
     @Override
@@ -47,8 +78,17 @@ public final class EntryPlugCarrierRenderer
         super.preRender(poseStack, animatable, model, bufferSource, buffer,
                 isReRender, partialTick, packedLight, packedOverlay,
                 red, green, blue, alpha);
-        model.getBone("entry_plug").ifPresent(bone ->
-                bone.setRotX((float) Math.toRadians(animatable.getXRot())));
+        float hatch = animatable.getHatchOpenAmount();
+        model.getBone("plug_hatch_l").ifPresent(bone ->
+        {
+            bone.setPosX(-EntryPlugKinematics.HATCH_OPEN_TRAVEL_MODEL * hatch);
+            bone.setRotZ(0.0F);
+        });
+        model.getBone("plug_hatch_r").ifPresent(bone ->
+        {
+            bone.setPosX(EntryPlugKinematics.HATCH_OPEN_TRAVEL_MODEL * hatch);
+            bone.setRotZ(0.0F);
+        });
     }
 
     @Override
@@ -57,8 +97,7 @@ public final class EntryPlugCarrierRenderer
                                   int packedOverlay, float red, float green,
                                   float blue, float alpha)
     {
-        if ("entry_plug".equals(bone.getName())
-                && LocalTriangleMeshLayer.hasPart(MESH, "entry_plug"))
+        if (LocalTriangleMeshLayer.hasPart(MESH, bone.getName()))
         {
             return;
         }

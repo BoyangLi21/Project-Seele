@@ -3,15 +3,20 @@ package com.projectseele.client;
 import com.projectseele.ProjectSeele;
 import com.projectseele.client.visual.VisualCaptureManager;
 import com.projectseele.entity.EvaUnit01Entity;
+import com.projectseele.entity.EvaScale;
+import com.projectseele.entity.EntryPlugCarrierEntity;
 import com.projectseele.network.SeeleNetwork;
 import com.projectseele.network.ServerboundEntryPlugPacket;
 import com.projectseele.network.ServerboundEvaControlPacket;
+import com.projectseele.world.EntryPlugKinematics;
+import com.projectseele.world.EvaPilotResolver;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.Mth;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.phys.BlockHitResult;
@@ -50,9 +55,12 @@ public final class ClientForgeEvents
     /** A held key may create one new request only after leaving and re-touching ground. */
     private static boolean jumpRepeatArmed;
     private static final int JUMP_REQUEST_RETRY_INTERVAL = 4;
-    /** Entry-plug insertion cinematic: counts down after boarding. */
-    private static final int INSERTION_LENGTH = 120;
-    private static int insertionTicks;
+    /**
+     * Last observed continuous cabin progress. It begins in the suspended
+     * capsule and survives the passenger transfer into the EVA, preventing the
+     * old six-second sound sequence from restarting halfway through insertion.
+     */
+    private static float cabinSequenceProgress = -1.0F;
     private static int pilotTicks;
     private static int damageFlashTicks;
     private static float lastEvaHealth = -1.0F;
@@ -65,11 +73,7 @@ public final class ClientForgeEvents
     /** 0..1 elapsed progress of the plug-insertion overlay, or -1 when idle. */
     public static float insertionProgress(float partialTick)
     {
-        if (insertionTicks <= 0)
-        {
-            return -1.0F;
-        }
-        return Mth.clamp((INSERTION_LENGTH - insertionTicks + partialTick) / INSERTION_LENGTH, 0.0F, 1.0F);
+        return cabinSequenceProgress;
     }
 
     public static int pilotTicks()
@@ -107,7 +111,7 @@ public final class ClientForgeEvents
 
     private static EvaUnit01Entity ridden(LocalPlayer player)
     {
-        return player != null && player.getVehicle() instanceof EvaUnit01Entity eva ? eva : null;
+        return player == null ? null : EvaPilotResolver.controlTarget(player);
     }
 
     @SubscribeEvent
@@ -115,6 +119,27 @@ public final class ClientForgeEvents
     {
         Minecraft minecraft = Minecraft.getInstance();
         LocalPlayer player = minecraft.player;
+        if (player == null)
+        {
+            // Forge can emit client ticks while a world connection is being
+            // assembled or torn down. No pilot/cabin state is meaningful in
+            // that window, and dereferencing the not-yet-created LocalPlayer
+            // would crash before the joining packet finishes.
+            if (event.phase == TickEvent.Phase.END)
+            {
+                wasPiloting = false;
+                pilotTicks = 0;
+                lastEvaHealth = -1.0F;
+                damageFlashTicks = 0;
+                cabinSequenceProgress = -1.0F;
+                crouchHeld = false;
+                sprintHeld = false;
+                chargeHeld = false;
+                rifleAimHeld = false;
+                clearJumpRequest();
+            }
+            return;
+        }
         EvaUnit01Entity eva = ridden(player);
 
         // While piloting, Shift belongs to the Unit's legs. Clear vanilla's
@@ -132,33 +157,17 @@ public final class ClientForgeEvents
             return;
         }
 
-        // Boarding transition: play the entry-plug insertion cinematic.
+        // Boarding transition: pilot HUD lifetime is independent from the
+        // capsule sequence, which may already be 70% complete at EVA transfer.
         boolean piloting = eva != null;
         if (piloting && !wasPiloting)
         {
-            insertionTicks = INSERTION_LENGTH;
             pilotTicks = 0;
             lastEvaHealth = eva.getHealth();
-            playPlugSound(minecraft, SoundEvents.PISTON_EXTEND, 1.4F, 0.55F);
         }
         pilotTicks = piloting ? pilotTicks + 1 : 0;
         wasPiloting = piloting;
-        if (insertionTicks > 0 && !minecraft.isPaused())
-        {
-            if (insertionTicks == 96)
-            {
-                playPlugSound(minecraft, SoundEvents.IRON_DOOR_CLOSE, 1.2F, 0.72F);
-            }
-            else if (insertionTicks == 68)
-            {
-                playPlugSound(minecraft, SoundEvents.BEACON_POWER_SELECT, 1.0F, 0.62F);
-            }
-            else if (insertionTicks == 32)
-            {
-                playPlugSound(minecraft, SoundEvents.BEACON_ACTIVATE, 1.0F, 1.18F);
-            }
-            insertionTicks--;
-        }
+        tickCabinAudio(minecraft, player, eva);
         if (damageFlashTicks > 0 && !minecraft.isPaused())
         {
             damageFlashTicks--;
@@ -210,6 +219,20 @@ public final class ClientForgeEvents
             if (eva != null)
             {
                 send(ServerboundEvaControlPacket.ACTION_TOGGLE_PRONE);
+            }
+        }
+        while (Keybinds.CANCEL_LAUNCH.consumeClick())
+        {
+            if (eva != null)
+            {
+                send(ServerboundEvaControlPacket.ACTION_CANCEL_LAUNCH);
+            }
+        }
+        while (Keybinds.SELF_LAUNCH.consumeClick())
+        {
+            if (eva != null)
+            {
+                send(ServerboundEvaControlPacket.ACTION_SELF_LAUNCH);
             }
         }
 
@@ -312,6 +335,79 @@ public final class ClientForgeEvents
         }
     }
 
+    private static void tickCabinAudio(Minecraft minecraft, LocalPlayer player,
+                                       EvaUnit01Entity eva)
+    {
+        if (player == null)
+        {
+            cabinSequenceProgress = -1.0F;
+            return;
+        }
+        float current = -1.0F;
+        if (player.getVehicle() instanceof EntryPlugCarrierEntity plug)
+        {
+            if (plug.isLockedToEva() && eva != null)
+            {
+                current = eva.getActivationTicks() > 0
+                        ? eva.getActivationProgress(0.0F) : 1.0F;
+            }
+            else
+            {
+                current = plug.getCabinStage()
+                        == EntryPlugCarrierEntity.CABIN_SEALED_DARK
+                        ? 0.0F : plug.getCabinProgress() / 100.0F;
+            }
+        }
+        else if (eva != null)
+        {
+            if (eva.getActivationTicks() > 0)
+            {
+                current = eva.getActivationProgress(0.0F);
+            }
+            else if (cabinSequenceProgress >= 0.0F)
+            {
+                current = 1.0F;
+            }
+        }
+        if (current < 0.0F)
+        {
+            cabinSequenceProgress = -1.0F;
+            return;
+        }
+        if (minecraft.isPaused())
+        {
+            return;
+        }
+        float previous = cabinSequenceProgress;
+        if (crossed(previous, current, 0.01F))
+        {
+            playPlugSound(minecraft, SoundEvents.PISTON_EXTEND,
+                    1.4F, 0.55F);
+        }
+        if (crossed(previous, current, 0.30F))
+        {
+            playPlugSound(minecraft, SoundEvents.IRON_DOOR_CLOSE,
+                    1.2F, 0.72F);
+        }
+        if (crossed(previous, current, 0.45F))
+        {
+            playPlugSound(minecraft, SoundEvents.BEACON_POWER_SELECT,
+                    1.0F, 0.62F);
+        }
+        if (crossed(previous, current, 0.78F))
+        {
+            playPlugSound(minecraft, SoundEvents.BEACON_ACTIVATE,
+                    1.0F, 1.18F);
+        }
+        cabinSequenceProgress = Math.max(previous, current);
+    }
+
+    private static boolean crossed(float previous, float current,
+                                   float threshold)
+    {
+        return previous < threshold && current >= threshold;
+    }
+
     /**
      * From the plug the mouse drives the Unit, not the pilot's own hands:
      * left-click swings and right-click slams. With the cannon out,
@@ -326,12 +422,12 @@ public final class ClientForgeEvents
         {
             if (player != null && event.isUseItem() && !player.isShiftKeyDown())
             {
-                EvaUnit01Entity entryTarget = findEntryPlugTarget(player);
+                Entity entryTarget = findEntryPlugTarget(player);
                 if (entryTarget != null)
                 {
-                    // The synthetic dorsal plug sits outside parts of the
-                    // coarse 8.5-wide collision box. Extend only this narrow
-                    // aimed interaction; the server repeats every gate.
+                    // The external capsule has a real hatch and passenger
+                    // space. Prefer it over the old synthetic EVA socket; the
+                    // server repeats the hatch, distance and sight gates.
                     event.setCanceled(true);
                     event.setSwingHand(false);
                     if (lastEntryPlugRequestTick != player.tickCount)
@@ -391,8 +487,12 @@ public final class ClientForgeEvents
         }
         Minecraft minecraft = Minecraft.getInstance();
         EvaUnit01Entity eva = ridden(minecraft.player);
+        boolean insideExternalPlug = minecraft.player != null
+                && minecraft.player.getVehicle()
+                        instanceof EntryPlugCarrierEntity;
         boolean opticalSight = isCannonScopeActive(eva) || isRifleSightActive(eva);
-        if (opticalSight && (event.getOverlay() == VanillaGuiOverlay.HOTBAR.type()
+        if ((opticalSight || insideExternalPlug)
+                && (event.getOverlay() == VanillaGuiOverlay.HOTBAR.type()
                 || event.getOverlay() == VanillaGuiOverlay.CROSSHAIR.type()))
         {
             event.setCanceled(true);
@@ -479,11 +579,30 @@ public final class ClientForgeEvents
         jumpRepeatArmed = false;
     }
 
-    private static EvaUnit01Entity findEntryPlugTarget(LocalPlayer player)
+    private static Entity findEntryPlugTarget(LocalPlayer player)
     {
-        AABB search = player.getBoundingBox().inflate(12.0D, 32.0D, 12.0D);
+        double interactionRange = EvaScale.ENTRY_PLUG_INTERACTION_RANGE;
+        AABB carrierSearch = player.getBoundingBox().inflate(interactionRange);
+        EntryPlugCarrierEntity carrier = player.level().getEntitiesOfClass(
+                        EntryPlugCarrierEntity.class, carrierSearch,
+                        plug -> plug.isAlive() && plug.isHatchOpen()
+                                && isExternalPlugTargeted(player, plug)
+                                && hasClearExternalPlugPath(player, plug)).stream()
+                .min((left, right) -> Double.compare(
+                        left.distanceToSqr(player), right.distanceToSqr(player)))
+                .orElse(null);
+        if (carrier != null)
+        {
+            return carrier;
+        }
+
+        // Compatibility path for the isolated launch-silo prototype, which has
+        // no physical overhead capsule. Canonical GeoFront cages always expose
+        // the carrier above and therefore take the branch above.
+        AABB search = player.getBoundingBox().inflate(18.0D, 48.0D, 18.0D);
         return player.level().getEntitiesOfClass(EvaUnit01Entity.class, search,
                         unit -> unit.isAlive() && !unit.isVehicle()
+                                && !unit.isNervLogisticsLocked()
                                 && !unit.isLaunchSequenceActive()
                                 && unit.isEntryPlugTargeted(player)
                                 && hasClearEntryPlugPath(player, unit)).stream()
@@ -491,6 +610,41 @@ public final class ClientForgeEvents
                         left.getEntryPlugSocketPosition().distanceToSqr(player.getEyePosition()),
                         right.getEntryPlugSocketPosition().distanceToSqr(player.getEyePosition())))
                 .orElse(null);
+    }
+
+    private static boolean isExternalPlugTargeted(LocalPlayer player,
+                                                   EntryPlugCarrierEntity plug)
+    {
+        Vec3 eye = player.getEyePosition();
+        // The carrier entity origin is the insertion tip and its vanilla AABB
+        // remains vertical even while the capsule rotates. Target the authored
+        // hatch portal instead: using the AABB centre made players aim at an
+        // invisible point above/below the visible shell.
+        Vec3 target = plug.hasCanonicalPose()
+                ? plug.transformPlugMarker(
+                        EntryPlugKinematics.HATCH_PORTAL_CENTRE_P)
+                : plug.getBoundingBox().getCenter();
+        Vec3 direction = target.subtract(eye);
+        double interactionRange = EvaScale.ENTRY_PLUG_INTERACTION_RANGE;
+        return direction.lengthSqr() <= interactionRange * interactionRange
+                && direction.lengthSqr() > 1.0E-4D
+                && direction.normalize().dot(player.getViewVector(1.0F))
+                        >= 0.35D;
+    }
+
+    private static boolean hasClearExternalPlugPath(LocalPlayer player,
+                                                     EntryPlugCarrierEntity plug)
+    {
+        Vec3 eye = player.getEyePosition();
+        Vec3 target = plug.hasCanonicalPose()
+                ? plug.transformPlugMarker(
+                        EntryPlugKinematics.HATCH_PORTAL_CENTRE_P)
+                : plug.getBoundingBox().getCenter();
+        BlockHitResult hit = player.level().clip(new ClipContext(
+                eye, target, ClipContext.Block.COLLIDER,
+                ClipContext.Fluid.NONE, player));
+        return hit.getType() == HitResult.Type.MISS
+                || hit.getLocation().distanceToSqr(target) <= 3.0D * 3.0D;
     }
 
     /**
@@ -510,7 +664,7 @@ public final class ClientForgeEvents
     @SubscribeEvent
     public static void onRenderPlayer(RenderPlayerEvent.Pre event)
     {
-        if (event.getEntity().getVehicle() instanceof EvaUnit01Entity)
+        if (EvaPilotResolver.controlTarget(event.getEntity()) != null)
         {
             event.setCanceled(true);
         }

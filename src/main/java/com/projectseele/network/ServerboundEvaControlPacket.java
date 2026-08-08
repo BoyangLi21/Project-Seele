@@ -4,6 +4,7 @@ import java.util.function.Supplier;
 
 import com.projectseele.ProjectSeele;
 import com.projectseele.entity.EvaUnit01Entity;
+import com.projectseele.world.EvaPilotResolver;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.network.NetworkEvent;
@@ -29,6 +30,8 @@ public class ServerboundEvaControlPacket
     public static final int ACTION_STOMP = 12;
     public static final int ACTION_TOGGLE_PRONE = 13;
     public static final int ACTION_RIFLE_FIRE = 14;
+    public static final int ACTION_CANCEL_LAUNCH = 15;
+    public static final int ACTION_SELF_LAUNCH = 16;
 
     public final int action;
     public final int requestId;
@@ -66,7 +69,10 @@ public class ServerboundEvaControlPacket
         // was lost. Queue the complete validation + dispatch atomically.
         context.enqueueWork(() ->
         {
-            if (sender != null && sender.getVehicle() instanceof EvaUnit01Entity eva)
+            EvaUnit01Entity eva = sender == null
+                    ? null : EvaPilotResolver.controlTarget(sender);
+            if (sender != null && eva != null
+                    && EvaPilotResolver.pilot(eva) == sender)
             {
                 if (Boolean.getBoolean("projectseele.visualCapture"))
                 {
@@ -101,6 +107,8 @@ public class ServerboundEvaControlPacket
                     case ACTION_STOMP -> eva.stompAttack(sender);
                     case ACTION_TOGGLE_PRONE -> eva.toggleProne(sender);
                     case ACTION_RIFLE_FIRE -> eva.fireRifle(sender);
+                    case ACTION_CANCEL_LAUNCH -> eva.cancelLaunchFromPilot(sender);
+                    case ACTION_SELF_LAUNCH -> eva.releaseLaunchFromPilot(sender);
                     default -> { }
                 }
             }

@@ -597,20 +597,20 @@ public final class ClientFxManager
         private static final int TIFERET = TreeOfLifeLayout.TIFERET;
         private static final float LABEL_ROTATION_DEGREES = 180.0F;
         private static final float DIAGRAM_TEXT_Z = -7.4F;
-        private static final float EXTERNAL_NAME_Y = 3.15F;
-        private static final float EXTERNAL_DIVINE_Y = 1.05F;
-        private static final float EXTERNAL_ARCHANGEL_Y = -1.05F;
-        private static final float EXTERNAL_CHOIR_Y = -3.15F;
-        private static final float EXTERNAL_NAME_SCALE = 0.40F;
-        private static final float EXTERNAL_DIVINE_SCALE = 0.28F;
-        private static final float EXTERNAL_ARCHANGEL_SCALE = 0.22F;
-        private static final float EXTERNAL_CHOIR_SCALE = 0.20F;
-        private static final float PATH_LETTER_SCALE = 0.46F;
-        private static final float INTERNAL_NAME_SCALE = 0.22F;
-        private static final float INTERNAL_DIVINE_SCALE = 0.16F;
-        private static final float INTERNAL_ARCHANGEL_SCALE = 0.16F;
-        private static final float INTERNAL_CHOIR_SCALE = 0.14F;
-        private static final float PATH_NUMBER_SCALE = 0.22F;
+        private static final float EXTERNAL_NAME_Y = 5.5F;
+        private static final float EXTERNAL_DIVINE_Y = 1.5F;
+        private static final float EXTERNAL_ARCHANGEL_Y = -1.5F;
+        private static final float EXTERNAL_CHOIR_Y = -5.5F;
+        private static final float EXTERNAL_NAME_SCALE = 0.67F;
+        private static final float EXTERNAL_DIVINE_SCALE = 0.47F;
+        private static final float EXTERNAL_ARCHANGEL_SCALE = 0.37F;
+        private static final float EXTERNAL_CHOIR_SCALE = 0.34F;
+        private static final float PATH_LETTER_SCALE = 0.80F;
+        private static final float INTERNAL_NAME_SCALE = 0.34F;
+        private static final float INTERNAL_DIVINE_SCALE = 0.26F;
+        private static final float INTERNAL_ARCHANGEL_SCALE = 0.24F;
+        private static final float INTERNAL_CHOIR_SCALE = 0.20F;
+        private static final float PATH_NUMBER_SCALE = 0.34F;
         private static final String[] SEPHIRA_NAMES = {
                 "KETER", "CHOKMAH", "BINAH", "CHESED", "GEVURAH",
                 "TIFERET", "NETZACH", "HOD", "YESOD", "MALKUTH"
@@ -667,7 +667,7 @@ public final class ClientFxManager
                 {1.0F,11.0F},{1.0F,-6.5F},{0.0F,0.0F},{0.0F,0.5F},
                 {-15.5F,0.0F},{1.5F,0.0F},{-17.0F,0.0F},{-0.5F,-1.0F},
                 {0.0F,-5.5F},{0.0F,-11.5F},{0.0F,1.0F},{-1.0F,-12.5F},
-                {0.0F,1.0F},{-1.0F,-3.0F},{1.5F,-3.0F},{0.0F,0.5F},
+                {0.0F,1.0F},{-13.0F,5.0F},{13.0F,5.0F},{0.0F,0.5F},
                 {-5.0F,-7.5F},{1.0F,-11.5F},{-1.0F,-11.5F},
                 {-6.0F,0.0F},{1.5F,0.0F},{-16.5F,0.0F}
         };
@@ -881,7 +881,7 @@ public final class ClientFxManager
                 drawLabel(poseStack, buffer, PATH_LETTERS[i], letterPos,
                         PATH_LETTER_SCALE, base * lit);
                 drawDiagramLabel(poseStack, buffer, displayHebrew(PATH_NUMERALS[i]),
-                        new Vector3f(letterPos.x + 1.8F, letterPos.y - 2.6F, DIAGRAM_TEXT_Z),
+                        new Vector3f(letterPos.x + 3.5F, letterPos.y - 7.0F, DIAGRAM_TEXT_Z),
                         PATH_NUMBER_SCALE, base * lit * 0.62F);
             }
             poseStack.popPose();

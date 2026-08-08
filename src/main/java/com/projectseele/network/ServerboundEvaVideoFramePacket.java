@@ -6,14 +6,20 @@ import java.util.UUID;
 import java.util.function.Supplier;
 
 import com.projectseele.ProjectSeele;
+import com.projectseele.config.SeeleConfig;
 import com.projectseele.entity.EvaUnit01Entity;
 import com.projectseele.visual.GeoFrontCommands;
 import com.projectseele.world.IntegratedNervMapBuilder;
+import com.projectseele.world.EvaPilotResolver;
+import com.projectseele.world.FacilityV2SavedData;
+import com.projectseele.world.PerformanceCounters;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.network.NetworkEvent;
 import net.minecraftforge.network.PacketDistributor;
 
@@ -26,8 +32,8 @@ public final class ServerboundEvaVideoFramePacket
 {
     public static final int FRAME_WIDTH = 160;
     public static final int FRAME_HEIGHT = 90;
-    public static final int MAX_FRAME_BYTES = 96 * 1024;
-    private static final int MIN_FRAME_INTERVAL_TICKS = 4;
+    public static final int MAX_FRAME_BYTES = 32 * 1024;
+    private static final int MIN_FRAME_INTERVAL_TICKS = 20;
     public static final int FEED_ACTIVE_TICKS = 60;
     private static final Map<UUID, Long> LAST_ACCEPTED_TICK = new HashMap<>();
     private static final long[] LAST_VARIANT_TICK = {
@@ -74,9 +80,12 @@ public final class ServerboundEvaVideoFramePacket
 
     private void relay(ServerPlayer sender)
     {
-        if (!(sender.getVehicle() instanceof EvaUnit01Entity eva)
+        EvaUnit01Entity eva = EvaPilotResolver.controlTarget(sender);
+        if (!SeeleConfig.liveCockpitVideoEnabled()
+                || !SeeleConfig.videoFrameRelayEnabled()
+                || eva == null
                 || !eva.isAlive() || eva.getUnitVariant() != this.variant
-                || eva.getFirstPassenger() != sender
+                || EvaPilotResolver.pilot(eva) != sender
                 || this.variant < EvaUnit01Entity.UNIT_00
                 || this.variant > EvaUnit01Entity.UNIT_02
                 || !validPng(this.png))
@@ -101,21 +110,16 @@ public final class ServerboundEvaVideoFramePacket
         LAST_VARIANT_TICK[this.variant] = now;
         LAST_HUMAN_VARIANT_TICK[this.variant] = now;
 
-        BlockPos origin = IntegratedNervMapBuilder.GEOFRONT_ORIGIN;
-        AABB commandArea = new AABB(
-                origin.getX() - 72.0D, origin.getY() - 35.0D,
-                origin.getZ() - 50.0D,
-                origin.getX() + 73.0D, origin.getY() + 91.0D,
-                origin.getZ() + 111.0D);
         ClientboundEvaVideoFramePacket outgoing =
                 new ClientboundEvaVideoFramePacket(this.variant, this.png);
         int viewers = 0;
         for (ServerPlayer viewer : level.players())
         {
-            if (commandArea.contains(viewer.position()))
+            if (isCommandViewer(level, viewer.position()))
             {
                 SeeleNetwork.CHANNEL.send(
                         PacketDistributor.PLAYER.with(() -> viewer), outgoing);
+                PerformanceCounters.recordVideoFrame(this.png.length);
                 viewers++;
             }
         }
@@ -152,16 +156,51 @@ public final class ServerboundEvaVideoFramePacket
 
     public static boolean hasCommandViewers(ServerLevel level)
     {
-        AABB area = commandArea();
+        if (!SeeleConfig.videoFrameRelayEnabled())
+        {
+            return false;
+        }
         return level.players().stream().anyMatch(
-                viewer -> area.contains(viewer.position()));
+                viewer -> isCommandViewer(level, viewer.position()));
+    }
+
+    /**
+     * Tells real pilots whether a remote operator can currently see the command
+     * wall. No viewer means no full-frame GPU readback and no PNG work.
+     */
+    public static void syncCaptureDemand(MinecraftServer server)
+    {
+        if (!SeeleConfig.liveCockpitVideoEnabled()
+                || !SeeleConfig.videoFrameRelayEnabled())
+        {
+            return;
+        }
+        ServerLevel level = server.getLevel(GeoFrontCommands.GEOFRONT);
+        if (level == null)
+        {
+            return;
+        }
+        boolean viewers = level.players().stream().anyMatch(
+                viewer -> isCommandViewer(level, viewer.position())
+                        && EvaPilotResolver.controlTarget(viewer) == null);
+        for (ServerPlayer player : level.players())
+        {
+            if (EvaPilotResolver.controlTarget(player) != null)
+            {
+                SeeleNetwork.CHANNEL.send(
+                        PacketDistributor.PLAYER.with(() -> player),
+                        new ClientboundEvaVideoDemandPacket(viewers));
+            }
+        }
     }
 
     /** Relays a server-sampled view only while no real pilot owns this feed. */
     public static void relayTrainingFrame(ServerLevel level, int variant,
                                           byte[] png)
     {
-        if (!level.dimension().equals(GeoFrontCommands.GEOFRONT)
+        if (!SeeleConfig.dummyPilotVideoEnabled()
+                || !SeeleConfig.videoFrameRelayEnabled()
+                || !level.dimension().equals(GeoFrontCommands.GEOFRONT)
                 || variant < EvaUnit01Entity.UNIT_00
                 || variant > EvaUnit01Entity.UNIT_02
                 || isHumanFeedActive(level, variant) || !validPng(png))
@@ -173,15 +212,38 @@ public final class ServerboundEvaVideoFramePacket
                 new ClientboundEvaVideoFramePacket(variant, png);
         for (ServerPlayer viewer : level.players())
         {
-            if (commandArea().contains(viewer.position()))
+            if (isCommandViewer(level, viewer.position()))
             {
                 SeeleNetwork.CHANNEL.send(
                         PacketDistributor.PLAYER.with(() -> viewer), outgoing);
+                PerformanceCounters.recordVideoFrame(png.length);
             }
         }
     }
 
-    private static AABB commandArea()
+    private static boolean isCommandViewer(ServerLevel level, Vec3 position)
+    {
+        if (legacyCommandArea().contains(position))
+        {
+            return true;
+        }
+        FacilityV2SavedData facility = FacilityV2SavedData.get(level);
+        if (!facility.commissioned()
+                || facility.requireZone("COMMAND_VOLUME").state()
+                != FacilityV2SavedData.ZoneState.COMPLETE)
+        {
+            return false;
+        }
+        BlockPos centre = facility.manifest().centre();
+        AABB command = new AABB(
+                centre.getX() - 80.0D, -376.0D,
+                centre.getZ() - 92.0D,
+                centre.getX() + 80.0D, -296.0D,
+                centre.getZ() + 92.0D);
+        return command.contains(position);
+    }
+
+    private static AABB legacyCommandArea()
     {
         BlockPos origin = IntegratedNervMapBuilder.GEOFRONT_ORIGIN;
         return new AABB(origin.getX() - 72.0D, origin.getY() - 35.0D,

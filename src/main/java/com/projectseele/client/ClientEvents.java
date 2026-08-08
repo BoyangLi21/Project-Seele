@@ -3,9 +3,11 @@ package com.projectseele.client;
 import com.projectseele.ProjectSeele;
 import com.projectseele.client.render.EntryPlugCarrierRenderer;
 import com.projectseele.client.render.EvaUnit01Renderer;
+import com.projectseele.client.render.EvaWeaponRenderer;
 import com.projectseele.client.render.LocalTriangleMeshLayer;
 import com.projectseele.client.render.LocalVisualAssetFingerprint;
 import com.projectseele.client.render.NervCarrierPlatformRenderer;
+import com.projectseele.client.render.NervCommandSeatRenderer;
 import com.projectseele.client.render.RamielRenderer;
 import com.projectseele.client.render.TrainingPilotRenderer;
 import com.projectseele.client.render.LilithRenderer;
@@ -13,6 +15,7 @@ import com.projectseele.client.render.ColossalHumanoidRenderer;
 import com.projectseele.client.render.HybridAddonRenderer;
 import com.projectseele.registry.ModEntities;
 import com.projectseele.registry.ModFluids;
+import com.projectseele.registry.ModBlocks;
 import net.minecraft.client.renderer.ItemBlockRenderTypes;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraftforge.api.distmarker.Dist;
@@ -37,6 +40,8 @@ public class ClientEvents
                     RenderType.translucent());
             ItemBlockRenderTypes.setRenderLayer(ModFluids.FLOWING_LCL.get(),
                     RenderType.translucent());
+            ItemBlockRenderTypes.setRenderLayer(ModBlocks.CLEAR_GLASS.get(),
+                    RenderType.translucent());
         });
     }
 
@@ -49,10 +54,16 @@ public class ClientEvents
         event.registerEntityRenderer(ModEntities.EVA_UNIT02.get(), EvaUnit01Renderer::new);
         event.registerEntityRenderer(ModEntities.ENTRY_PLUG_CARRIER.get(),
                 EntryPlugCarrierRenderer::new);
+        event.registerEntityRenderer(ModEntities.EVA_WEAPON.get(),
+                EvaWeaponRenderer::new);
         event.registerEntityRenderer(ModEntities.TRAINING_PILOT.get(),
                 TrainingPilotRenderer::new);
         event.registerEntityRenderer(ModEntities.NERV_CARRIER_PLATFORM.get(),
                 NervCarrierPlatformRenderer::new);
+        event.registerEntityRenderer(ModEntities.NERV_LIFT_CABIN.get(),
+                NervCarrierPlatformRenderer::new);
+        event.registerEntityRenderer(ModEntities.NERV_COMMAND_SEAT.get(),
+                NervCommandSeatRenderer::new);
         event.registerEntityRenderer(ModEntities.SACHIEL.get(), context -> new HybridAddonRenderer<>(context,
                 ColossalHumanoidRenderer.Style.SACHIEL, "sachiel", 8.0F));
         event.registerEntityRenderer(ModEntities.SHAMSHEL.get(),
@@ -85,6 +96,8 @@ public class ClientEvents
         event.register(Keybinds.EXIT_EVA);
         event.register(Keybinds.STOMP);
         event.register(Keybinds.TOGGLE_PRONE);
+        event.register(Keybinds.CANCEL_LAUNCH);
+        event.register(Keybinds.SELF_LAUNCH);
     }
 
     @SubscribeEvent
@@ -94,6 +107,7 @@ public class ClientEvents
         {
             LocalTriangleMeshLayer.clearCache();
             LocalVisualAssetFingerprint.clearCache();
+            EvaUnit01Renderer.prewarmLocalBodyMeshes(resourceManager);
         });
     }
 }

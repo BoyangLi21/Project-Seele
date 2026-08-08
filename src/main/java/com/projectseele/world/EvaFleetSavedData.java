@@ -17,7 +17,7 @@ import net.minecraft.world.level.saveddata.SavedData;
 public final class EvaFleetSavedData extends SavedData
 {
     private static final String DATA_NAME = "projectseele_eva_fleet";
-    private static final int DATA_VERSION = 1;
+    private static final int DATA_VERSION = 2;
 
     private final Map<Integer, FleetEntry> entries = new LinkedHashMap<>();
 
@@ -33,7 +33,7 @@ public final class EvaFleetSavedData extends SavedData
         EvaFleetSavedData data = new EvaFleetSavedData();
         int version = tag.contains("Version", Tag.TAG_INT)
                 ? tag.getInt("Version") : 1;
-        if (version != DATA_VERSION)
+        if (version < 1 || version > DATA_VERSION)
         {
             ProjectSeele.LOGGER.error(
                     "Unsupported EVA fleet SavedData version {}; ignoring fleet",
@@ -54,7 +54,9 @@ public final class EvaFleetSavedData extends SavedData
                     phase, Math.max(0, entryTag.getInt("Ticks")),
                     entryTag.getInt("Carrier"),
                     Math.max(0, Math.min(EvaHangarBuilder.LCL_SHOULDER_LAYERS,
-                            entryTag.getInt("LclLayers"))));
+                            entryTag.getInt("LclLayers"))),
+                    entryTag.hasUUID("EntryPlug")
+                            ? entryTag.getUUID("EntryPlug") : null);
             data.entries.put(variant, entry);
         }
         return data;
@@ -103,6 +105,11 @@ public final class EvaFleetSavedData extends SavedData
             entryTag.putInt("Ticks", value.getValue().ticks());
             entryTag.putInt("Carrier", value.getValue().carrier());
             entryTag.putInt("LclLayers", value.getValue().lclLayers());
+            if (value.getValue().entryPlugId() != null)
+            {
+                entryTag.putUUID("EntryPlug",
+                        value.getValue().entryPlugId());
+            }
             list.add(entryTag);
         }
         tag.put("Fleet", list);
@@ -114,6 +121,9 @@ public final class EvaFleetSavedData extends SavedData
         PARKED,
         BRIDGE_RETRACTING,
         PLUG_INSERTING,
+        PLUG_ABORT_RETURNING,
+        PLUG_ABORT_DOCKED,
+        PLUG_FAULT,
         PLUG_LOCKING,
         DRAINING,
         TO_SILO,
@@ -137,13 +147,25 @@ public final class EvaFleetSavedData extends SavedData
     }
 
     public record FleetEntry(UUID canonicalId, Phase phase, int ticks,
-                             int carrier, int lclLayers)
+                             int carrier, int lclLayers, UUID entryPlugId)
     {
+        public FleetEntry(UUID canonicalId, Phase phase, int ticks,
+                          int carrier, int lclLayers)
+        {
+            this(canonicalId, phase, ticks, carrier, lclLayers, null);
+        }
+
         public FleetEntry withPhase(Phase value, int newTicks,
                                     int newCarrier, int newLclLayers)
         {
             return new FleetEntry(this.canonicalId, value, newTicks,
-                    newCarrier, newLclLayers);
+                    newCarrier, newLclLayers, this.entryPlugId);
+        }
+
+        public FleetEntry withEntryPlug(UUID plugId)
+        {
+            return new FleetEntry(this.canonicalId, this.phase, this.ticks,
+                    this.carrier, this.lclLayers, plugId);
         }
     }
 }

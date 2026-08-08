@@ -32,6 +32,9 @@ public final class Tokyo3RecoveryConsole
     private static final int HALF_DEPTH = 8;
     private static final int HEIGHT = 8;
     private static final int CONTROL_Z = CENTRE_Z - 3;
+    private static final int ACCESS_HALF_WIDTH = 3;
+    private static final int ACCESS_HEIGHT = 6;
+    private static final int SOUTH_ACCESS_END_Z = -60;
     private static final String LABEL_TAG_PREFIX =
             "projectseele.tokyo3_recovery.unit";
     private static final int UPDATE_CLIENTS = Block.UPDATE_CLIENTS;
@@ -71,8 +74,9 @@ public final class Tokyo3RecoveryConsole
                 for (int y = 1; y < HEIGHT; y++)
                 {
                     BlockPos position = cityOrigin.offset(x, y, z);
-                    boolean doorway = z == CENTRE_Z + HALF_DEPTH
-                            && Math.abs(x) <= 2 && y <= 4;
+                    boolean doorway = (z == CENTRE_Z + HALF_DEPTH
+                            || z == CENTRE_Z - HALF_DEPTH)
+                            && Math.abs(x) <= ACCESS_HALF_WIDTH && y <= 5;
                     if (!perimeter || doorway)
                     {
                         clear(level, position);
@@ -116,6 +120,10 @@ public final class Tokyo3RecoveryConsole
         }
         set(level, cityOrigin.offset(0, HEIGHT, CENTRE_Z),
                 Blocks.BEACON.defaultBlockState());
+        buildAccessCorridor(level, cityOrigin,
+                CENTRE_Z + HALF_DEPTH + 1, -20);
+        buildAccessCorridor(level, cityOrigin,
+                CENTRE_Z - HALF_DEPTH - 1, SOUTH_ACCESS_END_Z);
         return inspect(level, cityOrigin);
     }
 
@@ -152,10 +160,21 @@ public final class Tokyo3RecoveryConsole
                 .is(Blocks.POLISHED_DEEPSLATE)
                 && level.getBlockState(cityOrigin.offset(0, HEIGHT, CENTRE_Z))
                 .is(Blocks.BEACON);
+        int accessRoutes = 0;
+        if (accessRouteClear(level, cityOrigin,
+                CENTRE_Z + HALF_DEPTH + 1, -20))
+        {
+            accessRoutes++;
+        }
+        if (accessRouteClear(level, cityOrigin,
+                CENTRE_Z - HALF_DEPTH - 1, SOUTH_ACCESS_END_Z))
+        {
+            accessRoutes++;
+        }
         return new RecoveryConsoleAudit(shell && controls == CONTROL_COUNT
                 && bases == CONTROL_COUNT && supports == CONTROL_COUNT
-                && labels == CONTROL_COUNT,
-                shell, controls, bases, supports, labels);
+                && labels == CONTROL_COUNT && accessRoutes == 2,
+                shell, controls, bases, supports, labels, accessRoutes);
     }
 
     public static BlockPos controlPosition(BlockPos cityOrigin, int variant)
@@ -170,6 +189,86 @@ public final class Tokyo3RecoveryConsole
     public static BlockPos entryPosition(BlockPos cityOrigin)
     {
         return cityOrigin.offset(0, 1, CENTRE_Z + HALF_DEPTH - 2);
+    }
+
+    /**
+     * Builds a pressure-safe pedestrian link from the recovery room to a real
+     * Tokyo-3 street. Both the short north airlock and the redundant south
+     * egress are rebuilt last, so later district repairs cannot leave the
+     * console as a sealed glass box.
+     */
+    private static void buildAccessCorridor(ServerLevel level,
+                                            BlockPos cityOrigin,
+                                            int startZ, int endZ)
+    {
+        int minimumZ = Math.min(startZ, endZ);
+        int maximumZ = Math.max(startZ, endZ);
+        for (int z = minimumZ; z <= maximumZ; z++)
+        {
+            for (int x = -ACCESS_HALF_WIDTH - 1;
+                 x <= ACCESS_HALF_WIDTH + 1; x++)
+            {
+                BlockPos floor = cityOrigin.offset(x, 0, z);
+                set(level, floor, Math.floorMod(z, 7) == 0
+                        ? Blocks.SEA_LANTERN.defaultBlockState()
+                        : Blocks.POLISHED_DEEPSLATE.defaultBlockState());
+                for (int y = 1; y < ACCESS_HEIGHT; y++)
+                {
+                    BlockPos position = floor.above(y);
+                    if (Math.abs(x) <= ACCESS_HALF_WIDTH)
+                    {
+                        clear(level, position);
+                    }
+                    else
+                    {
+                        set(level, position, y >= 2 && y <= 4
+                                ? Blocks.GRAY_STAINED_GLASS.defaultBlockState()
+                                : Blocks.POLISHED_BLACKSTONE_BRICKS
+                                        .defaultBlockState());
+                    }
+                }
+                set(level, floor.above(ACCESS_HEIGHT),
+                        Math.floorMod(x + z, 9) == 0
+                                ? Blocks.SEA_LANTERN.defaultBlockState()
+                                : Blocks.POLISHED_BLACKSTONE_BRICKS
+                                        .defaultBlockState());
+            }
+        }
+
+        // Open both ends completely; the side walls and lit lintel make the
+        // threshold legible without using a collision-bearing iron door.
+        for (int z : new int[] {startZ, endZ})
+        {
+            for (int x = -ACCESS_HALF_WIDTH; x <= ACCESS_HALF_WIDTH; x++)
+            {
+                for (int y = 1; y <= 5; y++)
+                {
+                    clear(level, cityOrigin.offset(x, y, z));
+                }
+            }
+        }
+    }
+
+    private static boolean accessRouteClear(ServerLevel level,
+                                            BlockPos cityOrigin,
+                                            int startZ, int endZ)
+    {
+        int step = Integer.compare(endZ, startZ);
+        for (int z = startZ; ; z += step)
+        {
+            BlockPos floor = cityOrigin.offset(0, 0, z);
+            if (!level.getBlockState(floor)
+                    .isFaceSturdy(level, floor, Direction.UP)
+                    || !level.getBlockState(floor.above()).isAir()
+                    || !level.getBlockState(floor.above(2)).isAir())
+            {
+                return false;
+            }
+            if (z == endZ)
+            {
+                return true;
+            }
+        }
     }
     private static void installLabel(ServerLevel level, BlockPos cityOrigin,
                                      BlockPos button, int variant)
@@ -261,6 +360,7 @@ public final class Tokyo3RecoveryConsole
         if (!level.getBlockState(position).isAir())
         {
             level.setBlock(position, Blocks.AIR.defaultBlockState(), UPDATE_CLIENTS);
+            PerformanceCounters.recordWorldBlockWrites(1);
         }
     }
 
@@ -270,19 +370,21 @@ public final class Tokyo3RecoveryConsole
         if (!level.getBlockState(position).equals(state))
         {
             level.setBlock(position, state, UPDATE_CLIENTS);
+            PerformanceCounters.recordWorldBlockWrites(1);
         }
     }
 
     public record RecoveryConsoleAudit(boolean valid, boolean shell,
                                        int controls, int bases,
-                                       int supports, int labels)
+                                       int supports, int labels,
+                                       int accessRoutes)
     {
         public String summary()
         {
             return String.format(Locale.ROOT,
-                    "valid=%s shell=%s controls=%d/3 bases=%d/3 supports=%d/3 labels=%d/3",
+                    "valid=%s shell=%s controls=%d/3 bases=%d/3 supports=%d/3 labels=%d/3 access=%d/2",
                     this.valid, this.shell, this.controls, this.bases,
-                    this.supports, this.labels);
+                    this.supports, this.labels, this.accessRoutes);
         }
     }
 }

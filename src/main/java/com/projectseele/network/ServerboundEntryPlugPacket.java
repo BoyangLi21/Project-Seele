@@ -2,6 +2,7 @@ package com.projectseele.network;
 
 import java.util.function.Supplier;
 
+import com.projectseele.entity.EntryPlugCarrierEntity;
 import com.projectseele.entity.EvaUnit01Entity;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
@@ -30,17 +31,26 @@ public class ServerboundEntryPlugPacket
 
     public void handle(Supplier<NetworkEvent.Context> ctx)
     {
-        ServerPlayer sender = ctx.get().getSender();
-        if (sender != null && !sender.isPassenger())
+        NetworkEvent.Context context = ctx.get();
+        ServerPlayer sender = context.getSender();
+        context.enqueueWork(() ->
         {
-            Entity target = sender.serverLevel().getEntity(this.entityId);
-            if (target instanceof EvaUnit01Entity eva)
+            if (sender == null || sender.isPassenger())
             {
-                // Range, rear sector, line of sight, aim cone, bed ownership
-                // and launch state are all re-evaluated on the server.
+                return;
+            }
+            Entity target = sender.serverLevel().getEntity(this.entityId);
+            if (target instanceof EntryPlugCarrierEntity plug)
+            {
+                plug.tryBoardFromHatch(sender);
+            }
+            else if (target instanceof EvaUnit01Entity eva)
+            {
+                // Legacy standalone-silo compatibility. Canonical GeoFront
+                // boarding is handled by the physical carrier branch above.
                 eva.tryEnterFromPlug(sender);
             }
-        }
-        ctx.get().setPacketHandled(true);
+        });
+        context.setPacketHandled(true);
     }
 }

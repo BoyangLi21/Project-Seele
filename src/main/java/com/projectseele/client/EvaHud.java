@@ -2,8 +2,10 @@ package com.projectseele.client;
 
 import com.projectseele.config.SeeleConfig;
 import com.projectseele.client.fx.ClientFxManager;
+import com.projectseele.entity.EntryPlugCarrierEntity;
 import com.projectseele.entity.EvaUnit01Entity;
 import com.projectseele.entity.RamielEntity;
+import com.projectseele.world.EvaPilotResolver;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
@@ -56,18 +58,53 @@ public final class EvaHud
      */
     public static final IGuiOverlay INSERTION = (gui, guiGraphics, partialTick, width, height) ->
     {
-        LocalPlayer player = Minecraft.getInstance().player;
-        if (player == null || !(player.getVehicle() instanceof EvaUnit01Entity eva)
-                || eva.getActivationTicks() <= 0)
+        Minecraft minecraft = Minecraft.getInstance();
+        LocalPlayer player = minecraft.player;
+        if (player == null || !minecraft.options.getCameraType().isFirstPerson())
         {
             return;
         }
-        float progress = eva.getActivationProgress(partialTick);
-        float blackout = progress < 0.12F ? Mth.clamp(progress / 0.08F, 0.0F, 1.0F)
-                : Mth.clamp(1.0F - (progress - 0.12F) / 0.22F, 0.0F, 1.0F);
-        guiGraphics.fill(0, 0, width, height, ((int) (blackout * 245.0F) << 24));
+        EvaUnit01Entity eva = EvaPilotResolver.controlTarget(player);
+        EntryPlugCarrierEntity plug =
+                player.getVehicle() instanceof EntryPlugCarrierEntity carrier
+                        ? carrier : null;
+        if ((eva == null || eva.getActivationTicks() <= 0) && plug == null)
+        {
+            return;
+        }
 
-        float rise = Mth.clamp((progress - 0.12F) / 0.34F, 0.0F, 1.0F);
+        if (plug != null
+                && plug.getCabinStage()
+                        == EntryPlugCarrierEntity.CABIN_SEALED_DARK)
+        {
+            guiGraphics.fill(0, 0, width, height, 0xFF000000);
+            drawPlugCabinFrame(guiGraphics, width, height, 0xD0FF7A00);
+            guiGraphics.drawCenteredString(gui.getFont(),
+                    Component.translatable("hud.projectseele.plug_sealed")
+                            .withStyle(ChatFormatting.GOLD,
+                                    ChatFormatting.BOLD),
+                    width / 2, height / 2 - 14, NERV_ORANGE);
+            guiGraphics.drawCenteredString(gui.getFont(),
+                    Component.translatable("hud.projectseele.await_prepare")
+                            .withStyle(ChatFormatting.DARK_GRAY),
+                    width / 2, height / 2 + 4, 0xFF8A8178);
+            return;
+        }
+
+        float progress = plug != null && !plug.isLockedToEva()
+                ? plug.getCabinProgress() / 100.0F
+                : eva == null ? 0.0F : eva.getActivationTicks() > 0
+                        ? eva.getActivationProgress(partialTick) : 1.0F;
+        // The pilot starts in a genuinely disconnected black capsule. LCL is
+        // visible locally, but the outside world only fades in after A10
+        // synchronization and continues smoothly after transfer to the EVA.
+        float blackout = progress < 0.52F ? 1.0F
+                : Mth.clamp(
+                        1.0F - (progress - 0.52F) / 0.48F, 0.0F, 1.0F);
+        guiGraphics.fill(0, 0, width, height,
+                (Mth.clamp(Math.round(blackout * 255.0F), 0, 255) << 24));
+
+        float rise = Mth.clamp(progress / 0.45F, 0.0F, 1.0F);
         float fade = progress > 0.76F ? Mth.clamp(1.0F - (progress - 0.76F) / 0.24F, 0.0F, 1.0F) : 1.0F;
         if (rise > 0.0F)
         {
@@ -95,34 +132,74 @@ public final class EvaHud
             }
         }
 
-        String stageKey = progress < 0.2F ? "hud.projectseele.plug_lock"
-                : progress < 0.48F ? "hud.projectseele.lcl_pressurize"
-                : progress < 0.70F ? "hud.projectseele.a10_connect"
+        drawPlugCabinFrame(guiGraphics, width, height,
+                (Mth.clamp((int) (210.0F * fade), 0, 255) << 24)
+                        | 0x00FF7A00);
+        String stageKey = progress < 0.08F ? "hud.projectseele.plug_lock"
+                : progress < 0.45F ? "hud.projectseele.lcl_pressurize"
+                : progress < 0.72F ? "hud.projectseele.a10_connect"
                 : "hud.projectseele.synch_start";
         guiGraphics.drawCenteredString(gui.getFont(),
                 Component.translatable(stageKey).withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD),
                 width / 2, height / 2 - 34, NERV_ORANGE);
+        boolean launchLocked = eva != null
+                && eva.getLaunchPhase() == EvaUnit01Entity.LAUNCH_LOCKED;
         int barWidth = Math.min(240, width / 2);
         int bx = width / 2 - barWidth / 2;
         int by = height / 2 - 15;
         guiGraphics.fill(bx, by, bx + barWidth, by + 5, 0xB0202020);
-        guiGraphics.fill(bx, by, bx + Math.round(barWidth * progress), by + 5, NERV_ORANGE);
-        guiGraphics.drawCenteredString(gui.getFont(), String.format("SYSTEM  %03d%%", Math.round(progress * 100.0F)),
+        // While launch-locked the activation clip deliberately holds; a partial
+        // bar there just looks frozen. Show it complete and awaiting command
+        // authorization instead of a gauge stuck part-way.
+        float shownProgress = launchLocked ? 1.0F : progress;
+        int fillColour = launchLocked ? 0xFF35C24A : NERV_ORANGE;
+        guiGraphics.fill(bx, by, bx + Math.round(barWidth * shownProgress), by + 5, fillColour);
+        guiGraphics.drawCenteredString(gui.getFont(),
+                launchLocked ? "LAUNCH READY" : String.format("SYSTEM  %03d%%",
+                        Math.round(progress * 100.0F)),
                 width / 2, by + 10, 0xFFE8D2B8);
-        if (eva.getLaunchPhase() == EvaUnit01Entity.LAUNCH_LOCKED)
+        if (launchLocked)
         {
             guiGraphics.drawCenteredString(gui.getFont(),
                     Component.translatable("hud.projectseele.launch_standby")
-                            .withStyle(ChatFormatting.RED, ChatFormatting.BOLD),
-                    width / 2, by + 24, 0xFFFF3030);
+                            .withStyle(ChatFormatting.GREEN, ChatFormatting.BOLD),
+                    width / 2, by + 24, 0xFF35C24A);
+            guiGraphics.drawCenteredString(gui.getFont(),
+                    Component.translatable("hud.projectseele.self_launch_hint",
+                                    Keybinds.SELF_LAUNCH.getTranslatedKeyMessage())
+                            .withStyle(ChatFormatting.GOLD),
+                    width / 2, by + 36, NERV_ORANGE);
         }
     };
+
+    private static void drawPlugCabinFrame(GuiGraphics graphics, int width,
+                                           int height, int colour)
+    {
+        int side = Math.max(9, width / 34);
+        int top = Math.max(7, height / 30);
+        graphics.fill(0, 0, side, height, 0xE00A0A0C);
+        graphics.fill(width - side, 0, width, height, 0xE00A0A0C);
+        graphics.fill(0, 0, width, top, 0xE00A0A0C);
+        graphics.fill(0, height - top, width, height, 0xE00A0A0C);
+        int notch = Math.max(18, width / 12);
+        graphics.fill(side, top, side + notch, top + 2, colour);
+        graphics.fill(width - side - notch, top, width - side, top + 2,
+                colour);
+        graphics.fill(side, height - top - 2, side + notch,
+                height - top, colour);
+        graphics.fill(width - side - notch, height - top - 2,
+                width - side, height - top, colour);
+    }
 
     /** Full entry-plug cockpit: frame, synchro readout, status, warnings. */
     public static final IGuiOverlay COCKPIT = (gui, guiGraphics, partialTick, width, height) ->
     {
-        LocalPlayer player = Minecraft.getInstance().player;
-        if (player == null || !(player.getVehicle() instanceof EvaUnit01Entity eva))
+        Minecraft minecraft = Minecraft.getInstance();
+        LocalPlayer player = minecraft.player;
+        EvaUnit01Entity eva = player == null
+                ? null : EvaPilotResolver.controlTarget(player);
+        if (player == null || !minecraft.options.getCameraType().isFirstPerson()
+                || eva == null)
         {
             return;
         }
@@ -174,7 +251,12 @@ public final class EvaHud
         int powerTicks = eva.getPowerTicks();
         int powerSeconds = Math.max(0, powerTicks / 20);
         Component powerStatus = eva.isUmbilicalConnected()
-                ? Component.translatable("hud.projectseele.power_external")
+                ? (powerTicks < eva.getPowerCapacityTicks()
+                    ? Component.translatable(
+                            "hud.projectseele.power_external_charging",
+                            Math.round(100.0F * powerTicks
+                                    / eva.getPowerCapacityTicks()))
+                    : Component.translatable("hud.projectseele.power_external"))
                     .withStyle(ChatFormatting.GREEN)
                 : eva.isPowerDepleted()
                     ? Component.translatable("hud.projectseele.power_depleted")
@@ -210,6 +292,14 @@ public final class EvaHud
             guiGraphics.drawCenteredString(gui.getFont(),
                     Component.translatable(launchKey).withStyle(ChatFormatting.RED, ChatFormatting.BOLD),
                     width / 2, m + 30, 0xFFFF3030);
+            if (eva.getLaunchPhase() == EvaUnit01Entity.LAUNCH_LOCKED)
+            {
+                guiGraphics.drawCenteredString(gui.getFont(),
+                        Component.translatable("hud.projectseele.self_launch_hint",
+                                        Keybinds.SELF_LAUNCH.getTranslatedKeyMessage())
+                                .withStyle(ChatFormatting.GOLD),
+                        width / 2, m + 42, NERV_ORANGE);
+            }
         }
 
         // Helmet sight and artificial horizon. It stays subtle until the
@@ -302,7 +392,9 @@ public final class EvaHud
     {
         Minecraft minecraft = Minecraft.getInstance();
         LocalPlayer player = minecraft.player;
-        if (player == null || !(player.getVehicle() instanceof EvaUnit01Entity eva))
+        EvaUnit01Entity eva = player == null
+                ? null : EvaPilotResolver.controlTarget(player);
+        if (player == null || eva == null)
         {
             return;
         }

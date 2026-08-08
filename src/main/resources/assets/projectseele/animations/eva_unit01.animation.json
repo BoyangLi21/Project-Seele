@@ -1,6 +1,35 @@
 {
   "format_version": "1.8.0",
   "animations": {
+    "animation.eva_unit01.dormant": {
+      "loop": true,
+      "bones": {
+        "torso_upper": {
+          "rotation": [2, 0, 0]
+        },
+        "head": {
+          "rotation": [6, 0, 0]
+        },
+        "arm_l": {
+          "rotation": [0, 0, 0]
+        },
+        "forearm_l": {
+          "rotation": [0, 0, 0]
+        },
+        "hand_l": {
+          "rotation": [0, 0, 0]
+        },
+        "arm_r": {
+          "rotation": [0, 0, 0]
+        },
+        "forearm_r": {
+          "rotation": [0, 0, 0]
+        },
+        "hand_r": {
+          "rotation": [0, 0, 0]
+        }
+      }
+    },
     "animation.eva_unit01.idle": {
       "loop": true,
       "animation_length": 3.2,

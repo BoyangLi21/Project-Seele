@@ -64,19 +64,49 @@ public final class EvaUmbilicalCableRenderer
             {
                 continue;
             }
-            Vec3 start = Vec3.atCenterOf(anchor).add(0.0D, 0.65D, 0.0D);
-            Vec3 backward = Vec3.directionFromRotation(0.0F, unit.getYRot())
-                    .scale(-3.2D);
-            Vec3 end = unit.position().add(backward).add(0.0D, 18.5D, 0.0D);
-            double sag = Math.min(10.0D, start.distanceTo(end) * 0.18D);
-            Vec3 previous = cablePoint(start, end, sag, 0.0D);
+            Vec3 pylon = Vec3.atCenterOf(anchor).add(0.0D, 0.65D, 0.0D);
+            Vec3 armourMount = unit.getUmbilicalMountPosition();
+            Vec3 lumbarSocket = unit.getUmbilicalSocketPosition();
+            Vec3 rear = unit.getRearDirection();
+            Vec3 right = new Vec3(-rear.z, 0.0D, rear.x);
+            Vec3 collarOuter = lumbarSocket.add(rear.scale(0.72D));
+            Vec3 adapterHub = lumbarSocket.add(0.0D, 0.34D, 0.0D);
+            Vec3 mountLeft = armourMount.subtract(right.scale(0.62D))
+                    .add(0.0D, -0.16D, 0.0D);
+            Vec3 mountRight = armourMount.add(right.scale(0.62D))
+                    .add(0.0D, -0.16D, 0.0D);
+
+            // A rigid silver/red three-point adapter is part of the EVA, not
+            // unsupported cable.  It runs down the centreline from the rear
+            // armour mount and provides a visible collar for the flexible lead.
+            RibbonRenderer.drawStarRibbon(pose, consumer,
+                    vector(armourMount), vector(lumbarSocket),
+                    0.52F, 0.62F, 0.34F, 0.38F, 0.43F, 1.0F);
+            RibbonRenderer.drawStarRibbon(pose, consumer,
+                    vector(armourMount.add(0.0D, -0.22D, 0.0D)),
+                    vector(lumbarSocket.add(0.0D, 0.18D, 0.0D)),
+                    0.16F, 0.20F, 0.95F, 0.20F, 0.08F, 1.0F);
+            RibbonRenderer.drawStarRibbon(pose, consumer,
+                    vector(mountLeft), vector(adapterHub),
+                    0.22F, 0.28F, 0.34F, 0.38F, 0.43F, 1.0F);
+            RibbonRenderer.drawStarRibbon(pose, consumer,
+                    vector(mountRight), vector(adapterHub),
+                    0.22F, 0.28F, 0.34F, 0.38F, 0.43F, 1.0F);
+            RibbonRenderer.drawStarRibbon(pose, consumer,
+                    vector(lumbarSocket.subtract(rear.scale(0.12D))),
+                    vector(collarOuter),
+                    0.72F, 0.48F, 0.55F, 0.08F, 0.05F, 1.0F);
+
+            double sag = Math.min(10.0D,
+                    pylon.distanceTo(collarOuter) * 0.18D);
+            Vec3 previous = cablePoint(pylon, collarOuter, sag, 0.0D);
             for (int segment = 1; segment <= SEGMENTS; segment++)
             {
                 double t = segment / (double) SEGMENTS;
-                Vec3 current = cablePoint(start, end, sag, t);
+                Vec3 current = cablePoint(pylon, collarOuter, sag, t);
                 RibbonRenderer.drawStarRibbon(pose, consumer,
                         vector(previous), vector(current),
-                        0.13F, 0.13F, 1.0F, 0.30F, 0.015F, 0.86F);
+                        0.18F, 0.18F, 0.07F, 0.075F, 0.085F, 1.0F);
                 previous = current;
             }
         }

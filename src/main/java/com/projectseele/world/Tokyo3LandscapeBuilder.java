@@ -38,8 +38,10 @@ public final class Tokyo3LandscapeBuilder
     private static final int RAIL_PORTAL = 286;
     private static final int RESCUE_X = -260;
     private static final int RESCUE_Z = 104;
+    private static final int LAUNCH_WARNING_INNER_RADIUS = 15;
+    private static final int LAUNCH_WARNING_OUTER_RADIUS = 17;
     private static final int UPDATE_CLIENTS = Block.UPDATE_CLIENTS;
-    private static final int[] LIFT_X = {-28, 0, 28};
+    private static final int[] LIFT_X = {-42, 0, 42};
     private static final int[][] RIDGE_AUDIT_POINTS = {
             {0, -336}, {336, 0}, {0, 336}, {-336, 0},
     };
@@ -104,9 +106,16 @@ public final class Tokyo3LandscapeBuilder
         int safetyZones = 0;
         for (int liftX : LIFT_X)
         {
-            BlockState marker = level.getBlockState(origin.offset(liftX, 0, 12));
-            if (marker.is(Blocks.YELLOW_CONCRETE)
-                    || marker.is(Blocks.BLACK_CONCRETE))
+            // The continuous-shaft pass deliberately replaces the outermost
+            // warning-ring cell with the iron carrier rim.  Audit both the
+            // rim and a deterministic black warning cell one block inside it
+            // instead of demanding yellow concrete at a coordinate whose
+            // final owner is the shaft head.
+            BlockState rim = level.getBlockState(origin.offset(
+                    liftX, 0, LAUNCH_WARNING_OUTER_RADIUS));
+            BlockState warning = level.getBlockState(origin.offset(
+                    liftX + 2, 0, LAUNCH_WARNING_OUTER_RADIUS - 1));
+            if (rim.is(Blocks.IRON_BLOCK) && warning.is(Blocks.BLACK_CONCRETE))
             {
                 safetyZones++;
             }
@@ -547,12 +556,15 @@ public final class Tokyo3LandscapeBuilder
     private static void buildLaunchSafetyZone(ServerLevel level, BlockPos origin,
                                               int liftX)
     {
-        for (int x = -12; x <= 12; x++)
+        for (int x = -LAUNCH_WARNING_OUTER_RADIUS;
+             x <= LAUNCH_WARNING_OUTER_RADIUS; x++)
         {
-            for (int z = -12; z <= 12; z++)
+            for (int z = -LAUNCH_WARNING_OUTER_RADIUS;
+                 z <= LAUNCH_WARNING_OUTER_RADIUS; z++)
             {
                 int edge = Math.max(Math.abs(x), Math.abs(z));
-                if (edge < 10 || edge > 12)
+                if (edge < LAUNCH_WARNING_INNER_RADIUS
+                        || edge > LAUNCH_WARNING_OUTER_RADIUS)
                 {
                     continue;
                 }
@@ -563,9 +575,11 @@ public final class Tokyo3LandscapeBuilder
             }
         }
 
-        for (int x : new int[] {-12, 12})
+        for (int x : new int[] {-LAUNCH_WARNING_OUTER_RADIUS,
+                LAUNCH_WARNING_OUTER_RADIUS})
         {
-            for (int z : new int[] {-12, 12})
+            for (int z : new int[] {-LAUNCH_WARNING_OUTER_RADIUS,
+                    LAUNCH_WARNING_OUTER_RADIUS})
             {
                 for (int y = 1; y <= 8; y++)
                 {
@@ -576,7 +590,10 @@ public final class Tokyo3LandscapeBuilder
                 }
             }
         }
-        buildLaunchControlBunker(level, origin.offset(liftX, 0, 20));
+        // The old bunker sat directly in the EVA's forward sortie lane.
+        // Keep the observation/control cell behind the carrier opening, where
+        // it can watch the shaft without becoming a 60-metre trip hazard.
+        buildLaunchControlBunker(level, origin.offset(liftX, 0, -26));
     }
 
     private static void buildLaunchControlBunker(ServerLevel level,
@@ -859,7 +876,14 @@ public final class Tokyo3LandscapeBuilder
     {
         for (int liftX : LIFT_X)
         {
-            if (Math.abs(x - liftX) <= 7 && Math.abs(z) <= 7)
+            // Runtime landscape repair happens after the 25x25 shaft shells
+            // already exist. Protect the complete shell, not only the old
+            // 15x15 prototype core, or the Y=79 under-deck lattice cuts all
+            // three continuous launch routes in one pass.
+            if (Math.abs(x - liftX)
+                    <= IntegratedNervMapBuilder.SHAFT_OUTER_RADIUS
+                    && Math.abs(z)
+                    <= IntegratedNervMapBuilder.SHAFT_OUTER_RADIUS)
             {
                 return true;
             }
@@ -944,6 +968,7 @@ public final class Tokyo3LandscapeBuilder
         if (!level.getBlockState(position).equals(state))
         {
             level.setBlock(position, state, UPDATE_CLIENTS);
+            PerformanceCounters.recordWorldBlockWrites(1);
         }
     }
 

@@ -21,6 +21,20 @@ public final class ClientEvaArrivalSync
         if (entity instanceof EvaUnit01Entity eva)
         {
             eva.applyClientArrivalSync(x, y, z, yaw, pitch);
+            /*
+             * The real pilot is nested player -> plug -> EVA.  A stale sensor
+             * or preview camera can survive the last launch frame even after
+             * the chassis has arrived correctly, leaving first person looking
+             * at the bottom of the shaft.  Reclaim the ordinary player camera
+             * only when this packet targets that player's actual root vehicle;
+             * spectators and command-room feeds remain untouched.
+             */
+            if (minecraft.player != null
+                    && minecraft.player.getRootVehicle() == eva
+                    && minecraft.getCameraEntity() != minecraft.player)
+            {
+                minecraft.setCameraEntity(minecraft.player);
+            }
         }
     }
 }
