@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 from collections import Counter
+import hashlib
 import json
 from pathlib import Path
 import shutil
@@ -417,10 +418,63 @@ def stage_world() -> dict:
     return marker_data
 
 
+def source_signature() -> str:
+    digest = hashlib.sha256()
+    digest.update(f"schema:{STAGED_WORLD_SCHEMA}\n".encode("ascii"))
+    candidates = [Path(__file__), SKYSCRAPER_SCHEM]
+    for root in (COMMAND_WORLD, TOKYO3_WORLD, select_world_template()):
+        candidates.append(root / "level.dat")
+        for folder in ("region", "entities", "poi"):
+            directory = root / folder
+            if directory.is_dir():
+                candidates.extend(directory.glob("*.mca"))
+    for path in sorted(
+            {value for value in candidates if value.is_file()},
+            key=lambda value: value.as_posix().lower()):
+        stat = path.stat()
+        digest.update(path.as_posix().encode("utf-8", "surrogatepass"))
+        digest.update(b"\0")
+        digest.update(str(stat.st_size).encode("ascii"))
+        digest.update(b"\0")
+        digest.update(str(stat.st_mtime_ns).encode("ascii"))
+        digest.update(b"\n")
+    return digest.hexdigest()
+
+
+def prepared_assets_current(assets_only: bool) -> bool:
+    manifest_path = LOCAL_ASSET_DIR / "manifest.json"
+    if not manifest_path.is_file():
+        return False
+    if not (LOCAL_ASSET_DIR / "nerv_command_left.nbt").is_file():
+        return False
+    if not (LOCAL_ASSET_DIR / "tokyo3_skyscraper.nbt").is_file():
+        return False
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return False
+    if manifest.get("input_signature") != source_signature():
+        return False
+    if assets_only:
+        return True
+    marker = STAGED_WORLD / ".projectseele_local_map.json"
+    if not marker.is_file() or not (STAGED_WORLD / "level.dat").is_file():
+        return False
+    try:
+        staged = json.loads(marker.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return False
+    return staged.get("schema") == STAGED_WORLD_SCHEMA
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--assets-only", action="store_true")
+    parser.add_argument("--if-stale", action="store_true")
     args = parser.parse_args()
+    if args.if_stale and prepared_assets_current(args.assets_only):
+        print("Private Tokyo-3/NERV map assets are current")
+        return
     LOCAL_ASSET_DIR.mkdir(parents=True, exist_ok=True)
     command = convert_command_module(LOCAL_ASSET_DIR / "nerv_command_left.nbt")
     skyscraper = convert_schematic(LOCAL_ASSET_DIR / "tokyo3_skyscraper.nbt")
@@ -430,6 +484,7 @@ def main() -> None:
         "minecraft_target": "1.20.1",
         "data_version": TARGET_DATA_VERSION,
         "private_local_only": True,
+        "input_signature": source_signature(),
         "command_module": command,
         "tokyo3_skyscraper": skyscraper,
         "staged_world": world,

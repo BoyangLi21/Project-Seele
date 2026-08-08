@@ -113,10 +113,14 @@ POSE_CASES = (
     {"name": "lance_recovery", "animation": "lance_thrust", "time": 0.60,
      "stance": "standing", "attachment": "lance",
      "weapon_bone": "lance"},
+    # Runtime never renders entry-plug hardware as an EVA body attachment:
+    # EntryPlugCarrierEntity owns the capsule, hatch and crane throughout the
+    # insertion sequence. These cases therefore validate the frozen airframe
+    # pose only; the moving plug is audited by render_launch_silo_preview.py.
     {"name": "activation_raised", "animation": "activation", "time": 0.0,
-     "stance": "standing", "attachment": "plug", "third_only": True},
+     "stance": "standing", "third_only": True},
     {"name": "activation_seating", "animation": "activation", "time": 3.05,
-     "stance": "standing", "attachment": "plug", "third_only": True},
+     "stance": "standing", "third_only": True},
 )
 
 MASS_POSES = (

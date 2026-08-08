@@ -59,7 +59,7 @@ external-assets/private-test-bundle/
 3. 运行 `start-server.bat`。第一次只用于生成 `eula.txt`；服务器所有者必须亲自阅读 [Mojang EULA](https://aka.ms/MinecraftEULA)，再自行决定是否改为 `eula=true`。脚本绝不会代替用户接受。
 4. 模板默认 `-Xms2G -Xmx8G`、`view-distance=8`、`simulation-distance=6`、`allow-flight=true`（避免 EVA 弹射/跳跃被误踢）、`max-tick-time=120000`、异步区块写入和 150% 实体广播距离。
 5. 模板默认 `online-mode=true`、`white-list=true`、`enforce-whitelist=true`。在服务器控制台依次执行 `whitelist add <正版玩家名>`；不要为了省事关闭正版验证或白名单。
-6. 首位管理员进入后执行 `/seele geofront audit`。只有 `valid=true`、`mapVersion=17`、三条连续井均通过时才开始驾驶测试。旧 v16 世界会在 GeoFront 登录时执行有界基础设施修复，自动补三座武器柜而不会重建城市。
+6. 首位管理员进入后执行 `/seele geofront audit`。只有 `valid=true`、`mapVersion=22`、三条连续井均通过时才开始驾驶测试。旧版已连接世界会在 GeoFront 登录时执行有界基础设施修复，自动补齐武器柜、电源桩、走廊和发射路线，而不会整座重建城市。
 7. `eva_real_model` 是客户端资源包；每位玩家本地安装即可。服务器不需要也不应强制公开下发含第三方素材的资源包。
 
 如果把模板复制到另一台机器，先保留其目录结构并再次运行同步脚本。公网服务器还需要路由器端口转发、防火墙规则与定期备份；这些涉及你的网络环境，模板不会自动修改。

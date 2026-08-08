@@ -204,7 +204,7 @@ call run.bat --nogui
 2. 运行 sync-from-private-pack.bat，同步相同版本的模组、配置、本机地图缓存和世界。
 3. 首次运行 start-server.bat 只会生成 eula.txt；服务器所有者必须亲自阅读 Mojang EULA 后决定是否改为 eula=true。
 4. 在服务器控制台执行 whitelist add <正版玩家名>，再重新启动。模板默认开启正版验证和强制白名单。
-5. 首位管理员进入后执行 /seele geofront audit，要求 valid=true、mapVersion=17、三井均为 3/3。
+5. 首位管理员进入后执行 /seele geofront audit，要求 valid=true、mapVersion=22、三井均为 3/3。
 6. 客户端仍需安装私测包 minecraft/ 内容，并启用 eva_real_model 资源包。
 7. 默认 JVM 为 2G 起步、8G 上限；如果物理内存不足 12G，请不要同时在主机上启动高精度客户端。
 8. server-template 与整个私测包都不得公开上传。

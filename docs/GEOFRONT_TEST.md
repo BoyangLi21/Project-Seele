@@ -21,7 +21,7 @@
 3. 玩家会到达 GeoFront 观察位。执行 `/seele geofront audit`，通过结果必须同时包含：
 
    ```text
-   valid=true mapVersion=18 controlMarkers=true lowerBeds=3/3
+   valid=true mapVersion=22 controlMarkers=true lowerBeds=3/3
    surfaceBeds=3/3 continuousShafts=3/3 clearExits=3/3
    ```
 

@@ -1,9 +1,16 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
 title Project SEELE - local test client
+set "SEELE_MANUAL_PLAY=0"
+if /i "%~1"=="play" set "SEELE_MANUAL_PLAY=1"
 rem Project SEELE - one-click test client.
 rem Uses the standalone JDK 17 if JAVA_HOME is not already set to one.
 if not exist "%JAVA_HOME%\bin\java.exe" set "JAVA_HOME=C:\Users\liboy\jdks\jdk-17.0.19+10"
+rem Windows had assigned this JDK to the Intel Iris Xe during an earlier
+rem diagnostic even though the laptop has an RTX 3070 Ti. Register both launch
+rem binaries as high-performance applications before Forge starts.
+reg add "HKCU\Software\Microsoft\DirectX\UserGpuPreferences" /v "%JAVA_HOME%\bin\java.exe" /t REG_SZ /d "GpuPreference=2;" /f >nul 2>nul
+reg add "HKCU\Software\Microsoft\DirectX\UserGpuPreferences" /v "%JAVA_HOME%\bin\javaw.exe" /t REG_SZ /d "GpuPreference=2;" /f >nul 2>nul
 set "SEELE_HOME=%~dp0.."
 if not exist "%SEELE_HOME%\gradlew.bat" set "SEELE_HOME=D:\eva"
 if not exist "%SEELE_HOME%\gradlew.bat" (
@@ -20,6 +27,10 @@ rem before a dev launch, so never load their raw copies from run\mods.
 if exist "run\mods\ars_nouveau-1.20.1-4.12.7-all.jar" del /Q "run\mods\ars_nouveau-1.20.1-4.12.7-all.jar"
 if exist "run\mods\curios-forge-5.14.1+1.20.1.jar" del /Q "run\mods\curios-forge-5.14.1+1.20.1.jar"
 if not exist ".Codex\local-mods" mkdir ".Codex\local-mods"
+rem Another Furniture supplies the three real sittable command chairs. Keep
+rem its private evaluation jar outside run\mods so ForgeGradle can remap it.
+if exist "run\mods\another_furniture-forge-1.20.1-3.0.4.jar" copy /Y "run\mods\another_furniture-forge-1.20.1-3.0.4.jar" ".Codex\local-mods\another-furniture-1.20.1-3.0.4.jar" >nul
+if exist "run\mods\another_furniture-forge-1.20.1-3.0.4.jar" del /Q "run\mods\another_furniture-forge-1.20.1-3.0.4.jar"
 set "SEELE_MC_MODS=C:\Users\liboy\AppData\Roaming\.minecraft\mods"
 if exist "%SEELE_MC_MODS%\ars_nouveau-1.20.1-4.12.7-all.jar" copy /Y "%SEELE_MC_MODS%\ars_nouveau-1.20.1-4.12.7-all.jar" ".Codex\local-mods\ars-nouveau-4.12.7.jar" >nul
 if exist "%SEELE_MC_MODS%\curios-forge-5.14.1+1.20.1.jar" copy /Y "%SEELE_MC_MODS%\curios-forge-5.14.1+1.20.1.jar" ".Codex\local-mods\curios-forge-1.20.1-5.14.1.jar" >nul
@@ -48,7 +59,7 @@ if not exist "%SEELE_MAP_PY%" set "SEELE_MAP_PY=python"
 if exist "external-assets\work\maps\source_eva_bilibili\EVA\level.dat" if exist "external-assets\work\maps\source_nerv_command\Nerv Comand Module\level.dat" if exist "external-assets\incoming\maps\tokyo-3-type-skyscrapper1-converted.schem" (
     set "SEELE_OLD_PYTHONPATH=!PYTHONPATH!"
     if exist ".Codex\pydeps312" set "PYTHONPATH=%SEELE_HOME%\.Codex\pydeps312"
-    "%SEELE_MAP_PY%" tools\prepare_local_map_assets.py
+    "%SEELE_MAP_PY%" tools\prepare_local_map_assets.py --if-stale
     set "SEELE_MAP_RESULT=!ERRORLEVEL!"
     set "PYTHONPATH=!SEELE_OLD_PYTHONPATH!"
     set "SEELE_OLD_PYTHONPATH="
@@ -59,10 +70,62 @@ if exist "external-assets\work\maps\source_eva_bilibili\EVA\level.dat" if exist 
     )
     set "SEELE_MAP_RESULT="
 )
+rem Stage S20 from the last coherent human-approved GeoFront block layout.
+rem S19 is a failed archive and is never a migration source.
+set "SEELE_OLD_PYTHONPATH=!PYTHONPATH!"
+if exist ".Codex\pydeps312" set "PYTHONPATH=%SEELE_HOME%\.Codex\pydeps312"
+"%SEELE_MAP_PY%" tools\prepare_s20_rebuild_world.py --if-missing
+set "SEELE_CLEAN_STAGE_RESULT=!ERRORLEVEL!"
+set "PYTHONPATH=!SEELE_OLD_PYTHONPATH!"
+set "SEELE_OLD_PYTHONPATH="
+if not "!SEELE_CLEAN_STAGE_RESULT!"=="0" (
+    echo Clean Project SEELE rebuild save preparation failed.
+    pause
+    exit /b 1
+)
+set "SEELE_CLEAN_STAGE_RESULT="
 set "SEELE_MAP_PY="
 set "SEELE_VISUAL_WORLD=SEELE_VISUAL_TEST_2"
 if exist "run\saves\SEELE_TOKYO3_COMPLETE\level.dat" set "SEELE_VISUAL_WORLD=SEELE_TOKYO3_COMPLETE"
 if exist "run\saves\SEELE_TOKYO3_REBUILT\level.dat" set "SEELE_VISUAL_WORLD=SEELE_TOKYO3_REBUILT"
+if exist "run\saves\SEELE_S20_REBUILD\level.dat" set "SEELE_VISUAL_WORLD=SEELE_S20_REBUILD"
+if exist "run\saves\SEELE_S20_RECOVERY_R02_R04_R05\level.dat" set "SEELE_VISUAL_WORLD=SEELE_S20_RECOVERY_R02_R04_R05"
+if exist "run\saves\SEELE_S20_RECOVERY_R06_R07\level.dat" set "SEELE_VISUAL_WORLD=SEELE_S20_RECOVERY_R06_R07"
+if exist "run\saves\SEELE_S20_RECOVERY_R10_R12\level.dat" set "SEELE_VISUAL_WORLD=SEELE_S20_RECOVERY_R10_R12"
+if exist "run\saves\SEELE_S20_RECOVERY_R13\level.dat" set "SEELE_VISUAL_WORLD=SEELE_S20_RECOVERY_R13"
+if exist "run\saves\SEELE_S20_RECOVERY_R14_R16\level.dat" set "SEELE_VISUAL_WORLD=SEELE_S20_RECOVERY_R14_R16"
+if exist "run\saves\SEELE_S20_RECOVERY_R17\level.dat" set "SEELE_VISUAL_WORLD=SEELE_S20_RECOVERY_R17"
+if exist "run\saves\SEELE_S20_RECOVERY_R18_R20\level.dat" set "SEELE_VISUAL_WORLD=SEELE_S20_RECOVERY_R18_R20"
+if exist "run\saves\SEELE_S20_RECOVERY_R21_R22\level.dat" set "SEELE_VISUAL_WORLD=SEELE_S20_RECOVERY_R21_R22"
+if exist "run\saves\SEELE_S20_RECOVERY_R23\level.dat" set "SEELE_VISUAL_WORLD=SEELE_S20_RECOVERY_R23"
+if exist "run\saves\SEELE_S20_RECOVERY_R24_R25\level.dat" set "SEELE_VISUAL_WORLD=SEELE_S20_RECOVERY_R24_R25"
+if exist "run\saves\SEELE_S20_RECOVERY_R28\level.dat" set "SEELE_VISUAL_WORLD=SEELE_S20_RECOVERY_R28"
+rem The v1 Ars sky sphere stored one ticking block entity per shell block.
+rem Migrate it offline, with region backups, before the legacy save opens.
+set "SEELE_MIGRATE_PY=C:\Users\liboy\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe"
+if not exist "%SEELE_MIGRATE_PY%" set "SEELE_MIGRATE_PY=python"
+set "SEELE_OLD_PYTHONPATH=!PYTHONPATH!"
+if exist ".Codex\pydeps312" set "PYTHONPATH=%SEELE_HOME%\.Codex\pydeps312"
+"%SEELE_MIGRATE_PY%" tools\migrate_s00_geofront_sky_shell.py --save "run\saves\!SEELE_VISUAL_WORLD!" --backup-root "run\save-archives" --if-needed
+set "SEELE_MIGRATE_RESULT=!ERRORLEVEL!"
+set "PYTHONPATH=!SEELE_OLD_PYTHONPATH!"
+set "SEELE_OLD_PYTHONPATH="
+set "SEELE_MIGRATE_PY="
+if not "!SEELE_MIGRATE_RESULT!"=="0" (
+    echo Legacy GeoFront sky-shell migration failed; the save was not opened.
+    pause
+    exit /b 1
+)
+set "SEELE_MIGRATE_RESULT="
+set "SEELE_PREPARE_ASSETS=0"
+if /i "%~1"=="refresh" set "SEELE_PREPARE_ASSETS=1"
+python tools\local_runtime_cache.py check >nul 2>nul
+if errorlevel 1 set "SEELE_PREPARE_ASSETS=1"
+if "%SEELE_PREPARE_ASSETS%"=="0" (
+    echo Local EVA models and private attachments are unchanged; using the cached runtime pack.
+    goto SEELE_ASSETS_READY
+)
+echo Refreshing changed local EVA models and private attachments...
 python tools\make_smod_model_pack.py "evaaddon1-0.zip"
 if errorlevel 1 (
     echo SmOd model-pack generation failed.
@@ -126,6 +189,14 @@ if exist "external-assets\incoming\mass-production-evangelion.zip" (
         exit /b 1
     )
 )
+rem Cold cages use black eye pigments. A separate transparent full-bright
+rem overlay is enabled only after the authoritative power circuit comes online.
+python tools\make_eva_power_textures.py
+if errorlevel 1 (
+    echo EVA powered-eye texture generation failed.
+    pause
+    exit /b 1
+)
 rem Graft EUD's detailed Longinus model after the Tiger body converters;
 rem otherwise the later Tiger geometry would restore the placeholder spear.
 if exist "eud-1.1.0-forge-1.20.1.jar" (
@@ -143,6 +214,18 @@ if exist "external-assets\incoming\progressive-knife.zip" if exist "external-ass
     python tools\make_downloaded_eva_accessories_pack.py
     if errorlevel 1 (
         echo Downloaded EVA accessory generation failed.
+        pause
+        exit /b 1
+    )
+)
+rem Replace the old EVA-02-derived capsule with Crymsin's high-detail pressure
+rem shell and the Project SEELE Soul-Throne cockpit. The DONW999 download only
+rem contains its display stand, so its renders are used as a CC BY reference
+rem while the actual seat/control geometry is clean-room and reproducible.
+if exist "external-assets\incoming\entry-plug\crymsin-2501188\files\ObjWithMaterial\EntryPlugSolidv3.obj" (
+    python tools\make_entry_plug_model.py
+    if errorlevel 1 (
+        echo High-detail Entry Plug generation failed.
         pause
         exit /b 1
     )
@@ -186,6 +269,20 @@ if errorlevel 1 (
     echo Original EVA-carried N2 device generation failed.
     pause
     exit /b 1
+)
+:SEELE_ASSETS_READY
+set "SEELE_RUN_STATIC_VALIDATION=0"
+if "%SEELE_PREPARE_ASSETS%"=="1" if "%SEELE_MANUAL_PLAY%"=="0" set "SEELE_RUN_STATIC_VALIDATION=1"
+if /i "%~1"=="offline" set "SEELE_RUN_STATIC_VALIDATION=1"
+if /i "%~1"=="verify" set "SEELE_RUN_STATIC_VALIDATION=1"
+if "%SEELE_MANUAL_PLAY%"=="1" (
+    if "%SEELE_PREPARE_ASSETS%"=="1" python tools\local_runtime_cache.py mark
+    echo Manual play mode: skipping static contract and preview suites.
+    goto SEELE_STATIC_VALIDATION_DONE
+)
+if "%SEELE_RUN_STATIC_VALIDATION%"=="0" (
+    echo Static contracts are unchanged; proceeding directly to the requested game test.
+    goto SEELE_STATIC_VALIDATION_DONE
 )
 python tools\validate_local_eva_pack.py
 if errorlevel 1 (
@@ -271,6 +368,15 @@ if errorlevel 1 (
     pause
     exit /b 1
 )
+if "%SEELE_PREPARE_ASSETS%"=="1" (
+    python tools\local_runtime_cache.py mark
+    if errorlevel 1 (
+        echo Local EVA runtime cache could not be recorded.
+        pause
+        exit /b 1
+    )
+)
+:SEELE_STATIC_VALIDATION_DONE
 if /i "%~1"=="offline" (
     set "OFFLINE_FAILED=0"
     echo Running the fail-closed offline visual recovery suite...
@@ -300,6 +406,7 @@ if /i "%~1"=="offline" (
     pause
     exit /b 0
 )
+if "%SEELE_MANUAL_PLAY%"=="1" goto SEELE_MANUAL_INSTRUCTIONS
 echo.
 echo Continuous Tokyo-3 / GeoFront test flow:
 echo   1. The fresh normal-terrain SEELE_TOKYO3_REBUILT world opens automatically when available.
@@ -314,7 +421,20 @@ echo   /seele geofront surface is a developer camera shortcut only.
 echo   /seele geofront exit returns to the original world.
 echo   /seele geofront audit and sortie_audit report both map and EVA links.
 echo.
+goto SEELE_INSTRUCTIONS_DONE
+:SEELE_MANUAL_INSTRUCTIONS
+echo.
+echo S20 authored-layout review:
+echo   1. !SEELE_VISUAL_WORLD! opens automatically. R28 is the active immutable review baseline.
+echo   2. The original command bridge is preserved; its yellow/orange dummy masks are replaced in place by two live sloped screens.
+echo   3. The compact wet cages remain at EVA-00 x=-12, EVA-01 x=30 and EVA-02 x=72; each silo is only 60 blocks from its cage.
+echo   4. Use /seele geofront hangar for the wet-cage gallery and /seele eva status all for the physical logistics state.
+echo   5. The S20 physical personnel lift is at x=108 z=192 with real landing and in-car buttons.
+echo   6. Do not run /seele facility_v2 bootstrap, setup, rebuild or rescue commands in S20.
+echo.
+:SEELE_INSTRUCTIONS_DONE
 echo Starting Project SEELE test client (first launch takes a minute)...
+echo High-performance GPU requested for %JAVA_HOME%\bin\java.exe.
 if /i "%~1"=="visual" (
     echo Automated Visual Lab mode enabled.
     if /i "%~2"=="all" (
@@ -370,7 +490,7 @@ if /i "%~1"=="visual" (
         exit /b %errorlevel%
     ) else if /i "%~2"=="geofront_sortie" (
         echo Capturing one EVA entity through the real GeoFront-to-Tokyo-3 shaft.
-        echo Five state-gated frames prove readiness, plug lock, live pilot telemetry, mid-shaft height and same-dimension arrival.
+        echo Eight state-gated frames cover wet-cage readiness, physical plug insertion, command video, ascent, arrival and recovery.
         python tools\validate_visual_capture_run.py begin geofront_sortie
         if errorlevel 1 exit /b 1
         call gradlew.bat runClient -PquickPlayWorld=%SEELE_VISUAL_WORLD% -PvisualCapture=true -PvisualCaptureUnit=geofront_sortie
@@ -452,12 +572,6 @@ if /i "%~1"=="visual" (
         pause
         exit /b 1
     )
-    if exist "run\saves\SEELE_TOKYO3_REBUILT\level.dat" (
-        call gradlew.bat runClient -PstrictHighDetail=true -PquickPlayWorld=SEELE_TOKYO3_REBUILT
-    ) else if exist "run\saves\SEELE_TOKYO3_COMPLETE\level.dat" (
-        call gradlew.bat runClient -PstrictHighDetail=true -PquickPlayWorld=SEELE_TOKYO3_COMPLETE
-    ) else (
-        call gradlew.bat runClient -PstrictHighDetail=true
-    )
+    call gradlew.bat runClient -PstrictHighDetail=true -PquickPlayWorld=!SEELE_VISUAL_WORLD!
 )
 pause

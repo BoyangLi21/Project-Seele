@@ -260,7 +260,7 @@ ACCESSORY_ASSETS = {
         "texture_stem": "eva02_weapons",
     },
     "entry_plug": {
-        "expected_triangles": 1_352,
+        "expected_triangles": 11_654,
         "required_parts": {"entry_plug", "plug_hatch_l", "plug_hatch_r"},
     },
     "longinus_lance": {

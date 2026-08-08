@@ -107,3 +107,22 @@ and never clears the active resource pack. During development its `--output`
 must point at an ignored staging pack until the matching renderer and Visual
 Lab batch have passed. `tools/render_tiger_variant_rig_preview.py` provides
 deterministic four-view identity/stress checks without starting Minecraft.
+
+## Local Entry Plug evaluation (2026-07-26)
+
+- Exterior: [Crymsin `Entry Plug (Evangelion)`](https://www.thingiverse.com/thing:2501188),
+  Thingiverse item 2501188, CC BY. The user-downloaded OBJ has 250,554 source
+  triangles and five material groups.
+- Cockpit reference: [DONW999 `Neo Genesis Evangelion Entry Plug Pilot Seat -
+  The Soul Throne`](https://www.thingiverse.com/thing:4961673), Thingiverse
+  item 4961673, CC BY. Its downloaded ZIP contains only `Stand.stl`, decals and
+  render images; it does not contain the displayed chair/control meshes.
+- `tools/make_entry_plug_model.py` cuts a physical hatch into the Crymsin
+  pressure shell, decimates each material independently, then adds an original
+  Project SEELE Soul-Throne-style seat, restraints, foot rests and two
+  induction levers guided by the bundled DONW999 renders.
+- The generated local contract is 14 x 58 x 14 model pixels, 11,670 triangles
+  and three animated parts. It is written only to the ignored
+  `run/resourcepacks/eva_real_model/` pack. Both source ZIPs and the derivative
+  mesh remain local-only until release attribution and the wider EVA
+  fan-work compliance review are complete.

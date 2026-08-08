@@ -27,6 +27,10 @@ def main() -> int:
     items = read("src/main/java/com/projectseele/registry/ModItems.java")
     rack = read("src/main/java/com/projectseele/world/EvaArmamentRackBlock.java")
     rack_entity = read("src/main/java/com/projectseele/world/EvaArmamentRackBlockEntity.java")
+    lift = read("src/main/java/com/projectseele/world/EvaWeaponLiftDirector.java")
+    lift_data = read("src/main/java/com/projectseele/world/EvaWeaponLiftSavedData.java")
+    weapon_entity = read("src/main/java/com/projectseele/entity/EvaWeaponEntity.java")
+    carrier = read("src/main/java/com/projectseele/entity/NervCarrierPlatformEntity.java")
     eva = read("src/main/java/com/projectseele/entity/EvaUnit01Entity.java")
     config = read("src/main/java/com/projectseele/config/SeeleConfig.java")
     integrated = read("src/main/java/com/projectseele/world/IntegratedNervMapBuilder.java")
@@ -71,13 +75,39 @@ def main() -> int:
             "empty player-used racks may be replenished on routine ensure",
         ),
         gate(
-            "interaction.exchange",
-            "findNearestEva" in rack
-            and "takeNextArmament" in rack
-            and "equipRackArmament" in rack
-            and "unloadRackArmament" in rack
+            "interaction.physical_lift",
+            "requestPresentation" in rack
+            and "requestReturn" in rack
+            and "equipRackArmament" not in rack
+            and "if (EvaWeaponLiftDirector.hasActiveSequence(serverLevel, pos))" in rack
+            and rack.index("requestReturn") < rack.index("takeNextArmament")
+            and "findNearestEva" in lift
+            and "State.PRESENTED_LOCKED" in lift
+            and "State.DESCENDING_WITH_WEAPON" in lift
             and "Containers.dropContents" in rack,
-            "nearest-EVA exchange, unload, or break-drop path is incomplete",
+            "rack still performs an instant exchange or physical presentation/return is incomplete",
+        ),
+        gate(
+            "transaction.restart_safe",
+            "reserveNextArmament" in rack_entity
+            and "nextTransactionNonce" in rack_entity
+            and "commitReservation" in rack_entity
+            and "reconcileReservationCommit" in rack_entity
+            and "acceptReturnedArmament" in rack_entity
+            and "ReservationNonce" in rack_entity
+            and "Nonce" in lift_data,
+            "two-phase reservation or nonce-idempotent return is missing",
+        ),
+        gate(
+            "entity.identity",
+            "boundEvaUuid" in weapon_entity
+            and "mountOnPlatform" in weapon_entity
+            and "bindToEva" in weapon_entity
+            and "configureArmamentLift" in carrier
+            and "DATA_ARMAMENT_PAYLOAD_ID" in carrier
+            and "isExpectedArmamentPayload" in carrier
+            and "instanceof EvaWeaponEntity" in carrier,
+            "persistent payload identity or payload-only carrier gate is missing",
         ),
         gate(
             "interaction.safety",
@@ -109,15 +139,17 @@ def main() -> int:
             "NERV unit panels do not report the matching launch-bay rack stock",
         ),
         gate(
-            "map.login_upgrade",
-            "GeoFront login infrastructure gate" in commands
-            and "IntegratedNervMapBuilder.prepareRuntime(installedMap)" in commands,
-            "existing connected saves do not receive bounded rack/pylon repair on login",
+            "map.runtime_gate",
+            "public static RuntimeAudit prepareRuntime" in integrated
+            and "live controls are strictly" in integrated
+            and "armamentRacksPresent(level)" in integrated
+            and "FacilityWorldPolicy.requireLegacyGenerationAllowed" in integrated,
+            "live launch controls do not perform a read-only rack-aware runtime gate",
         ),
         gate(
-            "map.schema_v18",
-            "MAP_VERSION = 18" in integrated
-            and integrated.count("ensureArmamentRacks(level);") == 3
+            "map.schema_v22",
+            "MAP_VERSION = 22" in integrated
+            and integrated.count("ensureArmamentRacks(level);") >= 3
             and "lowerArmamentRack" in integrated
             and "rack.stockStandardLoadout()" in integrated
             and "armamentRacksPresent(level)" in integrated,

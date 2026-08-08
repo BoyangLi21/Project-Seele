@@ -26,6 +26,9 @@ KIT_SOURCE = ROOT / "src/main/java/com/projectseele/item/NervConstructionKitItem
 INTEGRATED_SOURCE = ROOT / "src/main/java/com/projectseele/world/IntegratedNervMapBuilder.java"
 COMMAND_SOURCE = ROOT / "src/main/java/com/projectseele/visual/LaunchSiloCommands.java"
 ENTITY_SOURCE = ROOT / "src/main/java/com/projectseele/entity/EvaUnit01Entity.java"
+SCALE_SOURCE = ROOT / "src/main/java/com/projectseele/entity/EvaScale.java"
+CONFIG_SOURCE = ROOT / "src/main/java/com/projectseele/config/SeeleConfig.java"
+HANGAR_SOURCE = ROOT / "src/main/java/com/projectseele/world/EvaHangarBuilder.java"
 RENDERER_SOURCE = ROOT / "src/main/java/com/projectseele/client/render/EvaUnit01Renderer.java"
 GEO_SOURCE = ROOT / "src/main/resources/assets/projectseele/geo/eva_unit01.geo.json"
 ANIMATION_SOURCE = ROOT / "src/main/resources/assets/projectseele/animations/eva_unit01.animation.json"
@@ -85,6 +88,52 @@ def java_number(text: str, name: str) -> float:
         rf"\b{name}\s*=\s*(-?\d+(?:\.\d+)?)(?:D|F)?\s*;",
         text,
         name,
+    )
+    return float(match.group(1))
+
+
+def eva_scaled_number(entity_text: str, scale_text: str,
+                      name: str) -> float:
+    """Resolve the small subset of EvaScale expressions used by this audit."""
+    multiplier = java_number(scale_text, "WORLD_MULTIPLIER")
+    assignment = one(
+        rf"\b{name}\s*=\s*([^;]+)\s*;",
+        entity_text,
+        name,
+        re.S,
+    ).group(1).strip()
+    literal = re.fullmatch(r"(-?\d+(?:\.\d+)?)(?:D|F)?", assignment)
+    if literal:
+        return float(literal.group(1))
+    legacy = re.fullmatch(
+        r"EvaScale\.fromLegacy\((-?\d+(?:\.\d+)?)(?:D|F)?\)",
+        assignment,
+    )
+    if legacy:
+        return float(legacy.group(1)) * multiplier
+    scale_ref = re.fullmatch(r"EvaScale\.([A-Z0-9_]+)", assignment)
+    if scale_ref:
+        scale_assignment = one(
+            rf"\b{scale_ref.group(1)}\s*=\s*([^;]+)\s*;",
+            scale_text,
+            scale_ref.group(1),
+            re.S,
+        ).group(1).strip()
+        scaled_literal = re.fullmatch(
+            r"(-?\d+(?:\.\d+)?)(?:D|F)?\s*\*\s*WORLD_MULTIPLIER",
+            scale_assignment,
+        )
+        if scaled_literal:
+            return float(scaled_literal.group(1)) * multiplier
+    raise fail(f"unsupported scaled assignment for {name}: {assignment}")
+
+
+def config_default(text: str, key: str) -> float:
+    match = one(
+        rf'defineInRange\("{re.escape(key)}",\s*'
+        rf"(-?\d+(?:\.\d+)?)(?:D|F)?\s*,",
+        text,
+        f"config default {key}",
     )
     return float(match.group(1))
 
@@ -194,6 +243,9 @@ def parse_contract() -> SiloContract:
     integrated = source_text(INTEGRATED_SOURCE)
     command = source_text(COMMAND_SOURCE)
     entity = source_text(ENTITY_SOURCE)
+    scale_contract = source_text(SCALE_SOURCE)
+    config = source_text(CONFIG_SOURCE)
+    hangar = source_text(HANGAR_SOURCE)
     renderer = source_text(RENDERER_SOURCE)
     shaft = method_body(kit, "private static void buildLaunchShaft")
     gantry = method_body(kit, "private static void buildEntryGantry")
@@ -252,19 +304,33 @@ def parse_contract() -> SiloContract:
         re.S,
     )
     permanent_bed_half = max(abs(int(carrier_loop.group(1))), abs(int(carrier_loop.group(2))))
-    moving_carrier_loop = one(
-        r"for\s*\(int x = (-?\d+); x <= (-?\d+); x\+\+\)\s*\{\s*"
-        r"for\s*\(int z = (-?\d+); z <= (-?\d+); z\+\+\)",
+    one(
+        r"for\s*\(int x = -LAUNCH_CARRIER_HALF;\s*"
+        r"x <= LAUNCH_CARRIER_HALF;\s*x\+\+\)\s*\{\s*"
+        r"for\s*\(int z = -LAUNCH_CARRIER_HALF;\s*"
+        r"z <= LAUNCH_CARRIER_HALF;\s*z\+\+\)",
         moving_carrier,
         "moving carrier loops",
         re.S,
     )
-    moving_ranges = tuple(int(moving_carrier_loop.group(index)) for index in range(1, 5))
-    if moving_ranges[0] != moving_ranges[2] or moving_ranges[1] != moving_ranges[3]:
-        raise fail(f"moving carrier is not square: {moving_ranges}")
-    moving_carrier_half = max(abs(moving_ranges[0]), abs(moving_ranges[1]))
+    one(
+        r"LAUNCH_CARRIER_HALF\s*=\s*"
+        r"EvaHangarBuilder\.CARRIER_HALF_EXTENT\s*;",
+        entity,
+        "shared carrier extent",
+    )
+    moving_carrier_half = int(java_number(
+        hangar, "CARRIER_HALF_EXTENT"))
     bed_offset = int(one(r"centre\.offset\(0,\s*(-?\d+),\s*0\),\s*Blocks\.LODESTONE", shaft, "lodestone bed").group(1))
-    shutter_offset = int(one(r"centre\.offset\(i,\s*(-?\d+),\s*-8\)", shaft, "surface shutter").group(1))
+    # The 2x launch aperture was widened from the legacy +/-8 slit to the
+    # current +/-13 split shutter. Parse the live edge instead of pinning this
+    # preview to the obsolete half-width.
+    shutter_match = one(
+        r"centre\.offset\(i,\s*(-?\d+),\s*(-\d+)\),\s*accent",
+        shaft,
+        "surface shutter",
+    )
+    shutter_offset = int(shutter_match.group(1))
 
     gantry_origin = int(one(r"int gantryY = (-?\d+)\s*;", gantry, "gantry Y").group(1))
     ladder_match = one(r"for\s*\(int y = (-?\d+); y <= (-?\d+); y\+\+\).*?centre\.offset\(0, y, (\d+)\), ladder", gantry, "ladder contract", re.S)
@@ -287,7 +353,10 @@ def parse_contract() -> SiloContract:
     deploy_yaw = float(launch_yaw.group(1))
     board_match = one(r"bed\.getY\(\) \+ (\d+(?:\.\d+)?)D,\s*bed\.getZ\(\) \+ (\d+(?:\.\d+)?)D", board, "board teleport", re.S)
 
-    scale = float(one(r"this\.withScale\((\d+(?:\.\d+)?)F\)", renderer, "renderer scale").group(1))
+    one(r"this\.withScale\(EvaScale\.RENDER_SCALE\)", renderer,
+        "shared renderer scale")
+    scale = (java_number(scale_contract, "LEGACY_RENDER_SCALE")
+             * java_number(scale_contract, "WORLD_MULTIPLIER"))
     geo = json.loads(source_text(GEO_SOURCE))
     entry_bone = find_bone(geo, "entry_plug")
     pivot = entry_bone.get("pivot")
@@ -303,7 +372,8 @@ def parse_contract() -> SiloContract:
     if any(not isinstance(value, list) or len(value) != 3 for _, value in ordered):
         raise fail("entry_plug activation position vector")
 
-    legacy_target = java_number(entity, "LAUNCH_TARGET_ABOVE_BED")
+    legacy_target = eva_scaled_number(
+        entity, scale_contract, "LAUNCH_TARGET_ABOVE_BED")
     legacy_ticks = int(java_number(entity, "LAUNCH_ASCENT_TICKS"))
     ascent_speed = java_number(entity, "CONTINUOUS_ASCENT_BLOCKS_PER_TICK")
     dynamic_ticks = max(legacy_ticks, math.ceil(ascent_distance / ascent_speed))
@@ -337,19 +407,24 @@ def parse_contract() -> SiloContract:
         deploy_yaw=deploy_yaw,
         board_bed_y=float(board_match.group(1)),
         board_bed_z=float(board_match.group(2)),
-        unit_width=java_number(entity, "NORMAL_WIDTH"),
-        unit_height=java_number(entity, "NORMAL_HEIGHT"),
-        entry_min_height=java_number(entity, "SILO_ENTRY_MIN_HEIGHT"),
-        entry_max_height=java_number(entity, "SILO_ENTRY_MAX_HEIGHT"),
-        entry_min_distance=java_number(entity, "SILO_ENTRY_MIN_DISTANCE"),
-        entry_max_distance=java_number(entity, "SILO_ENTRY_MAX_DISTANCE"),
+        unit_width=eva_scaled_number(entity, scale_contract, "NORMAL_WIDTH"),
+        unit_height=eva_scaled_number(entity, scale_contract, "NORMAL_HEIGHT"),
+        entry_min_height=eva_scaled_number(
+            entity, scale_contract, "SILO_ENTRY_MIN_HEIGHT"),
+        entry_max_height=eva_scaled_number(
+            entity, scale_contract, "SILO_ENTRY_MAX_HEIGHT"),
+        entry_min_distance=eva_scaled_number(
+            entity, scale_contract, "SILO_ENTRY_MIN_DISTANCE"),
+        entry_max_distance=eva_scaled_number(
+            entity, scale_contract, "SILO_ENTRY_MAX_DISTANCE"),
         entry_min_rear_dot=java_number(entity, "SILO_ENTRY_MIN_REAR_DOT"),
         launch_target=float(ascent_distance + 1),
         ascent_ticks=dynamic_ticks,
         clear_ticks=int(java_number(entity, "LAUNCH_CLEAR_TICKS")),
         renderer_scale=scale,
         plug_pivot_y=float(pivot[1]),
-        runtime_plug_height=java_number(entity, "ENTRY_PLUG_HEIGHT_01"),
+        runtime_plug_height=config_default(config, "socketHeight")
+                * java_number(scale_contract, "WORLD_MULTIPLIER"),
         plug_animation_start_y=float(ordered[0][1][1]),
         plug_animation_end_y=float(ordered[-1][1][1]),
         geo_origin_y=geo_origin[1],
@@ -385,24 +460,24 @@ def audit_contract(contract: SiloContract) -> dict[str, Any]:
     checks = [
         check("three_variants", variants == ["00", "01", "02"], variants, ["00", "01", "02"]),
         check("three_unique_beds", len(set(bay_positions)) == 3, bay_positions, "three unique bay centres"),
-        check("bay_spacing", sorted(x for x, _ in bay_positions) == [-28, 0, 28], bay_positions, "x=-28,0,28"),
-        check("integrated_world_heights", contract.geo_origin_y == -380 and contract.tokyo_origin_y == 80, {"geofront_origin_y": contract.geo_origin_y, "tokyo3_origin_y": contract.tokyo_origin_y}, {"geofront_origin_y": -380, "tokyo3_origin_y": 80}),
-        check("shaft_shell", contract.shaft_outer_half == 7 and contract.shaft_y == (-378, 79), {"half": contract.shaft_outer_half, "world_y": contract.shaft_y}, {"half": 7, "world_y": [-378, 79]}),
-        check("clearance_11x11", clear_width == 11 and clear_depth == 11, [clear_width, clear_depth], [11, 11]),
-        check("clearance_458_high", clear_height == 458 and contract.audit_y == (1, 458), {"height": clear_height, "bed_relative_y": contract.audit_y}, {"height": 458, "bed_relative_y": [1, 458]}),
+        check("bay_spacing", sorted(x for x, _ in bay_positions) == [-42, 0, 42], bay_positions, "x=-42,0,42"),
+        check("integrated_world_heights", contract.geo_origin_y == -444 and contract.tokyo_origin_y == 80, {"geofront_origin_y": contract.geo_origin_y, "tokyo3_origin_y": contract.tokyo_origin_y}, {"geofront_origin_y": -444, "tokyo3_origin_y": 80}),
+        check("shaft_shell", contract.shaft_outer_half == 17 and contract.shaft_y == (-442, 79), {"half": contract.shaft_outer_half, "world_y": contract.shaft_y}, {"half": 17, "world_y": [-442, 79]}),
+        check("clearance_31x31", clear_width == 31 and clear_depth == 31, [clear_width, clear_depth], [31, 31]),
+        check("clearance_522_high", clear_height == 522 and contract.audit_y == (1, 522), {"height": clear_height, "bed_relative_y": contract.audit_y}, {"height": 522, "bed_relative_y": [1, 522]}),
         check("eva_fits_clearance", contract.unit_width <= clear_width, contract.unit_width, f"<= {clear_width}"),
-        check("permanent_bed_13x13", permanent_bed_width == 13, permanent_bed_width, 13),
-        check("moving_carrier_11x11", moving_carrier_width == 11, moving_carrier_width, 11),
-        check("high_dorsal_gantry", contract.gantry_y == 26 and contract.board_bed_y == 27, {"floor_y": contract.gantry_y, "boarding_y": contract.board_bed_y}, {"floor_y": 26, "boarding_y": 27}),
-        check("ladder_24_blocks", ladder_count == 24 and contract.ladder_y == (4, 27), {"count": ladder_count, "bed_relative_y": contract.ladder_y}, {"count": 24, "bed_relative_y": [4, 27]}),
+        check("permanent_bed_29x29", permanent_bed_width == 29, permanent_bed_width, 29),
+        check("moving_carrier_29x29", moving_carrier_width == 29, moving_carrier_width, 29),
+        check("high_dorsal_gantry", contract.gantry_y == 48 and contract.board_bed_y == 49, {"floor_y": contract.gantry_y, "boarding_y": contract.board_bed_y}, {"floor_y": 48, "boarding_y": 49}),
+        check("ladder_45_blocks", ladder_count == 45 and contract.ladder_y == (5, 49), {"count": ladder_count, "bed_relative_y": contract.ladder_y}, {"count": 45, "bed_relative_y": [5, 49]}),
         check("entry_height_gate", contract.entry_min_height <= player_relative_height <= contract.entry_max_height, player_relative_height, [contract.entry_min_height, contract.entry_max_height]),
         check("entry_rear_sector", contract.entry_min_distance <= board_distance <= contract.entry_max_distance and rear_dot >= contract.entry_min_rear_dot, {"distance": board_distance, "rear_dot": round(rear_dot, 4)}, {"distance": [contract.entry_min_distance, contract.entry_max_distance], "rear_dot_min": contract.entry_min_rear_dot}),
-        check("entry_socket_matches_gantry", 0.4 <= contract.plug_socket_world_y - contract.board_bed_y <= 2.2, {"socket_y": round(contract.plug_socket_world_y, 3), "boarding_feet_y": contract.board_bed_y}, "socket 0.4..2.2 blocks above boarding feet"),
+        check("entry_socket_matches_gantry", 4.0 <= contract.board_bed_y - contract.plug_socket_world_y <= 8.0, {"socket_y": round(contract.plug_socket_world_y, 3), "boarding_feet_y": contract.board_bed_y}, "socket 4..8 blocks below boarding feet"),
         check("plug_descends_from_above", contract.plug_animation_start_y > contract.plug_animation_end_y and contract.plug_start_world_y > contract.plug_end_world_y, {"animation_y": [contract.plug_animation_start_y, contract.plug_animation_end_y], "world_y": [round(contract.plug_start_world_y, 3), round(contract.plug_end_world_y, 3)]}, "start above end"),
         check("plug_starts_above_gantry", contract.plug_start_world_y > contract.board_bed_y, round(contract.plug_start_world_y, 3), f"> {contract.board_bed_y}"),
-        check("carrier_travel_458", abs(carrier_travel - 458.0) < 1.0e-6, carrier_travel, 458.0),
-        check("launch_endpoint", contract.launch_target == 459.0 and contract.shutter_y == 458.0 and contract.launch_target > contract.shutter_y, {"eva_base_y": contract.launch_target, "surface_y": contract.surface_y, "shutter_y": contract.shutter_y}, {"eva_base_y": 459.0, "surface_y": 458.0, "above_shutter": True}),
-        check("dynamic_ascent_229_ticks", contract.ascent_ticks == 229 and contract.legacy_ascent_ticks == 34, {"continuous_ticks": contract.ascent_ticks, "legacy_ticks": contract.legacy_ascent_ticks}, {"continuous_ticks": 229, "legacy_ticks": 34}),
+        check("carrier_travel_522", abs(carrier_travel - 522.0) < 1.0e-6, carrier_travel, 522.0),
+        check("launch_endpoint", contract.launch_target == 523.0 and contract.shutter_y == 522.0 and contract.launch_target > contract.shutter_y, {"eva_base_y": contract.launch_target, "surface_y": contract.surface_y, "shutter_y": contract.shutter_y}, {"eva_base_y": 523.0, "surface_y": 522.0, "above_shutter": True}),
+        check("dynamic_ascent_174_ticks", contract.ascent_ticks == 174 and contract.legacy_ascent_ticks == 34, {"continuous_ticks": contract.ascent_ticks, "legacy_ticks": contract.legacy_ascent_ticks}, {"continuous_ticks": 174, "legacy_ticks": 34}),
         check("same_dimension_primary", contract.same_dimension_primary, contract.same_dimension_primary, True),
         check("surface_clear_timed", contract.clear_ticks > 0, contract.clear_ticks, "> 0"),
     ]
@@ -454,7 +529,8 @@ def audit_contract(contract: SiloContract) -> dict[str, Any]:
         "sources": {
             str(path.relative_to(ROOT)).replace("\\", "/"): file_hash(path)
             for path in (KIT_SOURCE, INTEGRATED_SOURCE, COMMAND_SOURCE,
-                         ENTITY_SOURCE, RENDERER_SOURCE, GEO_SOURCE,
+                         ENTITY_SOURCE, SCALE_SOURCE, CONFIG_SOURCE,
+                         HANGAR_SOURCE, RENDERER_SOURCE, GEO_SOURCE,
                          ANIMATION_SOURCE)
         },
         "limitations": [
@@ -599,7 +675,10 @@ def render_preview(contract: SiloContract, report: dict[str, Any], output: Path)
     carrier_l = section(-contract.moving_carrier_half, carrier_probe_y)
     carrier_r = section(contract.moving_carrier_half, carrier_probe_y)
     draw.line((carrier_l[0], carrier_l[1], carrier_r[0], carrier_r[1]), fill=(94, 221, 227, 255), width=6)
-    draw.text((carrier_r[0] + 8, carrier_r[1] - 8), "MOVING 11x11", font=tiny, fill=(94, 221, 227, 255))
+    carrier_width = contract.moving_carrier_half * 2 + 1
+    draw.text((carrier_r[0] + 8, carrier_r[1] - 8),
+              f"MOVING {carrier_width}x{carrier_width}",
+              font=tiny, fill=(94, 221, 227, 255))
 
     # High rear gantry, ladder and boarding station.
     gy = section(0, contract.gantry_y)[1]

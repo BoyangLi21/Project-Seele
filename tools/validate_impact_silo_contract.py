@@ -299,7 +299,7 @@ def validate_tree(gate: Gate) -> None:
         "drawDiagramLabel", "SEPHIRA_HEBREW[i]", "SEPHIRA_DIVINE_NAMES[i]",
         "SEPHIRA_ARCHANGELS[i]", "SEPHIRA_CHOIRS[i]",
         "PATH_NUMERALS[i]", "Font.DisplayMode.NORMAL", "DIAGRAM_TEXT_Z = -7.4F",
-        "EXTERNAL_NAME_SCALE = 0.40F", "EXTERNAL_CHOIR_SCALE = 0.20F",
+        "EXTERNAL_NAME_SCALE = 0.67F", "EXTERNAL_CHOIR_SCALE = 0.34F",
     ))
     gate.require(
         "tree.dense_internal_marks",
@@ -392,7 +392,7 @@ def validate_tree(gate: Gate) -> None:
     gate.require(
         "unit01.crucified_strike_gate",
         strike_controller >= 0
-        and "if (this.isCrucified())" in strike_block
+        and "if (this.isCrucified() || !this.isPoweredOn())" in strike_block
         and "state.getController().stop()" in strike_block
         and "return PlayState.STOP" in strike_block
         and ".receiveTriggeredAnimations()" in strike_block,
@@ -447,11 +447,18 @@ def validate_tree(gate: Gate) -> None:
 
 def number(source: str, name: str) -> float:
     match = re.search(
-        rf"\b{re.escape(name)}\s*=\s*(-?\d+(?:\.\d+)?)D?\s*;", source
+        rf"\b{re.escape(name)}\s*=\s*(-?\d+(?:\.\d+)?)[FfDd]?\s*;", source
     )
-    if not match:
-        raise ValueError(f"Numeric Java constant not found: {name}")
-    return float(match.group(1))
+    if match:
+        return float(match.group(1))
+    scaled = re.search(
+        rf"\b{re.escape(name)}\s*=\s*"
+        rf"EvaScale\.fromLegacy\((-?\d+(?:\.\d+)?)[FfDd]?\)\s*;",
+        source,
+    )
+    if scaled:
+        return float(scaled.group(1)) * 2.0
+    raise ValueError(f"Numeric Java constant not found: {name}")
 
 
 def blockpos_y(source: str, name: str) -> int:
@@ -537,29 +544,29 @@ def validate_silo(gate: Gate) -> None:
     min_height = number(entity, "SILO_ENTRY_MIN_HEIGHT")
     max_height = number(entity, "SILO_ENTRY_MAX_HEIGHT")
     gantry_y = int(gantry_match.group(1)) if gantry_match else 999
-    # Bed is origin-30, EVA base origin-29, gantry standing Y origin-3.
-    relative_entry_height = (-3) - (-29)
-    high_entry = gantry_y == -4 and min_height <= relative_entry_height <= max_height \
-        and "bed.getY() + 27.0D" in command
+    # Bed is origin-45, EVA base origin-44, gantry standing Y origin+4.
+    relative_entry_height = 4 - (-44)
+    high_entry = gantry_y == 3 and min_height <= relative_entry_height <= max_height \
+        and "bed.getY() + 49.0D" in command
     gate.require(
         "silo.high_entry",
         high_entry,
         f"gantryY={gantry_y} relativeEntry={relative_entry_height} allowed={min_height:g}..{max_height:g}",
     )
     ladder = (
-        "for (int y = -26; y <= -3; y++)" in builder
+        "for (int y = -40; y <= 4; y++)" in builder
         and "LadderBlock.FACING, Direction.NORTH" in builder
-        and "for (int y = 4; y <= 27; y++)" in command
+        and "for (int y = 5; y <= 49; y++)" in command
         and "ladderContinuous" in command
     )
-    gate.require("silo.gantry_access", ladder, "all 24 ladder blocks are runtime-audited")
+    gate.require("silo.gantry_access", ladder, "all 45 ladder blocks are runtime-audited")
     climb_through_hatch = all(token in builder for token in (
-        "x == 0 && z == 13", "? ladder", "level.setBlock(centre.offset(x, gantryY, z), deck, 3)",
+        "x == 0 && z == 30", "? ladder", "level.setBlock(centre.offset(x, gantryY, z), deck, 3)",
     ))
     gate.require(
         "silo.gantry_climb_through_hatch",
         climb_through_hatch,
-        "the upper deck preserves the twenty-fourth ladder cell as a real access opening",
+        "the upper deck preserves the top ladder cell as a real access opening",
     )
     parked_heading_sync = all(token in builder for token in (
         "unit.setYRot(launchYaw)", "unit.setYBodyRot(launchYaw)",
@@ -590,12 +597,12 @@ def validate_silo(gate: Gate) -> None:
     gate.require("silo.entry_plug_interaction", plug_interaction,
                  "aimed dorsal socket works beyond the coarse entity AABB and is revalidated server-side")
     seated_plug_visual = all(token in renderer for token in (
-        "boolean plugTravelling = !this.pilotView && isEntryPlugTravelling(animatable)",
-        'setWeaponVisibility(model, "entry_plug", plugTravelling)',
-        'setWeaponVisibility(model, "plug_hatch_l", !this.pilotView)',
-        'setWeaponVisibility(model, "plug_hatch_r", !this.pilotView)',
+        'setWeaponVisibility(model, "entry_plug", false)',
+        'setWeaponVisibility(model, "plug_hatch_l", false)',
+        'setWeaponVisibility(model, "plug_hatch_r", false)',
         "boolean entryHardwareMesh = !this.pilotView",
-        "return entity.getActivationTicks() > 57",
+        "private static boolean isEntryHardwareVisible",
+        "return false;",
     )) and all(token in entity for token in (
         "this.entityData.set(DATA_ENTRY_PLUG_INSERTED, true)",
         "this.getControllingPassenger() != null && !this.isEntryPlugInserted()",
@@ -603,7 +610,7 @@ def validate_silo(gate: Gate) -> None:
     gate.require(
         "silo.seated_entry_plug_visual",
         seated_plug_visual,
-        "external observers retain the travelling plug and closed hatches while the pilot cannot see dorsal hardware",
+        "the external carrier owns insertion and no duplicate capsule remains outside the sealed dorsal armour",
     )
     entry_start = entity.find("public InteractionResult tryEnterFromPlug(Player player, boolean requireAim)")
     entry_end = entity.find("private void alignForSiloBoarding", entry_start)
@@ -624,11 +631,14 @@ def validate_silo(gate: Gate) -> None:
         "ENTRY_PLUG_HEIGHT_00", "ENTRY_PLUG_HEIGHT_01", "ENTRY_PLUG_HEIGHT_02")]
     socket_geometry = all(26.8 < value < 27.1 for value in socket_heights) \
         and max(socket_heights) - min(socket_heights) < 0.01 \
-        and abs(number(entity, "ENTRY_PLUG_REAR_OFFSET") - 1.25) < 1.0e-6
+        and all(token in entity for token in (
+            "SeeleConfig.PLUG_SOCKET_HEIGHT.get()",
+            "SeeleConfig.PLUG_SOCKET_REAR_OFFSET.get()",
+            "EvaScale.fromLegacy("))
     gate.require("silo.variant_entry_sockets", socket_geometry,
                  f"runtimeHeights={socket_heights} rearOffset={number(entity, 'ENTRY_PLUG_REAR_OFFSET'):g}")
     bed_envelope = all(token in entity for token in (
-        "for (int x = -5; x <= 5; x++)", "for (int z = -5; z <= 5; z++)",
+        "LAUNCH_CARRIER_HALF", "EvaHangarBuilder.CARRIER_HALF_EXTENT",
         "launchBedClaimedByAnother", "launch_bed_occupied",
     ))
     gate.require("silo.bed_envelope_lock", bed_envelope,
@@ -644,7 +654,7 @@ def validate_silo(gate: Gate) -> None:
     physical_ascent = surface_bed_y - lower_bed_y
     continuous_ascent_ticks = math.ceil(physical_ascent / ascent_speed)
     launch_contract = (
-        target == 32.0
+        target == 64.0
         and ascent_ticks > 0
         and ascent_speed > 0.0
         and "LAUNCH_LOCKED" in entity
@@ -692,7 +702,7 @@ def validate_silo(gate: Gate) -> None:
         "NervCarrierVisuals.update", "NervCarrierVisuals.remove",
         "NERV carrier progress", "this.setSurfaceCarrier(true)",
         "recoverMovingCarrier", "hasMovingCarrierSignature",
-        "exact 11x11 carrier signature",
+        "exact 29x29 carrier signature",
     )) and all(token in carrier_visuals for token in (
         "NERV_CARRIER_PLATFORM", "PLATFORM_BY_EVA", "moveControlled",
         "resetRuntime",
@@ -701,7 +711,7 @@ def validate_silo(gate: Gate) -> None:
         "this.noPhysics = true",
     ))
     gate.require("silo.moving_carrier", moving_carrier,
-                 "persisted 11x11 carrier follows the EVA and closes on abort")
+                 "persisted 29x29 carrier follows the EVA and closes on abort")
     travel_interlock = all(token in game_events for token in (
         "EntityTravelToDimensionEvent", "eva.isLaunchSequenceActive()",
         "event.setCanceled(true)",
@@ -717,8 +727,8 @@ def validate_silo(gate: Gate) -> None:
     continuous_map = all(token in integrated for token in (
         "GEOFRONT_ORIGIN = new BlockPos(30, -444, 296)",
         "TOKYO3_ORIGIN = new BlockPos(30, 80, 220)",
-        "LIFT_X = {-28, 0, 28}", "SHAFT_OUTER_RADIUS = 7",
-        "SHAFT_CLEAR_RADIUS = 5", "buildContinuousShaft(level, link)",
+        "LIFT_X = {-42, 0, 42}", "SHAFT_OUTER_RADIUS = 17",
+        "SHAFT_CLEAR_RADIUS = 15", "buildContinuousShaft(level, link)",
         "int worldZ = TOKYO3_ORIGIN.getZ()",
         "new LiftLink(index, worldX, worldZ",
         "link.z() + z", "shaftLayerIsClear(level, link, y)",
@@ -804,7 +814,7 @@ def validate_silo(gate: Gate) -> None:
             "continuousShafts == LIFT_LINKS.size()",
             "clearExits == LIFT_LINKS.size()",
         )),
-        f"legacy bays and the primary 11x11x{physical_ascent} physical corridors are independently audited",
+        f"legacy bays and the primary 29x29x{physical_ascent} physical corridors are independently audited",
     )
     gate.require(
         "silo.documentation",

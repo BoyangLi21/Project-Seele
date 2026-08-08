@@ -122,7 +122,8 @@ def main() -> int:
         require("motion.private_skyscrapers",
                 all(token in local_assets for token in (
                     "applyTokyo3RetractionDepth",
-                    "SKYSCRAPER_MOVE_QUANTUM = 12",
+                    "SKYSCRAPER_MOVE_QUANTUM = 4",
+                    "travelPhase",
                     "addTokyo3SkyscraperTravelChunks",
                     "ceilingRoofRelativeYForBounds",
                     "inspectTokyo3Skyscrapers(BlockGetter level,",
@@ -140,7 +141,7 @@ def main() -> int:
                     "Tokyo3RetractionDirector.depth",
                     "currentRetractionDepth",
                     "this.origin, currentRetractionDepth")),
-                "three local NBT high-rises move in bounded twelve-block "
+                "three local NBT high-rises move in staggered bounded four-block "
                 "steps inside explicitly ticketed rotated footprints; "
                 "current-depth travel receipts plus seven internal blocks "
                 "reject stale state markers and failed moves stay retryable"),

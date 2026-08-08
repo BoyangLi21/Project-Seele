@@ -73,7 +73,7 @@ def main() -> int:
             "template.documentation",
             "server-template/" in docs
             and "whitelist add" in docs
-            and "mapVersion=17" in docs
+            and "mapVersion=22" in docs
             and "allow-flight=true" in docs,
             "deployment, whitelist, schema or EVA-flight instructions are missing",
         ),

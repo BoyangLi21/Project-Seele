@@ -193,17 +193,17 @@ def main() -> int:
              "walkable passage/stair to the ground overlook"),
         gate("map.integrated_coordinates",
              all(token in integrated for token in (
-                  "MAP_VERSION = 18",
+                  "MAP_VERSION = 22",
                    "EvaHangarBuilder.build(level, GEOFRONT_ORIGIN)",
                    "EvaHangarBuilder.ensure(level, GEOFRONT_ORIGIN)",
                   "stagedEvaWorld(level)",
                   "GEOFRONT_ORIGIN = new BlockPos(30, -444, 296)",
                   "TOKYO3_ORIGIN = new BlockPos(30, 80, 220)",
-                 "LIFT_X = {-28, 0, 28}",
+                 "LIFT_X = {-42, 0, 42}",
                  "LOWER_TERMINAL_Z = -76",
                  "LOWER_BED_ABOVE_ORIGIN = 1",
                  "SURFACE_BED_BELOW_ORIGIN = 1")),
-             "GeoFront beds are Y=-443 and Tokyo-3 beds Y=79 at X=2/30/58 Z=220"),
+             "GeoFront beds are Y=-443 and Tokyo-3 beds Y=79 at X=-12/30/72 Z=220"),
         gate("map.deep_burial_and_lava_gate",
              all(token in integrated for token in (
                  "rockCover >= 80", "bedrockClearance >= 16",
@@ -214,7 +214,7 @@ def main() -> int:
              "the sphere has at least 80 blocks of cover and stale vanilla-lava chunks fail the server audit"),
         gate("map.three_continuous_shafts",
              all(token in integrated for token in (
-                 "SHAFT_OUTER_RADIUS = 7", "SHAFT_CLEAR_RADIUS = 5",
+                 "SHAFT_OUTER_RADIUS = 17", "SHAFT_CLEAR_RADIUS = 15",
                  "buildContinuousShaft(level, link)",
                  "for (int y = bottomY; y <= topY; y++)",
                  "int worldZ = TOKYO3_ORIGIN.getZ()",
@@ -226,15 +226,15 @@ def main() -> int:
                  "surfaceBeds == LIFT_LINKS.size()",
                  "clearExits == LIFT_LINKS.size()"))
              and "IntegratedNervMapBuilder.ascentDistance()" in commands,
-             "three audited 15x15 shells contain uninterrupted 11x11, 522-block routes"),
+             "three audited 35x35 shells contain uninterrupted 31x31, 522-block routes"),
         gate("map.lower_bay_observation_glass",
              all(token in integrated for token in (
                  "ensureLowerBayWindows(level)",
                  "Blocks.GRAY_STAINED_GLASS.defaultBlockState()",
                  "state.is(Blocks.GRAY_STAINED_GLASS)",
-                 "y >= accessDeckY + 1 && y <= accessDeckY + 3",
-                 "Math.abs(x) <= 2",
-                 "clear(level, new BlockPos(link.x() + x, y, wallZ))")),
+                 "int top = bottom + LOWER_OBSERVATION_HEIGHT",
+                 "for (int x = -SHAFT_CLEAR_RADIUS;",
+                 "set(level, new BlockPos(link.x() + x, y, wallZ)")),
              "three lower shafts have audited blast glazing without sealing the plug gantry door"),
         gate("map.original_landmarks",
              all(token in builder for token in (
@@ -273,7 +273,7 @@ def main() -> int:
                  "ceilingBuildings == MOVABLE_BUILDINGS.size()",
                  "emergeCeilingLayer", "ceilingRoofRelativeY"))
              and all(token in local_assets for token in (
-                 "SKYSCRAPER_MOVE_QUANTUM = 12",
+                 "SKYSCRAPER_MOVE_QUANTUM = 4",
                  "applyTokyo3RetractionDepth", "skyscraperDrop")),
              "the 416-block district moves 66 inner towers, 29 outer wards "
              "and three local high-rises into a curved ceiling city"),
@@ -301,7 +301,8 @@ def main() -> int:
              all(token in integrated for token in (
                  "public static BlockPos lowerPowerPylon",
                  "public static BlockPos surfacePowerPylon",
-                 "offset(10, 1, 0)", "offset(11, 2, 0)",
+                 "SHAFT_GUIDE_OFFSET, 1, 0",
+                 "SHAFT_OUTER_RADIUS + 2, 2, 0",
                  "ensurePowerPylons(level)",
                  "powerPylonsPresent(level)",
                  "ModBlocks.UMBILICAL_PYLON.get().defaultBlockState()")),
@@ -537,8 +538,8 @@ def main() -> int:
                  "tokyo3_surface_arrival", "recovery_descent",
                  "wet_cage_return", "GeoFrontSortieSession",
                  "double ascent = IntegratedNervMapBuilder.ascentDistance()",
-                 "ascent * 0.40D",
-                 "ascent + 1.5D"))
+                 "ascent * 0.35D",
+                 "ascent * 0.68D"))
              and 'CAPTURE_UNIT.equals("geofront_sortie")' in automation
              and all(token in automation for token in (
                  "TrainingPilotDirector.start",
@@ -550,7 +551,7 @@ def main() -> int:
              and all(token in sortie_packet for token in (
                  "startGeoFrontSortie", "readVarInt", "readBlockPos"))
              and "IntegratedNervMapBuilder.surfaceLiftBed(1)" in capture,
-             "seven state-gated frames prove dummy external-plug boarding, command-authorized wet-cage transfer, live sortie and physical recovery through one same-dimension shaft"),
+             "eight state-gated frames prove dummy external-plug boarding, command-authorized wet-cage transfer, live sortie and physical recovery through one same-dimension shaft"),
         gate("battle.operation_yashima_persistent",
              all(token in battle for token in (
                  "RESTORE_DELAY_TICKS = 100", "Tokyo3RamielBattleSavedData.get",

@@ -62,19 +62,22 @@ def main() -> int:
     require(
         "dummy.physical_insertion",
         all(token in director for token in (
-            "suspendedPosition", "tickInsertion", "START_REAR_OFFSET",
-            "SEATED_TILT", "boardFromExternalPlug"
-        )) and "boardFromExternalPlug(Entity passenger)" in eva,
-        "passenger-carrying plug follows a diagonal world-space path",
+            "suspendedPosition", "tickInsertion", "approachPoint",
+            "insertionMouthPoint", "seatedPoint",
+            "CARRIAGE_END", "ALIGN_END", "SEATED_TILT",
+            "setCabinSequenceProgress", "boardFromExternalPlug"
+        )) and "boardFromExternalPlug(Entity passenger," in eva,
+        "passenger-carrying plug follows a three-stage trolley, alignment and ram path into the dorsal socket",
     )
     require(
         "dummy.bounded_plug_lookup",
         all(token in director for token in (
             "CACHED_PLUGS", "getEntitiesOfClass(EntryPlugCarrierEntity.class",
             "AABB search", "resetRuntime"
-        )) and "level.getAllEntities()" not in director
+        )) and "for (Entity entity : level.getAllEntities())" in director
+        and "entity instanceof EntryPlugCarrierEntity" in director
         and "EntryPlugDirector.resetRuntime()" in game_events,
-        "parked plug lookup is cached/local and is cleared with server runtime state",
+        "parked lookup is cached/local; the only global pass is typed ghost-plug cleanup",
     )
     require(
         "dummy.phase_order",
@@ -116,4 +119,3 @@ if __name__ == "__main__":
     except AssertionError as error:
         print(f"Dummy pilot contract failed: {error}", file=sys.stderr)
         raise SystemExit(1)
-

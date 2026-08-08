@@ -661,7 +661,7 @@ def main():
     print(f"common progressive knife: {common_triangles} triangles")
     print("EVA-02 weapons: " + ", ".join(
         f"{name}={count}" for name, count in sorted(unit02_counts.items())))
-    print(f"adapted entry plug: {plug_triangles} triangles / 8x38x9 model pixels / trailing-cap socket")
+    print(f"legacy fallback entry plug: {plug_triangles} triangles / 8x38x9 model pixels / trailing-cap socket")
     print(f"EUD Longinus attachment: {lance_triangles} triangles")
     print(f"local accessories written -> {output}")
 

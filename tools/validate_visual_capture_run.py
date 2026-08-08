@@ -23,7 +23,7 @@ SNAPSHOT = REPO / "run/.projectseele_visual_before.json"
 EXPECTED = {
     "unit01": 364, "unit00": 364, "unit02": 364,
     "mass": 35, "tokyo3": 4, "tokyo3_retraction": 4, "geofront": 13,
-    "geofront_sortie": 7,
+    "geofront_sortie": 8,
     "silo": 6, "impact": 3,
 }
 VIEWS_PER_POSE = {"unit01": 13, "unit00": 13, "unit02": 13, "mass": 7}
@@ -53,8 +53,9 @@ TOKYO3_RETRACTION_STAGES = (
     "deployed", "mid_descent", "fully_retracted", "restored",
 )
 GEOFRONT_SORTIE_STAGES = (
-    "three_units_ready", "entry_plug_locked", "live_pilot_sensor", "ascent_mid",
-    "tokyo3_surface_arrival", "recovery_descent", "wet_cage_return",
+    "three_units_ready", "entry_plug_insertion", "entry_plug_locked",
+    "live_pilot_sensor", "ascent_mid", "tokyo3_surface_arrival",
+    "recovery_descent", "wet_cage_return",
 )
 GEOFRONT_VIEWS = (
     "cavern_overview", "natural_lake", "forest_canopy",

@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 
@@ -29,8 +30,32 @@ def method_body(source: str, signature: str) -> str:
     return ""
 
 
+def constant(source: str, name: str) -> int | None:
+    """Reads `... NAME = <int>;` out of a Java source file."""
+    found = re.search(r"\b" + re.escape(name) + r"\s*=\s*(-?\d+)\s*;", source)
+    return int(found.group(1)) if found else None
+
+
+def boarding_is_dorsal(hangar: str, plug: str) -> bool:
+    """
+    The boarding gantry must be on the same side as the entry-plug socket.
+
+    An earlier revision of this gate asserted REAR_BOARDING_Z_FROM_BED = -6.
+    The airframe parks at yaw 180, so it faces -Z and its socket is at +Z:
+    that literal certified a boarding bridge built at the EVA's face. Compare
+    the two sides instead of pinning either one, and require the Java gate to
+    derive the side from the socket rather than restate a sign.
+    """
+    boarding = constant(hangar, "REAR_BOARDING_Z_FROM_BED")
+    gantry = constant(hangar, "REAR_GANTRY_Z_FROM_BED")
+    if boarding is None or gantry is None or boarding <= 0 or gantry <= boarding:
+        return False
+    return "socketZOffset" in plug and "socketZOffset" in hangar
+
+
 def main() -> int:
     hangar = read("src/main/java/com/projectseele/world/EvaHangarBuilder.java")
+    plug = read("src/main/java/com/projectseele/world/EntryPlugDirector.java")
     data = read("src/main/java/com/projectseele/world/EvaFleetSavedData.java")
     logistics = read("src/main/java/com/projectseele/world/EvaLogisticsDirector.java")
     surface_console = read(
@@ -53,6 +78,16 @@ def main() -> int:
         "src/main/java/com/projectseele/entity/NervCarrierPlatformEntity.java")
     carrier_renderer = read(
         "src/main/java/com/projectseele/client/render/NervCarrierPlatformRenderer.java")
+    plug_entity = read(
+        "src/main/java/com/projectseele/entity/EntryPlugCarrierEntity.java")
+    plug_renderer = read(
+        "src/main/java/com/projectseele/client/render/EntryPlugCarrierRenderer.java")
+    plug_geo = read(
+        "src/main/resources/assets/projectseele/geo/entry_plug_carrier.geo.json")
+    scale = read("src/main/java/com/projectseele/entity/EvaScale.java")
+    hud = read("src/main/java/com/projectseele/client/EvaHud.java")
+    packet = read(
+        "src/main/java/com/projectseele/network/ServerboundEntryPlugPacket.java")
     registry = read("src/main/java/com/projectseele/registry/ModEntities.java")
     client_events = read("src/main/java/com/projectseele/client/ClientEvents.java")
 
@@ -67,18 +102,19 @@ def main() -> int:
         ("hangar.three_wet_cages", all(token in hangar for token in (
             "for (int variant = 0; variant < 3; variant++)",
             "buildChamber", "buildShoulderCatwalk", "buildObservationGallery",
-            "LCL_SHOULDER_LAYERS = 22", "ModFluids.LCL_SOURCE",
+            "LCL_SHOULDER_LAYERS = 44", "ModFluids.LCL_SOURCE",
             "Dedicated shell receipts",
             "bed.offset(-HALF_WIDTH, CHAMBER_HEIGHT, 0)",
             "bed.offset(HALF_WIDTH, CHAMBER_HEIGHT, 0)",
-            "controls == 6", "galleries == 3", "walkableRoutes == 3"))),
-        ("hangar.walkable_rear_boarding", all(token in hangar for token in (
-            "CATWALK_FLOOR_ABOVE_BED = 24",
-            "REAR_CROSS_Z_FROM_BED = -12",
-            "REAR_BOARDING_Z_FROM_BED = -6",
-            "buildBoardingConnector", "isBoardingRouteWalkable",
-            "floorY != origin.getY() + GALLERY_Y",
-            "Direction.UP", "Blocks.IRON_BARS"))),
+            "controls == 9", "galleries == 3", "walkableRoutes == 3",
+            "galleryLinked", "cancelControlPosition"))),
+        ("hangar.walkable_rear_boarding", boarding_is_dorsal(hangar, plug)
+            and all(token in hangar for token in (
+                "CATWALK_FLOOR_ABOVE_BED = 48",
+                "FRONT_CROSS_Z_FROM_BED = -24",
+                "buildRearBoardingGantry", "buildRearLadders",
+                "buildBoardingConnector", "isBoardingRouteWalkable",
+                "Direction.UP", "Blocks.IRON_BARS"))),
         ("hangar.physical_rail_route", all(token in hangar for token in (
             "buildTransportTunnel", "setCarrier", "restoreStaticCarrier",
             "IntegratedNervMapBuilder.lowerLiftBed(variant)",
@@ -88,7 +124,8 @@ def main() -> int:
             "SILO_READY", "DEPLOYED", "DESCENDING", "TO_HANGAR", "FILLING",
             "setDirty()"))),
         ("fleet.no_teleport_logistics", all(token in logistics for token in (
-            "FLUID_LAYER_TICKS = 4", "HORIZONTAL_TRANSFER_TICKS = 160",
+            "FLUID_LAYER_TICKS = 4", "HORIZONTAL_BLOCKS_PER_TICK = 0.35D",
+            "Math.sqrt(dx * dx + dz * dz)",
             "VERTICAL_BLOCKS_PER_TICK = 2.0D", "tickHorizontal", "tickDescent",
             "moveOnNervCarrier", "setLclLayer"))
             and "changeDimension" not in logistics
@@ -128,8 +165,8 @@ def main() -> int:
             "forceReset(level, variant)", "requestPrepare"))
             and 'Commands.literal("recover")' not in commands
             and "requestRecovery" not in commands),
-        ("fleet.map_v18_upgrade", all(token in integrated for token in (
-            "MAP_VERSION = 18", "EvaHangarBuilder.build(level, GEOFRONT_ORIGIN)",
+        ("fleet.map_v22_upgrade", all(token in integrated for token in (
+            "MAP_VERSION = 22", "EvaHangarBuilder.build(level, GEOFRONT_ORIGIN)",
             "EvaHangarBuilder.ensure(level, GEOFRONT_ORIGIN)",
             "Tokyo3RecoveryConsole.build(level, TOKYO3_ORIGIN)",
             "Tokyo3RecoveryConsole.ensure(level, TOKYO3_ORIGIN)",
@@ -179,8 +216,38 @@ def main() -> int:
                 "recovery_descent", "wet_cage_return",
                 "TIMEOUT_TICKS = 2400"))
             and all(token in visual_validator for token in (
-                '"geofront_sortie": 7',
+                '"geofront_sortie": 8',
                 "VISUAL GEOFRONT LOGISTICS CYCLE VALID"))),
+        ("plug.physical_cabin_sequence", all(token in scale for token in (
+            "WORLD_MULTIPLIER = 2.0", "RENDER_SCALE =",
+            "NORMAL_WIDTH = 8.5F * WORLD_MULTIPLIER",
+            "NORMAL_HEIGHT = 30.0F * WORLD_MULTIPLIER",
+            "ENTRY_PLUG_WIDTH =",
+            "3.0F",
+            "ENTRY_PLUG_LENGTH =",
+            "16.0F",
+            "(32.0F / 3.0F) * WORLD_MULTIPLIER"))
+            and all(token in plug_entity for token in (
+                "CABIN_SEALED_DARK", "CABIN_LCL_FILLING",
+                "CABIN_SYNCHRONIZING", "CABIN_ONLINE",
+                "tryBoardFromHatch", "sealCabin",
+                "setCabinSequenceProgress"))
+            and all(token in plug for token in (
+                "tickCabinPreparation", "CABIN_TRANSFER_PERCENT",
+                "boardFromExternalPlug(passenger",
+                "sweepStrayPlugs", "level.getAllEntities()"))
+            and all(token in packet for token in (
+                "target instanceof EntryPlugCarrierEntity",
+                "plug.tryBoardFromHatch(sender)"))
+            and all(token in hud for token in (
+                "player.getVehicle() instanceof EntryPlugCarrierEntity",
+                "CABIN_SEALED_DARK", "LCL", "blackout",
+                "getCameraType().isFirstPerson()"))
+            and all(token in plug_geo for token in (
+                '"plug_hatch_l"', '"plug_hatch_r"'))
+            and all(token in plug_renderer for token in (
+                "getHatchOpenAmount()", "plug_hatch_l", "plug_hatch_r",
+                "EvaScale.RENDER_SCALE"))),
         ("fleet.launcher_gate", "validate_eva_logistics_contract.py" in launcher),
     ]
 

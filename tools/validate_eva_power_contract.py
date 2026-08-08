@@ -22,6 +22,7 @@ def gate(name: str, condition: bool, detail: str) -> None:
 
 
 entity = text("src/main/java/com/projectseele/entity/EvaUnit01Entity.java")
+scale = text("src/main/java/com/projectseele/entity/EvaScale.java")
 block = text("src/main/java/com/projectseele/world/UmbilicalPylonBlock.java")
 block_entity = text("src/main/java/com/projectseele/world/UmbilicalPylonBlockEntity.java")
 blocks = text("src/main/java/com/projectseele/registry/ModBlocks.java")
@@ -32,6 +33,10 @@ config = text("src/main/java/com/projectseele/config/SeeleConfig.java")
 hud = text("src/main/java/com/projectseele/client/EvaHud.java")
 telemetry = text("src/main/java/com/projectseele/world/NervCommandTelemetry.java")
 cable = text("src/main/java/com/projectseele/client/render/EvaUmbilicalCableRenderer.java")
+renderer = text("src/main/java/com/projectseele/client/render/EvaUnit01Renderer.java")
+animation = text("src/main/resources/assets/projectseele/animations/eva_unit01.animation.json")
+capture = text("src/main/java/com/projectseele/client/visual/VisualCaptureManager.java")
+power_textures = text("tools/make_eva_power_textures.py")
 integrated = text("src/main/java/com/projectseele/world/IntegratedNervMapBuilder.java")
 doc = text("docs/EVA_POWER_TEST.md")
 
@@ -76,11 +81,14 @@ gate(
 gate(
     "power.authoritative_cycle",
     "this.tickPowerSystem();" in entity
-    and "this.entityData.set(DATA_POWER_TICKS, this.getPowerCapacityTicks())" in entity
+    and "int chargePerTick = Math.max(1, Mth.ceil(capacity / 100.0F))" in entity
+    and "Math.min(capacity, oldPower + chargePerTick)" in entity
     and "int nextPower = oldPower - 1" in entity
     and "this.entityData.set(DATA_AT_ON, false)" in entity
-    and "this.heal((float) repair)" in entity,
-    "server tick holds full charge on cable, drains internally, shuts field and repairs on grid",
+    and "this.heal((float) repair)" in entity
+    and "DATA_UMBILICAL_SEVERED" in entity
+    and "enterHangarStandby()" in entity,
+    "server tick charges from zero, drains internally, severs the cable and cold-parks the airframe",
 )
 
 gate(
@@ -108,16 +116,56 @@ gate(
     "power.visible_cable",
     all(token in cable for token in (
         "RenderLevelStageEvent.Stage.AFTER_PARTICLES", "SEGMENTS = 18",
-        "getUmbilicalAnchor()", "cablePoint", "RibbonRenderer.drawStarRibbon"
+        "getUmbilicalAnchor()", "getUmbilicalMountPosition()",
+        "getUmbilicalSocketPosition()", "collarOuter",
+        "adapterHub", "mountLeft", "mountRight",
+        "cablePoint", "RibbonRenderer.drawStarRibbon"
+    )) and all(token in scale for token in (
+        "UMBILICAL_MOUNT_HEIGHT", "20.2D * WORLD_MULTIPLIER",
+        "UMBILICAL_MOUNT_REAR_OFFSET", "1.90D * WORLD_MULTIPLIER",
+        "UMBILICAL_SOCKET_HEIGHT", "16.7D * WORLD_MULTIPLIER",
+        "UMBILICAL_SOCKET_REAR_OFFSET", "2.10D * WORLD_MULTIPLIER"
+    )) and all(token in entity for token in (
+        "Vec3 cableSocket = this.getUmbilicalSocketPosition();",
+        "public Vec3 getUmbilicalMountPosition()",
+        "public Vec3 getRearDirection()"
     )),
-    "connected units render an eighteen-segment sagging umbilical ribbon",
+    "the renderer and sever FX share a back-mounted rigid adapter, lumbar socket and eighteen-segment flexible cable",
+)
+
+gate(
+    "power.visible_cold_and_live_airframe",
+    '"animation.eva_unit01.dormant"' in animation
+    and "if (!this.isPoweredOn())" in entity
+    and "ANIM_DORMANT" in entity
+    and "entity.isPoweredOn()" in renderer
+    and "eva_unit00_eyes.png" in renderer
+    and "eva_unit01_eyes.png" in renderer
+    and "eva_unit02_eyes.png" in renderer
+    and "ensure_bundled_fallbacks()" in power_textures
+    and all((ROOT / (
+        f"src/main/resources/assets/projectseele/textures/entity/"
+        f"eva_unit{variant}_eyes.png"
+    )).is_file() for variant in ("00", "01", "02")),
+    "cold cages use a weapon-free arms-down animation and powered eyes are a separate full-bright layer",
+)
+
+gate(
+    "power.visual_sortie_evidence",
+    all(token in capture for token in (
+        "!unit.isPoweredOn()", "!unit.isUmbilicalConnected()",
+        "unit.getPowerTicks() == 0", "unit.isPoweredOn()",
+        "unit.isUmbilicalConnected()", "unit.getPowerTicks() > 0",
+        "power={}/{} umbilical={} powered={}",
+    )),
+    "the real hangar-sortie capture fails closed unless it sees both cold-zero and connected-charging states",
 )
 
 gate(
     "power.facility_deployment",
     all(token in integrated for token in (
-        "public static BlockPos lowerPowerPylon", "offset(10, 1, 0)",
-        "public static BlockPos surfacePowerPylon", "offset(11, 2, 0)",
+        "public static BlockPos lowerPowerPylon", "SHAFT_GUIDE_OFFSET, 1, 0",
+        "public static BlockPos surfacePowerPylon", "SHAFT_OUTER_RADIUS + 2, 2, 0",
         "ensurePowerPylons(level)", "powerPylonsPresent(level)",
         "for (int index = 0; index < LIFT_LINKS.size(); index++)",
         "ModBlocks.UMBILICAL_PYLON.get().defaultBlockState()",

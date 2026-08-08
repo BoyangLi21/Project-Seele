@@ -44,6 +44,7 @@ CAPTURE_SOURCE = ROOT / "src/main/java/com/projectseele/client/visual/VisualCapt
 ENTITY_SOURCE = ROOT / "src/main/java/com/projectseele/registry/ModEntities.java"
 CLIENT_EVENTS_SOURCE = ROOT / "src/main/java/com/projectseele/client/ClientEvents.java"
 UNIT_RENDERER_SOURCE = ROOT / "src/main/java/com/projectseele/client/render/EvaUnit01Renderer.java"
+EVA_SCALE_SOURCE = ROOT / "src/main/java/com/projectseele/entity/EvaScale.java"
 DEFAULT_ASSET_ROOT = (
     ROOT / "run/resourcepacks/eva_real_model/assets/projectseele"
 )
@@ -135,6 +136,8 @@ class TreeData:
     internal_archangel_scale: float
     internal_choir_scale: float
     path_number_scale: float
+    path_number_x_offset: float
+    path_number_y_offset: float
     label_x_offsets: tuple[float, ...]
     path_label_offsets: tuple[tuple[float, float], ...]
     all_labels_backed: bool
@@ -249,22 +252,55 @@ def string_constant(source: str, name: str) -> str:
 
 
 def entity_size(source: str, registry_name: str) -> tuple[float, float]:
-    pattern = (
-        rf'\.build\("{re.escape(registry_name)}"\)|'
-        rf'\.build\("{re.escape(registry_name)}"\)'
+    start = require_match(
+        rf'ENTITY_TYPES\.register\("{re.escape(registry_name)}"',
+        source,
+        f"{registry_name} entity registration start",
+    ).start()
+    end = require_match(
+        rf'\.build\("{re.escape(registry_name)}"\)',
+        source[start:],
+        f"{registry_name} entity registration end",
+    ).end()
+    block = source[start:start + end]
+    match = require_match(
+        r"\.sized\(\s*([^,]+?)\s*,\s*([^)]+?)\s*\)",
+        block,
+        f"{registry_name} entity size",
+        re.S,
     )
-    end = require_match(pattern, source, f"{registry_name} entity registration").end()
-    prefix = source[:end]
-    sizes = list(re.finditer(r"\.sized\((\d+(?:\.\d+)?)F,\s*(\d+(?:\.\d+)?)F\)", prefix))
-    if not sizes:
-        raise ValueError(f"could not parse {registry_name} entity size")
-    match = sizes[-1]
-    return float(match.group(1)), float(match.group(2))
+    eva_scale = read(EVA_SCALE_SOURCE)
+    multiplier = float_constant(eva_scale, "WORLD_MULTIPLIER")
+
+    def resolve(raw: str) -> float:
+        token = raw.strip()
+        literal = re.fullmatch(r"(-?\d+(?:\.\d+)?)(?:D|F)?", token)
+        if literal:
+            return float(literal.group(1))
+        reference = re.fullmatch(r"EvaScale\.([A-Z0-9_]+)", token)
+        if reference:
+            expression = require_match(
+                rf"\b{reference.group(1)}\s*=\s*([^;]+)\s*;",
+                eva_scale,
+                reference.group(1),
+                re.S,
+            ).group(1).strip()
+            scaled = re.fullmatch(
+                r"(-?\d+(?:\.\d+)?)(?:D|F)?\s*\*\s*WORLD_MULTIPLIER",
+                expression,
+            )
+            if scaled:
+                return float(scaled.group(1)) * multiplier
+        raise ValueError(
+            f"could not resolve {registry_name} entity size token {token!r}")
+
+    return resolve(match.group(1)), resolve(match.group(2))
 
 
 def renderer_scales() -> tuple[float, float]:
     client = read(CLIENT_EVENTS_SOURCE)
     unit_renderer = read(UNIT_RENDERER_SOURCE)
+    eva_scale = read(EVA_SCALE_SOURCE)
     mass = require_match(
         r'ColossalHumanoidRenderer\.Style\.MASS_PRODUCTION,\s*'
         r'"mass_production_eva",\s*([\d.]+)F',
@@ -272,12 +308,23 @@ def renderer_scales() -> tuple[float, float]:
         "Mass Production renderer scale",
         re.S,
     )
-    unit = require_match(
-        r"\bwithScale\(([\d.]+)F\)",
+    require_match(
+        r"\bwithScale\(EvaScale\.RENDER_SCALE\)",
         unit_renderer,
-        "Unit-01 renderer scale",
+        "Unit-01 shared renderer scale",
     )
-    return float(mass.group(1)), float(unit.group(1))
+    legacy = require_match(
+        r"\bLEGACY_RENDER_SCALE\s*=\s*([\d.]+)F",
+        eva_scale,
+        "legacy EVA renderer scale",
+    )
+    multiplier = require_match(
+        r"\bWORLD_MULTIPLIER\s*=\s*([\d.]+)F",
+        eva_scale,
+        "EVA world multiplier",
+    )
+    return float(mass.group(1)), (
+        float(legacy.group(1)) * float(multiplier.group(1)))
 
 
 def posed_visual_envelope(asset_root: Path, model: str, animation: str,
@@ -438,6 +485,12 @@ def parse_tree(asset_root: Path) -> TreeData:
         "Tiferet glory geometry",
         re.S,
     )
+    path_number_offset = require_match(
+        r"new Vector3f\(letterPos\.x \+ ([\d.]+)F,\s*"
+        r"letterPos\.y - ([\d.]+)F,\s*DIAGRAM_TEXT_Z\)",
+        fx,
+        "path number offset",
+    )
 
     mass_size = entity_size(entities, "mass_production_eva")
     unit_size = entity_size(entities, "eva_unit01")
@@ -505,6 +558,8 @@ def parse_tree(asset_root: Path) -> TreeData:
         internal_archangel_scale=float_constant(fx, "INTERNAL_ARCHANGEL_SCALE"),
         internal_choir_scale=float_constant(fx, "INTERNAL_CHOIR_SCALE"),
         path_number_scale=float_constant(fx, "PATH_NUMBER_SCALE"),
+        path_number_x_offset=float(path_number_offset.group(1)),
+        path_number_y_offset=-float(path_number_offset.group(2)),
         label_x_offsets=label_x_offsets,
         path_label_offsets=path_label_offsets,
         all_labels_backed=(
@@ -767,7 +822,10 @@ def label_specs(data: TreeData) -> list[LabelSpec]:
             force_backing=data.all_labels_backed,
             rotation_degrees=data.label_rotation_degrees,
         ))
-        number_position = (position[0] + 1.8, position[1] - 2.6)
+        number_position = (
+            position[0] + data.path_number_x_offset,
+            position[1] + data.path_number_y_offset,
+        )
         labels.append(LabelSpec(
             f"path_number_{index + 1:02d}_{left + 1}_{right + 1}", "path_number",
             reverse_hebrew(data.path_numerals[index]), data.path_numerals[index],

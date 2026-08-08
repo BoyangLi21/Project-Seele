@@ -85,14 +85,14 @@ require("attacks.live_visual_matrix",
         "full Visual Lab runs real player input in external and first-person views")
 require("rifle.visual_muzzle_socket",
         "rifleMuzzlePosition(dir)" in rifle_body
-        and "RIFLE_STANDING_MUZZLE_FORWARD = 18.3308D" in entity
-        and "RIFLE_PRONE_MUZZLE_FORWARD = 19.9715D" in entity
+        and "RIFLE_STANDING_MUZZLE_FORWARD =\n            EvaScale.fromLegacy(18.3308D)" in entity
+        and "RIFLE_PRONE_MUZZLE_FORWARD =\n            EvaScale.fromLegacy(19.9715D)" in entity
         and "pitchedUp.scale(muzzleUp)" in entity,
         "tracer and sound originate at the measured standing/prone visible muzzle")
 require("cannon.visual_muzzle_socket",
         "cannonMuzzlePosition(dir)" in entity
-        and "CANNON_STANDING_MUZZLE_FORWARD = 22.4417D" in entity
-        and "CANNON_PRONE_MUZZLE_FORWARD = 23.9289D" in entity
+        and "CANNON_STANDING_MUZZLE_FORWARD =\n            EvaScale.fromLegacy(22.4417D)" in entity
+        and "CANNON_PRONE_MUZZLE_FORWARD =\n            EvaScale.fromLegacy(23.9289D)" in entity
         and "new ClientboundCannonBeamPacket(muzzle.x, muzzle.y, muzzle.z" in entity,
         "positron beam originates at the measured standing/prone barrel cap")
 require("melee.humanoid_claw",
