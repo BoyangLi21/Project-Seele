@@ -33,6 +33,12 @@ public final class GeoFrontLandscapeBuilder
             new BlockPos(-98, 0, -22),
             new BlockPos(98, 0, -22)
     };
+    private static final BlockPos ARBORETUM_CENTRE =
+            new BlockPos(-202, 0, 74);
+    private static final BlockPos STAFF_CAMPUS_CENTRE =
+            new BlockPos(198, 0, 58);
+    private static final BlockPos RESEARCH_CAMPUS_CENTRE =
+            new BlockPos(0, 0, -242);
     private static final int[][] FOREST_CENTRES = {
             {-185, -130}, {-160, -80}, {-150, -20}, {-135, 55},
             {185, -130}, {160, -80}, {150, -20}, {135, 55},
@@ -49,6 +55,7 @@ public final class GeoFrontLandscapeBuilder
 
     public static LandscapeAudit build(ServerLevel level, BlockPos origin)
     {
+        PerformanceCounters.recordBuilderCall();
         buildLclShore(level, origin);
         buildServiceRoad(level, origin);
         buildDocks(level, origin);
@@ -56,7 +63,19 @@ public final class GeoFrontLandscapeBuilder
         buildMaintenanceTerrace(level, origin);
         buildBlastBunkers(level, origin);
         enrichForest(level, origin);
+        buildInhabitedCampus(level, origin);
         return inspect(level, origin);
+    }
+
+    /** Bounded upgrade path for old saves; never rebuilds the 640-block shell. */
+    public static LandscapeAudit ensure(ServerLevel level, BlockPos origin)
+    {
+        LandscapeAudit audit = inspect(level, origin);
+        if (!audit.valid())
+        {
+            audit = build(level, origin);
+        }
+        return audit;
     }
 
     public static LandscapeAudit inspect(ServerLevel level)
@@ -137,12 +156,41 @@ public final class GeoFrontLandscapeBuilder
                     .is(Blocks.LODESTONE);
         }
 
+        int campusFacilities = 0;
+        for (BlockPos centre : new BlockPos[] {
+                STAFF_CAMPUS_CENTRE, RESEARCH_CAMPUS_CENTRE
+        })
+        {
+            if (level.getBlockState(origin.offset(
+                            centre.getX(), 9, centre.getZ()))
+                    .is(Blocks.LODESTONE))
+            {
+                campusFacilities++;
+            }
+        }
+        boolean arboretum = level.getBlockState(origin.offset(
+                        ARBORETUM_CENTRE.getX(), 1,
+                        ARBORETUM_CENTRE.getZ()))
+                .is(Blocks.FLOWERING_AZALEA_LEAVES)
+                && level.getBlockState(origin.offset(
+                        ARBORETUM_CENTRE.getX(), 0,
+                        ARBORETUM_CENTRE.getZ() - 14))
+                .is(Blocks.MOSS_BLOCK);
+        boolean transitNetwork = isCampusPath(level.getBlockState(
+                        origin.offset(-160, 0, 48)))
+                && isCampusPath(level.getBlockState(
+                        origin.offset(160, 0, 44)))
+                && isCampusPath(level.getBlockState(
+                        origin.offset(0, 0, -205)));
+
         boolean valid = shore && docks == 2 && pumpHouse && lclIntake
                 && serviceRoad && maintenance && bunkers == BLAST_BUNKERS.length
                 && forestGroves >= 10 && lclLakeSamples == 4 && protectedSites;
+        valid &= campusFacilities == 2 && arboretum && transitNetwork;
         return new LandscapeAudit(valid, shore, docks, pumpHouse, lclIntake,
                 serviceRoad, maintenance, bunkers, forestGroves,
-                lclLakeSamples, protectedSites);
+                lclLakeSamples, protectedSites, campusFacilities,
+                arboretum, transitNetwork);
     }
 
     /** Raised retaining wall and a dry promenade around the five-block lake. */
@@ -548,6 +596,425 @@ public final class GeoFrontLandscapeBuilder
                 Blocks.LODESTONE.defaultBlockState());
     }
 
+    /**
+     * Expands the cavern into an inhabited underground campus: the TV
+     * GeoFront reads as a landscape containing a headquarters, not as a
+     * pyramid dropped onto an empty lawn.
+     */
+    private static void buildInhabitedCampus(ServerLevel level,
+                                             BlockPos origin)
+    {
+        buildCampusPaths(level, origin);
+        buildArboretum(level, origin);
+        buildCampusBuilding(level, origin, STAFF_CAMPUS_CENTRE,
+                19, 15, Blocks.LIGHT_BLUE_CONCRETE.defaultBlockState(),
+                CampusStyle.STAFF);
+        buildCampusBuilding(level, origin, RESEARCH_CAMPUS_CENTRE,
+                21, 16, Blocks.PURPLE_CONCRETE.defaultBlockState(),
+                CampusStyle.RESEARCH);
+        buildServiceRail(level, origin);
+        buildPerimeterPortal(level, origin, -238,
+                GeoFrontBuilder.CAVERN_CENTRE_Z, Direction.EAST);
+        buildPerimeterPortal(level, origin, 238,
+                GeoFrontBuilder.CAVERN_CENTRE_Z, Direction.WEST);
+        buildPerimeterPortal(level, origin, 0, -286, Direction.SOUTH);
+    }
+
+    private static void buildCampusPaths(ServerLevel level, BlockPos origin)
+    {
+        // West arboretum branch.
+        paintPathLineX(level, origin, -202, -134, 48,
+                Blocks.MOSSY_STONE_BRICKS.defaultBlockState());
+        paintPathLineZ(level, origin, -202, 48, 74,
+                Blocks.MOSSY_STONE_BRICKS.defaultBlockState());
+        paintPathLineZ(level, origin, -134, 48, 108,
+                Blocks.MOSSY_STONE_BRICKS.defaultBlockState());
+
+        // East staff/medical campus branch.
+        paintPathLineX(level, origin, 134, 198, 44,
+                Blocks.SMOOTH_STONE.defaultBlockState());
+        paintPathLineZ(level, origin, 198, 44, 58,
+                Blocks.SMOOTH_STONE.defaultBlockState());
+        paintPathLineZ(level, origin, 134, 44, 108,
+                Blocks.SMOOTH_STONE.defaultBlockState());
+
+        // Northern research branch deliberately bends around the three EVA
+        // launch corridors instead of crossing their 31x31 clear volumes.
+        paintPathLineZ(level, origin, 0, -242, -205,
+                Blocks.POLISHED_ANDESITE.defaultBlockState());
+        paintPathLineX(level, origin, 0, 142, -205,
+                Blocks.POLISHED_ANDESITE.defaultBlockState());
+        paintPathLineZ(level, origin, 142, -205, -112,
+                Blocks.POLISHED_ANDESITE.defaultBlockState());
+        paintPathLineX(level, origin, 134, 142, -112,
+                Blocks.POLISHED_ANDESITE.defaultBlockState());
+
+        // Garden promenade joins the public GeoFront station at Z=190 to the
+        // west campus without cutting across the pyramid's service apron.
+        paintPathLineX(level, origin, -108, 0, 178,
+                Blocks.CUT_COPPER.defaultBlockState());
+        paintPathLineZ(level, origin, -108, 108, 178,
+                Blocks.CUT_COPPER.defaultBlockState());
+        paintPathLineX(level, origin, -160, -108, 108,
+                Blocks.CUT_COPPER.defaultBlockState());
+        paintPathLineZ(level, origin, -160, 74, 108,
+                Blocks.CUT_COPPER.defaultBlockState());
+    }
+
+    private static void paintPathLineX(ServerLevel level, BlockPos origin,
+                                       int minimumX, int maximumX, int z,
+                                       BlockState centre)
+    {
+        for (int x = Math.min(minimumX, maximumX);
+            x <= Math.max(minimumX, maximumX); x++)
+        {
+            paintPathCell(level, origin, x, z, centre,
+                    Math.floorMod(x, 14) == 0, true);
+        }
+    }
+
+    private static void paintPathLineZ(ServerLevel level, BlockPos origin,
+                                       int x, int minimumZ, int maximumZ,
+                                       BlockState centre)
+    {
+        for (int z = Math.min(minimumZ, maximumZ);
+            z <= Math.max(minimumZ, maximumZ); z++)
+        {
+            paintPathCell(level, origin, x, z, centre,
+                    Math.floorMod(z, 14) == 0, false);
+        }
+    }
+
+    private static void paintPathCell(ServerLevel level, BlockPos origin,
+                                      int centreX, int centreZ,
+                                      BlockState centre, boolean lit,
+                                      boolean runsAlongX)
+    {
+        for (int lateral = -2; lateral <= 2; lateral++)
+        {
+            int x = centreX + (runsAlongX ? 0 : lateral);
+            int z = centreZ + (runsAlongX ? lateral : 0);
+            BlockPos floor = origin.offset(x, 0, z);
+            set(level, floor, lateral == 0 ? centre
+                    : Blocks.POLISHED_DEEPSLATE.defaultBlockState());
+            if (level.getBlockState(floor.below()).isAir())
+            {
+                set(level, floor.below(),
+                        Blocks.DEEPSLATE_BRICKS.defaultBlockState());
+            }
+            clearHeadroom(level, floor.above(), 5);
+        }
+        if (lit)
+        {
+            int firstX = centreX + (runsAlongX ? 0 : -3);
+            int firstZ = centreZ + (runsAlongX ? -3 : 0);
+            int secondX = centreX + (runsAlongX ? 0 : 3);
+            int secondZ = centreZ + (runsAlongX ? 3 : 0);
+            set(level, origin.offset(firstX, 1, firstZ),
+                    Blocks.IRON_BARS.defaultBlockState());
+            set(level, origin.offset(firstX, 2, firstZ),
+                    Blocks.SEA_LANTERN.defaultBlockState());
+            set(level, origin.offset(secondX, 1, secondZ),
+                    Blocks.IRON_BARS.defaultBlockState());
+            set(level, origin.offset(secondX, 2, secondZ),
+                    Blocks.SEA_LANTERN.defaultBlockState());
+        }
+    }
+
+    private static void buildArboretum(ServerLevel level, BlockPos origin)
+    {
+        int centreX = ARBORETUM_CENTRE.getX();
+        int centreZ = ARBORETUM_CENTRE.getZ();
+        for (int x = -28; x <= 28; x++)
+        {
+            for (int z = -22; z <= 22; z++)
+            {
+                boolean path = Math.abs(x) <= 2 || Math.abs(z) <= 2;
+                boolean border = Math.abs(x) == 28 || Math.abs(z) == 22;
+                BlockState ground = path
+                        ? Blocks.MOSSY_STONE_BRICKS.defaultBlockState()
+                        : Math.floorMod(x * 7 + z * 11, 9) == 0
+                                ? Blocks.MOSS_BLOCK.defaultBlockState()
+                                : Blocks.GRASS_BLOCK.defaultBlockState();
+                set(level, origin.offset(centreX + x, 0, centreZ + z),
+                        ground);
+                clearHeadroom(level,
+                        origin.offset(centreX + x, 1, centreZ + z), 7);
+                if (border)
+                {
+                    set(level, origin.offset(centreX + x, 1,
+                                    centreZ + z),
+                            Blocks.AZALEA_LEAVES.defaultBlockState());
+                    if (Math.floorMod(x + z, 6) == 0)
+                    {
+                        set(level, origin.offset(centreX + x, 2,
+                                        centreZ + z),
+                                Blocks.SEA_LANTERN.defaultBlockState());
+                    }
+                }
+                else if (!path && Math.floorMod(x * 13 + z * 17, 29) == 0)
+                {
+                    BlockState flower = Math.floorMod(x - z, 4) == 0
+                            ? Blocks.ALLIUM.defaultBlockState()
+                            : Math.floorMod(x - z, 4) == 1
+                                    ? Blocks.OXEYE_DAISY.defaultBlockState()
+                                    : Math.floorMod(x - z, 4) == 2
+                                            ? Blocks.PINK_TULIP
+                                            .defaultBlockState()
+                                            : Blocks.AZURE_BLUET
+                                            .defaultBlockState();
+                    set(level, origin.offset(centreX + x, 1,
+                            centreZ + z), flower);
+                }
+            }
+        }
+
+        // Reflecting pond and four deliberately framed specimen trees.
+        for (int x = -8; x <= 8; x++)
+        {
+            for (int z = -6; z <= 6; z++)
+            {
+                if (x * x * 36 + z * z * 64 <= 2304)
+                {
+                    set(level, origin.offset(centreX + x, -1,
+                                    centreZ + z),
+                            Blocks.CLAY.defaultBlockState());
+                    set(level, origin.offset(centreX + x, 0,
+                                    centreZ + z),
+                            net.minecraft.world.level.material.Fluids.WATER
+                                    .defaultFluidState().createLegacyBlock());
+                }
+            }
+        }
+        for (int[] tree : new int[][] {
+                {-17, -12}, {17, -12}, {-17, 12}, {17, 12}
+        })
+        {
+            buildGardenTree(level, origin, centreX + tree[0],
+                    centreZ + tree[1]);
+        }
+        set(level, origin.offset(centreX, 0, centreZ - 14),
+                Blocks.MOSS_BLOCK.defaultBlockState());
+        set(level, origin.offset(centreX, 1, centreZ),
+                Blocks.FLOWERING_AZALEA_LEAVES.defaultBlockState());
+    }
+
+    private static void buildGardenTree(ServerLevel level, BlockPos origin,
+                                        int x, int z)
+    {
+        for (int y = 1; y <= 7; y++)
+        {
+            set(level, origin.offset(x, y, z),
+                    Blocks.CHERRY_LOG.defaultBlockState());
+        }
+        for (int dx = -3; dx <= 3; dx++)
+        {
+            for (int dz = -3; dz <= 3; dz++)
+            {
+                for (int dy = -1; dy <= 2; dy++)
+                {
+                    if (dx * dx + dz * dz + dy * dy <= 11)
+                    {
+                        set(level, origin.offset(x + dx, 7 + dy, z + dz),
+                                Blocks.CHERRY_LEAVES.defaultBlockState());
+                    }
+                }
+            }
+        }
+    }
+
+    private static void buildCampusBuilding(ServerLevel level,
+                                            BlockPos origin,
+                                            BlockPos centre,
+                                            int halfX, int halfZ,
+                                            BlockState accent,
+                                            CampusStyle style)
+    {
+        for (int x = -halfX; x <= halfX; x++)
+        {
+            for (int z = -halfZ; z <= halfZ; z++)
+            {
+                boolean boundary = Math.abs(x) == halfX
+                        || Math.abs(z) == halfZ;
+                set(level, origin.offset(centre.getX() + x, 0,
+                                centre.getZ() + z),
+                        Blocks.POLISHED_DEEPSLATE.defaultBlockState());
+                for (int y = 1; y <= 8; y++)
+                {
+                    BlockState state;
+                    if (!boundary)
+                    {
+                        state = Blocks.AIR.defaultBlockState();
+                    }
+                    else if (y >= 3 && y <= 6
+                            && Math.floorMod(x + z, 5) <= 2)
+                    {
+                        state = Blocks.GRAY_STAINED_GLASS.defaultBlockState();
+                    }
+                    else
+                    {
+                        state = y == 1 || y == 8 ? accent
+                                : Blocks.LIGHT_GRAY_CONCRETE
+                                .defaultBlockState();
+                    }
+                    set(level, origin.offset(centre.getX() + x, y,
+                            centre.getZ() + z), state);
+                }
+                set(level, origin.offset(centre.getX() + x, 9,
+                                centre.getZ() + z),
+                        Math.floorMod(x + z, 8) == 0
+                                ? Blocks.SEA_LANTERN.defaultBlockState()
+                                : Blocks.POLISHED_BLACKSTONE_BRICKS
+                                .defaultBlockState());
+            }
+        }
+
+        // South-facing seven-wide pressure entrance.
+        for (int x = -3; x <= 3; x++)
+        {
+            for (int y = 1; y <= 5; y++)
+            {
+                clear(level, origin.offset(centre.getX() + x, y,
+                        centre.getZ() + halfZ));
+            }
+        }
+        if (style == CampusStyle.STAFF)
+        {
+            furnishStaffCampus(level, origin, centre, halfX, halfZ);
+        }
+        else
+        {
+            furnishResearchCampus(level, origin, centre, halfX, halfZ);
+        }
+        set(level, origin.offset(centre.getX(), 9, centre.getZ()),
+                Blocks.LODESTONE.defaultBlockState());
+    }
+
+    private static void furnishStaffCampus(ServerLevel level, BlockPos origin,
+                                           BlockPos centre,
+                                           int halfX, int halfZ)
+    {
+        for (int z = -halfZ + 5; z <= halfZ - 6; z += 7)
+        {
+            for (int x = -halfX + 5; x <= halfX - 5; x += 7)
+            {
+                set(level, origin.offset(centre.getX() + x, 1,
+                                centre.getZ() + z),
+                        Blocks.SMOOTH_QUARTZ_SLAB.defaultBlockState());
+                set(level, origin.offset(centre.getX() + x - 1, 1,
+                                centre.getZ() + z),
+                        Blocks.POLISHED_BLACKSTONE_BRICK_STAIRS
+                                .defaultBlockState()
+                                .setValue(
+                                        net.minecraft.world.level.block.StairBlock.FACING,
+                                        Direction.EAST));
+                set(level, origin.offset(centre.getX() + x + 1, 1,
+                                centre.getZ() + z),
+                        Blocks.POLISHED_BLACKSTONE_BRICK_STAIRS
+                                .defaultBlockState()
+                                .setValue(
+                                        net.minecraft.world.level.block.StairBlock.FACING,
+                                        Direction.WEST));
+            }
+        }
+    }
+
+    private static void furnishResearchCampus(ServerLevel level,
+                                              BlockPos origin,
+                                              BlockPos centre,
+                                              int halfX, int halfZ)
+    {
+        for (int x = -halfX + 5; x <= halfX - 5; x += 8)
+        {
+            for (int z = -halfZ + 5; z <= halfZ - 5; z += 8)
+            {
+                set(level, origin.offset(centre.getX() + x, 1,
+                                centre.getZ() + z),
+                        Blocks.IRON_BLOCK.defaultBlockState());
+                set(level, origin.offset(centre.getX() + x, 2,
+                                centre.getZ() + z),
+                        Blocks.PURPLE_STAINED_GLASS.defaultBlockState());
+                set(level, origin.offset(centre.getX() + x, 3,
+                                centre.getZ() + z),
+                        Blocks.AMETHYST_BLOCK.defaultBlockState());
+                set(level, origin.offset(centre.getX() + x, 4,
+                                centre.getZ() + z),
+                        Blocks.PURPLE_STAINED_GLASS.defaultBlockState());
+            }
+        }
+    }
+
+    private static void buildServiceRail(ServerLevel level, BlockPos origin)
+    {
+        final int z = -178;
+        for (int x = -184; x <= 184; x++)
+        {
+            set(level, origin.offset(x, 8, z),
+                    Blocks.IRON_BLOCK.defaultBlockState());
+            set(level, origin.offset(x, 9, z),
+                    Math.floorMod(x, 12) == 0
+                            ? Blocks.POWERED_RAIL.defaultBlockState()
+                            : Blocks.RAIL.defaultBlockState());
+            if (Math.floorMod(x, 16) == 0)
+            {
+                for (int y = 0; y <= 7; y++)
+                {
+                    set(level, origin.offset(x, y, z),
+                            y == 4 ? Blocks.SEA_LANTERN.defaultBlockState()
+                                    : Blocks.DEEPSLATE_BRICKS
+                                    .defaultBlockState());
+                }
+            }
+        }
+        for (int x : new int[] {-184, 0, 184})
+        {
+            for (int dx = -6; dx <= 6; dx++)
+            {
+                for (int dz = -3; dz <= 3; dz++)
+                {
+                    set(level, origin.offset(x + dx, 8, z + dz),
+                            Blocks.SMOOTH_STONE.defaultBlockState());
+                    if (Math.abs(dx) == 6)
+                    {
+                        set(level, origin.offset(x + dx, 9, z + dz),
+                                Blocks.IRON_BARS.defaultBlockState());
+                    }
+                }
+            }
+            set(level, origin.offset(x, 8, z),
+                    Blocks.LODESTONE.defaultBlockState());
+        }
+    }
+
+    private static void buildPerimeterPortal(ServerLevel level,
+                                             BlockPos origin,
+                                             int centreX, int centreZ,
+                                             Direction inward)
+    {
+        Direction lateral = inward.getClockWise();
+        for (int depth = 0; depth <= 7; depth++)
+        {
+            for (int side = -6; side <= 6; side++)
+            {
+                for (int y = 0; y <= 8; y++)
+                {
+                    int x = centreX + inward.getStepX() * depth
+                            + lateral.getStepX() * side;
+                    int z = centreZ + inward.getStepZ() * depth
+                            + lateral.getStepZ() * side;
+                    boolean shell = Math.abs(side) >= 5 || y == 0 || y == 8;
+                    set(level, origin.offset(x, y, z), shell
+                            ? y == 4 && Math.abs(side) == 6
+                                    ? Blocks.ORANGE_CONCRETE
+                                    .defaultBlockState()
+                                    : Blocks.REINFORCED_DEEPSLATE
+                                    .defaultBlockState()
+                            : Blocks.AIR.defaultBlockState());
+                }
+            }
+        }
+    }
+
     private static void enrichForest(ServerLevel level, BlockPos origin)
     {
         for (int index = 0; index < FOREST_CENTRES.length; index++)
@@ -679,6 +1146,15 @@ public final class GeoFrontLandscapeBuilder
                 || state.is(Blocks.YELLOW_CONCRETE);
     }
 
+    private static boolean isCampusPath(BlockState state)
+    {
+        return state.is(Blocks.MOSSY_STONE_BRICKS)
+                || state.is(Blocks.SMOOTH_STONE)
+                || state.is(Blocks.POLISHED_ANDESITE)
+                || state.is(Blocks.CUT_COPPER)
+                || state.is(Blocks.POLISHED_DEEPSLATE);
+    }
+
     private static void clearHeadroom(ServerLevel level, BlockPos feet, int height)
     {
         for (int y = 0; y < height; y++)
@@ -700,25 +1176,37 @@ public final class GeoFrontLandscapeBuilder
         if (!level.getBlockState(position).equals(state))
         {
             level.setBlock(position, state, UPDATE_CLIENTS);
+            PerformanceCounters.recordWorldBlockWrites(1);
         }
+    }
+
+    private enum CampusStyle
+    {
+        STAFF,
+        RESEARCH
     }
 
     public record LandscapeAudit(boolean valid, boolean shore, int docks,
                                  boolean pumpHouse, boolean lclIntake,
                                  boolean serviceRoad, boolean maintenance,
                                  int bunkers, int forestGroves,
-                                 int lclLakeSamples, boolean protectedSites)
+                                 int lclLakeSamples, boolean protectedSites,
+                                 int campusFacilities, boolean arboretum,
+                                 boolean transitNetwork)
     {
         public String summary()
         {
             return String.format(Locale.ROOT,
                     "valid=%s shore=%s docks=%d/2 pumpHouse=%s lclIntake=%s "
                             + "serviceRoad=%s maintenance=%s bunkers=%d/2 "
-                            + "forestGroves=%d/%d lclLake=%d/4 protectedSites=%s",
+                            + "forestGroves=%d/%d lclLake=%d/4 protectedSites=%s "
+                            + "campus=%d/2 arboretum=%s transit=%s",
                     this.valid, this.shore, this.docks, this.pumpHouse,
                     this.lclIntake, this.serviceRoad, this.maintenance,
                     this.bunkers, this.forestGroves, FOREST_CENTRES.length,
-                    this.lclLakeSamples, this.protectedSites);
+                    this.lclLakeSamples, this.protectedSites,
+                    this.campusFacilities, this.arboretum,
+                    this.transitNetwork);
         }
     }
 }

@@ -12,8 +12,10 @@ import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.projectseele.ProjectSeele;
 import com.projectseele.entity.EvaUnit01Entity;
 import com.projectseele.registry.ModEntities;
+import com.projectseele.world.EvaHangarBuilder;
 import com.projectseele.world.GeoFrontBuilder;
 import com.projectseele.world.EvaLogisticsDirector;
+import com.projectseele.world.FacilityWorldPolicy;
 import com.projectseele.world.GeoFrontBuilder.GeoFrontAudit;
 import com.projectseele.world.IntegratedNervMapBuilder;
 import com.projectseele.world.IntegratedNervMapBuilder.IntegratedAudit;
@@ -23,6 +25,7 @@ import com.projectseele.world.NervOperationsCentreBuilder;
 import com.projectseele.world.TerminalDogmaBuilder;
 import com.projectseele.world.ThirdTokyoSurfaceBuilder;
 import com.projectseele.world.Tokyo3RetractionDirector;
+import com.projectseele.world.Tokyo3RetractionDirector.RequestResult;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.core.BlockPos;
@@ -38,6 +41,7 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.event.RegisterCommandsEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
@@ -73,6 +77,8 @@ public final class GeoFrontCommands
                 .then(Commands.literal("geofront")
                         .then(Commands.literal("setup")
                                 .executes(context -> setup(context.getSource())))
+                        .then(Commands.literal("rebuild")
+                                .executes(context -> rebuild(context.getSource())))
                         .then(Commands.literal("enter")
                                 .executes(context -> enter(context.getSource())))
                         .then(Commands.literal("link")
@@ -105,27 +111,25 @@ public final class GeoFrontCommands
         {
             return;
         }
+        restoreManualPlayerPhysics(player);
         ServerLevel current = player.serverLevel();
-        ServerLevel installedMap = current.dimension().equals(GEOFRONT)
-                ? current : current.getServer().getLevel(GEOFRONT);
-        if (installedMap != null
-                && IntegratedNervMapBuilder.isInstalled(installedMap))
-        {
-            IntegratedNervMapBuilder.RuntimeAudit runtime =
-                    IntegratedNervMapBuilder.prepareRuntime(installedMap);
-            if (!runtime.valid())
-            {
-                ProjectSeele.LOGGER.warn(
-                        "GeoFront login infrastructure gate needs operator repair: {}",
-                        runtime.summary());
-            }
-        }
         if (unsafeOverviewLogin(player, current))
         {
-            teleportOverview(player, current);
-            ProjectSeele.LOGGER.info(
-                    "Rescued {} from an unsafe saved GeoFront overview position",
-                    player.getGameProfile().getName());
+            if (teleportToLoadedSafeCell(player, current,
+                    current.getSharedSpawnPos()))
+            {
+                ProjectSeele.LOGGER.info(
+                        "Moved {} from an unsafe retired-GeoFront position to "
+                                + "the already-loaded dimension spawn",
+                        player.getGameProfile().getName());
+            }
+            else
+            {
+                player.displayClientMessage(Component.literal(
+                        "Retired GeoFront position is unsafe and no loaded safe "
+                                + "cell is available; an administrator must "
+                                + "commission FacilitySchema v2."), false);
+            }
             return;
         }
         if (!current.dimension().equals(Level.OVERWORLD)
@@ -134,37 +138,56 @@ public final class GeoFrontCommands
         {
             return;
         }
-        ServerLevel destination = geoFront(player);
-        if (destination == null)
+        if (teleportToLoadedSafeCell(player, current,
+                current.getSharedSpawnPos()))
         {
-            ProjectSeele.LOGGER.error(
-                    "Staged Tokyo-3 login rescue failed: GeoFront dimension is unavailable");
-            return;
+            ProjectSeele.LOGGER.info(
+                    "Moved staged-world player {} from the empty template "
+                            + "floor to its already-loaded spawn without "
+                            + "building the retired GeoFront",
+                    player.getGameProfile().getName());
         }
-        if (!IntegratedNervMapBuilder.isInstalled(destination))
+        else
         {
-            IntegratedAudit audit = IntegratedNervMapBuilder.ensure(destination);
-            if (!audit.valid())
-            {
-                ProjectSeele.LOGGER.error(
-                        "Staged Tokyo-3 login rescue refused an invalid connected map: {}",
-                        audit.summary());
-                return;
-            }
+            player.displayClientMessage(Component.literal(
+                    "FacilitySchema v2 is not commissioned. Login will not "
+                            + "build or repair the retired GeoFront."), false);
         }
-        prepareSurfaceLanding(destination);
-        player.teleportTo(destination,
-                TOKYO3_ORIGIN.getX() + 0.5D,
-                TOKYO3_ORIGIN.getY() + ThirdTokyoSurfaceBuilder.OBSERVATION_Y + 1.0D,
-                TOKYO3_ORIGIN.getZ() + ThirdTokyoSurfaceBuilder.OBSERVATION_Z + 0.5D,
-                180.0F, 18.0F);
-        ProjectSeele.LOGGER.info(
-                "Rescued staged-world player {} from the empty template spawn to Tokyo-3",
-                player.getGameProfile().getName());
+    }
+
+    private static boolean teleportToLoadedSafeCell(ServerPlayer player,
+                                                    ServerLevel level,
+                                                    BlockPos feet)
+    {
+        if (!level.hasChunkAt(feet))
+        {
+            return false;
+        }
+        BlockPos floor = feet.below();
+        BlockState floorState = level.getBlockState(floor);
+        if (!level.getFluidState(feet).isEmpty()
+                || !level.getFluidState(feet.above()).isEmpty()
+                || floorState.isAir()
+                || !floorState.getFluidState().isEmpty()
+                || floorState.getCollisionShape(level, floor).isEmpty()
+                || !level.getBlockState(feet).getCollisionShape(level, feet).isEmpty()
+                || !level.getBlockState(feet.above())
+                        .getCollisionShape(level, feet.above()).isEmpty())
+        {
+            return false;
+        }
+        player.teleportTo(level, feet.getX() + 0.5D, feet.getY(),
+                feet.getZ() + 0.5D, player.getYRot(), player.getXRot());
+        player.resetFallDistance();
+        return true;
     }
 
     static int setup(CommandSourceStack source) throws CommandSyntaxException
     {
+        if (rejectRetiredAliasInCleanWorld(source, "setup"))
+        {
+            return 0;
+        }
         ServerPlayer player = source.getPlayerOrException();
         ServerLevel level = geoFront(player);
         if (level == null)
@@ -194,6 +217,49 @@ public final class GeoFrontCommands
     }
 
     /** Fixed build used by the unattended GeoFront screenshot target. */
+    /**
+     * Forces a complete physical rebuild, unlike {@link #setup} which reuses an
+     * already-installed map and only repairs the audited fragments. This is the
+     * developer path for applying geometry code changes (LCL fill, hangar
+     * stairs, gallery concourse, cavern carve) that the incremental audit does
+     * not detect. It is heavy but one-shot; the EVA fleet persists in saved
+     * data and is untouched.
+     */
+    static int rebuild(CommandSourceStack source) throws CommandSyntaxException
+    {
+        if (rejectRetiredAliasInCleanWorld(source, "rebuild"))
+        {
+            return 0;
+        }
+        ServerPlayer player = source.getPlayerOrException();
+        ServerLevel level = geoFront(player);
+        if (level == null)
+        {
+            source.sendFailure(Component.literal(
+                    "GeoFront dimension is unavailable; verify the Project SEELE datapack."));
+            return 0;
+        }
+        saveReturn(player);
+        source.sendSuccess(() -> Component.literal(
+                "Forcing a complete GeoFront rebuild (LCL fill, hangar stairs, "
+                        + "gallery concourse, cavern shell). This can take a moment..."),
+                false);
+        IntegratedAudit result = IntegratedNervMapBuilder.build(level);
+        Tokyo3RetractionDirector.register(level, TOKYO3_ORIGIN);
+        logIntegratedAudit("rebuild", result);
+        if (!result.valid())
+        {
+            source.sendFailure(Component.literal(
+                    "Rebuild finished but the map audit still failed: " + result.summary()));
+            return 0;
+        }
+        teleportOverview(player, level);
+        source.sendSuccess(() -> Component.literal(
+                "GeoFront fully rebuilt: LCL, hangar stairs, gallery concourse and "
+                        + "cavern shell refreshed."), false);
+        return 1;
+    }
+
     static int setupVisualCapture(CommandSourceStack source) throws CommandSyntaxException
     {
         ServerPlayer player = source.getPlayerOrException();
@@ -205,15 +271,21 @@ public final class GeoFrontCommands
         // A previous manual session may have saved the automation player in
         // Unit-01.  Release that stale passenger relation before the strict
         // three-airframe canonicalization gate runs.
-        player.stopRiding();
+        restoreManualPlayerPhysics(player);
         level.setDayTime(6000L);
         level.setWeatherParameters(12000, 0, false, false);
         // Visual captures must not inherit a CITY ARMOUR state left by a
         // previous manual session. Restore the physical tower volumes before
         // the fixed-camera audit; changing SavedData alone can leave a valid
         // looking marker set above an empty skyline.
-        Tokyo3RetractionDirector.forceDepth(level,
+        RequestResult cityReset = Tokyo3RetractionDirector.forceDepth(level,
                 IntegratedNervMapBuilder.TOKYO3_ORIGIN, false);
+        if (cityReset.accepted())
+        {
+            throw new IllegalStateException(
+                    "Tokyo-3 restoration is running as a bounded transaction; "
+                            + "rerun the visual capture after the skyline reaches DEPLOYED");
+        }
         IntegratedAudit result = IntegratedNervMapBuilder.ensure(level);
         logIntegratedAudit("visual-setup", result);
         if (!result.valid())
@@ -267,6 +339,10 @@ public final class GeoFrontCommands
 
     private static int enter(CommandSourceStack source) throws CommandSyntaxException
     {
+        if (rejectRetiredAliasInCleanWorld(source, "enter"))
+        {
+            return 0;
+        }
         ServerPlayer player = source.getPlayerOrException();
         ServerLevel level = geoFront(player);
         if (level == null)
@@ -289,6 +365,10 @@ public final class GeoFrontCommands
     /** Prepares three EVAs at the physical lower stations; no transfer occurs. */
     static int link(CommandSourceStack source) throws CommandSyntaxException
     {
+        if (rejectRetiredAliasInCleanWorld(source, "link"))
+        {
+            return 0;
+        }
         ServerPlayer player = source.getPlayerOrException();
         if (player.isPassenger())
         {
@@ -305,7 +385,7 @@ public final class GeoFrontCommands
         IntegratedNervMapBuilder.RuntimeAudit mapAudit =
                 IntegratedNervMapBuilder.prepareRuntime(geoFront);
         Tokyo3RetractionDirector.register(geoFront, TOKYO3_ORIGIN);
-        if (!mapAudit.valid())
+        if (!mapAudit.launchReady())
         {
             source.sendFailure(Component.literal(
                     "Connected sortie route failed its runtime gate: "
@@ -367,16 +447,33 @@ public final class GeoFrontCommands
         {
             throw new IllegalStateException("GeoFront visual sortie dimension is unavailable");
         }
+        // A linked-sortie capture is a launch-system test, not a city-motion
+        // test. Normalize an interrupted or half-travelled skyline first so
+        // the surface frame cannot inherit a previous retraction session and
+        // report misleading 56/66 tower counts.
+        RequestResult cityReset = Tokyo3RetractionDirector.forceDepth(
+                geoFront, TOKYO3_ORIGIN, false);
+        if (cityReset.accepted())
+        {
+            throw new IllegalStateException(
+                    "Tokyo-3 restoration is still running; retry the sortie preload after DEPLOYED");
+        }
         IntegratedNervMapBuilder.RuntimeAudit audit =
                 IntegratedNervMapBuilder.prepareRuntime(geoFront);
-        if (!audit.valid())
+        if (!audit.launchReady())
         {
             throw new IllegalStateException(
                     "GeoFront visual sortie runtime gate failed: "
                             + audit.summary());
         }
+        if (!audit.valid())
+        {
+            ProjectSeele.LOGGER.warn(
+                    "Visual sortie proceeding on a safe launch route while non-sortie facility audit remains incomplete: {}",
+                    audit.summary());
+        }
         loadSortieChunks(geoFront);
-        player.stopRiding();
+        restoreManualPlayerPhysics(player);
         player.teleportTo(geoFront,
                 ORIGIN.getX() + 0.5D,
                 ORIGIN.getY() + GeoFrontBuilder.OBSERVATION_Y + 1.0D,
@@ -500,7 +597,12 @@ public final class GeoFrontCommands
             }
         }
         boolean variants = hasAllVariants(units);
-        boolean gantries = GeoFrontBuilder.inspect(geoFront, ORIGIN).gantries() == 3;
+        // The current 2x logistics layout boards from the three wet-cage
+        // bridge/crane rigs. GeoFrontBuilder.gantries() describes the removed
+        // small prototype decks beside the shaft beds and must not veto a
+        // fleet whose runtime hangar gate has already passed.
+        boolean gantries = EvaHangarBuilder.runtimeInfrastructurePresent(
+                geoFront, ORIGIN);
         boolean valid = units.size() == 3 && linked == 3 && validDestinations == 3
                 && variants && gantries;
         return new SortieAudit(valid, units.size(), linked, validDestinations,
@@ -574,6 +676,10 @@ public final class GeoFrontCommands
 
     private static int surface(CommandSourceStack source) throws CommandSyntaxException
     {
+        if (rejectRetiredAliasInCleanWorld(source, "surface"))
+        {
+            return 0;
+        }
         ServerPlayer player = source.getPlayerOrException();
         ServerLevel destination = geoFront(player);
         if (destination == null)
@@ -592,7 +698,7 @@ public final class GeoFrontCommands
             saveReturn(player);
         }
         prepareSurfaceLanding(destination);
-        player.stopRiding();
+        restoreManualPlayerPhysics(player);
         player.teleportTo(destination,
                 TOKYO3_ORIGIN.getX() + 0.5D,
                 TOKYO3_ORIGIN.getY() + ThirdTokyoSurfaceBuilder.OBSERVATION_Y + 1.0D,
@@ -629,7 +735,7 @@ public final class GeoFrontCommands
                 }
             }
         }
-        player.stopRiding();
+        restoreManualPlayerPhysics(player);
         player.teleportTo(destination, x, y, z, player.getYRot(), player.getXRot());
         source.sendSuccess(() -> Component.literal(
                 "Exited the combined Tokyo-3 / GeoFront development world."), false);
@@ -638,6 +744,10 @@ public final class GeoFrontCommands
 
     private static int audit(CommandSourceStack source) throws CommandSyntaxException
     {
+        if (rejectRetiredAliasInCleanWorld(source, "audit"))
+        {
+            return 0;
+        }
         ServerPlayer player = source.getPlayerOrException();
         ServerLevel level = geoFront(player);
         if (level == null)
@@ -658,6 +768,10 @@ public final class GeoFrontCommands
 
     private static int overview(CommandSourceStack source) throws CommandSyntaxException
     {
+        if (rejectRetiredAliasInCleanWorld(source, "overview"))
+        {
+            return 0;
+        }
         ServerPlayer player = source.getPlayerOrException();
         ServerLevel level = geoFront(player);
         if (level == null)
@@ -680,6 +794,10 @@ public final class GeoFrontCommands
 
     private static int operations(CommandSourceStack source) throws CommandSyntaxException
     {
+        if (rejectRetiredAliasInCleanWorld(source, "operations"))
+        {
+            return 0;
+        }
         ServerPlayer player = source.getPlayerOrException();
         ServerLevel level = geoFront(player);
         if (level == null)
@@ -707,7 +825,7 @@ public final class GeoFrontCommands
             saveReturn(player);
         }
         prepareOperationsLanding(level);
-        player.stopRiding();
+        restoreManualPlayerPhysics(player);
         player.teleportTo(level, ORIGIN.getX() + 0.5D,
                 ORIGIN.getY() + 8.0D,
                 ORIGIN.getZ() + 18.5D, 180.0F, 0.0F);
@@ -718,6 +836,10 @@ public final class GeoFrontCommands
 
     private static int dogma(CommandSourceStack source) throws CommandSyntaxException
     {
+        if (rejectRetiredAliasInCleanWorld(source, "dogma"))
+        {
+            return 0;
+        }
         ServerPlayer player = source.getPlayerOrException();
         ServerLevel level = geoFront(player);
         if (level == null)
@@ -737,7 +859,7 @@ public final class GeoFrontCommands
         {
             saveReturn(player);
         }
-        player.stopRiding();
+        restoreManualPlayerPhysics(player);
         player.teleportTo(level, ORIGIN.getX() + 0.5D,
                 ORIGIN.getY() + TerminalDogmaBuilder.FACILITY_Y_OFFSET
                         + TerminalDogmaBuilder.OBSERVATION_Y + 1.0D,
@@ -758,12 +880,31 @@ public final class GeoFrontCommands
     private static void teleportOverview(ServerPlayer player, ServerLevel level)
     {
         prepareOverviewLanding(level);
-        player.stopRiding();
+        restoreManualPlayerPhysics(player);
         player.teleportTo(level,
                 ORIGIN.getX() + 0.5D,
                 ORIGIN.getY() + GeoFrontBuilder.OBSERVATION_Y + 1.0D,
                 ORIGIN.getZ() + GeoFrontBuilder.OBSERVATION_Z + 0.5D,
                 180.0F, 16.0F);
+    }
+
+    /**
+     * Clears detached-camera state before returning control to a person.
+     * Visual Lab intentionally uses no-gravity tracking positions, but that
+     * flag is persistent entity data and must never survive into manual play.
+     */
+    public static void restoreManualPlayerPhysics(ServerPlayer player)
+    {
+        boolean cameraResidue = player.isNoGravity();
+        player.stopRiding();
+        player.setNoGravity(false);
+        player.setDeltaMovement(Vec3.ZERO);
+        player.fallDistance = 0.0F;
+        if (cameraResidue && player.getAbilities().flying)
+        {
+            player.getAbilities().flying = false;
+            player.onUpdateAbilities();
+        }
     }
 
     private static void prepareOverviewLanding(ServerLevel level)
@@ -867,6 +1008,25 @@ public final class GeoFrontCommands
         data.putDouble(RETURN_X, player.getX());
         data.putDouble(RETURN_Y, player.getY());
         data.putDouble(RETURN_Z, player.getZ());
+    }
+
+    private static boolean rejectRetiredAliasInCleanWorld(
+            CommandSourceStack source, String alias)
+    {
+        boolean s19 = FacilityWorldPolicy.isCleanRebuild(source.getServer());
+        boolean s20 = FacilityWorldPolicy.isS20Rebuild(source.getServer());
+        if (!s19 && !s20)
+        {
+            return false;
+        }
+        source.sendFailure(Component.literal(
+                "/seele geofront " + alias
+                        + " belongs to the retired overlapping map pipeline "
+                        + "and is disabled in "
+                        + (s20 ? "SEELE_S20_REBUILD" : "SEELE_S19_CLEAN")
+                        + ". Use the bounded S20 directors or "
+                        + "/seele facility_v2 status for S19."));
+        return true;
     }
 
     private static void logAudit(String stage, GeoFrontAudit result)

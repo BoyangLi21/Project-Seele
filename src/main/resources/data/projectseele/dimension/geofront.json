@@ -1,11 +1,13 @@
 {
   "type": "projectseele:geofront",
   "generator": {
-    "type": "minecraft:noise",
+    "type": "projectseele:geofront_bounded",
     "biome_source": {
-      "type": "minecraft:multi_noise",
-      "preset": "minecraft:overworld"
+      "type": "minecraft:fixed",
+      "biome": "projectseele:geofront_surface"
     },
-    "settings": "projectseele:geofront_surface"
+    "settings": "projectseele:geofront_surface",
+    "candidate_index": 0,
+    "surface_datum": 96
   }
 }

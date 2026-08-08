@@ -3,13 +3,16 @@ package com.projectseele.world;
 import java.util.Locale;
 
 import com.projectseele.ProjectSeele;
+import com.projectseele.config.SeeleConfig;
 import com.projectseele.registry.ModFluids;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.tags.BlockTags;
 import net.minecraft.tags.FluidTags;
+import net.minecraft.util.Mth;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.LadderBlock;
@@ -20,6 +23,12 @@ import net.minecraft.world.level.material.Fluids;
 public final class GeoFrontBuilder
 {
     public static final int CAVERN_RADIUS = 320;
+    /** Structures occupy the inner disc, so it stays perfectly level. */
+    public static final int TERRAIN_FLAT_RADIUS = 170;
+    private static final int TERRAIN_CELL = 24;
+    private static final int TERRAIN_AMPLITUDE = 4;
+    private static final int TERRAIN_BLEND = 40;
+    private static final int NO_SURFACE = Integer.MIN_VALUE;
     /** Sphere centre relative to the NERV floor origin. */
     public static final int CAVERN_CENTRE_Y = 112;
     public static final int CAVERN_CENTRE_Z = -76;
@@ -28,7 +37,7 @@ public final class GeoFrontBuilder
     /** Ground-access overlook south of the pyramid, reached by the public stair. */
     public static final int OBSERVATION_Z = 190;
     public static final int OBSERVATION_Y = 24;
-    public static final int[] LIFT_X = {-28, 0, 28};
+    public static final int[] LIFT_X = {-42, 0, 42};
 
     // The downloaded command module occupies X=-28..27, Y=-21..55 and
     // Z=-33..95. The NERV shell deliberately encloses that complete volume
@@ -60,8 +69,16 @@ public final class GeoFrontBuilder
     public static void build(ServerLevel level, BlockPos origin,
                              boolean preservePrivateShell)
     {
-        buildSkyweaveSphere(level, origin);
+        FacilityWorldPolicy.requireLegacyGenerationAllowed(
+                level.getServer(), "GeoFrontBuilder.build");
+        PerformanceCounters.recordBuilderCall();
+        if (!SeeleConfig.rescueMode()
+                && SeeleConfig.TRANSPARENT_GEOFRONT_SHELL.get())
+        {
+            buildSkyweaveSphere(level, origin);
+        }
         buildCavernFloor(level, origin);
+        logFloorContinuity(level, origin);
         clearLegacyArtificialSun(level, origin);
         buildNaturalLake(level, origin);
         buildLclLake(level, origin);
@@ -80,6 +97,10 @@ public final class GeoFrontBuilder
 
     public static GeoFrontAudit inspect(ServerLevel level, BlockPos origin)
     {
+        // Terrain continuity is reported by logFloorContinuity right after the
+        // floor is laid, not asserted here. Gating the whole map on it put the
+        // server in a rebuild loop: every login failed the audit, rebuilt for
+        // thirty seconds, and failed again.
         boolean floor = level.getBlockState(origin.offset(150, 0,
                 CAVERN_CENTRE_Z)).is(Blocks.GRASS_BLOCK);
         BlockPos sphereCentre = cavernCentre(origin);
@@ -130,8 +151,14 @@ public final class GeoFrontBuilder
             {
                 lifts++;
             }
-            if (level.getBlockState(origin.offset(x, 27, -63)).is(Blocks.LADDER)
-                    && !level.getBlockState(origin.offset(x, 27, -70)).isAir())
+            // buildLiftGantry anchors its dry access ladder 17 blocks behind
+            // the -76 carrier bed, with the suspension frame one block farther
+            // back. The old -63/-70 samples described a removed prototype and
+            // rejected all three intact current gantries.
+            if (level.getBlockState(origin.offset(x, 27, -59))
+                    .is(Blocks.LADDER)
+                    && level.getBlockState(origin.offset(x, 27, -58))
+                    .is(Blocks.IRON_BLOCK))
             {
                 gantries++;
             }
@@ -193,6 +220,130 @@ public final class GeoFrontBuilder
         return lava;
     }
 
+    /**
+     * Measures cavern-floor continuity and logs it.
+     *
+     * <p>Diagnostic, not a gate. Two earlier revisions asserted this and both
+     * were wrong about what the finished floor looks like — the first demanded
+     * bare ground where roads and groves sit, the second still failed for
+     * reasons the audit could not report. Run this right after the floor is
+     * laid and before anything is built on it, so the numbers describe the
+     * terrain itself, and print them instead of guessing again.
+     */
+    private static void logFloorContinuity(ServerLevel level, BlockPos origin)
+    {
+        BlockPos centre = cavernCentre(origin);
+        int floorDeltaY = origin.getY() - centre.getY();
+        int floorRadius = (int) Math.floor(Math.sqrt(
+                CAVERN_RADIUS * CAVERN_RADIUS - floorDeltaY * floorDeltaY)) - 8;
+        int compared = 0;
+        int missing = 0;
+        int worstStep = 0;
+        String worstAt = "none";
+        for (int radius = TERRAIN_FLAT_RADIUS + 6;
+             radius <= floorRadius - 6; radius += 17)
+        {
+            for (int degrees = 0; degrees < 360; degrees += 15)
+            {
+                double angle = Math.toRadians(degrees);
+                int x = (int) Math.round(Math.cos(angle) * radius);
+                int z = (int) Math.round(Math.sin(angle) * radius);
+                int here = surfaceOffsetY(level, centre, origin.getY(), x, z);
+                if (here == NO_SURFACE)
+                {
+                    missing++;
+                    continue;
+                }
+                for (int[] step : new int[][] {{1, 0}, {0, 1}})
+                {
+                    int next = surfaceOffsetY(level, centre, origin.getY(),
+                            x + step[0], z + step[1]);
+                    if (next == NO_SURFACE)
+                    {
+                        missing++;
+                        continue;
+                    }
+                    compared++;
+                    int delta = Math.abs(next - here);
+                    if (delta > worstStep)
+                    {
+                        worstStep = delta;
+                        worstAt = x + "," + z + " -> " + (x + step[0])
+                                + "," + (z + step[1])
+                                + " (" + here + " -> " + next + ")";
+                    }
+                }
+            }
+        }
+        ProjectSeele.LOGGER.info(
+                "GeoFront floor continuity: compared={} noSurface={} worstStep={} at {}",
+                compared, missing, worstStep, worstAt);
+    }
+
+    /** Grass/stone surface height of one column, relative to the NERV floor. */
+    private static int surfaceOffsetY(ServerLevel level, BlockPos centre,
+                                       int baseY, int x, int z)
+    {
+        for (int y = TERRAIN_AMPLITUDE + 2; y >= -TERRAIN_AMPLITUDE - 2; y--)
+        {
+            BlockState state = level.getBlockState(
+                    new BlockPos(centre.getX() + x, baseY + y, centre.getZ() + z));
+            if (state.is(Blocks.GRASS_BLOCK) || state.is(Blocks.STONE)
+                    || state.is(Blocks.MOSS_BLOCK))
+            {
+                return y;
+            }
+        }
+        return NO_SURFACE;
+    }
+
+    /**
+     * Continuous cavern-floor height.
+     *
+     * <p>The predecessor evaluated {@code floorMod(x * 31 + z * 17, 5) - 2}
+     * per block. That is a hash, not a height field: stepping one block in x
+     * moved it by one level and one block in z by two, so every column stood
+     * at a different height from its neighbours and two thirds of the floor
+     * read as a lattice of one-block pillars. Control points are therefore
+     * sampled once per {@link #TERRAIN_CELL} and blended, which bounds the
+     * slope between orthogonal neighbours to a single block.
+     */
+    private static int terrainHeight(int x, int z, int distance)
+    {
+        if (distance <= TERRAIN_FLAT_RADIUS)
+        {
+            return 0;
+        }
+        int cellX = Math.floorDiv(x, TERRAIN_CELL);
+        int cellZ = Math.floorDiv(z, TERRAIN_CELL);
+        float withinX = smoothStep((x - cellX * TERRAIN_CELL) / (float) TERRAIN_CELL);
+        float withinZ = smoothStep((z - cellZ * TERRAIN_CELL) / (float) TERRAIN_CELL);
+        float near = Mth.lerp(withinX, controlHeight(cellX, cellZ),
+                controlHeight(cellX + 1, cellZ));
+        float far = Mth.lerp(withinX, controlHeight(cellX, cellZ + 1),
+                controlHeight(cellX + 1, cellZ + 1));
+        // Ramp in from the flat inner disc so the two regions meet without a
+        // step at the seam.
+        float ramp = Mth.clamp((distance - TERRAIN_FLAT_RADIUS)
+                / (float) TERRAIN_BLEND, 0.0F, 1.0F);
+        return Math.round(Mth.lerp(withinZ, near, far)
+                * TERRAIN_AMPLITUDE * ramp);
+    }
+
+    /** Deterministic -1..1 control value for one terrain lattice corner. */
+    private static float controlHeight(int cellX, int cellZ)
+    {
+        int hash = cellX * 374761393 + cellZ * 668265263;
+        hash = (hash ^ (hash >>> 13)) * 1274126177;
+        hash ^= hash >>> 16;
+        return Math.floorMod(hash, 2001) / 1000.0F - 1.0F;
+    }
+
+    private static float smoothStep(float value)
+    {
+        return value * value * (3.0F - 2.0F * value);
+    }
+
     private static void buildCavernFloor(ServerLevel level, BlockPos origin)
     {
         BlockPos centre = cavernCentre(origin);
@@ -210,11 +361,12 @@ public final class GeoFrontBuilder
                     continue;
                 }
                 int distance = (int) Math.sqrt(distanceSqr);
-                int terrainY = distance <= 170 ? 0
-                        : Math.floorMod(x * 31 + z * 17, 5) - 2;
+                int terrainY = terrainHeight(x, z, distance);
                 BlockPos column = new BlockPos(
                         centre.getX() + x, origin.getY(), centre.getZ() + z);
-                for (int y = -5; y <= terrainY - 3; y++)
+                // Track the surface downwards, otherwise a dipped column ends
+                // its dirt below the fixed old base and opens a hole.
+                for (int y = Math.min(-5, terrainY - 3); y <= terrainY - 3; y++)
                 {
                     set(level, column.offset(0, y, 0),
                             Blocks.STONE.defaultBlockState());
@@ -227,11 +379,14 @@ public final class GeoFrontBuilder
                         distance >= floorRadius - 3
                                 ? Blocks.STONE.defaultBlockState()
                                 : Blocks.GRASS_BLOCK.defaultBlockState());
-                // Older terrain formulas left dirt/grass towers because a
+                // Older terrain formulas left dirt/grass/stone towers because a
                 // later rebuild wrote the new top but never cleared the old
-                // one. Remove only natural terrain; authored structures are
-                // rebuilt later and non-terrain blocks remain untouched.
-                for (int y = terrainY + 1; y <= 24; y++)
+                // one. The old ceiling of 24 missed remnants that a much taller
+                // formula stranded higher up (the thin stone columns hanging in
+                // the cavern), so sweep the whole lower hemisphere. Only natural
+                // terrain is removed; authored structures use non-terrain blocks
+                // and are rebuilt later, so they stay untouched.
+                for (int y = terrainY + 1; y <= CAVERN_CENTRE_Y; y++)
                 {
                     BlockPos stale = column.offset(0, y, 0);
                     if (isNaturalTerrain(level.getBlockState(stale)))
@@ -256,16 +411,29 @@ public final class GeoFrontBuilder
             int nextRadius = (int) Math.round(Math.sqrt(
                     Math.max(0, radiusSqr - poleStep * poleStep)));
             int innerRadius = Math.max(0, nextRadius - 1);
-            for (int radius = innerRadius; radius <= horizontalRadius; radius++)
+            // Carve the annulus band by rows, not by angular samples. The old
+            // raster rounded adjacent angles onto the same voxel and skipped
+            // its neighbour, so where the shell is steep the misses stacked
+            // across layers into thin stone columns hanging from the ceiling.
+            int outerSqr = horizontalRadius * horizontalRadius;
+            int innerSqr = innerRadius * innerRadius;
+            for (int x = -horizontalRadius; x <= horizontalRadius; x++)
             {
-                int samples = Math.max(8, (int) Math.ceil(
-                        Math.PI * 2.0D * Math.max(1, radius) * 1.25D));
-                for (int sample = 0; sample < samples; sample++)
+                int xSqr = x * x;
+                if (xSqr > outerSqr)
                 {
-                    double angle = Math.PI * 2.0D * sample / samples;
-                    int x = (int) Math.round(Math.cos(angle) * radius);
-                    int z = (int) Math.round(Math.sin(angle) * radius);
+                    continue;
+                }
+                int zOuter = (int) Math.floor(Math.sqrt(outerSqr - xSqr));
+                int zInner = xSqr >= innerSqr ? 0
+                        : (int) Math.ceil(Math.sqrt(innerSqr - xSqr));
+                for (int z = zInner; z <= zOuter; z++)
+                {
                     set(level, centre.offset(x, y, z), sky);
+                    if (z != 0)
+                    {
+                        set(level, centre.offset(x, y, -z), sky);
+                    }
                 }
             }
         }
@@ -343,7 +511,7 @@ public final class GeoFrontBuilder
                 }
                 BlockState bed = Math.floorMod(x * 17 + z * 31, 37) == 0
                         ? Blocks.SEA_LANTERN.defaultBlockState()
-                        : Blocks.ORANGE_CONCRETE.defaultBlockState();
+                        : Blocks.POLISHED_BASALT.defaultBlockState();
                 set(level, origin.offset(x, -4, z), bed);
                 for (int y = -3; y <= 1; y++)
                 {
@@ -403,6 +571,8 @@ public final class GeoFrontBuilder
      */
     public static boolean ensurePyramidRevision(ServerLevel level, BlockPos origin)
     {
+        FacilityWorldPolicy.requireLegacyGenerationAllowed(
+                level.getServer(), "GeoFrontBuilder.ensurePyramidRevision");
         BlockPos baseMarker = origin.offset(-PYRAMID_BASE_HALF_X,
                 PYRAMID_BASE_Y,
                 PYRAMID_BASE_CENTRE_Z - PYRAMID_BASE_HALF_Z);
@@ -549,9 +719,16 @@ public final class GeoFrontBuilder
                     continue;
                 }
                 BlockState state = level.getBlockState(position);
-                clearStaleNaturalColumn(level, position, 1, 24);
+                clearStaleNaturalColumn(level, position, 1, 32,
+                        !commandColumn);
+                clearStaleApronSuperstructure(level, origin, x, z,
+                        commandColumn);
                 if (commandColumn && !isNaturalTerrain(state))
                 {
+                    if (state.isAir())
+                    {
+                        set(level, position, pyramidApronState(x, centredZ));
+                    }
                     continue;
                 }
                 if (!state.is(Blocks.GRASS_BLOCK) && !state.is(Blocks.DIRT)
@@ -561,21 +738,14 @@ public final class GeoFrontBuilder
                         && !state.is(Blocks.PODZOL) && !state.is(Blocks.MYCELIUM)
                         && !state.is(Blocks.MUD) && !state.is(Blocks.CLAY)
                         && !state.is(Blocks.POLISHED_DEEPSLATE)
-                        && !state.is(Blocks.LIGHT_GRAY_CONCRETE))
+                        && !state.is(Blocks.LIGHT_GRAY_CONCRETE)
+                        && !state.isAir())
                 {
                     continue;
                 }
-                boolean border = Math.abs(x)
-                        == PYRAMID_BASE_HALF_X + PYRAMID_APRON_MARGIN
-                        || Math.abs(centredZ)
-                        == PYRAMID_BASE_HALF_Z + PYRAMID_APRON_MARGIN;
                 boolean guide = Math.floorMod(x, 16) <= 1
                         || Math.floorMod(centredZ, 16) <= 1;
-                set(level, position, border
-                        ? Blocks.CHISELED_POLISHED_BLACKSTONE.defaultBlockState()
-                        : guide
-                                ? Blocks.LIGHT_GRAY_CONCRETE.defaultBlockState()
-                                : Blocks.POLISHED_DEEPSLATE.defaultBlockState());
+                set(level, position, pyramidApronState(x, centredZ));
 
                 if (guide && Math.floorMod(x * 7 + centredZ * 11, 31) == 0)
                 {
@@ -583,6 +753,21 @@ public final class GeoFrontBuilder
                 }
             }
         }
+    }
+
+    private static BlockState pyramidApronState(int x, int centredZ)
+    {
+        boolean border = Math.abs(x)
+                == PYRAMID_BASE_HALF_X + PYRAMID_APRON_MARGIN
+                || Math.abs(centredZ)
+                == PYRAMID_BASE_HALF_Z + PYRAMID_APRON_MARGIN;
+        boolean guide = Math.floorMod(x, 16) <= 1
+                || Math.floorMod(centredZ, 16) <= 1;
+        return border
+                ? Blocks.CHISELED_POLISHED_BLACKSTONE.defaultBlockState()
+                : guide
+                        ? Blocks.LIGHT_GRAY_CONCRETE.defaultBlockState()
+                        : Blocks.POLISHED_DEEPSLATE.defaultBlockState();
     }
     private static void writePyramidApronMarkers(ServerLevel level,
                                                    BlockPos origin)
@@ -601,7 +786,7 @@ public final class GeoFrontBuilder
             }
         }
         set(level, origin.offset(x, 1, PYRAMID_BASE_CENTRE_Z + z),
-                Blocks.LODESTONE.defaultBlockState());
+                Blocks.CRYING_OBSIDIAN.defaultBlockState());
         set(level, origin.offset(-x, 1, PYRAMID_BASE_CENTRE_Z + z),
                 Blocks.LODESTONE.defaultBlockState());
     }
@@ -626,7 +811,7 @@ public final class GeoFrontBuilder
             }
         }
         return level.getBlockState(origin.offset(x, 1,
-                        PYRAMID_BASE_CENTRE_Z + z)).is(Blocks.LODESTONE)
+                        PYRAMID_BASE_CENTRE_Z + z)).is(Blocks.CRYING_OBSIDIAN)
                 && level.getBlockState(origin.offset(-x, 1,
                         PYRAMID_BASE_CENTRE_Z + z)).is(Blocks.LODESTONE);
     }
@@ -648,11 +833,21 @@ public final class GeoFrontBuilder
         {
             BlockState state = level.getBlockState(origin.offset(sample[0], 0,
                     PYRAMID_BASE_CENTRE_Z + sample[1]));
-            if (state.is(Blocks.GRASS_BLOCK) || state.is(Blocks.DIRT)
-                    || state.is(Blocks.MOSS_BLOCK) || state.is(Blocks.PODZOL)
-                    || state.is(Blocks.MYCELIUM))
+            if (!state.is(Blocks.POLISHED_DEEPSLATE)
+                    && !state.is(Blocks.LIGHT_GRAY_CONCRETE)
+                    && !state.is(Blocks.CHISELED_POLISHED_BLACKSTONE))
             {
                 return false;
+            }
+            for (int y = 2; y <= 8; y++)
+            {
+                BlockState above = level.getBlockState(origin.offset(
+                        sample[0], y,
+                        PYRAMID_BASE_CENTRE_Z + sample[1]));
+                if (!above.isAir() && !above.is(Blocks.LIGHT))
+                {
+                    return false;
+                }
             }
         }
         return true;
@@ -1066,14 +1261,16 @@ public final class GeoFrontBuilder
         }
     }
 
-    /** Removes only carrier residue inside the three audited 11x11 lift paths. */
+    /** Removes only carrier residue inside the three audited 15x15 lift paths. */
     private static void clearLiftCorridor(ServerLevel level, BlockPos centre)
     {
-        for (int y = 2; y <= 32; y++)
+        for (int y = 2; y <= 50; y++)
         {
-            for (int x = -5; x <= 5; x++)
+            for (int x = -IntegratedNervMapBuilder.SHAFT_CLEAR_RADIUS;
+                 x <= IntegratedNervMapBuilder.SHAFT_CLEAR_RADIUS; x++)
             {
-                for (int z = -5; z <= 5; z++)
+                for (int z = -IntegratedNervMapBuilder.SHAFT_CLEAR_RADIUS;
+                     z <= IntegratedNervMapBuilder.SHAFT_CLEAR_RADIUS; z++)
                 {
                     set(level, centre.offset(x, y, z), Blocks.AIR.defaultBlockState());
                 }
@@ -1090,25 +1287,25 @@ public final class GeoFrontBuilder
         BlockState light = Blocks.SEA_LANTERN.defaultBlockState();
         BlockState ladder = Blocks.LADDER.defaultBlockState()
                 .setValue(LadderBlock.FACING, Direction.NORTH);
-        int gantryY = 27;
+        int gantryY = 40;
 
         for (int y = 2; y <= gantryY; y++)
         {
-            set(level, centre.offset(0, y, 14), frame);
-            set(level, centre.offset(0, y, 13), ladder);
+            set(level, centre.offset(0, y, 18), frame);
+            set(level, centre.offset(0, y, 17), ladder);
             if (y % 4 == 0)
             {
-                set(level, centre.offset(1, y, 14), light);
+                set(level, centre.offset(1, y, 18), light);
             }
         }
-        for (int z = 6; z <= 14; z++)
+        for (int z = 8; z <= 18; z++)
         {
-            for (int x = -3; x <= 3; x++)
+            for (int x = -4; x <= 4; x++)
             {
-                BlockState deck = x == 0 && z == 13
+                BlockState deck = x == 0 && z == 17
                         ? ladder : (x == 0 && z % 3 == 0 ? accent : dark);
                 set(level, centre.offset(x, gantryY, z), deck);
-                if (Math.abs(x) == 3)
+                if (Math.abs(x) == 4)
                 {
                     set(level, centre.offset(x, gantryY + 1, z),
                             Blocks.IRON_BARS.defaultBlockState());
@@ -1247,6 +1444,8 @@ public final class GeoFrontBuilder
      */
     public static void repairCavernLighting(ServerLevel level, BlockPos origin)
     {
+        FacilityWorldPolicy.requireLegacyGenerationAllowed(
+                level.getServer(), "GeoFrontBuilder.repairCavernLighting");
         int floorDeltaY = origin.getY() - cavernCentre(origin).getY();
         int floorRadius = (int) Math.floor(Math.sqrt(
                 CAVERN_RADIUS * CAVERN_RADIUS - floorDeltaY * floorDeltaY)) - 14;
@@ -1514,9 +1713,92 @@ public final class GeoFrontBuilder
         }
     }
 
+    /**
+     * Removes rejected pyramid/apron revisions which left artificial stone
+     * terraces standing above the current service plane.
+     *
+     * <p>Only cells outside the current sloping shell are eligible. The three
+     * EVA terminals and the southern public approach are explicit exclusions,
+     * so an installed world's real circulation architecture is never treated
+     * as debris.</p>
+     */
+    private static void clearStaleApronSuperstructure(ServerLevel level,
+                                                       BlockPos origin,
+                                                       int relativeX,
+                                                       int relativeZ,
+                                                       boolean commandColumn)
+    {
+        if (commandColumn
+                || isWithinPyramidPublicAccess(relativeX, relativeZ)
+                || isWithinEvaLiftTerminal(relativeX, relativeZ))
+        {
+            return;
+        }
+        for (int y = 1; y <= 32; y++)
+        {
+            int halfX = pyramidHalfXAt(y);
+            int halfZ = pyramidHalfZAt(y);
+            if (Math.abs(relativeX) <= halfX
+                    && Math.abs(relativeZ - pyramidCentreZAt(y)) <= halfZ)
+            {
+                continue;
+            }
+            BlockPos stale = origin.offset(relativeX, y, relativeZ);
+            BlockState state = level.getBlockState(stale);
+            if (isRejectedApronMaterial(state))
+            {
+                set(level, stale, Blocks.AIR.defaultBlockState());
+            }
+        }
+    }
+
+    private static boolean isWithinEvaLiftTerminal(int relativeX,
+                                                    int relativeZ)
+    {
+        for (int liftX : LIFT_X)
+        {
+            if (Math.abs(relativeX - liftX) <= 10
+                    && relativeZ >= -90 && relativeZ <= -34)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean isRejectedApronMaterial(BlockState state)
+    {
+        return state.is(Blocks.COBBLED_DEEPSLATE)
+                || state.is(Blocks.COBBLED_DEEPSLATE_STAIRS)
+                || state.is(Blocks.COBBLED_DEEPSLATE_SLAB)
+                || state.is(Blocks.COBBLED_DEEPSLATE_WALL)
+                || state.is(Blocks.POLISHED_DEEPSLATE)
+                || state.is(Blocks.POLISHED_DEEPSLATE_STAIRS)
+                || state.is(Blocks.POLISHED_DEEPSLATE_SLAB)
+                || state.is(Blocks.POLISHED_DEEPSLATE_WALL)
+                || state.is(Blocks.DEEPSLATE_BRICKS)
+                || state.is(Blocks.DEEPSLATE_BRICK_STAIRS)
+                || state.is(Blocks.DEEPSLATE_BRICK_SLAB)
+                || state.is(Blocks.DEEPSLATE_BRICK_WALL)
+                || state.is(Blocks.CRACKED_DEEPSLATE_BRICKS)
+                || state.is(Blocks.DEEPSLATE_TILES)
+                || state.is(Blocks.DEEPSLATE_TILE_STAIRS)
+                || state.is(Blocks.DEEPSLATE_TILE_SLAB)
+                || state.is(Blocks.DEEPSLATE_TILE_WALL)
+                || state.is(Blocks.CRACKED_DEEPSLATE_TILES)
+                || state.is(Blocks.CHISELED_DEEPSLATE)
+                || state.is(Blocks.POLISHED_BLACKSTONE)
+                || state.is(Blocks.POLISHED_BLACKSTONE_BRICKS)
+                || state.is(Blocks.CRACKED_POLISHED_BLACKSTONE_BRICKS)
+                || state.is(Blocks.SMOOTH_STONE)
+                || state.is(Blocks.LIGHT_GRAY_CONCRETE)
+                || state.is(Blocks.GRAY_CONCRETE);
+    }
+
     private static void clearStaleNaturalColumn(ServerLevel level,
                                                 BlockPos base,
-                                                int minimumY, int maximumY)
+                                                int minimumY, int maximumY,
+                                                boolean clearTrees)
     {
         for (int y = minimumY; y <= maximumY; y++)
         {
@@ -1535,7 +1817,12 @@ public final class GeoFrontBuilder
                     || above.is(Blocks.AZURE_BLUET)
                     || above.is(Blocks.OXEYE_DAISY)
                     || above.is(Blocks.CORNFLOWER)
-                    || above.is(Blocks.LILY_OF_THE_VALLEY))
+                    || above.is(Blocks.LILY_OF_THE_VALLEY)
+                    || (clearTrees && (above.is(BlockTags.LOGS)
+                            || above.is(BlockTags.LEAVES)
+                            || above.is(Blocks.VINE)
+                            || above.is(Blocks.AZALEA)
+                            || above.is(Blocks.FLOWERING_AZALEA))))
             {
                 set(level, stale, Blocks.AIR.defaultBlockState());
             }
@@ -1557,6 +1844,7 @@ public final class GeoFrontBuilder
         if (!level.getBlockState(position).equals(state))
         {
             level.setBlock(position, state, UPDATE_CLIENTS);
+            PerformanceCounters.recordWorldBlockWrites(1);
         }
     }
 

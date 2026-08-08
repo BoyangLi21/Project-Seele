@@ -15,6 +15,8 @@ import net.minecraftforge.network.NetworkEvent;
 /** Keeps the real player and client chunk window under each GeoFront camera. */
 public final class ServerboundGeoFrontCameraPacket
 {
+    public static final int S20_VIEW_BASE = 100;
+    public static final int S20_RESTORE_VIEW = 199;
     private static final double[][] TRACKING_OFFSETS = {
             {-64.0D, 51.5D, -53.0D},
             {-143.5D, 14.5D, -107.5D},
@@ -30,6 +32,18 @@ public final class ServerboundGeoFrontCameraPacket
             {-41.0D, 11.0D, 6.0D},
             {0.0D, 16.0D, -57.0D},
     };
+    private static final double[][] S20_TRACKING_POSITIONS = {
+            {80.0D, -414.0D, 330.0D},
+            {80.0D, -414.0D, 356.0D},
+            {80.0D, -406.0D, 300.0D},
+            {130.0D, -441.0D, 273.0D},
+            {80.0D, -396.0D, 144.0D},
+             {80.0D, -392.0D, 176.0D},
+             {80.0D, -394.0D, 176.0D},
+             {80.0D, -424.0D, 218.0D},
+             {130.0D, -441.0D, 273.0D},
+             {130.0D, 81.0D, 273.0D},
+     };
 
     private final int view;
 
@@ -76,6 +90,34 @@ public final class ServerboundGeoFrontCameraPacket
         {
             return;
         }
+        if (this.view >= S20_VIEW_BASE)
+        {
+            if (this.view == S20_RESTORE_VIEW
+                    && com.projectseele.world.FacilityWorldPolicy
+                    .isS20Rebuild(player.getServer()))
+            {
+                level.getChunkAt(new BlockPos(28, -430, 340));
+                player.stopRiding();
+                player.setNoGravity(false);
+                player.setDeltaMovement(Vec3.ZERO);
+                player.fallDistance = 0.0F;
+                player.teleportTo(level, 28.5D, -429.0D, 340.5D,
+                        180.0F, 0.0F);
+                return;
+            }
+            int s20View = this.view - S20_VIEW_BASE;
+            if (!com.projectseele.world.FacilityWorldPolicy.isS20Rebuild(
+                    player.getServer())
+                    || s20View < 0
+                    || s20View >= S20_TRACKING_POSITIONS.length)
+            {
+                return;
+            }
+            double[] position = S20_TRACKING_POSITIONS[s20View];
+            movePlayer(level, player, this.view,
+                    position[0], position[1], position[2]);
+            return;
+        }
         BlockPos origin = GeoFrontCommands.ORIGIN;
         if (this.view < 0)
         {
@@ -98,6 +140,12 @@ public final class ServerboundGeoFrontCameraPacket
         double x = origin.getX() + offset[0];
         double y = origin.getY() + offset[1];
         double z = origin.getZ() + offset[2];
+        movePlayer(level, player, this.view, x, y, z);
+    }
+
+    private static void movePlayer(ServerLevel level, ServerPlayer player,
+                                   int view, double x, double y, double z)
+    {
         level.getChunkAt(BlockPos.containing(x, y, z));
         player.stopRiding();
         player.setNoGravity(true);
@@ -106,7 +154,7 @@ public final class ServerboundGeoFrontCameraPacket
         player.teleportTo(level, x, y, z, 180.0F, 0.0F);
         ProjectSeele.LOGGER.info(
                 "GeoFront camera tracking: view={} player={} position={},{},{}",
-                this.view, player.getGameProfile().getName(),
+                view, player.getGameProfile().getName(),
                 x, y, z);
     }
 }

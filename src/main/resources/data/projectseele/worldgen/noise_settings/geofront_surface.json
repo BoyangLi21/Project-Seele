@@ -28,23 +28,30 @@
       "when_out_of_range": {
         "type": "minecraft:range_choice",
         "input": "minecraft:y",
-        "min_inclusive": -12.0,
-        "max_exclusive": 320.0,
-        "when_in_range": {
-          "type": "minecraft:squeeze",
-          "argument": {
-            "type": "minecraft:mul",
-            "argument1": 0.64,
-            "argument2": {
-              "type": "minecraft:interpolated",
-              "argument": {
-                "type": "minecraft:blend_density",
-                "argument": "minecraft:overworld/sloped_cheese"
+        "min_inclusive": -640.0,
+        "max_exclusive": -32.0,
+        "when_in_range": 1.0,
+        "when_out_of_range": {
+          "type": "minecraft:range_choice",
+          "input": "minecraft:y",
+          "min_inclusive": 64.0,
+          "max_exclusive": 320.0,
+          "when_in_range": {
+            "type": "minecraft:squeeze",
+            "argument": {
+              "type": "minecraft:mul",
+              "argument1": 0.64,
+              "argument2": {
+                "type": "minecraft:interpolated",
+                "argument": {
+                  "type": "minecraft:blend_density",
+                  "argument": "minecraft:overworld/sloped_cheese"
+                }
               }
             }
-          }
-        },
-        "when_out_of_range": -1.0
+          },
+          "when_out_of_range": 1.0
+        }
       }
     },
     "fluid_level_floodedness": 0.0,
@@ -52,10 +59,17 @@
     "initial_density_without_jaggedness": {
       "type": "minecraft:range_choice",
       "input": "minecraft:y",
-      "min_inclusive": -12.0,
-      "max_exclusive": 320.0,
-      "when_in_range": "minecraft:overworld/sloped_cheese",
-      "when_out_of_range": -1.0
+      "min_inclusive": -640.0,
+      "max_exclusive": -32.0,
+      "when_in_range": 1.0,
+      "when_out_of_range": {
+        "type": "minecraft:range_choice",
+        "input": "minecraft:y",
+        "min_inclusive": 64.0,
+        "max_exclusive": 320.0,
+        "when_in_range": "minecraft:overworld/sloped_cheese",
+        "when_out_of_range": 1.0
+      }
     },
     "lava": 0.0,
     "ridges": "minecraft:overworld/ridges",
