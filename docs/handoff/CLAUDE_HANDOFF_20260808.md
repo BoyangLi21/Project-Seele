@@ -236,3 +236,133 @@ z=267  y−403  ....###....
 3. 回到 07-07 交接包的 P0-C（真人登舱 → PREPARE → 插入栓 → 发射全链）
 4. P0-B Tokyo-3 漂浮屋顶
 5. 地图扩建仍按 07-07 §7.2 走预览副本；R28 本体继续冻结
+
+---
+
+## 8. Git 基线（2026-08-08 建立）
+
+在此之前工作区有 **221 个未提交文件、最后一次 commit 停在 07-23**（16 天）。
+现已整理成 6 个提交，`git status` 干净，`gradlew build` 通过：
+
+```
+cc9a160  chore: keep generated evidence out of the repo and collect handoffs
+03a182a  feat: add shared mod plumbing for the facility build
+3dfc64c  feat: add the GeoFront dimension and the Facility-v2 architecture
+df84fbb  feat: build the S20 command room
+04ff932  feat: extend EVA logistics, entry plug and weapon systems
+3d882fb  feat: add map measurement and audit tooling
+```
+
+合计 227 文件 / +57451 / −2037。分支 `recovery/visual-foundation`，**未 push**。
+
+**注意**：这六个提交是按主题切的，**中间提交单独拿出来不保证能编译**——这批工作
+是 16 天里连续演化出来的，没有可复原的可构建中间态。只有 HEAD 保证 build 通过。
+以后请每个功能单独提交，别再攒 200 个文件。
+
+`/artifacts/` 已加入 `.gitignore`（1.1 GB / 5462 文件的生成产物）。
+还原快照 `artifacts/R28_command_repairs_undo.mcfunction` 因此不在 git 里，
+但文件仍在本地。
+
+---
+
+## 9. 给下一位的加速建议
+
+以下不是风格偏好，是我从这个仓库的痕迹里量出来的、**每回合固定成本**。
+去掉它们不影响工作质量，只是不再交税。
+
+### 9.1 别每次读写 130 KB 的工作日志
+
+```
+.Codex/ACTIVE_WORKLOG.md   2087 行 / 130 KB / 81 节，只增不减
+文件开头自己写着 "Update it before and after every material architecture change"
+```
+
+130 KB ≈ 3.5 万 token，**每次实质改动前后各一遍**。而且它还在长。
+
+**替代**：拆成两个文件。`DECISIONS.md`（≤200 行，只放"人类锁定的要求"和
+"待决事项"，每次都读）+ `ARCHIVE.md`（历史，只在明确需要考古时才读）。
+更好的做法是把约束写进**它约束的那个文件的注释里**——本轮我把
+"区块没驻留会读出全空气然后假成功"这条写在 `S20CommandRoomRepairs.tick()` 上面，
+下一个人打开文件就看见，不需要先读一份日志。
+
+### 9.2 别每轮写一个 700 行的一次性分析脚本
+
+```
+build_s20_r30_pyramid_infill_preview.py    880 行
+build_s20_r31_deep_access_preview.py       960 行
+build_s20_r33_geofront_campus_preview.py   597 行
+.Codex/*.py 合计 8458 行 —— 无一个 from <共用模块> import
+```
+
+每一份都从 `gzip / numpy / matplotlib` 重新搭一遍"读区块 → 解调色板 → 画图"。
+输出 token 是最慢的 token，而这是同一件事做了十几遍。
+
+**替代**：`tools/query_blocks.py` 已经把这层封好了，直接用：
+
+```python
+import sys; sys.path.insert(0, "tools")
+from query_blocks import read_box
+box = read_box(Path("run/saves/SEELE_S20_RECOVERY_R28"),
+               "projectseele:geofront", (0,-425,330), (56,-388,368))
+state = box.get((28,-409,288), "minecraft:air")   # 完整状态串，带 properties
+```
+
+命令行也能直接用，多数情况下根本不用写脚本：
+
+```
+python tools/query_blocks.py <world> --dim projectseele:geofront \
+    --box 26 -410 286 30 -406 291 --mode list        # 逐格
+    --mode census                                     # 材质统计
+    --mode slice                                      # 逐层 ASCII 平面图
+```
+
+本轮所有测量——19 把椅子扫描、三面墙的 ASCII 剖面、朝向反推、561 格还原快照
+——全部是这一个模块 + 十几行内联脚本，没有新建任何一次性程序。
+
+### 9.3 别靠日志记住"人类改过什么"，让代码自己判断
+
+**做法**：每一格只在**当前状态仍在实测到的集合里**时才写。
+
+```java
+private static int place(ServerLevel level, BlockPos cell,
+                         BlockState target, Set<String> allowed)
+{
+    BlockState current = level.getBlockState(cell);
+    String id = BuiltInRegistries.BLOCK.getKey(current.getBlock()).toString();
+    if (!allowed.contains(id)) return 0;   // 人改过 -> 人赢
+    level.setBlock(cell, target, Block.UPDATE_CLIENTS);
+    return 1;
+}
+```
+
+这样代码和真人的手工修改可以共存，**世界本身就是记录**，不需要外部日志同步。
+真人上一轮把碇司令的黄凳换回红凳，这一轮我只要把那一格从列表里去掉就行，
+不用回溯任何历史。
+
+### 9.4 规格藏在别处时，去取，别试
+
+三个本轮的实例：
+
+| 问题 | 试错做法 | 实际做法 |
+|---|---|---|
+| 大屏文字位置不对 | 上下挪几格看看 | 反编译 `DisplayRenderer$TextDisplayRenderer`，拿到 `translate(1-w/2, -lines*10, 0)`，得知**底边对齐**，写成公式一次到位 |
+| 椅子该长什么样 | 猜一套调色板 | 运行时读真人认可的 (28,−409,288) 那四格真实状态当模板 |
+| 椅子朝哪 | 假设都朝屏幕 | 找唯一那个靠背邻格，朝向 = 其反方向（结果 3 把朝东 3 把朝西，假设会全错） |
+
+判据：**如果答案已经存在于代码、NBT、字节码或真人的手工作品里，就去读它。**
+只有真的无处可读时才试。
+
+### 9.5 分不清就停手，把图摆出来
+
+北端那三个坐标真人明确要求封，我没做——把 z 262..270 一层层画出来后，
+那是九层厚的立体浮雕，我分不出镂空和缺损，矩形填过去一定糊死造型。
+于是给了 A/B 两个方案和格数让真人选。
+
+这比填错再回滚快得多，也比反复问"这是什么"快。**画一张 ASCII 剖面图的成本
+是几秒，填错一面墙的成本是一轮回滚加一次信任损失。**
+
+### 9.6 存档相关
+
+- 每轮拷一份 100 MB 整档 → 73 个存档 / 5.0 GB。改成只在**真人批准前**拷贝一次
+  预览副本，批准后合并，别每轮都留。
+- 写入冻结存档前先导出还原快照（561 行 setblock，十几行脚本的事）。
