@@ -732,14 +732,30 @@ public final class VisualCaptureManager
      */
     private static final class S20Session
     {
-        private static final String[] NAMES = {
+        private static final boolean S21_B1_ONLY = "s21_b1".equals(
+                System.getProperty("projectseele.visualCaptureUnit"));
+        private static final boolean S21_B2_ONLY = "s21_b2".equals(
+                System.getProperty("projectseele.visualCaptureUnit"));
+        private static final String[] NAMES = S21_B1_ONLY
+                ? new String[] {"command_rear_b1_west", "command_rear_b1_east"}
+                : S21_B2_ONLY
+                ? new String[] {"command_rear_b2_west", "command_rear_b2_east"}
+                : new String[] {
                 "command_hierarchy", "command_screens",
                  "command_rear_route", "b40_personnel_bridge",
                  "wet_cages_front", "wet_cages_rear",
                  "unit01_plug_side", "launch_interface",
                  "surface_lift_lower", "surface_lift_pavilion"
         };
-        private static final Vec3[] CAMERAS = {
+        private static final Vec3[] CAMERAS = S21_B1_ONLY
+                ? new Vec3[] {
+                        new Vec3(26.5D, -409.0D, 279.5D),
+                        new Vec3(33.5D, -409.0D, 279.5D)}
+                : S21_B2_ONLY
+                ? new Vec3[] {
+                        new Vec3(23.5D, -407.5D, 260.5D),
+                        new Vec3(29.0D, -405.5D, 260.5D)}
+                : new Vec3[] {
                 new Vec3(44.0D, -412.0D, 303.0D),
                 new Vec3(28.0D, -414.0D, 302.0D),
                 new Vec3(28.0D, -405.0D, 246.0D),
@@ -751,7 +767,15 @@ public final class VisualCaptureManager
                  new Vec3(90.0D, -440.0D, 273.0D),
                  new Vec3(108.0D, 87.0D, 285.0D),
         };
-        private static final Vec3[] TARGETS = {
+        private static final Vec3[] TARGETS = S21_B1_ONLY
+                ? new Vec3[] {
+                        new Vec3(29.5D, -409.0D, 279.5D),
+                        new Vec3(29.5D, -409.0D, 279.5D)}
+                : S21_B2_ONLY
+                ? new Vec3[] {
+                        new Vec3(26.0D, -407.0D, 260.5D),
+                        new Vec3(26.0D, -407.0D, 260.5D)}
+                : new Vec3[] {
                 new Vec3(28.0D, -414.0D, 286.0D),
                 new Vec3(28.0D, -416.0D, 330.0D),
                 new Vec3(28.0D, -406.0D, 270.0D),

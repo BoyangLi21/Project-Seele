@@ -66,6 +66,8 @@ public final class VisualLabAutomation
             CAPTURE_UNIT.equals("tokyo3_battle");
     private static final boolean GEOFRONT_CAPTURE = CAPTURE_UNIT.equals("geofront");
     private static final boolean S20_CAPTURE = CAPTURE_UNIT.equals("s20");
+    private static final boolean S21_B1_CAPTURE = CAPTURE_UNIT.equals("s21_b1");
+    private static final boolean S21_B2_CAPTURE = CAPTURE_UNIT.equals("s21_b2");
     private static final boolean S20_PLUG_CAPTURE =
             CAPTURE_UNIT.equals("s20_plug");
     private static final boolean GEOFRONT_SORTIE_CAPTURE =
@@ -181,7 +183,8 @@ public final class VisualLabAutomation
         {
             if (ticks == 40)
             {
-                if (S20_CAPTURE || S20_PLUG_CAPTURE)
+                if (S20_CAPTURE || S20_PLUG_CAPTURE || S21_B1_CAPTURE
+                        || S21_B2_CAPTURE)
                 {
                     if (!FacilityWorldPolicy.isS20Rebuild(server))
                     {
@@ -197,7 +200,7 @@ public final class VisualLabAutomation
                     }
                     player.stopRiding();
                     player.setNoGravity(true);
-                    if (S20_CAPTURE)
+                    if (S20_CAPTURE || S21_B1_CAPTURE || S21_B2_CAPTURE)
                     {
                         player.teleportTo(geoFront,
                                 28.0D, -416.0D, 342.0D,
