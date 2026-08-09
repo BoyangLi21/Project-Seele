@@ -44,3 +44,4 @@ forge*changelog.txt
 # Generated evidence: renders, GLB/PDF previews, voxel ledgers, review bundles.
 # 1.1 GB and fully reproducible from tools/ - keep it local.
 /artifacts/
+/backups/

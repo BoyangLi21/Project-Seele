@@ -100,6 +100,12 @@ if exist "run\saves\SEELE_S20_RECOVERY_R21_R22\level.dat" set "SEELE_VISUAL_WORL
 if exist "run\saves\SEELE_S20_RECOVERY_R23\level.dat" set "SEELE_VISUAL_WORLD=SEELE_S20_RECOVERY_R23"
 if exist "run\saves\SEELE_S20_RECOVERY_R24_R25\level.dat" set "SEELE_VISUAL_WORLD=SEELE_S20_RECOVERY_R24_R25"
 if exist "run\saves\SEELE_S20_RECOVERY_R28\level.dat" set "SEELE_VISUAL_WORLD=SEELE_S20_RECOVERY_R28"
+if exist "run\saves\SEELE_S21_COMMAND_REAR\level.dat" set "SEELE_VISUAL_WORLD=SEELE_S21_COMMAND_REAR"
+if exist "run\saves\SEELE_S21_COMMAND_REAR_R02\level.dat" set "SEELE_VISUAL_WORLD=SEELE_S21_COMMAND_REAR_R02"
+if exist "run\saves\SEELE_S21_COMMAND_REAR_R03\level.dat" set "SEELE_VISUAL_WORLD=SEELE_S21_COMMAND_REAR_R03"
+if exist "run\saves\SEELE_S21_COMMAND_REAR_R04\level.dat" set "SEELE_VISUAL_WORLD=SEELE_S21_COMMAND_REAR_R04"
+rem R05 failed human review. Force the last accepted immutable baseline.
+if exist "run\saves\SEELE_S20_RECOVERY_R28\level.dat" set "SEELE_VISUAL_WORLD=SEELE_S20_RECOVERY_R28"
 rem The v1 Ars sky sphere stored one ticking block entity per shell block.
 rem Migrate it offline, with region backups, before the legacy save opens.
 set "SEELE_MIGRATE_PY=C:\Users\liboy\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe"
@@ -425,7 +431,7 @@ goto SEELE_INSTRUCTIONS_DONE
 :SEELE_MANUAL_INSTRUCTIONS
 echo.
 echo S20 authored-layout review:
-echo   1. !SEELE_VISUAL_WORLD! opens automatically. R28 is the active immutable review baseline.
+echo   1. !SEELE_VISUAL_WORLD! opens automatically. R28 remains the immutable source baseline.
 echo   2. The original command bridge is preserved; its yellow/orange dummy masks are replaced in place by two live sloped screens.
 echo   3. The compact wet cages remain at EVA-00 x=-12, EVA-01 x=30 and EVA-02 x=72; each silo is only 60 blocks from its cage.
 echo   4. Use /seele geofront hangar for the wet-cage gallery and /seele eva status all for the physical logistics state.
@@ -572,6 +578,25 @@ if /i "%~1"=="visual" (
         pause
         exit /b 1
     )
+    rem Pre-flight banner. runClient compiles first, so the Java changes to the
+    rem four-stop command lift and the tree-of-life wall are picked up here.
+    rem The wall image is read from run\projectseele-local-maps at runtime and
+    rem is deliberately NOT part of the regenerated resource pack.
+    echo.
+    echo ------------------------------------------------------------
+    echo  Project SEELE  --  launching
+    echo   world        : !SEELE_VISUAL_WORLD!
+    if exist "run\projectseele-local-maps\tree_of_life.png" (
+        echo   tree of life : image present
+    ) else (
+        echo   tree of life : MISSING - save the engraving as
+        echo                  run\projectseele-local-maps\tree_of_life.png
+        echo                  wall at 20 -415 257 stays blank until then
+    )
+    echo   command lift : 4 stops  B-40 / B-20 / B-19 / B-10
+    echo                  car has 4 buttons and a floor readout
+    echo ------------------------------------------------------------
+    echo.
     call gradlew.bat runClient -PstrictHighDetail=true -PquickPlayWorld=!SEELE_VISUAL_WORLD!
 )
 pause

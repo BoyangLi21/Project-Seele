@@ -31,6 +31,9 @@ import net.minecraft.world.level.block.state.properties.AttachFace;
 import net.minecraft.world.level.saveddata.SavedData;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.nbt.FloatTag;
+import net.minecraft.world.entity.Display;
+import net.minecraft.world.entity.EntityType;
 
 /**
  * Bounded S20 personnel elevator.
@@ -72,6 +75,12 @@ public final class S20PhysicalElevatorDirector
     private static final int CABIN_DOOR_HALF_WIDTH = 1;
     private static final int LANDING_DOOR_HALF_WIDTH = 2;
     private static final int DOOR_HEIGHT = 3;
+    /**
+     * Two per column.  A two-stop car then keeps exactly the panel that was
+     * approved, and a four-stop car reads as a tidy 2x2 instead of a column
+     * of three with the top floor stranded beside it.
+     */
+    private static final int BUTTONS_PER_COLUMN = 2;
     private static final int CLOSE_TICKS = 12;
     private static final int OPEN_TICKS = 10;
     private static final int ENTITY_CABIN_REVISION = 2;
@@ -112,11 +121,21 @@ public final class S20PhysicalElevatorDirector
      */
     public static LiftSpec commandRearLift()
     {
-        return new LiftSpec(COMMAND_REAR_LIFT_ID,
+        /*
+         * Four stops on the one authored axis at (12,*,253).  The two new
+         * ones are the decks the human opened southward out of the shaft at
+         * z=256/257; both hand off onto their own floor plate seven blocks
+         * south, so all four keep the original south exit.
+         */
+        return new LiftSpec(COMMAND_REAR_LIFT_ID, List.of(
                 new Landing("B-40 LOWER INTERCHANGE",
                         new BlockPos(12, -448, 253), Direction.SOUTH),
                 new Landing("B-20 COMMAND BRIDGE",
-                        new BlockPos(12, -423, 253), Direction.SOUTH));
+                        new BlockPos(12, -423, 253), Direction.SOUTH),
+                new Landing("B-19 REAR SERVICE",
+                        new BlockPos(12, -419, 253), Direction.SOUTH),
+                new Landing("B-10 COMMAND GALLERY",
+                        new BlockPos(12, -409, 253), Direction.SOUTH)));
     }
 
     /** Physical link from the lowered launch observation hall to the hangar. */
@@ -266,8 +285,10 @@ public final class S20PhysicalElevatorDirector
                 }
             }
         }
-        inspectRouteHandoff(level, spec, spec.lower(), failures);
-        inspectRouteHandoff(level, spec, spec.upper(), failures);
+        for (Landing landing : spec.stops())
+        {
+            inspectRouteHandoff(level, spec, landing, failures);
+        }
         return new PreflightResult(failures.isEmpty(),
                 List.copyOf(failures));
     }
@@ -288,12 +309,36 @@ public final class S20PhysicalElevatorDirector
             LiftRuntime runtime = existing.get();
             if (!runtime.fingerprint.equals(spec.fingerprint()))
             {
-                ProjectSeele.LOGGER.error(
-                        "S20 physical lift {} rejected: saved anchors {} "
-                                + "do not match requested anchors {}",
-                        spec.id(), runtime.fingerprint,
-                        spec.fingerprint());
-                return false;
+                /*
+                 * A different shaft is still a hard reject.  The same shaft
+                 * with a different set of floors is a deliberate upgrade:
+                 * re-cut the swept volume, rebuild every landing and re-anchor
+                 * the runtime instead of leaving the lift out of service.
+                 */
+                if (!spec.sharesAxisWith(runtime.fingerprint))
+                {
+                    ProjectSeele.LOGGER.error(
+                            "S20 physical lift {} rejected: saved anchors {} "
+                                    + "do not match requested anchors {}",
+                            spec.id(), runtime.fingerprint,
+                            spec.fingerprint());
+                    return false;
+                }
+                ProjectSeele.LOGGER.info(
+                        "S20 physical lift {} re-anchored for a new stop "
+                                + "list: {} -> {}",
+                        spec.id(), runtime.fingerprint, spec.fingerprint());
+                clearSweptCabinVolume(level, spec);
+                for (Landing landing : spec.stops())
+                {
+                    buildLanding(level, landing);
+                }
+                LiftRuntime rebuilt = LiftRuntime.installed(spec);
+                data.put(spec.id(), rebuilt);
+                return USE_LEGACY_BLOCK_CABIN
+                        ? ensureLegacyBlockCabin(level, spec, rebuilt, data)
+                        : ensurePersistentCabin(level, spec, rebuilt, data)
+                        != null;
             }
             if (USE_LEGACY_BLOCK_CABIN)
             {
@@ -328,8 +373,10 @@ public final class S20PhysicalElevatorDirector
         }
 
         clearSweptCabinVolume(level, spec);
-        buildLanding(level, spec.lower());
-        buildLanding(level, spec.upper());
+        for (Landing landing : spec.stops())
+        {
+            buildLanding(level, landing);
+        }
         LiftRuntime runtime = LiftRuntime.installed(spec);
         data.put(spec.id(), runtime);
         if (USE_LEGACY_BLOCK_CABIN)
@@ -360,8 +407,10 @@ public final class S20PhysicalElevatorDirector
      */
     public static void repairLandingHardware(ServerLevel level, LiftSpec spec)
     {
-        buildLanding(level, spec.lower());
-        buildLanding(level, spec.upper());
+        for (Landing landing : spec.stops())
+        {
+            buildLanding(level, landing);
+        }
         LiftRuntime runtime = RuntimeData.get(level)
                 .find(spec.id()).orElse(null);
         if (USE_LEGACY_BLOCK_CABIN)
@@ -369,38 +418,36 @@ public final class S20PhysicalElevatorDirector
             if (runtime != null)
             {
                 Landing current = spec.landingAt(runtime.currentY);
-                setLandingDoor(level, spec.lower(),
-                        current == spec.lower()
-                                && runtime.mode == Mode.IDLE_OPEN);
-                setLandingDoor(level, spec.upper(),
-                        current == spec.upper()
-                                && runtime.mode == Mode.IDLE_OPEN);
+                for (Landing landing : spec.stops())
+                {
+                    setLandingDoor(level, landing,
+                            current == landing
+                                    && runtime.mode == Mode.IDLE_OPEN);
+                }
             }
             return;
         }
         NervCarrierPlatformEntity cabin = runtime == null ? null
                 : resolvePersistentCabin(level, spec, runtime);
-        if (cabin != null && cabin.isAtLiftY(spec.lower().walkY()))
+        for (Landing landing : spec.stops())
         {
-            buildLandingDeck(level, spec.lower());
-            clearLandingDeck(level, spec.upper());
+            if (cabin != null && cabin.isAtLiftY(landing.walkY()))
+            {
+                buildLandingDeck(level, landing);
+            }
+            else
+            {
+                clearLandingDeck(level, landing);
+            }
+            setLandingDoor(level, landing, cabin != null
+                    && cabin.canOpenLandingDoorAt(landing.walkY()));
         }
-        else if (cabin != null
-                && cabin.isAtLiftY(spec.upper().walkY()))
-        {
-            clearLandingDeck(level, spec.lower());
-            buildLandingDeck(level, spec.upper());
-        }
-        setLandingDoor(level, spec.lower(), cabin != null
-                && cabin.canOpenLandingDoorAt(spec.lower().walkY()));
-        setLandingDoor(level, spec.upper(), cabin != null
-                && cabin.canOpenLandingDoorAt(spec.upper().walkY()));
     }
 
     private static LiftRuntime recoverExistingCabin(
             ServerLevel level, LiftSpec spec)
     {
-        for (Landing landing : List.of(spec.lower(), spec.upper()))
+        for (Landing landing : spec.stops())
         {
             BlockPos centre = landing.cabinCentre();
             if (!cabinFloorPresent(level, centre))
@@ -465,6 +512,7 @@ public final class S20PhysicalElevatorDirector
                     "runtime anchor fingerprint changed");
             return;
         }
+        updateFloorIndicator(level, spec, runtime);
         if (USE_LEGACY_BLOCK_CABIN)
         {
             if (!ensureLegacyBlockCabin(level, spec, runtime, data)
@@ -706,10 +754,11 @@ public final class S20PhysicalElevatorDirector
                 entityCabin.discard();
             }
 
-            clearPersistentInteriorControls(level, spec.lower());
-            clearPersistentInteriorControls(level, spec.upper());
-            clearLandingDeck(level, spec.lower());
-            clearLandingDeck(level, spec.upper());
+            for (Landing landing : spec.stops())
+            {
+                clearPersistentInteriorControls(level, spec, landing);
+                clearLandingDeck(level, landing);
+            }
             Landing start = nearestLanding(spec, lastY);
             runtime.mode = Mode.IDLE_OPEN;
             runtime.currentY = start.walkY();
@@ -741,10 +790,10 @@ public final class S20PhysicalElevatorDirector
             centre = current.cabinCentre();
         }
         if (!legacyCabinPresent(level, centre, runtime.cabinExit,
-                runtime.mode == Mode.IDLE_OPEN))
+                runtime.mode == Mode.IDLE_OPEN, spec.stops().size()))
         {
             buildCabin(level, centre, runtime.cabinExit,
-                    runtime.mode == Mode.IDLE_OPEN);
+                    runtime.mode == Mode.IDLE_OPEN, spec.stops().size());
         }
         if (runtime.mode == Mode.IDLE_OPEN)
         {
@@ -1015,6 +1064,120 @@ public final class S20PhysicalElevatorDirector
         clearLandingDeck(level, away);
     }
 
+    /**
+     * Floor indicator inside the cabin.
+     *
+     * <p>A text display rather than a sign: it has to move with the cabin and
+     * change between "at floor" and "travelling to", and it is the only part
+     * of the car that can say where the car actually is while it is between
+     * decks.  It is re-anchored every tick from the runtime, so it never
+     * lingers at an old stop.</p>
+     */
+    private static void updateFloorIndicator(
+            ServerLevel level, LiftSpec spec, LiftRuntime runtime)
+    {
+        String tag = "projectseele.s20.lift." + spec.id();
+        BlockPos centre = spec.centreAt(runtime.currentY);
+        AABB search = AABB.ofSize(Vec3.atCenterOf(centre),
+                64.0D, 96.0D, 64.0D);
+        List<Display.TextDisplay> found = new ArrayList<>(
+                level.getEntitiesOfClass(Display.TextDisplay.class, search,
+                        display -> display.getTags().contains(tag)));
+        Display.TextDisplay display;
+        boolean created = found.isEmpty();
+        if (created)
+        {
+            display = EntityType.TEXT_DISPLAY.create(level);
+            if (display == null)
+            {
+                return;
+            }
+            display.addTag(tag);
+            display.setNoGravity(true);
+            display.setInvulnerable(true);
+            display.setSilent(true);
+        }
+        else
+        {
+            display = found.get(0);
+            for (int index = 1; index < found.size(); index++)
+            {
+                found.get(index).discard();
+            }
+        }
+
+        Landing at = spec.landingAt(runtime.currentY);
+        Landing target = spec.landingAt(runtime.targetY);
+        String code = floorCode(at != null ? at : target);
+        String line = runtime.mode == Mode.FAULT
+                ? "-- --"
+                : at != null && runtime.mode == Mode.IDLE_OPEN
+                ? code
+                : (runtime.targetY > runtime.currentY ? "▲ " : "▼ ")
+                + floorCode(target);
+
+        CompoundTag data = display.saveWithoutId(new CompoundTag());
+        data.putString("text", Component.Serializer.toJson(
+                Component.literal(line)));
+        data.putInt("background", 0xE0060A0E);
+        data.putBoolean("shadow", false);
+        data.putBoolean("see_through", false);
+        data.putBoolean("default_background", false);
+        data.putString("alignment", "center");
+        data.putString("billboard", "fixed");
+        data.putFloat("view_range", 1.0F);
+        CompoundTag brightness = new CompoundTag();
+        brightness.putInt("block", 15);
+        brightness.putInt("sky", 15);
+        data.put("brightness", brightness);
+        CompoundTag transformation = new CompoundTag();
+        ListTag scale = new ListTag();
+        for (int axis = 0; axis < 3; axis++)
+        {
+            scale.add(FloatTag.valueOf(0.9F));
+        }
+        transformation.put("scale", scale);
+        ListTag identity = new ListTag();
+        for (int axis = 0; axis < 4; axis++)
+        {
+            identity.add(FloatTag.valueOf(axis == 3 ? 1.0F : 0.0F));
+        }
+        transformation.put("left_rotation", identity);
+        transformation.put("right_rotation", identity.copy());
+        ListTag origin = new ListTag();
+        for (int axis = 0; axis < 3; axis++)
+        {
+            origin.add(FloatTag.valueOf(0.0F));
+        }
+        transformation.put("translation", origin);
+        data.put("transformation", transformation);
+        display.load(data);
+
+        Direction exit = runtime.cabinExit;
+        Vec3 anchor = Vec3.atCenterOf(centre)
+                .add(exit.getStepX() * (CABIN_RADIUS - 0.46D), 2.6D,
+                        exit.getStepZ() * (CABIN_RADIUS - 0.46D));
+        display.setPos(anchor.x, anchor.y, anchor.z);
+        display.setYRot(exit.getOpposite().toYRot());
+        display.setXRot(0.0F);
+        if (created)
+        {
+            level.addFreshEntity(display);
+        }
+    }
+
+    /** "B-40 LOWER INTERCHANGE" -> "B-40". */
+    private static String floorCode(Landing landing)
+    {
+        if (landing == null)
+        {
+            return "--";
+        }
+        String label = landing.label();
+        int space = label.indexOf(' ');
+        return space > 0 ? label.substring(0, space) : label;
+    }
+
     private static void buildLandingDeck(
             ServerLevel level, Landing landing)
     {
@@ -1059,9 +1222,16 @@ public final class S20PhysicalElevatorDirector
 
     private static Landing nearestLanding(LiftSpec spec, double y)
     {
-        return Math.abs(y - spec.lower().walkY())
-                <= Math.abs(y - spec.upper().walkY())
-                ? spec.lower() : spec.upper();
+        Landing best = spec.lower();
+        for (Landing landing : spec.stops())
+        {
+            if (Math.abs(y - landing.walkY())
+                    < Math.abs(y - best.walkY()))
+            {
+                best = landing;
+            }
+        }
+        return best;
     }
 
     private static int liftAccent(LiftSpec spec)
@@ -1293,13 +1463,12 @@ public final class S20PhysicalElevatorDirector
     private static Landing recoveryLanding(
             LiftSpec spec, double savedTargetY, double currentY)
     {
-        if (Math.abs(savedTargetY - spec.lower().walkY()) <= 0.08D)
+        for (Landing landing : spec.stops())
         {
-            return spec.lower();
-        }
-        if (Math.abs(savedTargetY - spec.upper().walkY()) <= 0.08D)
-        {
-            return spec.upper();
+            if (Math.abs(savedTargetY - landing.walkY()) <= 0.08D)
+            {
+                return landing;
+            }
         }
         return nearestLanding(spec, currentY);
     }
@@ -1316,34 +1485,38 @@ public final class S20PhysicalElevatorDirector
         if (current == null || !cabin.isPersistentLiftIdle()
                 || !cabin.isLiftDoorOpen())
         {
-            clearPersistentInteriorControls(level, spec.lower());
-            clearPersistentInteriorControls(level, spec.upper());
+            for (Landing landing : spec.stops())
+            {
+                clearPersistentInteriorControls(level, spec, landing);
+            }
             return;
         }
-
-        Landing away = current == spec.lower()
-                ? spec.upper() : spec.lower();
-        clearPersistentInteriorControls(level, away);
+        for (Landing landing : spec.stops())
+        {
+            if (landing != current)
+            {
+                clearPersistentInteriorControls(level, spec, landing);
+            }
+        }
 
         Direction side = current.exit().getClockWise();
         BlockPos centre = current.cabinCentre();
-        BlockPos lowerBacking = centre.relative(side, CABIN_RADIUS)
-                .above(1);
-        BlockPos upperBacking = lowerBacking.above();
-        set(level, lowerBacking, CABIN_PANEL);
-        set(level, upperBacking, CABIN_PANEL);
-        set(level, interiorButtonPosition(centre, current.exit(), false),
-                wallButton(side.getOpposite()));
-        set(level, interiorButtonPosition(centre, current.exit(), true),
-                wallButton(side.getOpposite()));
+        for (int index = 0; index < spec.stops().size(); index++)
+        {
+            set(level, interiorBackingPosition(
+                    centre, current.exit(), index), CABIN_PANEL);
+            set(level, interiorButtonPosition(
+                            centre, current.exit(), index),
+                    wallButton(side.getOpposite()));
+        }
     }
 
     private static void clearPersistentInteriorControls(
-            ServerLevel level, Landing landing)
+            ServerLevel level, LiftSpec spec, Landing landing)
     {
         Direction side = landing.exit().getClockWise();
         BlockPos centre = landing.cabinCentre();
-        for (boolean upper : new boolean[] {false, true})
+        for (int upper = 0; upper < spec.stops().size(); upper++)
         {
             BlockPos button = interiorButtonPosition(
                     centre, landing.exit(), upper);
@@ -1352,8 +1525,8 @@ public final class S20PhysicalElevatorDirector
             {
                 set(level, button, AIR);
             }
-            BlockPos backing = centre.relative(side, CABIN_RADIUS)
-                    .above(upper ? 2 : 1);
+            BlockPos backing = interiorBackingPosition(
+                    centre, landing.exit(), upper);
             if (level.getBlockState(backing).equals(CABIN_PANEL))
             {
                 set(level, backing, AIR);
@@ -1365,23 +1538,29 @@ public final class S20PhysicalElevatorDirector
             BlockPos clicked, LiftSpec spec,
             NervCarrierPlatformEntity cabin)
     {
-        Landing current = cabin.isAtLiftY(spec.lower().walkY())
-                ? spec.lower()
-                : cabin.isAtLiftY(spec.upper().walkY())
-                ? spec.upper() : null;
+        Landing current = null;
+        for (Landing landing : spec.stops())
+        {
+            if (cabin.isAtLiftY(landing.walkY()))
+            {
+                current = landing;
+                break;
+            }
+        }
         if (current == null)
         {
             return null;
         }
         BlockPos centre = current.cabinCentre();
-        if (clicked.equals(interiorButtonPosition(
-                centre, current.exit(), false)))
+        for (int index = 0; index < spec.stops().size(); index++)
         {
-            return spec.lower();
+            if (clicked.equals(interiorButtonPosition(
+                    centre, current.exit(), index)))
+            {
+                return spec.stops().get(index);
+            }
         }
-        return clicked.equals(interiorButtonPosition(
-                centre, current.exit(), true))
-                ? spec.upper() : null;
+        return null;
     }
 
     private static boolean landingDoorClosed(
@@ -1547,7 +1726,7 @@ public final class S20PhysicalElevatorDirector
         }
         runtime.cabinExit = destination.exit();
         buildCabin(level, spec.centreAt(runtime.currentY),
-                runtime.cabinExit, true);
+                runtime.cabinExit, true, spec.stops().size());
         setLandingDoor(level, destination, true);
         runtime.mode = Mode.IDLE_OPEN;
         runtime.phaseTicks = 0;
@@ -1589,7 +1768,8 @@ public final class S20PhysicalElevatorDirector
         Landing target = spec.landingAt(runtime.targetY);
         Direction nextExit = target == null
                 ? runtime.cabinExit : target.exit();
-        buildCabin(level, nextCentre, nextExit, false);
+        buildCabin(level, nextCentre, nextExit, false,
+                spec.stops().size());
         runtime.currentY += deltaY;
         runtime.cabinExit = nextExit;
         return cabinFloorPresent(level, nextCentre);
@@ -1642,7 +1822,7 @@ public final class S20PhysicalElevatorDirector
 
     private static void buildCabin(
             ServerLevel level, BlockPos centre, Direction exit,
-            boolean doorOpen)
+            boolean doorOpen, int stopCount)
     {
         for (int dx = -CABIN_RADIUS; dx <= CABIN_RADIUS; dx++)
         {
@@ -1673,7 +1853,7 @@ public final class S20PhysicalElevatorDirector
                 }
             }
         }
-        buildInteriorControls(level, centre, exit);
+        buildInteriorControls(level, centre, exit, stopCount);
     }
 
     private static void clearCabin(
@@ -1695,16 +1875,26 @@ public final class S20PhysicalElevatorDirector
         }
     }
 
+    /**
+     * One button per floor in the legacy block car.
+     *
+     * <p>This is the panel that is actually in use: {@code
+     * USE_LEGACY_BLOCK_CABIN} is true, so the persistent-cabin control code
+     * never runs.  It hard-coded two buttons, which is why a four-stop lift
+     * still only offered two - and, once the presence check started demanding
+     * one button per stop, why the car was being rebuilt every tick.</p>
+     */
     private static void buildInteriorControls(
-            ServerLevel level, BlockPos centre, Direction exit)
+            ServerLevel level, BlockPos centre, Direction exit, int stopCount)
     {
         Direction side = exit.getClockWise();
-        BlockPos backing = centre.relative(side, CABIN_RADIUS).above(1);
-        set(level, backing, CABIN_PANEL);
-        set(level, backing.above(), CABIN_PANEL);
         BlockState button = wallButton(side.getOpposite());
-        set(level, backing.relative(side.getOpposite()), button);
-        set(level, backing.above().relative(side.getOpposite()), button);
+        for (int index = 0; index < stopCount; index++)
+        {
+            set(level, interiorBackingPosition(centre, exit, index),
+                    CABIN_PANEL);
+            set(level, interiorButtonPosition(centre, exit, index), button);
+        }
     }
 
     private static void buildLanding(
@@ -1810,8 +2000,10 @@ public final class S20PhysicalElevatorDirector
     private static void closeAllLandingDoors(
             ServerLevel level, LiftSpec spec)
     {
-        setLandingDoor(level, spec.lower(), false);
-        setLandingDoor(level, spec.upper(), false);
+        for (Landing landing : spec.stops())
+        {
+            setLandingDoor(level, landing, false);
+        }
     }
 
     private static boolean barriersClosed(
@@ -1866,24 +2058,23 @@ public final class S20PhysicalElevatorDirector
         {
             return null;
         }
-        if (clicked.equals(exteriorCallPosition(spec.lower())))
+        for (Landing landing : spec.stops())
         {
-            return spec.lower();
-        }
-        if (clicked.equals(exteriorCallPosition(spec.upper())))
-        {
-            return spec.upper();
+            if (clicked.equals(exteriorCallPosition(landing)))
+            {
+                return landing;
+            }
         }
         BlockPos centre = spec.centreAt(runtime.currentY);
-        BlockPos lowerButton = interiorButtonPosition(
-                centre, runtime.cabinExit, false);
-        BlockPos upperButton = interiorButtonPosition(
-                centre, runtime.cabinExit, true);
-        if (clicked.equals(lowerButton))
+        for (int index = 0; index < spec.stops().size(); index++)
         {
-            return spec.lower();
+            if (clicked.equals(interiorButtonPosition(
+                    centre, runtime.cabinExit, index)))
+            {
+                return spec.stops().get(index);
+            }
         }
-        return clicked.equals(upperButton) ? spec.upper() : null;
+        return null;
     }
 
     public static BlockPos exteriorCallPosition(Landing landing)
@@ -1904,12 +2095,33 @@ public final class S20PhysicalElevatorDirector
         return exteriorCallPosition(landing).above();
     }
 
+    /**
+     * One button per floor.  The cabin is four blocks of clear height, so a
+     * column holds three; a fourth floor starts a second column one block
+     * further from the door.  With two or three stops this is bit-for-bit the
+     * layout that was already approved.
+     */
     public static BlockPos interiorButtonPosition(
-            BlockPos cabinCentre, Direction exit, boolean upper)
+            BlockPos cabinCentre, Direction exit, int stopIndex)
+    {
+        return interiorControlColumn(cabinCentre, exit,
+                stopIndex, CABIN_RADIUS - 1);
+    }
+
+    private static BlockPos interiorBackingPosition(
+            BlockPos cabinCentre, Direction exit, int stopIndex)
+    {
+        return interiorControlColumn(cabinCentre, exit,
+                stopIndex, CABIN_RADIUS);
+    }
+
+    private static BlockPos interiorControlColumn(
+            BlockPos cabinCentre, Direction exit, int stopIndex, int inset)
     {
         Direction side = exit.getClockWise();
-        return cabinCentre.relative(side, CABIN_RADIUS - 1)
-                .above(upper ? 2 : 1);
+        return cabinCentre.relative(side, inset)
+                .relative(exit.getOpposite(), stopIndex / BUTTONS_PER_COLUMN)
+                .above(1 + stopIndex % BUTTONS_PER_COLUMN);
     }
 
     private static void inspectRouteHandoff(
@@ -2064,7 +2276,7 @@ public final class S20PhysicalElevatorDirector
      */
     private static boolean legacyCabinPresent(
             ServerLevel level, BlockPos centre, Direction exit,
-            boolean doorOpen)
+            boolean doorOpen, int stopCount)
     {
         if (!cabinFloorPresent(level, centre))
         {
@@ -2111,11 +2323,16 @@ public final class S20PhysicalElevatorDirector
                 }
             }
         }
-        BlockPos lower = interiorButtonPosition(centre, exit, false);
-        BlockPos upper = interiorButtonPosition(centre, exit, true);
-        return level.getBlockState(lower).getBlock() instanceof ButtonBlock
-                && level.getBlockState(upper).getBlock()
-                instanceof ButtonBlock;
+        for (int index = 0; index < stopCount; index++)
+        {
+            BlockPos button = interiorButtonPosition(centre, exit, index);
+            if (!(level.getBlockState(button).getBlock()
+                    instanceof ButtonBlock))
+            {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static boolean insideCabinBounds(
@@ -2223,8 +2440,15 @@ public final class S20PhysicalElevatorDirector
         }
     }
 
-    public record LiftSpec(
-            String id, Landing lower, Landing upper)
+    /**
+     * A lift is an ordered list of stops on one vertical axis, lowest first.
+     *
+     * <p>It used to be exactly two.  {@code lower()} and {@code upper()} are
+     * kept as derived accessors so the shaft, the swept volume and every
+     * extreme-of-travel check keep reading the way they always did; only the
+     * places that must visit every floor were changed.</p>
+     */
+    public record LiftSpec(String id, List<Landing> stops)
     {
         public LiftSpec
         {
@@ -2233,44 +2457,88 @@ public final class S20PhysicalElevatorDirector
                 throw new IllegalArgumentException(
                         "Physical lift id cannot be empty");
             }
-            Objects.requireNonNull(lower, "lower");
-            Objects.requireNonNull(upper, "upper");
-            if (lower.walkY() >= upper.walkY())
+            Objects.requireNonNull(stops, "stops");
+            if (stops.size() < 2)
             {
                 throw new IllegalArgumentException(
-                        "Physical lift lower stop must be below upper stop");
+                        "Physical lift needs at least two stops");
             }
-            if (lower.cabinCentre().getX()
-                    != upper.cabinCentre().getX()
-                    || lower.cabinCentre().getZ()
-                    != upper.cabinCentre().getZ())
+            stops = List.copyOf(stops);
+            for (int index = 1; index < stops.size(); index++)
             {
-                throw new IllegalArgumentException(
-                        "Physical lift stops must share one vertical axis");
+                Landing below = stops.get(index - 1);
+                Landing above = stops.get(index);
+                if (below.walkY() >= above.walkY())
+                {
+                    throw new IllegalArgumentException(
+                            "Physical lift stops must ascend");
+                }
+                if (below.cabinCentre().getX()
+                        != above.cabinCentre().getX()
+                        || below.cabinCentre().getZ()
+                        != above.cabinCentre().getZ())
+                {
+                    throw new IllegalArgumentException(
+                            "Physical lift stops must share one vertical axis");
+                }
             }
+        }
+
+        public LiftSpec(String id, Landing lower, Landing upper)
+        {
+            this(id, List.of(lower, upper));
+        }
+
+        public Landing lower()
+        {
+            return this.stops.get(0);
+        }
+
+        public Landing upper()
+        {
+            return this.stops.get(this.stops.size() - 1);
         }
 
         public BlockPos centreAt(int walkY)
         {
-            return new BlockPos(this.lower.cabinCentre().getX(), walkY,
-                    this.lower.cabinCentre().getZ());
+            return new BlockPos(lower().cabinCentre().getX(), walkY,
+                    lower().cabinCentre().getZ());
         }
 
         public Landing landingAt(int walkY)
         {
-            if (walkY == this.lower.walkY())
+            for (Landing landing : this.stops)
             {
-                return this.lower;
+                if (landing.walkY() == walkY)
+                {
+                    return landing;
+                }
             }
-            return walkY == this.upper.walkY() ? this.upper : null;
+            return null;
         }
 
         public String fingerprint()
         {
-            return this.lower.cabinCentre().asLong() + ":"
-                    + this.lower.exit().name() + ":"
-                    + this.upper.cabinCentre().asLong() + ":"
-                    + this.upper.exit().name();
+            StringBuilder text = new StringBuilder();
+            for (Landing landing : this.stops)
+            {
+                if (text.length() > 0)
+                {
+                    text.append(':');
+                }
+                text.append(landing.cabinCentre().asLong()).append(':')
+                        .append(landing.exit().name());
+            }
+            return text.toString();
+        }
+
+        /** Same shaft, possibly a different set of floors. */
+        public boolean sharesAxisWith(String otherFingerprint)
+        {
+            String axis = Long.toString(
+                    lower().cabinCentre().asLong());
+            return otherFingerprint != null
+                    && otherFingerprint.startsWith(axis + ":");
         }
     }
 
