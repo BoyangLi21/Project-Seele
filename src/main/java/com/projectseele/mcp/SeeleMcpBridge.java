@@ -83,6 +83,7 @@ public final class SeeleMcpBridge
             return;
         }
         SeeleMcpBuildService.shutdown(server);
+        SeeleMcpViewCapture.shutdown();
         stopInternal(true);
     }
 

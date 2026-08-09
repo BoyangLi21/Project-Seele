@@ -1,0 +1,4 @@
+interface:
+  display_name: "Minecraft Reference Builder"
+  short_description: "Research, build, and visually refine Minecraft landmarks"
+  default_prompt: "Use $minecraft-reference-builder to research visual references, plan a Minecraft-scale reconstruction, build it safely with Project SEELE MCP, and refine it from captured views."

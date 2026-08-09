@@ -1,0 +1,51 @@
+name: Build Project SEELE
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: Build Forge mod
+        run: bash ./gradlew build
+
+      - name: Package Codex plugin
+        run: |
+          mkdir -p dist
+          cd plugins
+          zip -r "$GITHUB_WORKSPACE/dist/project-seele-builder-${GITHUB_SHA::7}.zip" project-seele-builder
+
+      - name: Upload distributable artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: project-seele-${{ github.sha }}
+          if-no-files-found: error
+          path: |
+            build/libs/projectseele-*.jar
+            dist/project-seele-builder-*.zip
+            .agents/plugins/marketplace.json
+
+      - name: Publish tagged release assets
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --generate-notes
+          gh release upload "$GITHUB_REF_NAME" build/libs/projectseele-*.jar dist/project-seele-builder-*.zip --clobber

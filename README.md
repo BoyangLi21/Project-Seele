@@ -52,6 +52,14 @@ Requires **JDK 17**.
 
 The mod jar is written to `build/libs/`.
 
+Codex opened from a trusted clone automatically discovers the repository's
+project-scoped Minecraft MCP server. The optional `project-seele-builder` plugin
+adds web/image-reference research, blueprint validation, staged construction,
+and rendered multi-view visual QA; see
+[docs/MCP_INTEGRATION.md](docs/MCP_INTEGRATION.md). / 在可信 clone 根目录打开
+Codex 后会自动发现项目级 Minecraft MCP；可选插件还会加入图片参考检索、蓝图校验、
+分批施工与游戏画面多视角复核工作流，详见 MCP 文档。
+
 ## Local visual testing / 本机视觉测试
 
 The desktop `Project SEELE 测试.bat` is a stable shim into the tracked

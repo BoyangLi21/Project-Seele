@@ -93,6 +93,24 @@ const TOOLS = {
     },
     annotations: { readOnlyHint: true, destructiveHint: false },
   },
+  minecraft_capture_view: {
+    description: "Capture the active player's current rendered world view as a PNG for visual inspection. This never moves the player or camera; position the view in game before calling it.",
+    method: "POST",
+    endpoint: "/v1/tools/capture_view",
+    inputSchema: {
+      type: "object",
+      properties: {
+        viewLabel: {
+          type: "string",
+          description: "A short label such as front-three-quarter, port-side, dining-room, or roof-detail.",
+          maxLength: 96,
+        },
+        width: { type: "integer", minimum: 160, maximum: 960, default: 640 },
+        height: { type: "integer", minimum: 90, maximum: 540, default: 360 },
+      },
+    },
+    annotations: { readOnlyHint: true, destructiveHint: false },
+  },
   minecraft_preview_build_plan: {
     description: "Compile and validate a voxel plan without changing the world. Save planId and execute that exact preview.",
     method: "POST",
@@ -138,6 +156,7 @@ This is a Forge 1.20.1 compatibility bridge inspired by gemini-minecraft's MCP w
 2. If genericMcpMutationAllowed is false, do not try to write. Project SEELE facility, recovery, and frozen-preview saves require the repository's MAP_EDITING_PROTOCOL.md and approved deterministic patches.
 3. In a disposable development world, call minecraft_buildsite before terrain-sensitive construction.
 4. Translate the user's natural-language brief into dimensions, orientation, functional zones, palette, structural modules, and acceptance criteria. A named fictional building may be interpreted as a Minecraft-scale reconstruction; state important assumptions instead of inventing false precision.
+   - For a named real or fictional landmark, research multiple exterior and interior reference views before planning when web/image search is available. Prefer canonical or official descriptive sources, keep source URLs, separate verified features from inference, and never copy or redistribute official art assets.
 5. Create a structured plan with palette, cuboids, blocks, and optional steps.
    - Prefer frame-and-infill construction: foundation, silhouette/frame, floors, envelope, circulation, detail, and lighting.
    - Use cuboids for large surfaces and repeated modules, and explicit blocks only for details. Do not issue /fill, /clone, /summon, /data, or arbitrary game commands.
@@ -149,6 +168,7 @@ This is a Forge 1.20.1 compatibility bridge inspired by gemini-minecraft's MCP w
 7. If the user explicitly asked to build in a disposable development world, that request is approval after safety checks. Ask only when a consequential ambiguity would materially change the result.
 8. Execute the exact cached preview using executePlanId.
 9. Poll minecraft_batch_status until complete. Report each major stage. Use minecraft_undo_last_batch if the result is unwanted, then correct and preview again rather than building over an error.
+10. For visual quality gates, have the player frame a useful exterior or interior angle, then call minecraft_capture_view. Compare silhouette, proportions, color blocking, openings, circulation, and signature details against the reference manifest. Capture at least front three-quarter, side/rear, and one interior view for large reference builds, and apply only scoped, previewed correction batches.
 
 Relative plan coordinates are anchored at the active player's block position plus origin. Absolute mode requires an explicit world origin. Rotation is around the Y axis. Block strings may include state properties, for example minecraft:oak_stairs[facing=north,half=bottom,shape=straight,waterlogged=false].
 `;
@@ -229,7 +249,7 @@ class BridgeClient {
           path: `${target.pathname}${target.search}`,
           method,
           headers,
-          timeout: 15000,
+          timeout: 20000,
         },
         (response) => {
           const chunks = [];
@@ -265,13 +285,22 @@ class BridgeClient {
 
 function toolResult(requestId, payload) {
   const isError = Boolean(payload && payload.error);
+  const imageBase64 = !isError && payload && typeof payload.imageBase64 === "string"
+    ? payload.imageBase64
+    : "";
+  const metadata = imageBase64 ? { ...payload } : payload;
+  if (imageBase64) delete metadata.imageBase64;
+  const content = [{ type: "text", text: JSON.stringify(metadata) }];
+  if (imageBase64) {
+    content.push({ type: "image", data: imageBase64, mimeType: payload.mimeType || "image/png" });
+  }
   return {
     jsonrpc: "2.0",
     id: requestId,
     result: {
       isError,
-      content: [{ type: "text", text: JSON.stringify(payload) }],
-      structuredContent: payload,
+      content,
+      structuredContent: metadata,
     },
   };
 }

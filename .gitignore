@@ -27,9 +27,11 @@ mcmodsrepo
 # Claude Code session data — never publish (local logs/settings)
 .claude/
 
-# Local agent instructions/session notes - never publish.
+# Local agent instructions/session notes - never publish. Keep the directory
+# itself visible so macOS can also track the case-insensitive .codex config.
 /AGENTS.md
-/.Codex/
+/.Codex/*
+!/.codex/config.toml
 
 # Third-party mod jars parked in the repo root for local model extraction
 # (Rei Chikita / EUD). All Rights Reserved — never commit or redistribute.

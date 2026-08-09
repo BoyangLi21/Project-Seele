@@ -1,0 +1,7 @@
+# Project-scoped MCP registration. Codex loads this after the repository is
+# trusted, so clones do not need a machine-specific absolute path.
+[mcp_servers.projectseele]
+command = "node"
+args = ["tools/seele_mcp_sidecar.js", "--project-root", "."]
+startup_timeout_sec = 10
+tool_timeout_sec = 120

@@ -18,6 +18,7 @@ import java.security.MessageDigest;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
@@ -31,6 +32,7 @@ final class SeeleMcpBridgeServer
     private static final Gson GSON = new Gson();
     private static final int MAX_BODY_BYTES = 4 * 1024 * 1024;
     private static final long SERVER_CALL_TIMEOUT_MS = 10_000L;
+    private static final long CAPTURE_TIMEOUT_MS = 12_000L;
 
     private final MinecraftServer minecraftServer;
     private final int port;
@@ -75,6 +77,8 @@ final class SeeleMcpBridgeServer
         httpServer.createContext("/v1/tools/batch_status", authenticated(
                 exchange -> handleJsonCall(exchange,
                         body -> SeeleMcpBuildService.batchStatus(body))));
+        httpServer.createContext("/v1/tools/capture_view", authenticated(
+                this::handleCaptureCall));
         httpServer.createContext("/v1/actions/preview_build_plan", authenticated(
                 exchange -> handleJsonCall(exchange,
                         body -> SeeleMcpBuildService.preview(
@@ -211,6 +215,36 @@ final class SeeleMcpBridgeServer
         JsonObject body = readJsonBody(exchange);
         JsonObject result = callOnServerThread(() -> action.apply(body));
         writeResult(exchange, result);
+    }
+
+    private void handleCaptureCall(HttpExchange exchange) throws IOException
+    {
+        JsonObject body = readJsonBody(exchange);
+        SeeleMcpViewCapture.CaptureTicket ticket = callOnServerThread(
+                () -> SeeleMcpViewCapture.begin(minecraftServer, body));
+        try
+        {
+            writeResult(exchange, ticket.future.get(
+                    CAPTURE_TIMEOUT_MS, TimeUnit.MILLISECONDS));
+        }
+        catch (TimeoutException exception)
+        {
+            SeeleMcpViewCapture.cancel(ticket.id);
+            throw new RequestException(504, "CAPTURE_TIMEOUT",
+                    "No rendered frame arrived. Keep the game focused and unpaused, then retry.");
+        }
+        catch (InterruptedException exception)
+        {
+            Thread.currentThread().interrupt();
+            SeeleMcpViewCapture.cancel(ticket.id);
+            throw new RequestException(503, "CAPTURE_INTERRUPTED",
+                    "The rendered-view capture was interrupted.");
+        }
+        catch (ExecutionException exception)
+        {
+            throw new IllegalStateException("Rendered-view capture failed",
+                    exception.getCause());
+        }
     }
 
     private <T> T callOnServerThread(Supplier<T> action)

@@ -1,0 +1,30 @@
+{
+  "name": "project-seele-builder",
+  "version": "0.1.0",
+  "description": "Research visual references, build safe staged Minecraft reconstructions, and inspect them through Project SEELE MCP.",
+  "author": {
+    "name": "Project SEELE contributors",
+    "url": "https://github.com/BoyangLi21/Project-Seele"
+  },
+  "homepage": "https://github.com/BoyangLi21/Project-Seele/blob/main/docs/MCP_INTEGRATION.md",
+  "repository": "https://github.com/BoyangLi21/Project-Seele",
+  "license": "MIT",
+  "keywords": ["minecraft", "forge", "mcp", "architecture", "voxel"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Project Seele Builder",
+    "shortDescription": "Reference-driven Minecraft architecture with visual QA.",
+    "longDescription": "Searches exterior and interior references, derives a Minecraft-scale blueprint, uses Project SEELE's protected preview/execute workflow, captures rendered views, and applies scoped visual corrections.",
+    "developerName": "Project SEELE contributors",
+    "category": "Developer",
+    "capabilities": ["Interactive", "Write"],
+    "websiteURL": "https://github.com/BoyangLi21/Project-Seele",
+    "defaultPrompt": [
+      "Research and build a landmark near me, then inspect it from several views.",
+      "Create a source-backed Minecraft blueprint before constructing this building.",
+      "Capture my current build view and propose a scoped visual correction batch."
+    ],
+    "brandColor": "#A11221"
+  },
+  "mcpServers": "./.mcp.json"
+}

@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "projectseele": {
+      "command": "node",
+      "args": [
+        "tools/seele_mcp_sidecar.js",
+        "--project-root",
+        "."
+      ]
+    }
+  }
+}

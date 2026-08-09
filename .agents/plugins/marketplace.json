@@ -1,0 +1,20 @@
+{
+  "name": "project-seele",
+  "interface": {
+    "displayName": "Project Seele"
+  },
+  "plugins": [
+    {
+      "name": "project-seele-builder",
+      "source": {
+        "source": "local",
+        "path": "./plugins/project-seele-builder"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_USE"
+      },
+      "category": "Developer"
+    }
+  ]
+}

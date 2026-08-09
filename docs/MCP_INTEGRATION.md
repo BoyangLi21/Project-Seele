@@ -23,10 +23,15 @@ Forge 兼容层，保留上游最有价值的工作流：
 - `SEELE_S20_REBUILD`、clean rebuild、历史损坏档和带空间冻结标记的存档，
   一律拒绝通用 MCP 写入。它们继续受 `MAP_EDITING_PROTOCOL.md` 管理。
 
-## 首次连接 Codex
+## 克隆后直接连接 Codex
+
+仓库已经提交项目级 [`.codex/config.toml`](../.codex/config.toml)。因此其他人
+clone/pull 后，只要从仓库根目录打开 Codex、信任该仓库并新建任务，Codex 就会自动
+启动 `tools/seele_mcp_sidecar.js`；不再需要把作者机器的绝对路径写进全局配置。
 
 ```bash
-cd /absolute/path/to/Project-Seele
+git clone git@github.com:BoyangLi21/Project-Seele.git
+cd Project-Seele
 bash ./gradlew createSrgToMcp
 bash ./gradlew runClient
 ```
@@ -38,7 +43,8 @@ bash ./gradlew runClient
 /seele mcp setup
 ```
 
-第二条命令会在聊天中生成可复制的命令。在本机等价于：
+第二条命令仍会在聊天中生成全局配置命令，供旧版 Codex 或从仓库外启动时使用。
+在本机等价于：
 
 ```bash
 codex mcp add projectseele -- node "/absolute/path/to/Project-Seele/tools/seele_mcp_sidecar.js" --project-root "/absolute/path/to/Project-Seele"
@@ -46,6 +52,38 @@ codex mcp add projectseele -- node "/absolute/path/to/Project-Seele/tools/seele_
 
 添加后重启 Codex。Codex 桌面、CLI 与 IDE 扩展共享 MCP 配置。游戏未启动时，
 sidecar 仍可正常初始化并列出工具；调用世界工具时会返回 `BRIDGE_UNAVAILABLE`。
+
+首次载入项目级配置时若 Codex 显示信任提示，需要确认信任；项目 MCP 配置只会在
+可信仓库中生效。修改 `.codex/config.toml`、插件或 Skill 后，请新建 Codex 任务，
+不要指望已经打开的旧任务热加载工具。
+
+## 安装参考建筑插件
+
+仅使用 MCP 建造工具时，项目级配置已经足够。要让 Codex 自动采用“搜索外部/内部
+图片 → 参考清单 → 蓝图 → 分批建造 → 多视角截图复核”的完整流程，再安装仓库内的
+`project-seele-builder` 插件：
+
+```bash
+codex plugin marketplace add BoyangLi21/Project-Seele --ref main
+codex plugin add project-seele-builder@project-seele
+```
+
+本地开发 checkout 也可以作为 marketplace：
+
+```bash
+codex plugin marketplace add .
+codex plugin add project-seele-builder@project-seele
+```
+
+安装或更新后新建一个 Codex 任务。可显式触发 Skill：
+
+```text
+使用 $minecraft-reference-builder，先搜索巴拉蒂的外观和内部参考图，
+生成有来源的 Minecraft 蓝图，再在安全检查通过后分批建造并截图修正。
+```
+
+插件不会打包或提交《海贼王》《EVA》等作品的官方图片。图片只在 Codex 研究阶段
+作为临时参考；Git 中保留的是来源链接、由图片归纳出的建筑特征与自有方块代码。
 
 常用管理命令：
 
@@ -63,6 +101,7 @@ sidecar 仍可正常初始化并列出工具；调用世界工具时会返回 `B
 | `minecraft_session` | 只读 | 玩家、维度、位置、模式和写入门禁 |
 | `minecraft_seele_status` | 只读 | SEELE 存档角色与冻结状态 |
 | `minecraft_buildsite` | 只读 | 玩家周围地表高度和材质采样 |
+| `minecraft_capture_view` | 只读 | 回传玩家当前世界视角的 PNG，供视觉对照 |
 | `minecraft_preview_build_plan` | 只读 | 编译计划、返回精确边界/材料/planId |
 | `minecraft_execute_build_plan` | 写入 | 执行预览缓存，启动分批施工 |
 | `minecraft_batch_status` | 只读 | 查询施工或撤销进度 |
@@ -133,9 +172,14 @@ Dogma 等超大型场景应缩放或拆成多个区域，避免一次计划超�
 ## 当前边界
 
 - v1 只选择服务器玩家列表中的第一个玩家，定位为本地单人开发。
-- 尚未移植上游的截图视觉、物品/配方查询、自动修复和任意命令执行。
+- 已提供当前视角截图回传；物品/配方查询、自动修复和任意命令执行仍不开放。
 - 通用 voxel 计划适合独立建筑原型；GeoFront、东京-3 下沉都市和发射井仍应调用
   Project SEELE 的确定性 Java builders，不应用几十万条临时计划替代。
+- `minecraft_capture_view` 不会移动角色或镜头。玩家先站到正面 3/4、侧后、入口或
+  室内等验收视角，Agent 再分别抓图。画面默认 640×360、上限 960×540、1 MiB。
+- `minecraft_buildsite` 是地表高度/方块采样，不是完整区域体素扫描。Agent 可以按
+  人工给出的绝对坐标精确连接多条通道，但当前 preview 不会报告沿途将替换的原方块；
+  要自动绕过未知地下建筑并作“不破坏”硬保证，仍需区域扫描、碰撞报告和寻路工具。
 - 对权威 S20 存档的任何修改，都必须先走地点卡、旧状态证据、positiveEditMask、
   forward/inverse patch 和真人批准流程。
 
@@ -147,3 +191,14 @@ Dogma 等超大型场景应缩放或拆成多个区域，避免一次计划超�
 node --check tools/seele_mcp_sidecar.js
 node tools/seele_mcp_sidecar.js --self-test
 ```
+
+完整发行构建：
+
+```bash
+bash ./gradlew build
+```
+
+JAR 位于 `build/libs/`。GitHub Actions 会在每次主分支/PR 构建时上传 JAR、Codex
+插件 ZIP 和 marketplace 清单；推送 `v*` 标签时还会把 JAR 与插件 ZIP 附到
+GitHub Release。普通玩家安装 JAR 时仍需 Minecraft 1.20.1、Forge 47.4.10 和
+GeckoLib 4.8+；MCP/插件只在需要 AI 建造时安装。
