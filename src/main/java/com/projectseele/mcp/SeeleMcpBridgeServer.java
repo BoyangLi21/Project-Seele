@@ -50,8 +50,14 @@ final class SeeleMcpBridgeServer
         {
             return;
         }
+        // The stdio sidecar intentionally connects to 127.0.0.1. On some
+        // macOS/JDK combinations getLoopbackAddress() prefers ::1, which
+        // leaves the IPv4 client unable to connect even though both ends are
+        // local. Pin the listener to the same explicit IPv4 loopback address.
+        InetAddress ipv4Loopback = InetAddress.getByAddress(
+                new byte[] {127, 0, 0, 1});
         httpServer = HttpServer.create(new InetSocketAddress(
-                InetAddress.getLoopbackAddress(), port), 0);
+                ipv4Loopback, port), 0);
         executor = Executors.newCachedThreadPool(new BridgeThreadFactory());
         httpServer.setExecutor(executor);
         httpServer.createContext("/v1/health", this::handleHealth);
