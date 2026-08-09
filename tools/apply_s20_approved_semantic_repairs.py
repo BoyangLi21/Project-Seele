@@ -340,6 +340,63 @@ PROFILES = {
             ),
         },
     },
+    "s21-b1": {
+        # First independently shippable S21 breakpoint. r01 was visually
+        # rejected because one aperture cell had no floor. r02 is rendered
+        # from frozen R28, adds that single supported footing, and removes the
+        # same two guarded obstruction voxels into a fresh destination copy.
+        "source": ROOT / "run" / "saves" / "SEELE_S20_RECOVERY_R28",
+        "approval_hash_mode": "canonical_payload",
+        "allow_region_rebase": False,
+        "source_tree_sha256": None,
+        "receipt": ".projectseele_s21_command_rear_b1_r02.json",
+        "approved": {
+            "S21-COMMAND-REAR-B1-N2-N5-PREVIEW-r02": (
+                "01c75269bc62731d8b940cab8f5336d0697e5ff26513d2e564d3903689976274"
+            ),
+        },
+    },
+    "s21-b1-b2": {
+        # Fresh cumulative preview from immutable R28.  Each packet remains
+        # independently sealed; no broad region rebase is permitted.
+        "source": ROOT / "run" / "saves" / "SEELE_S20_RECOVERY_R28",
+        "approval_hash_mode": "canonical_payload",
+        "allow_region_rebase": False,
+        "source_tree_sha256": None,
+        "receipt": ".projectseele_s21_command_rear_b1_b2.json",
+        "approved": {
+            "S21-COMMAND-REAR-B1-N2-N5-PREVIEW-r02": (
+                "01c75269bc62731d8b940cab8f5336d0697e5ff26513d2e564d3903689976274"
+            ),
+            "S21-COMMAND-REAR-B2-N2-N4-PREVIEW-r02": (
+                "179b7977af7119a2e05229ab6b5843aae4b7114ea17729970be2a58e9c3204c7"
+            ),
+        },
+    },
+    "s21-rear-complete": {
+        # Four independently sealed rear-circulation breakpoints, composed
+        # only onto immutable R28. B3 opens the measured ladder/stair landing;
+        # B4 adds the three-block, laterally anchored maintenance crossing.
+        "source": ROOT / "run" / "saves" / "SEELE_S20_RECOVERY_R28",
+        "approval_hash_mode": "canonical_payload",
+        "allow_region_rebase": False,
+        "source_tree_sha256": None,
+        "receipt": ".projectseele_s21_command_rear_complete.json",
+        "approved": {
+            "S21-COMMAND-REAR-B1-N2-N5-PREVIEW-r02": (
+                "01c75269bc62731d8b940cab8f5336d0697e5ff26513d2e564d3903689976274"
+            ),
+            "S21-COMMAND-REAR-B2-N2-N4-PREVIEW-r02": (
+                "179b7977af7119a2e05229ab6b5843aae4b7114ea17729970be2a58e9c3204c7"
+            ),
+            "S21-COMMAND-REAR-B3-N3-N2-PREVIEW-r02": (
+                "ac5d79dcf6468d5170b63da9475824cbbe7403a9d8e110f6ca2be0b2696a0323"
+            ),
+            "S21-COMMAND-REAR-B4-N1-N3-PREVIEW-r02": (
+                "11655a8e63330ef4a25681caf62d61bdea19631b0684aec984ceadf8a0ffe861"
+            ),
+        },
+    },
 }
 
 # Human visual review revoked these packets after they damaged the spatial
