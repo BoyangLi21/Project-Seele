@@ -52,8 +52,10 @@ public final class TreeOfLifeWallClient
      * never z-fights with them.
      */
     private static final Vec3 CENTRE = new Vec3(20.5D, -414.5D, 257.98D);
-    private static final float WIDTH = 7.5F;
+    /** Height is fixed to the wall; width follows the image's own ratio. */
     private static final float HEIGHT = 10.0F;
+    private static final float MAX_WIDTH = 9.0F;
+    private static float width = 7.5F;
     private static final float YAW = 0.0F;
     private static final double RANGE_SQR = 96.0D * 96.0D;
 
@@ -97,7 +99,7 @@ public final class TreeOfLifeWallClient
         VertexConsumer consumer = buffers.getBuffer(renderType);
         Matrix4f pose = poseStack.last().pose();
         Matrix3f normal = poseStack.last().normal();
-        float halfWidth = WIDTH * 0.5F;
+        float halfWidth = width * 0.5F;
         float halfHeight = HEIGHT * 0.5F;
         // Wound so the printed side faces +Z, which is the room.
         vertex(consumer, pose, normal, halfWidth, -halfHeight, 0.0F, 0.0F, 1.0F);
@@ -128,11 +130,17 @@ public final class TreeOfLifeWallClient
         try (InputStream stream = Files.newInputStream(SOURCE))
         {
             NativeImage image = NativeImage.read(stream);
+            // Derive the plate from the image rather than stretching the
+            // image to a guessed plate: a different scan can be dropped in
+            // later without it going oval.
+            width = Math.min(MAX_WIDTH,
+                    HEIGHT * image.getWidth() / (float) image.getHeight());
             texture = new DynamicTexture(image);
             minecraft.getTextureManager().register(TEXTURE_ID, texture);
             ProjectSeele.LOGGER.info(
-                    "Tree-of-life wall loaded {}x{} from {}",
-                    image.getWidth(), image.getHeight(), SOURCE);
+                    "Tree-of-life wall loaded {}x{} from {}; plate {}x{}",
+                    image.getWidth(), image.getHeight(), SOURCE,
+                    String.format("%.2f", width), HEIGHT);
             return true;
         }
         catch (IOException | RuntimeException exception)
