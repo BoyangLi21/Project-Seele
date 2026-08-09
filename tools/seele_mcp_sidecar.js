@@ -137,11 +137,18 @@ This is a Forge 1.20.1 compatibility bridge inspired by gemini-minecraft's MCP w
 1. Call minecraft_session and minecraft_seele_status.
 2. If genericMcpMutationAllowed is false, do not try to write. Project SEELE facility, recovery, and frozen-preview saves require the repository's MAP_EDITING_PROTOCOL.md and approved deterministic patches.
 3. In a disposable development world, call minecraft_buildsite before terrain-sensitive construction.
-4. Create a structured plan with palette, cuboids, blocks, and optional steps.
-5. Call minecraft_preview_build_plan and inspect resolvedOrigin, bounds, materials, blockCount, and previewBlocks.
-6. Ask for user approval when the build materially changes their world.
-7. Execute the exact cached preview using executePlanId.
-8. Poll minecraft_batch_status until complete. Use minecraft_undo_last_batch if the result is unwanted.
+4. Translate the user's natural-language brief into dimensions, orientation, functional zones, palette, structural modules, and acceptance criteria. A named fictional building may be interpreted as a Minecraft-scale reconstruction; state important assumptions instead of inventing false precision.
+5. Create a structured plan with palette, cuboids, blocks, and optional steps.
+   - Prefer frame-and-infill construction: foundation, silhouette/frame, floors, envelope, circulation, detail, and lighting.
+   - Use cuboids for large surfaces and repeated modules, and explicit blocks only for details. Do not issue /fill, /clone, /summon, /data, or arbitrary game commands.
+   - Large projects must be split into spatial or construction-stage batches that stay independently inspectable and reversible.
+   - Multi-storey buildings must have usable floor heights, entrances, interior space, and vertical circulation.
+   - Avoid giant solid masses and uniformly flat facades. Use a primary silhouette, secondary structural rhythm, and tertiary details such as setbacks, ribs, window bands, eaves, recesses, or diagonal braces.
+   - Record overall bounds, entrance direction, floor heights, symmetry axes, module spacing, material roles, and approximate block count before execution.
+6. Call minecraft_preview_build_plan and inspect resolvedOrigin, bounds, materials, blockCount, and previewBlocks. Reject plans with bad proportions, inaccessible interiors, accidental solid fill, unsafe terrain intersection, or limits exceeded.
+7. If the user explicitly asked to build in a disposable development world, that request is approval after safety checks. Ask only when a consequential ambiguity would materially change the result.
+8. Execute the exact cached preview using executePlanId.
+9. Poll minecraft_batch_status until complete. Report each major stage. Use minecraft_undo_last_batch if the result is unwanted, then correct and preview again rather than building over an error.
 
 Relative plan coordinates are anchored at the active player's block position plus origin. Absolute mode requires an explicit world origin. Rotation is around the Y axis. Block strings may include state properties, for example minecraft:oak_stairs[facing=north,half=bottom,shape=straight,waterlogged=false].
 `;
