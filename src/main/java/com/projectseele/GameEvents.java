@@ -8,6 +8,7 @@ import com.projectseele.entity.Angel;
 import com.projectseele.entity.EvaUnit01Entity;
 import com.projectseele.entity.RamielEntity;
 import com.projectseele.event.ThirdImpactDirector;
+import com.projectseele.mcp.SeeleMcpBridge;
 import com.projectseele.network.ServerboundEvaVideoFramePacket;
 import com.projectseele.world.MagiDeepLabBuilder;
 import com.projectseele.world.NervCommandTelemetry;
@@ -60,6 +61,7 @@ import net.minecraftforge.event.entity.player.PlayerInteractEvent;
 import net.minecraftforge.event.entity.EntityTravelToDimensionEvent;
 import net.minecraftforge.event.entity.EntityJoinLevelEvent;
 import net.minecraftforge.event.server.ServerStoppedEvent;
+import net.minecraftforge.event.server.ServerStartedEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.eventbus.api.EventPriority;
 import net.minecraftforge.fml.common.Mod;
@@ -132,6 +134,7 @@ public class GameEvents
             return;
         }
         PerformanceCounters.beginProjectTickWork(event.getServer());
+        SeeleMcpBridge.tick(event.getServer());
         boolean brokenArchive =
                 FacilityWorldPolicy.isReadOnlyBrokenArchive(
                         event.getServer());
@@ -505,8 +508,15 @@ public class GameEvents
     }
 
     @SubscribeEvent
+    public static void onServerStarted(ServerStartedEvent event)
+    {
+        SeeleMcpBridge.start(event.getServer());
+    }
+
+    @SubscribeEvent
     public static void onServerStopped(ServerStoppedEvent event)
     {
+        SeeleMcpBridge.stop(event.getServer());
         AngelAlarmSystem.reset();
         NervCommandTelemetry.reset();
         NervOperationsConsole.reset();

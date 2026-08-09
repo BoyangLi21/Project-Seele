@@ -31,6 +31,10 @@
 ./gradlew runServer    # 专用服务器（Phase 6 验证用）
 ```
 
+本地 Codex/MCP 建造桥见 `docs/MCP_INTEGRATION.md`。它是 Forge 1.20.1
+原生适配，默认关闭；进入一次性开发世界后用 `/seele mcp enable` 开启。
+通用 MCP 写入永远不得用于 S20、clean rebuild、损坏归档或空间冻结存档。
+
 - 游戏日志：`run/logs/latest.log`（每次启动重建，验证 mod 加载搜 `Project SEELE initialized`）
 - 首次构建要反编译 MC，视 CPU 10–60 分钟；之后增量构建 <1 分钟
 - gradle daemon 已启用（`gradle.properties`），内存 4G

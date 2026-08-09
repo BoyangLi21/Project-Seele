@@ -17,6 +17,7 @@ Pilot controls / 驾驶操作：`WASD` 移动、`Space` 跳跃、`Shift` 单膝�
 - **[docs/ROADMAP.md](docs/ROADMAP.md)** — full plan through Third Impact & the Tree of Life / 完整路线图（直到第三次冲击与生命之树）
 - [docs/SETUP.md](docs/SETUP.md) — dev environment setup / 开发环境搭建
 - [docs/PROMPTS.md](docs/PROMPTS.md) — kickoff prompts for AI-assisted sessions / AI 协作开工手册
+- [docs/MCP_INTEGRATION.md](docs/MCP_INTEGRATION.md) — Codex/Gemini-style MCP bridge for safe staged voxel construction / Codex/Gemini 风格 MCP 安全分批建造桥
 - [docs/VISUAL_RECOVERY.md](docs/VISUAL_RECOVERY.md) — fixed Visual Lab workflow and acceptance gate / 固定视觉实验室与验收门槛
 - [docs/THIRD_IMPACT_VISUAL.md](docs/THIRD_IMPACT_VISUAL.md) — deterministic Tree/tableau capture and current visual verdict / 生命之树固定构图与当前验收结论
 - [docs/LAUNCH_SILO_TEST.md](docs/LAUNCH_SILO_TEST.md) — launch carrier, high entry-plug gantry and manual test / 发射井、高位插入栓栈桥与测试流程

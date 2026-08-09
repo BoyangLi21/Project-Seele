@@ -23,6 +23,13 @@ public final class SeeleConfig
     public static final ForgeConfigSpec.BooleanValue RUNTIME_WORLD_REPAIR;
     public static final ForgeConfigSpec.BooleanValue TRANSPARENT_GEOFRONT_SHELL;
 
+    // ----- common: local MCP bridge -----
+    public static final ForgeConfigSpec.BooleanValue MCP_ENABLED;
+    public static final ForgeConfigSpec.IntValue MCP_PORT;
+    public static final ForgeConfigSpec.IntValue MCP_BLOCKS_PER_TICK;
+    public static final ForgeConfigSpec.IntValue MCP_MAX_PLAN_BLOCKS;
+    public static final ForgeConfigSpec.IntValue MCP_MAX_BUILD_RADIUS;
+
     // ----- common: Ramiel -----
     public static final ForgeConfigSpec.DoubleValue RAMIEL_MAX_HEALTH;
     public static final ForgeConfigSpec.DoubleValue RAMIEL_ARMOR;
@@ -144,6 +151,25 @@ public final class SeeleConfig
                 .comment("Allow future generators to build the legacy transparent GeoFront sphere.",
                         "The rescue pass does not rewrite an existing save; migration removes it later.")
                 .define("transparentGeoFrontShell", false);
+        common.pop();
+
+        common.push("mcp");
+        MCP_ENABLED = common
+                .comment("Start the loopback-only MCP bridge when a server starts.",
+                        "Keep disabled unless a trusted local MCP client needs access.")
+                .define("enabled", false);
+        MCP_PORT = common
+                .comment("Loopback TCP port used by the Project SEELE MCP bridge.")
+                .defineInRange("port", 7766, 1024, 65535);
+        MCP_BLOCKS_PER_TICK = common
+                .comment("Maximum staged MCP block writes per server tick.")
+                .defineInRange("blocksPerTick", 2048, 64, 20000);
+        MCP_MAX_PLAN_BLOCKS = common
+                .comment("Maximum unique block positions accepted in one MCP build plan.")
+                .defineInRange("maxPlanBlocks", 250000, 1, 1000000);
+        MCP_MAX_BUILD_RADIUS = common
+                .comment("Maximum horizontal distance in blocks from a plan origin.")
+                .defineInRange("maxBuildRadius", 384, 16, 2048);
         common.pop();
 
         common.push("ramiel");
