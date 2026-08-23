@@ -30,6 +30,7 @@ import com.projectseele.world.S20SurfaceTransitDirector;
 import com.projectseele.world.S20SurfaceAccessGate;
 import com.projectseele.world.S22FleetMigration;
 import com.projectseele.world.EvaLogisticsDirector;
+import com.projectseele.world.EvaMotionLabDirector;
 import com.projectseele.world.EvaPilotResolver;
 import com.projectseele.world.EntryPlugDirector;
 import com.projectseele.world.FacilityV2ArchitectureDirector;
@@ -149,6 +150,11 @@ public class GameEvents
             return;
         }
         PerformanceCounters.beginProjectTickWork(event.getServer());
+        if (EvaMotionLabDirector.tick(event.getServer()))
+        {
+            PerformanceCounters.endServerTick(event.getServer());
+            return;
+        }
         maintainFacilityEnvironment(event.getServer());
         boolean brokenArchive =
                 FacilityWorldPolicy.isReadOnlyBrokenArchive(

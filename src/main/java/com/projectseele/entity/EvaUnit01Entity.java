@@ -1024,6 +1024,19 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         return true;
     }
 
+    /** Server-only gait flag for the disposable autonomous motion demo. */
+    public void setMotionLabDemoGait(boolean sprinting)
+    {
+        if (this.level().isClientSide
+                || !this.getTags().contains("seele_motion_lab"))
+        {
+            return;
+        }
+        this.entityData.set(DATA_SPRINTING, sprinting);
+        this.entityData.set(DATA_CROUCHING, false);
+        this.entityData.set(DATA_PRONE, false);
+    }
+
     /**
      * The optical-link cinematic belongs only to initial plug activation.
      * Launch interlocks deliberately pin the same countdown above twenty ticks,

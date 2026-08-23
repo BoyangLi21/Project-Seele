@@ -3,6 +3,7 @@ package com.projectseele.client;
 import com.projectseele.ProjectSeele;
 import com.projectseele.client.render.EntryPlugCarrierRenderer;
 import com.projectseele.client.render.EvaUnit01Renderer;
+import com.projectseele.client.render.EvaMotionEngineV2;
 import com.projectseele.client.render.LocalTriangleMeshLayer;
 import com.projectseele.client.render.LocalVisualAssetFingerprint;
 import com.projectseele.client.render.NervCarrierPlatformRenderer;
@@ -147,6 +148,7 @@ public class ClientEvents
         {
             LocalTriangleMeshLayer.clearCache();
             LocalVisualAssetFingerprint.clearCache();
+            EvaMotionEngineV2.reload(resourceManager);
             EvaUnit01Renderer.prewarmLocalBodyMeshes(resourceManager);
         });
     }

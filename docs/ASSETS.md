@@ -127,3 +127,31 @@ deterministic four-view identity/stress checks without starting Minecraft.
   `run/resourcepacks/eva_real_model/` pack. Both source ZIPs and the derivative
   mesh remain local-only until release attribution and the wider EVA
   fan-work compliance review are complete.
+
+## Open humanoid motion sources and animation references (2026-08-24)
+
+| Asset | Licence and source | Project SEELE use |
+|---|---|---|
+| Quaternius Universal Animation Library Standard | [Official page](https://quaternius.com/packs/universalanimationlibrary.html), bundled `License.txt`: CC0 1.0; downloaded ZIP SHA-256 `CC73FC4E495B82958207316596317A3F40B9FA38065BDE1027937452DA537724` | 43 source actions were inventoried. Idle, walk, formal walk, jog, sprint, crouch, jump, punch, sword and firearm poses are clean-room retarget inputs. The raw ZIP/GLB remains under ignored `external-assets/`; the derived quaternion motion database may ship under the repository licence because the source is dedicated to the public domain. |
+| Quaternius Universal Animation Library 2 Standard | [Official itch.io page](https://quaternius.itch.io/universal-animation-library-2), bundled `License.txt`: CC0 1.0; downloaded ZIP SHA-256 `4008EA208A604773A2B2177D965F0F5D3195498B5BF838C3F5785D68E95F2A68` | Adds hook punches, multi-stage sword attacks, dash, slide and ninja-jump references. Raw files remain ignored; selected derived clips are merged into `assets/projectseele/motion/eva_humanoid_v2.json`. |
+| CMU Graphics Lab Motion Capture Database, subjects 02 and 16 | [Official database](https://mocap.cs.cmu.edu/). The official FAQ explicitly permits copying, modification and redistribution without permission. ASF SHA-256: subject 02 `C9F5FF45B4437B279F58B95DACF017AFD3135373096274DF69436A9354D796CF`, subject 16 `2323F876564610F84BFBEC9B90B8EBFFB57515673B7F4A45B0FB0849AF465BDB`; selected 120 Hz AMC hashes are recorded in the local motion inventory. | Subject 02 supplies same-performer walk, run, jump, punch and swordplay. Subject 16 adds start/stop, veer and 90-degree walk/jog/run turns. Walk/jog/sprint now use audited CMU motion; phase-aware jump and 15 combat slices remain guarded until animation-direction review. Raw ASF/AMC/BVH files remain ignored. |
+| `amc2bvh` 0.1.0 | [Tom Copeland repository](https://github.com/thcopeland/amc2bvh), MIT | Local-only deterministic ASF/AMC to BVH conversion for Blender. The binary/source archive remains ignored; no executable is shipped in the mod. |
+| GenoView Inverse Kinematics / Foot Locking | [Daniel Holden source](https://github.com/orangeduck/GenoView-InverseKinematics), MIT; article [Inverse Kinematics and Foot Locking](https://theorangeduck.com/page/inverse-kinematics-foot-locking) | Algorithmic reference for velocity-based contact annotation, shared-pelvis two-leg IK and offline contact locking. Project SEELE's implementation operates on its own EVA skeleton and data. |
+| Motion Matching example | [Daniel Holden source](https://github.com/orangeduck/Motion-Matching), MIT | Reference architecture for trajectory features, database search, pose inertialization and contact fix-up. The external checkout is ignored; only independently adapted Project SEELE code may ship. |
+| ozz-animation | [Official repository](https://github.com/guillaumeblanc/ozz-animation), MIT | Data-oriented sampling/blending reference. No native ozz binary is currently linked into Forge; the Java renderer follows its phase-synchronised local-pose blending principles. |
+
+`tools/inspect_humanoid_motion_library.py` inventories source skeletons and
+actions through the same Blender importer used by production.  The reusable
+`tools/build_eva_motion_database.py` collapses the source spine/clavicle chains
+onto the EVA hierarchy, calibrates against a standing idle rather than a
+T-pose, changes coordinate systems, records 30 Hz normalized quaternions and
+annotates left/right foot contact. No Evangelion animation, footage or official
+asset is present in this database.
+
+CMU trials are segmented by `analyze_bvh_locomotion.py`,
+`analyze_bvh_jump.py` and `segment_bvh_combat_motion.py`.  Retargeted candidates
+are built by `build_eva_cmu_motion_candidates.py`, then rejected unless both
+`audit_eva_motion_database.py` and the exact-matrix Blender mesh audit are
+green.  `refine_eva_motion_database.py` performs velocity-aware contact
+annotation, fitted stride extraction, shared-root correction and two-leg IK;
+`promote_eva_motion_candidates.py` refuses promotion from a failed audit.

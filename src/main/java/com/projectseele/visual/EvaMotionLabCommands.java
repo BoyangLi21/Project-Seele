@@ -54,6 +54,17 @@ public final class EvaMotionLabCommands
                                                                 context, "variant"),
                                                         StringArgumentType.getString(
                                                                 context, "weapon"))))))
+                        .then(Commands.literal("demo")
+                                .then(Commands.argument("variant",
+                                                StringArgumentType.word())
+                                        .then(Commands.argument("mode",
+                                                        StringArgumentType.word())
+                                                .executes(context -> demo(
+                                                        context.getSource(),
+                                                        StringArgumentType.getString(
+                                                                context, "variant"),
+                                                        StringArgumentType.getString(
+                                                                context, "mode"))))))
                         .then(Commands.literal("camera")
                                 .executes(context -> camera(
                                         context.getSource())))));
@@ -130,6 +141,23 @@ public final class EvaMotionLabCommands
             player.stopRiding();
         }
         EvaMotionLabDirector.teleportCamera(player);
+        return 1;
+    }
+
+    private static int demo(CommandSourceStack source, String rawVariant,
+                            String mode)
+    {
+        int variant = variant(rawVariant);
+        if (variant < 0 || !EvaMotionLabDirector.setDemo(
+                source.getLevel(), variant, mode))
+        {
+            source.sendFailure(Component.literal(
+                    "Usage: /seele motionlab demo unit01 walk|run|jump|stop"));
+            return 0;
+        }
+        source.sendSuccess(() -> Component.literal(
+                "Motion-lab autonomous gait: EVA-"
+                        + String.format("%02d", variant) + " " + mode), false);
         return 1;
     }
 

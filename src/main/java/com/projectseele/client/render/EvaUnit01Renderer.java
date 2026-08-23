@@ -339,6 +339,8 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
                 // with the current semantic-parent converter.
             }
 
+            boolean motionV2 = EvaMotionEngineV2.apply(
+                    animatable, model, partialTick);
             EvaProceduralAnimator.apply(animatable, model, partialTick);
 
             // The imported locomotion clips carry a permanent mirrored roll
@@ -346,7 +348,7 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
             // toe-out stance rather than natural weight transfer. Keep knees
             // and toes on the sagittal plane; the forward swing and knee bend
             // remain authored by the clip.
-            if (animatable.isVisuallyMovingForRender()
+            if (!motionV2 && animatable.isVisuallyMovingForRender()
                     && !animatable.isPilotCrouching()
                     && !animatable.isPilotProne()
                     && !animatable.hasActiveCarrierMotion())

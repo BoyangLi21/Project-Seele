@@ -8,7 +8,9 @@ import com.projectseele.registry.ModEntities;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.MoverType;
 import net.minecraft.world.level.GameRules;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
@@ -24,6 +26,10 @@ public final class EvaMotionLabDirector
     private static final BlockPos MARKER = new BlockPos(0, FLOOR_Y - 1, 0);
     private static final int[] UNIT_X = {-80, 0, 80};
     private static final int UNIT_Z = -105;
+    private static final DemoMode[] DEMO_MODES = {
+            DemoMode.STOP, DemoMode.STOP, DemoMode.STOP
+    };
+    private static final int[] DEMO_DIRECTIONS = {1, 1, 1};
     private static final AABB ARENA = new AABB(
             -190, FLOOR_Y - 12, -190, 191, 100, 191);
 
@@ -55,7 +61,95 @@ public final class EvaMotionLabDirector
         {
             buildArena(level);
         }
+        if (force)
+        {
+            for (int index = 0; index < DEMO_MODES.length; index++)
+            {
+                DEMO_MODES[index] = DemoMode.STOP;
+                DEMO_DIRECTIONS[index] = 1;
+            }
+        }
         ensureUnits(level, force);
+        return true;
+    }
+
+    /**
+     * Runs the disposable autonomous gait lane and suppresses campaign map
+     * writers while this dedicated save is open.
+     */
+    public static boolean tick(MinecraftServer server)
+    {
+        ServerLevel level = server.overworld();
+        if (!isMotionLab(level))
+        {
+            return false;
+        }
+        for (int variant = 0; variant < 3; variant++)
+        {
+            EvaUnit01Entity eva = unit(level, variant);
+            if (eva == null)
+            {
+                continue;
+            }
+            DemoMode mode = DEMO_MODES[variant];
+            if (mode == DemoMode.JUMP)
+            {
+                eva.setMotionLabDemoGait(false);
+                if (eva.onGround())
+                {
+                    eva.setDeltaMovement(0.0D, 1.45D, 0.0D);
+                    DEMO_MODES[variant] = DemoMode.STOP;
+                }
+                continue;
+            }
+            if (mode == DemoMode.STOP)
+            {
+                eva.setMotionLabDemoGait(false);
+                continue;
+            }
+            double speed = mode == DemoMode.RUN ? 0.62D : 0.34D;
+            int direction = DEMO_DIRECTIONS[variant];
+            if (eva.getZ() > 142.0D)
+            {
+                direction = -1;
+            }
+            else if (eva.getZ() < -142.0D)
+            {
+                direction = 1;
+            }
+            DEMO_DIRECTIONS[variant] = direction;
+            float yaw = direction > 0 ? 0.0F : 180.0F;
+            eva.setYRot(yaw);
+            eva.yRotO = eva.yBodyRot = eva.yHeadRot = yaw;
+            eva.setMotionLabDemoGait(mode == DemoMode.RUN);
+            eva.move(MoverType.SELF,
+                    new net.minecraft.world.phys.Vec3(
+                            0.0D, 0.0D, speed * direction));
+            eva.setDeltaMovement(net.minecraft.world.phys.Vec3.ZERO);
+        }
+        return true;
+    }
+
+    public static boolean setDemo(ServerLevel level, int variant,
+                                  String rawMode)
+    {
+        if (!isMotionLab(level) || variant < 0 || variant >= 3)
+        {
+            return false;
+        }
+        DemoMode mode = switch (rawMode.toLowerCase())
+        {
+            case "stop", "idle" -> DemoMode.STOP;
+            case "walk" -> DemoMode.WALK;
+            case "run", "sprint" -> DemoMode.RUN;
+            case "jump" -> DemoMode.JUMP;
+            default -> null;
+        };
+        if (mode == null)
+        {
+            return false;
+        }
+        DEMO_MODES[variant] = mode;
         return true;
     }
 
@@ -104,20 +198,39 @@ public final class EvaMotionLabDirector
 
     private static void ensureUnits(ServerLevel level, boolean force)
     {
-        List<EvaUnit01Entity> existing = level.getEntitiesOfClass(
-                EvaUnit01Entity.class, ARENA,
-                eva -> eva.getTags().contains(ENTITY_TAG));
+        List<EvaUnit01Entity> all = level.getEntitiesOfClass(
+                EvaUnit01Entity.class, ARENA, EvaUnit01Entity::isAlive);
+        List<EvaUnit01Entity> existing = new java.util.ArrayList<>();
         if (force)
         {
-            existing.forEach(EvaUnit01Entity::discard);
-            existing = List.of();
+            all.forEach(EvaUnit01Entity::discard);
+        }
+        else
+        {
+            for (EvaUnit01Entity eva : all)
+            {
+                if (eva.getTags().contains(ENTITY_TAG))
+                {
+                    existing.add(eva);
+                }
+                else
+                {
+                    // The flat template historically contained one untagged
+                    // trio. In this disposable world those are not campaign
+                    // assets; keeping them made every reviewed motion appear
+                    // three times and collision-launched the tagged unit.
+                    eva.discard();
+                }
+            }
         }
         for (int variant = 0; variant < 3; variant++)
         {
             int wanted = variant;
-            EvaUnit01Entity eva = existing.stream()
+            List<EvaUnit01Entity> matches = existing.stream()
                     .filter(candidate -> candidate.getUnitVariant() == wanted)
-                    .findFirst().orElse(null);
+                    .toList();
+            EvaUnit01Entity eva = matches.isEmpty() ? null : matches.get(0);
+            matches.stream().skip(1).forEach(EvaUnit01Entity::discard);
             if (eva == null)
             {
                 eva = create(level, variant);
@@ -264,5 +377,13 @@ public final class EvaMotionLabDirector
                             BlockState state)
     {
         level.setBlock(position, state, Block.UPDATE_CLIENTS);
+    }
+
+    private enum DemoMode
+    {
+        STOP,
+        WALK,
+        RUN,
+        JUMP
     }
 }
