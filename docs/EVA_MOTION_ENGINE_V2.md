@@ -130,6 +130,17 @@ shoulder/elbow IK then lock those contacts. Crawl hand speed fell from roughly
 `EVA_POSTURE_REVIEW_EXACT.blend` displays cyan/magenta hand-contact markers and
 passes its database and exact-mesh audits (0/4).
 
+Two-hand weapons have their own exact surface gate. The current Gecko rifle,
+prone-rifle and Longinus layers are converted by
+`build_eva_weapon_pose_database.py` with animated weapon-bone translations.
+`audit_eva_weapon_pose_exact.py` measures real hand-mesh to weapon-mesh
+distance and muzzle/fork direction, rather than wrist-pivot proxies. The rifle
+was already in contact (right/left 0.02/0.05 Blender units); the lance support
+hand was 0.19--0.80 away. `solve_eva_weapon_hand_contacts.py` uses the exact
+closest surface delta and two-bone shoulder/elbow IK to reduce Longinus to
+0.04--0.06 while preserving its 1.00 forward-axis cosine. The solved weapon
+lab passes body and weapon audits (0/7); it is not yet promoted to live input.
+
 ## Non-goals
 
 - No official Evangelion animation or footage is extracted.

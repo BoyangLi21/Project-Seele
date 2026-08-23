@@ -39,6 +39,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--texture", required=True, type=Path)
     parser.add_argument("--knife-mesh", type=Path)
     parser.add_argument("--knife-texture", type=Path)
+    parser.add_argument("--rifle-mesh", type=Path)
+    parser.add_argument("--rifle-texture", type=Path)
+    parser.add_argument("--lance-mesh", type=Path)
+    parser.add_argument("--lance-texture", type=Path)
     parser.add_argument("--motion-db", required=True, type=Path)
     parser.add_argument("--source-human", type=Path)
     parser.add_argument("--output", required=True, type=Path)
@@ -143,8 +147,16 @@ def animate_exact(motion: dict, bone_order: list[str],
     for clip_name in sequence:
         clip = motion["clips"][clip_name]
         start = frame_cursor
-        show_knife = (clip_name.startswith("cmu_sword_")
-                      or clip_name.startswith("knife"))
+        def show_attachment(name: str) -> bool:
+            if name == "knife":
+                return (clip_name.startswith("cmu_sword_")
+                        or clip_name.startswith("knife"))
+            if name == "cannon":
+                return ("rifle" in clip_name or "cannon" in clip_name
+                        or "aim" in clip_name)
+            if name == "lance":
+                return "lance" in clip_name
+            return False
         bpy.context.scene.timeline_markers.new(clip_name.upper(), frame=start)
         last_matrices = None
         last_contacts = None
@@ -157,7 +169,8 @@ def animate_exact(motion: dict, bone_order: list[str],
             for bone_name, obj in parts.items():
                 key_transform(obj, matrices[bone_name], frame, clip_name)
                 if bone_name in attachment_names:
-                    obj.hide_viewport = obj.hide_render = not show_knife
+                    visible = show_attachment(bone_name)
+                    obj.hide_viewport = obj.hide_render = not visible
                     obj.keyframe_insert("hide_viewport", frame=frame,
                                         group=clip_name)
                     obj.keyframe_insert("hide_render", frame=frame,
@@ -205,7 +218,8 @@ def animate_exact(motion: dict, bone_order: list[str],
             for bone_name, obj in parts.items():
                 key_transform(obj, last_matrices[bone_name], hold, clip_name)
                 if bone_name in attachment_names:
-                    obj.hide_viewport = obj.hide_render = not show_knife
+                    visible = show_attachment(bone_name)
+                    obj.hide_viewport = obj.hide_render = not visible
                     obj.keyframe_insert("hide_viewport", frame=hold,
                                         group=clip_name)
                     obj.keyframe_insert("hide_render", frame=hold,
@@ -291,21 +305,27 @@ def main() -> None:
     parts = build_parts(args.mesh, master, visual_collection,
                         make_material(args.texture))
     attachment_names: set[str] = set()
-    if args.knife_mesh is not None or args.knife_texture is not None:
-        if (args.knife_mesh is None or args.knife_texture is None
-                or not args.knife_mesh.is_file()
-                or not args.knife_texture.is_file()):
-            raise SystemExit("knife mesh and texture must both exist")
-        knife_parts = build_parts(
-            args.knife_mesh, master, attachment_collection,
-            make_material(args.knife_texture),
+    attachment_inputs = (
+        ("knife", args.knife_mesh, args.knife_texture),
+        ("rifle", args.rifle_mesh, args.rifle_texture),
+        ("lance", args.lance_mesh, args.lance_texture),
+    )
+    for label, mesh_path, texture_path in attachment_inputs:
+        if mesh_path is None and texture_path is None:
+            continue
+        if (mesh_path is None or texture_path is None
+                or not mesh_path.is_file() or not texture_path.is_file()):
+            raise SystemExit(f"{label} mesh and texture must both exist")
+        new_parts = build_parts(
+            mesh_path, master, attachment_collection,
+            make_material(texture_path),
         )
-        overlap = set(parts) & set(knife_parts)
+        overlap = set(parts) & set(new_parts)
         if overlap:
             raise SystemExit("attachment/body part collision: "
                              + ", ".join(sorted(overlap)))
-        parts.update(knife_parts)
-        attachment_names.update(knife_parts)
+        parts.update(new_parts)
+        attachment_names.update(new_parts)
     joints = {
         name: make_joint(name, pivot, master, joint_collection)
         for name, pivot in pivots.items()

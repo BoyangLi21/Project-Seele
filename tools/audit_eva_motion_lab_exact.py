@@ -124,7 +124,8 @@ def main() -> None:
                   if name in runtime_core}
     scene = bpy.context.scene
     parts = [obj for obj in scene.objects
-             if obj.name.startswith("PART::") and obj.name != "PART::knife"]
+             if obj.name.startswith("PART::")
+             and obj.name not in {"PART::knife", "PART::cannon", "PART::lance"}]
     if len(parts) != 43:
         raise SystemExit(f"expected 43 exact mesh parts, found {len(parts)}")
     idle = sample(scene, parts, ranges["idle"][0])
@@ -139,7 +140,7 @@ def main() -> None:
         role = motion["clips"][name].get("role", "unknown")
         low_profile = role in {
             "candidate_prone", "candidate_posture_transition", "crouch"
-        }
+        } or name.startswith("prone_")
         length = max(1, end - start)
         frames = sorted({start, end, start + length // 4,
                          start + length // 2, start + length * 3 // 4})

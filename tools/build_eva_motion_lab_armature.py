@@ -178,12 +178,17 @@ def deformation_matrices(frame_data: dict, db_bones: list[str],
     root_runtime = Vector((-root_m.x, root_m.y, root_m.z)) * 112.0
     root_yaw = float(frame_data.get("root_yaw_radians", 0.0))
     root_yaw_matrix = Matrix.Rotation(root_yaw, 4, "Z")
+    animated_positions = frame_data.get("bone_position_xyz", {})
     matrices = {}
     for name in bone_order:
         pivot = target_to_blender(pivots[name])
         rotation = rotations.get(name, Quaternion((1.0, 0.0, 0.0, 0.0)))
         position = (target_to_blender(root_runtime) if name == "root"
                     else Vector((0.0, 0.0, 0.0)))
+        if name in animated_positions:
+            raw = Vector(tuple(float(value)
+                               for value in animated_positions[name]))
+            position += target_to_blender(Vector((-raw.x, raw.y, raw.z)))
         local = (Matrix.Translation(position)
                  @ (root_yaw_matrix if name == "root" else Matrix.Identity(4))
                  @ Matrix.Translation(pivot)

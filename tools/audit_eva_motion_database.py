@@ -195,14 +195,21 @@ def main() -> None:
             hand_contacts = list(frame.get("hand_contact", (False, False)))
             for side_index, side in enumerate(("l", "r")):
                 world_hand = sample["joints"][f"hand_{side}"] + virtual_root
-                expected_hand = (target_to_blender(
-                    yaw_rotation @ analytic_hand(runtime_rotations, pivots, side)
-                    + root_target
-                ) + virtual_root)
-                maximum_analytic_hand_error[side] = max(
-                    maximum_analytic_hand_error[side],
-                    (expected_hand - world_hand).length,
-                )
+                animated_positions = frame.get("bone_position_xyz", {})
+                positioned_chain = {
+                    "torso_lower", "torso_upper", f"arm_{side}",
+                    f"forearm_{side}", f"hand_{side}",
+                }
+                if not positioned_chain.intersection(animated_positions):
+                    expected_hand = (target_to_blender(
+                        yaw_rotation @ analytic_hand(
+                            runtime_rotations, pivots, side
+                        ) + root_target
+                    ) + virtual_root)
+                    maximum_analytic_hand_error[side] = max(
+                        maximum_analytic_hand_error[side],
+                        (expected_hand - world_hand).length,
+                    )
                 if (hand_contacts[side_index]
                         and previous_hand_contacts[side_index]
                         and index > 0):
