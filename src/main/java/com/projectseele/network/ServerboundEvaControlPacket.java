@@ -4,6 +4,7 @@ import java.util.function.Supplier;
 
 import com.projectseele.ProjectSeele;
 import com.projectseele.entity.EvaUnit01Entity;
+import com.projectseele.entity.NervArmamentStationEntity;
 import com.projectseele.world.EvaPilotResolver;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
@@ -32,6 +33,7 @@ public class ServerboundEvaControlPacket
     public static final int ACTION_RIFLE_FIRE = 14;
     public static final int ACTION_CANCEL_LAUNCH = 15;
     public static final int ACTION_SELF_LAUNCH = 16;
+    public static final int ACTION_TAKE_ARMAMENT = 17;
 
     public final int action;
     public final int requestId;
@@ -109,6 +111,14 @@ public class ServerboundEvaControlPacket
                     case ACTION_RIFLE_FIRE -> eva.fireRifle(sender);
                     case ACTION_CANCEL_LAUNCH -> eva.cancelLaunchFromPilot(sender);
                     case ACTION_SELF_LAUNCH -> eva.releaseLaunchFromPilot(sender);
+                    case ACTION_TAKE_ARMAMENT ->
+                    {
+                        if (eva.level() instanceof net.minecraft.server.level.ServerLevel level)
+                        {
+                            NervArmamentStationEntity.acquireNearest(
+                                    level, sender, eva);
+                        }
+                    }
                     default -> { }
                 }
             }

@@ -5,6 +5,7 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.List;
 
 import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.blaze3d.vertex.PoseStack;
@@ -28,39 +29,55 @@ import org.joml.Matrix3f;
 import org.joml.Matrix4f;
 
 /**
- * Framed plate on the command-room wall at z=257.
+ * Local image plates used by the command room and commander's office.
  *
  * <p>The image is read from the game directory rather than the mod jar, so the
  * plate can be replaced without a rebuild and no third-party artwork is
  * committed to this repository.  Drop the file at
- * {@code projectseele-local-maps/tree_of_life.png}; if it is absent nothing is
- * drawn and the wall stays as authored.</p>
+ * {@code projectseele-local-maps/tree_of_life.png} and
+ * {@code projectseele-local-maps/nerv_logo.png}; if either is absent only that
+ * plate is omitted and its authored wall remains visible.</p>
  */
 @Mod.EventBusSubscriber(modid = ProjectSeele.MODID,
         bus = Mod.EventBusSubscriber.Bus.FORGE, value = Dist.CLIENT)
 public final class TreeOfLifeWallClient
 {
-    private static final Path SOURCE = Paths.get(
+    private static final Path TREE_SOURCE = Paths.get(
             "projectseele-local-maps", "tree_of_life.png");
-    private static final ResourceLocation TEXTURE_ID = new ResourceLocation(
+    private static final Path NERV_SOURCE = Paths.get(
+            "projectseele-local-maps", "nerv_logo.png");
+    private static final ResourceLocation TREE_TEXTURE_ID = new ResourceLocation(
             ProjectSeele.MODID, "dynamic/tree_of_life_wall");
+    private static final ResourceLocation NERV_TEXTURE_ID = new ResourceLocation(
+            ProjectSeele.MODID, "dynamic/nerv_logo_wall");
 
-    /*
-     * The authored face is x16..25 by y-419..-410 on the z=257 plane, so the
-     * plate is centred on it and sized 3:4 to match the engraving rather than
-     * stretched to the square wall.  z sits just proud of the blocks so it
-     * never z-fights with them.
-     */
-    private static final Vec3 CENTRE = new Vec3(20.5D, -414.5D, 257.98D);
-    /** Height is fixed to the wall; width follows the image's own ratio. */
-    private static final float HEIGHT = 10.0F;
-    private static final float MAX_WIDTH = 9.0F;
-    private static float width = 7.5F;
-    private static final float YAW = 0.0F;
+    /* Both plates reuse the user-local image; no third-party scan is packed in
+     * the jar.  The command plate faces +Z.  The upper-pyramid office plate
+     * sits just north of its south feature wall and faces -Z into the room. */
+    private static final List<Plate> TREE_PLATES = List.of(
+            new Plate(new Vec3(20.5D, -414.5D, 257.98D),
+                    10.0F, 9.0F, 0.0F),
+            // Seen from the north side of the south wall. The authored white
+            // Blocks x=20..40 occupy [20,41], whose physical centre is 30.5.
+            new Plate(new Vec3(30.5D, -322.0D, 339.98D),
+                    12.0F, 10.0F, 180.0F));
+    private static final List<Plate> NERV_PLATES = List.of(
+            // Block z=311 occupies [311,312]; the office is on its south
+            // side, so the image must sit beyond z=312 rather than inside it.
+            new Plate(new Vec3(30.5D, -322.0D, 312.01D),
+                    11.0F, 15.0F, 0.0F),
+            // Main command dais: centred on the five-wide black feature wall
+            // at z=272 and facing south toward the commander's seat.
+            new Plate(new Vec3(28.5D, -402.0D, 273.01D),
+                    4.5F, 5.0F, 0.0F));
+    private static float treeImageAspect = 0.75F;
+    private static float nervImageAspect = 1.0F;
     private static final double RANGE_SQR = 96.0D * 96.0D;
 
-    private static DynamicTexture texture;
-    private static boolean sourceChecked;
+    private static DynamicTexture treeTexture;
+    private static DynamicTexture nervTexture;
+    private static boolean treeSourceChecked;
+    private static boolean nervSourceChecked;
 
     private TreeOfLifeWallClient() {}
 
@@ -78,69 +95,99 @@ public final class TreeOfLifeWallClient
         {
             return;
         }
-        if (minecraft.player.position().distanceToSqr(CENTRE) > RANGE_SQR)
-        {
-            return;
-        }
-        if (!ensureTexture(minecraft))
-        {
-            return;
-        }
-
         Vec3 camera = event.getCamera().getPosition();
         PoseStack poseStack = event.getPoseStack();
-        poseStack.pushPose();
-        poseStack.translate(CENTRE.x - camera.x, CENTRE.y - camera.y,
-                CENTRE.z - camera.z);
-        poseStack.mulPose(Axis.YP.rotationDegrees(YAW));
         MultiBufferSource.BufferSource buffers =
                 minecraft.renderBuffers().bufferSource();
-        RenderType renderType = RenderType.entityTranslucent(TEXTURE_ID);
-        VertexConsumer consumer = buffers.getBuffer(renderType);
-        Matrix4f pose = poseStack.last().pose();
-        Matrix3f normal = poseStack.last().normal();
-        float halfWidth = width * 0.5F;
-        float halfHeight = HEIGHT * 0.5F;
-        // Wound so the printed side faces +Z, which is the room.
-        vertex(consumer, pose, normal, halfWidth, -halfHeight, 0.0F, 0.0F, 1.0F);
-        vertex(consumer, pose, normal, -halfWidth, -halfHeight, 0.0F, 1.0F, 1.0F);
-        vertex(consumer, pose, normal, -halfWidth, halfHeight, 0.0F, 1.0F, 0.0F);
-        vertex(consumer, pose, normal, halfWidth, halfHeight, 0.0F, 0.0F, 0.0F);
-        buffers.endBatch(renderType);
-        poseStack.popPose();
+        if (ensureTreeTexture(minecraft))
+        {
+            renderPlates(minecraft, poseStack, buffers, camera,
+                    TREE_TEXTURE_ID, TREE_PLATES, treeImageAspect);
+        }
+        if (ensureNervTexture(minecraft))
+        {
+            renderPlates(minecraft, poseStack, buffers, camera,
+                    NERV_TEXTURE_ID, NERV_PLATES, nervImageAspect);
+        }
     }
 
-    private static boolean ensureTexture(Minecraft minecraft)
+    private static void renderPlates(
+            Minecraft minecraft, PoseStack poseStack,
+            MultiBufferSource.BufferSource buffers, Vec3 camera,
+            ResourceLocation textureId, List<Plate> plates, float aspect)
     {
-        if (texture != null)
+        RenderType renderType = RenderType.entityTranslucent(textureId);
+        VertexConsumer consumer = buffers.getBuffer(renderType);
+        boolean rendered = false;
+        for (Plate plate : plates)
+        {
+            if (minecraft.player.position().distanceToSqr(plate.centre())
+                    > RANGE_SQR)
+            {
+                continue;
+            }
+            poseStack.pushPose();
+            poseStack.translate(plate.centre().x - camera.x,
+                    plate.centre().y - camera.y,
+                    plate.centre().z - camera.z);
+            poseStack.mulPose(Axis.YP.rotationDegrees(plate.yaw()));
+            Matrix4f pose = poseStack.last().pose();
+            Matrix3f normal = poseStack.last().normal();
+            float halfWidth = Math.min(plate.maxWidth(),
+                    plate.height() * aspect) * 0.5F;
+            float halfHeight = plate.height() * 0.5F;
+            // Wound toward +Z before the per-plate yaw is applied.
+            // World-facing plates are viewed from opposite sides after yaw;
+            // U must follow local X or both supplied images appear mirrored.
+            vertex(consumer, pose, normal, halfWidth, -halfHeight,
+                    0.0F, 1.0F, 1.0F);
+            vertex(consumer, pose, normal, -halfWidth, -halfHeight,
+                    0.0F, 0.0F, 1.0F);
+            vertex(consumer, pose, normal, -halfWidth, halfHeight,
+                    0.0F, 0.0F, 0.0F);
+            vertex(consumer, pose, normal, halfWidth, halfHeight,
+                    0.0F, 1.0F, 0.0F);
+            poseStack.popPose();
+            rendered = true;
+        }
+        if (!rendered)
+        {
+            return;
+        }
+        buffers.endBatch(renderType);
+    }
+
+    private static boolean ensureTreeTexture(Minecraft minecraft)
+    {
+        if (treeTexture != null)
         {
             return true;
         }
-        if (sourceChecked)
+        if (treeSourceChecked)
         {
             return false;
         }
-        sourceChecked = true;
-        if (!Files.isRegularFile(SOURCE))
+        treeSourceChecked = true;
+        if (!Files.isRegularFile(TREE_SOURCE))
         {
             ProjectSeele.LOGGER.info(
-                    "Tree-of-life wall idle: no image at {}", SOURCE);
+                    "Tree-of-life wall idle: no image at {}", TREE_SOURCE);
             return false;
         }
-        try (InputStream stream = Files.newInputStream(SOURCE))
+        try (InputStream stream = Files.newInputStream(TREE_SOURCE))
         {
             NativeImage image = NativeImage.read(stream);
             // Derive the plate from the image rather than stretching the
             // image to a guessed plate: a different scan can be dropped in
             // later without it going oval.
-            width = Math.min(MAX_WIDTH,
-                    HEIGHT * image.getWidth() / (float) image.getHeight());
-            texture = new DynamicTexture(image);
-            minecraft.getTextureManager().register(TEXTURE_ID, texture);
+            treeImageAspect = image.getWidth() / (float) image.getHeight();
+            treeTexture = new DynamicTexture(image);
+            minecraft.getTextureManager().register(
+                    TREE_TEXTURE_ID, treeTexture);
             ProjectSeele.LOGGER.info(
-                    "Tree-of-life wall loaded {}x{} from {}; plate {}x{}",
-                    image.getWidth(), image.getHeight(), SOURCE,
-                    String.format("%.2f", width), HEIGHT);
+                    "Tree-of-life walls loaded {}x{} from {}; plates={}",
+                    image.getWidth(), image.getHeight(), TREE_SOURCE,
+                    TREE_PLATES.size());
             return true;
         }
         catch (IOException | RuntimeException exception)
@@ -151,16 +198,95 @@ public final class TreeOfLifeWallClient
         }
     }
 
+    private static boolean ensureNervTexture(Minecraft minecraft)
+    {
+        if (nervTexture != null)
+        {
+            return true;
+        }
+        if (nervSourceChecked)
+        {
+            return false;
+        }
+        nervSourceChecked = true;
+        if (!Files.isRegularFile(NERV_SOURCE))
+        {
+            ProjectSeele.LOGGER.info(
+                    "NERV office wall idle: no image at {}", NERV_SOURCE);
+            return false;
+        }
+        try (InputStream stream = Files.newInputStream(NERV_SOURCE))
+        {
+            NativeImage image = NativeImage.read(stream);
+            removeBakedCheckerboard(image);
+            nervImageAspect = image.getWidth() / (float) image.getHeight();
+            nervTexture = new DynamicTexture(image);
+            minecraft.getTextureManager().register(
+                    NERV_TEXTURE_ID, nervTexture);
+            ProjectSeele.LOGGER.info(
+                    "NERV office wall loaded {}x{} from {}",
+                    image.getWidth(), image.getHeight(), NERV_SOURCE);
+            return true;
+        }
+        catch (IOException | RuntimeException exception)
+        {
+            ProjectSeele.LOGGER.error(
+                    "NERV office wall image unreadable", exception);
+            return false;
+        }
+    }
+
+    /** Shared local-only logo texture for moving NERV machinery. */
+    public static ResourceLocation nervLogoTexture(Minecraft minecraft)
+    {
+        return ensureNervTexture(minecraft) ? NERV_TEXTURE_ID : null;
+    }
+
+    /**
+     * The supplied logo has a light checkerboard baked into its RGB pixels.
+     * Remove only nearly neutral light pixels at load time, preserving the
+     * original red artwork and its antialiased edge over the black wall.
+     */
+    private static void removeBakedCheckerboard(NativeImage image)
+    {
+        for (int y = 0; y < image.getHeight(); y++)
+        {
+            for (int x = 0; x < image.getWidth(); x++)
+            {
+                int pixel = image.getPixelRGBA(x, y);
+                // NativeImage#getPixelRGBA uses native ABGR ordering.
+                int red = pixel & 0xFF;
+                int green = pixel >> 8 & 0xFF;
+                int blue = pixel >> 16 & 0xFF;
+                int brightest = Math.max(red, Math.max(green, blue));
+                int darkest = Math.min(red, Math.min(green, blue));
+                if (brightest >= 180 && brightest - darkest <= 48)
+                {
+                    image.setPixelRGBA(x, y, 0);
+                }
+            }
+        }
+    }
+
     /** Forces a re-read after the file on disk has been replaced. */
     public static void reload()
     {
-        if (texture != null)
+        if (treeTexture != null)
         {
-            Minecraft.getInstance().getTextureManager().release(TEXTURE_ID);
-            texture.close();
-            texture = null;
+            Minecraft.getInstance().getTextureManager().release(
+                    TREE_TEXTURE_ID);
+            treeTexture.close();
+            treeTexture = null;
         }
-        sourceChecked = false;
+        if (nervTexture != null)
+        {
+            Minecraft.getInstance().getTextureManager().release(
+                    NERV_TEXTURE_ID);
+            nervTexture.close();
+            nervTexture = null;
+        }
+        treeSourceChecked = false;
+        nervSourceChecked = false;
     }
 
     private static void vertex(VertexConsumer consumer, Matrix4f pose,
@@ -174,5 +300,9 @@ public final class TreeOfLifeWallClient
                 .uv2(LightTexture.FULL_BRIGHT)
                 .normal(normal, 0.0F, 0.0F, 1.0F)
                 .endVertex();
+    }
+
+    private record Plate(Vec3 centre, float height, float maxWidth, float yaw)
+    {
     }
 }

@@ -30,6 +30,7 @@ public final class IntegratedNervMapBuilder
      */
     public static final BlockPos GEOFRONT_ORIGIN = new BlockPos(30, -444, 296);
     public static final BlockPos TOKYO3_ORIGIN = new BlockPos(30, 80, 220);
+    public static final BlockPos S22_TOKYO3_ORIGIN = new BlockPos(30, 68, 220);
     public static final int[] LIFT_X = {-42, 0, 42};
     /** 31x31 unobstructed core for the doubled EVA and its shoulder pylons. */
     public static final int SHAFT_CLEAR_RADIUS = 15;
@@ -46,7 +47,11 @@ public final class IntegratedNervMapBuilder
     private static final int LOWER_INTERFACE_HEIGHT = 72;
     private static final int DORSAL_ACCESS_DECK_ABOVE_ORIGIN = 56;
     private static final int UPDATE_CLIENTS = Block.UPDATE_CLIENTS;
-    private static final List<LiftLink> LIFT_LINKS = createLiftLinks();
+    private static final List<LiftLink> LIFT_LINKS = createLiftLinks(
+            TOKYO3_ORIGIN, GEOFRONT_ORIGIN);
+    private static final List<LiftLink> S22_LIFT_LINKS =
+            createLiftLinks(S22_TOKYO3_ORIGIN,
+                    GEOFRONT_ORIGIN.offset(0, -12, 0));
     private static final BlockPos RESCUE_MECHANICAL_MARKER_A =
             GEOFRONT_ORIGIN.offset(100, 2, -100);
     private static final BlockPos RESCUE_MECHANICAL_MARKER_B =
@@ -94,7 +99,6 @@ public final class IntegratedNervMapBuilder
             }
         }
         ensurePowerPylons(level);
-        ensureArmamentRacks(level);
         buildControlMarkers(level);
         set(level, RESCUE_MECHANICAL_MARKER_A,
                 Blocks.BARRIER.defaultBlockState());
@@ -197,7 +201,6 @@ public final class IntegratedNervMapBuilder
         TerminalDogmaBuilder.repairRuntimeAccess(level, GEOFRONT_ORIGIN);
         NervOperationsCentreBuilder.linkFacilities(level, GEOFRONT_ORIGIN);
         ensurePowerPylons(level);
-        ensureArmamentRacks(level);
         buildControlMarkers(level);
         return inspect(level);
     }
@@ -209,7 +212,6 @@ public final class IntegratedNervMapBuilder
                 level.getServer(), "IntegratedNervMapBuilder.ensure");
         ensureLowerBayWindows(level);
         ensurePowerPylons(level);
-        ensureArmamentRacks(level);
 
         if (isInstalled(level))
         {
@@ -331,7 +333,6 @@ public final class IntegratedNervMapBuilder
         boolean valid = controlMarkers && lowerBayWindows
                 && hangars.valid() && recoveryConsole.valid()
                 && powerPylonsPresent(level)
-                && armamentRacksPresent(level)
                 && lowerBeds == LIFT_LINKS.size()
                 && surfaceBeds == LIFT_LINKS.size()
                 && continuousShafts == LIFT_LINKS.size()
@@ -408,7 +409,6 @@ public final class IntegratedNervMapBuilder
                 && audit.deeplyBuried()
                 && audit.controlMarkers()
                 && powerPylonsPresent(level)
-                && armamentRacksPresent(level)
                 && audit.recoveryConsole()
                 && audit.lowerBeds() == LIFT_LINKS.size()
                 && audit.surfaceBeds() == LIFT_LINKS.size()
@@ -467,7 +467,7 @@ public final class IntegratedNervMapBuilder
         boolean deeplyBuried = rockCover >= 80 && bedrockClearance >= 16;
         boolean valid = geoFront.valid() && geoFrontLandscape.valid()
                 && tokyo3.valid() && tokyo3Landscape.valid() && controlMarkers
-                && powerPylons && armamentRacksPresent(level)
+                && powerPylons
                 && hangars.valid() && recoveryConsole.valid()
                 && deeplyBuried
                 && lowerBeds == LIFT_LINKS.size()
@@ -532,14 +532,35 @@ public final class IntegratedNervMapBuilder
         return GEOFRONT_ORIGIN;
     }
 
+    public static BlockPos geoFrontOrigin(ServerLevel level)
+    {
+        return S24CoordinateTransform.apply(level.getServer(),
+                GEOFRONT_ORIGIN);
+    }
+
     public static BlockPos tokyo3Origin()
     {
         return TOKYO3_ORIGIN;
     }
 
+    /** Runtime surface frame; R28 remains at Y=80 while S22 follows Y=68 terrain. */
+    public static BlockPos tokyo3Origin(ServerLevel level)
+    {
+        return S24CoordinateTransform.apply(level.getServer(), TOKYO3_ORIGIN);
+    }
+
     public static List<LiftLink> liftLinks()
     {
         return LIFT_LINKS;
+    }
+
+    public static List<LiftLink> liftLinks(ServerLevel level)
+    {
+        if (!FacilityWorldPolicy.isS22Coastal(level.getServer()))
+        {
+            return LIFT_LINKS;
+        }
+        return createLiftLinks(tokyo3Origin(level), geoFrontOrigin(level));
     }
 
     public static LiftLink lift(int index)
@@ -549,6 +570,16 @@ public final class IntegratedNervMapBuilder
             throw new IllegalArgumentException("EVA lift index must be 0, 1 or 2");
         }
         return LIFT_LINKS.get(index);
+    }
+
+    public static LiftLink lift(ServerLevel level, int index)
+    {
+        List<LiftLink> links = liftLinks(level);
+        if (index < 0 || index >= links.size())
+        {
+            throw new IllegalArgumentException("EVA lift index must be 0, 1 or 2");
+        }
+        return links.get(index);
     }
 
     /** Unit variants 00/01/02 use lift indices 0/1/2 respectively. */
@@ -595,9 +626,36 @@ public final class IntegratedNervMapBuilder
         return lift(index).lowerBed();
     }
 
+    public static BlockPos lowerLiftBed(BlockPos geoFrontOrigin, int index)
+    {
+        if (index < 0 || index >= LIFT_X.length)
+        {
+            throw new IllegalArgumentException(
+                    "EVA lift index must be 0, 1 or 2");
+        }
+        return geoFrontOrigin.offset(LIFT_X[index],
+                LOWER_BED_ABOVE_ORIGIN, LOWER_TERMINAL_Z);
+    }
+
+    public static BlockPos lowerLiftBed(ServerLevel level, int index)
+    {
+        return lift(level, index).lowerBed();
+    }
+
     public static BlockPos surfaceLiftBed(int index)
     {
         return lift(index).surfaceBed();
+    }
+
+    public static BlockPos surfaceLiftBed(ServerLevel level, int index)
+    {
+        return lift(level, index).surfaceBed();
+    }
+
+    public static boolean isSurfaceStation(ServerLevel level, BlockPos stationBed)
+    {
+        return liftLinks(level).stream()
+                .anyMatch(link -> link.surfaceBed().equals(stationBed));
     }
 
     public static BlockPos lowerControlMarker()
@@ -642,17 +700,18 @@ public final class IntegratedNervMapBuilder
         }
         return false;
     }
-    private static List<LiftLink> createLiftLinks()
+    private static List<LiftLink> createLiftLinks(BlockPos surfaceOrigin,
+                                                   BlockPos geoFrontOrigin)
     {
         List<LiftLink> links = new ArrayList<>(LIFT_X.length);
         for (int index = 0; index < LIFT_X.length; index++)
         {
             int relativeX = LIFT_X[index];
-            int worldX = TOKYO3_ORIGIN.getX() + relativeX;
-            int worldZ = TOKYO3_ORIGIN.getZ();
-            BlockPos lowerBed = GEOFRONT_ORIGIN.offset(relativeX,
+            int worldX = surfaceOrigin.getX() + relativeX;
+            int worldZ = surfaceOrigin.getZ();
+            BlockPos lowerBed = geoFrontOrigin.offset(relativeX,
                     LOWER_BED_ABOVE_ORIGIN, LOWER_TERMINAL_Z);
-            BlockPos surfaceBed = TOKYO3_ORIGIN.offset(relativeX,
+            BlockPos surfaceBed = surfaceOrigin.offset(relativeX,
                     -SURFACE_BED_BELOW_ORIGIN, 0);
             if (lowerBed.getX() != surfaceBed.getX()
                     || lowerBed.getZ() != surfaceBed.getZ()
@@ -1057,62 +1116,6 @@ public final class IntegratedNervMapBuilder
                     String.format(Locale.ROOT, "%02d", index));
         }
         return lowerLiftInterfaceValid(level, link);
-    }
-
-    public static BlockPos lowerArmamentRack(int index)
-    {
-        return lift(index).lowerBed().offset(-SHAFT_GUIDE_OFFSET, 1, 0);
-    }
-
-    private static void ensureArmamentRacks(ServerLevel level)
-    {
-        for (int index = 0; index < LIFT_LINKS.size(); index++)
-        {
-            BlockPos position = lowerArmamentRack(index);
-            BlockPos legacy = lift(index).lowerBed().offset(
-                    -SHAFT_CLEAR_RADIUS, 1, 0);
-            if (!legacy.equals(position)
-                    && level.getBlockState(legacy)
-                    .is(ModBlocks.EVA_ARMAMENT_RACK.get()))
-            {
-                level.removeBlock(legacy, false);
-            }
-            boolean newlyPlaced = !level.getBlockState(position)
-                    .is(ModBlocks.EVA_ARMAMENT_RACK.get());
-            if (newlyPlaced)
-            {
-                set(level, position,
-                        ModBlocks.EVA_ARMAMENT_RACK.get().defaultBlockState());
-            }
-            if (!(level.getBlockEntity(position)
-                    instanceof EvaArmamentRackBlockEntity rack))
-            {
-                level.removeBlock(position, false);
-                set(level, position,
-                        ModBlocks.EVA_ARMAMENT_RACK.get().defaultBlockState());
-                newlyPlaced = true;
-            }
-            if (newlyPlaced && level.getBlockEntity(position)
-                    instanceof EvaArmamentRackBlockEntity rack)
-            {
-                rack.stockStandardLoadout();
-            }
-        }
-    }
-
-    private static boolean armamentRacksPresent(ServerLevel level)
-    {
-        for (int index = 0; index < LIFT_LINKS.size(); index++)
-        {
-            BlockPos position = lowerArmamentRack(index);
-            if (!level.getBlockState(position).is(ModBlocks.EVA_ARMAMENT_RACK.get())
-                    || !(level.getBlockEntity(position)
-                    instanceof EvaArmamentRackBlockEntity))
-            {
-                return false;
-            }
-        }
-        return true;
     }
 
     private static void ensurePowerPylons(ServerLevel level)

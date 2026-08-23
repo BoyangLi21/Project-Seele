@@ -34,7 +34,6 @@ import net.minecraft.client.CloudStatus;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.Screenshot;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
@@ -732,11 +731,39 @@ public final class VisualCaptureManager
      */
     private static final class S20Session
     {
+        private static final boolean S22_ARRIVAL_ONLY = "s22_arrival".equals(
+                System.getProperty("projectseele.visualCaptureUnit"));
+        private static final boolean S22_DOCK_ONLY = "s22_dock".equals(
+                System.getProperty("projectseele.visualCaptureUnit"));
+        private static final boolean S22_GATE_ONLY = "s22_gate".equals(
+                System.getProperty("projectseele.visualCaptureUnit"));
+        private static final boolean S22_DOGMA_ONLY = "s22_dogma".equals(
+                System.getProperty("projectseele.visualCaptureUnit"));
+        private static final boolean S22_B20_ONLY = "s22_b20".equals(
+                System.getProperty("projectseele.visualCaptureUnit"));
+        private static final boolean S22_CEILING_ONLY = "s22_ceiling".equals(
+                System.getProperty("projectseele.visualCaptureUnit"));
         private static final boolean S21_B1_ONLY = "s21_b1".equals(
                 System.getProperty("projectseele.visualCaptureUnit"));
         private static final boolean S21_B2_ONLY = "s21_b2".equals(
                 System.getProperty("projectseele.visualCaptureUnit"));
-        private static final String[] NAMES = S21_B1_ONLY
+        private static final String[] NAMES = S22_CEILING_ONLY
+                ? new String[] {"s22_ceiling_city"}
+                : S22_B20_ONLY
+                ? new String[] {"s22_b20_radial_gallery", "s22_b20_ladder_aperture"}
+                : S22_DOGMA_ONLY
+                ? new String[] {"s22_terminal_dogma"}
+                : S22_GATE_ONLY
+                ? new String[] {"s22_main_gate"}
+                : S22_DOCK_ONLY
+                ? new String[] {"s22_eva_interchange"}
+                : S22_ARRIVAL_ONLY
+                ? new String[] {
+                        "s22_lake_arrival", "s22_eva_interchange",
+                        "s22_main_gate", "s22_arrival_axis",
+                        "s22_artificial_sector", "s22_collector_yard",
+                        "s22_south_hills"}
+                : S21_B1_ONLY
                 ? new String[] {"command_rear_b1_west", "command_rear_b1_east"}
                 : S21_B2_ONLY
                 ? new String[] {"command_rear_b2_west", "command_rear_b2_east"}
@@ -747,7 +774,28 @@ public final class VisualCaptureManager
                  "unit01_plug_side", "launch_interface",
                  "surface_lift_lower", "surface_lift_pavilion"
         };
-        private static final Vec3[] CAMERAS = S21_B1_ONLY
+        private static final Vec3[] CAMERAS = S22_CEILING_ONLY
+                ? new Vec3[] {new Vec3(30.0D, -380.0D, 350.0D)}
+                : S22_B20_ONLY
+                ? new Vec3[] {
+                        new Vec3(92.0D, -504.5D, 273.0D),
+                        new Vec3(72.0D, -504.5D, 255.0D)}
+                : S22_DOGMA_ONLY
+                ? new Vec3[] {new Vec3(30.0D, -562.0D, 334.0D)}
+                : S22_GATE_ONLY
+                ? new Vec3[] {new Vec3(-105.0D, -430.0D, 240.0D)}
+                : S22_DOCK_ONLY
+                ? new Vec3[] {new Vec3(-102.0D, -419.0D, 151.0D)}
+                : S22_ARRIVAL_ONLY
+                ? new Vec3[] {
+                        new Vec3(-178.0D, -438.0D, 86.0D),
+                        new Vec3(-102.0D, -419.0D, 151.0D),
+                        new Vec3(-105.0D, -430.0D, 240.0D),
+                        new Vec3(-145.0D, -430.0D, 235.0D),
+                        new Vec3(355.0D, -430.0D, 275.0D),
+                        new Vec3(370.0D, -430.0D, 320.0D),
+                        new Vec3(175.0D, -424.0D, 540.0D)}
+                : S21_B1_ONLY
                 ? new Vec3[] {
                         new Vec3(26.5D, -409.0D, 279.5D),
                         new Vec3(33.5D, -409.0D, 279.5D)}
@@ -767,7 +815,28 @@ public final class VisualCaptureManager
                  new Vec3(90.0D, -440.0D, 273.0D),
                  new Vec3(108.0D, 87.0D, 285.0D),
         };
-        private static final Vec3[] TARGETS = S21_B1_ONLY
+        private static final Vec3[] TARGETS = S22_CEILING_ONLY
+                ? new Vec3[] {new Vec3(30.0D, 46.0D, 220.0D)}
+                : S22_B20_ONLY
+                ? new Vec3[] {
+                        new Vec3(72.0D, -504.5D, 273.0D),
+                        new Vec3(72.0D, -504.5D, 269.0D)}
+                : S22_DOGMA_ONLY
+                ? new Vec3[] {new Vec3(30.0D, -578.0D, 272.0D)}
+                : S22_GATE_ONLY
+                ? new Vec3[] {new Vec3(-68.0D, -442.0D, 210.0D)}
+                : S22_DOCK_ONLY
+                ? new Vec3[] {new Vec3(-181.0D, -420.0D, 151.0D)}
+                : S22_ARRIVAL_ONLY
+                ? new Vec3[] {
+                        new Vec3(-220.0D, -457.0D, 120.0D),
+                        new Vec3(-181.0D, -420.0D, 151.0D),
+                        new Vec3(-68.0D, -442.0D, 210.0D),
+                        new Vec3(-100.0D, -452.0D, 185.0D),
+                        new Vec3(285.0D, -451.0D, 315.0D),
+                        new Vec3(340.0D, -451.0D, 365.0D),
+                        new Vec3(80.0D, -452.0D, 580.0D)}
+                : S21_B1_ONLY
                 ? new Vec3[] {
                         new Vec3(29.5D, -409.0D, 279.5D),
                         new Vec3(29.5D, -409.0D, 279.5D)}
@@ -839,6 +908,13 @@ public final class VisualCaptureManager
             this.maintainCamera(minecraft);
             if (this.settleTicks-- > 0)
             {
+                if (this.settleTicks % 20 == 0)
+                {
+                    SeeleNetwork.CHANNEL.sendToServer(
+                            new ServerboundGeoFrontCameraPacket(
+                                    ServerboundGeoFrontCameraPacket.S20_VIEW_BASE
+                                            + this.view));
+                }
                 return true;
             }
             if (!minecraft.level.hasChunkAt(
@@ -1847,10 +1923,8 @@ public final class VisualCaptureManager
                     150, 0, GeoFrontBuilder.CAVERN_CENTRE_Z)).is(Blocks.GRASS_BLOCK);
             BlockPos sphereCentre = GeoFrontBuilder.cavernCentre(this.origin);
             BlockPos canopySample = sphereCentre.offset(64, 248, 0);
-            ResourceLocation canopyId = BuiltInRegistries.BLOCK.getKey(
-                    minecraft.level.getBlockState(canopySample).getBlock());
-            boolean skyweaveCanopy = canopyId.equals(
-                    new ResourceLocation("ars_nouveau", "sky_block"));
+            boolean skyweaveCanopy = minecraft.level.getBlockState(canopySample)
+                    .is(ModBlocks.GEOFRONT_SKYWEAVE.get());
             boolean lclLake = minecraft.level.getFluidState(
                     this.origin.offset(48, 1, 0)).getFluidType()
                     == com.projectseele.registry.ModFluids.LCL_TYPE.get();

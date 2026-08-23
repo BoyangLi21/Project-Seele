@@ -4,7 +4,10 @@
     "Name": "minecraft:stone"
   },
   "default_fluid": {
-    "Name": "minecraft:air"
+    "Name": "minecraft:water",
+    "Properties": {
+      "level": "0"
+    }
   },
   "disable_mob_generation": false,
   "legacy_random_source": false,
@@ -34,22 +37,9 @@
         "when_out_of_range": {
           "type": "minecraft:range_choice",
           "input": "minecraft:y",
-          "min_inclusive": 64.0,
+          "min_inclusive": -64.0,
           "max_exclusive": 320.0,
-          "when_in_range": {
-            "type": "minecraft:squeeze",
-            "argument": {
-              "type": "minecraft:mul",
-              "argument1": 0.64,
-              "argument2": {
-                "type": "minecraft:interpolated",
-                "argument": {
-                  "type": "minecraft:blend_density",
-                  "argument": "minecraft:overworld/sloped_cheese"
-                }
-              }
-            }
-          },
+          "when_in_range": "minecraft:overworld/sloped_cheese",
           "when_out_of_range": 1.0
         }
       }
@@ -65,7 +55,7 @@
       "when_out_of_range": {
         "type": "minecraft:range_choice",
         "input": "minecraft:y",
-        "min_inclusive": 64.0,
+        "min_inclusive": -64.0,
         "max_exclusive": 320.0,
         "when_in_range": "minecraft:overworld/sloped_cheese",
         "when_out_of_range": 1.0
@@ -96,7 +86,7 @@
     "vein_toggle": 0.0
   },
   "ore_veins_enabled": false,
-  "sea_level": -672,
+  "sea_level": 63,
   "spawn_target": [
     {
       "continentalness": [-0.11, 1.0],

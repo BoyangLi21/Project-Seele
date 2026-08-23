@@ -68,6 +68,18 @@ public final class VisualLabAutomation
     private static final boolean S20_CAPTURE = CAPTURE_UNIT.equals("s20");
     private static final boolean S21_B1_CAPTURE = CAPTURE_UNIT.equals("s21_b1");
     private static final boolean S21_B2_CAPTURE = CAPTURE_UNIT.equals("s21_b2");
+    private static final boolean S22_ARRIVAL_CAPTURE =
+            CAPTURE_UNIT.equals("s22_arrival");
+    private static final boolean S22_DOCK_CAPTURE =
+            CAPTURE_UNIT.equals("s22_dock");
+    private static final boolean S22_GATE_CAPTURE =
+            CAPTURE_UNIT.equals("s22_gate");
+    private static final boolean S22_DOGMA_CAPTURE =
+            CAPTURE_UNIT.equals("s22_dogma");
+    private static final boolean S22_B20_CAPTURE =
+            CAPTURE_UNIT.equals("s22_b20");
+    private static final boolean S22_CEILING_CAPTURE =
+            CAPTURE_UNIT.equals("s22_ceiling");
     private static final boolean S20_PLUG_CAPTURE =
             CAPTURE_UNIT.equals("s20_plug");
     private static final boolean GEOFRONT_SORTIE_CAPTURE =
@@ -184,7 +196,10 @@ public final class VisualLabAutomation
             if (ticks == 40)
             {
                 if (S20_CAPTURE || S20_PLUG_CAPTURE || S21_B1_CAPTURE
-                        || S21_B2_CAPTURE)
+                        || S21_B2_CAPTURE || S22_ARRIVAL_CAPTURE
+                        || S22_DOCK_CAPTURE || S22_GATE_CAPTURE
+                        || S22_DOGMA_CAPTURE || S22_B20_CAPTURE
+                        || S22_CEILING_CAPTURE)
                 {
                     if (!FacilityWorldPolicy.isS20Rebuild(server))
                     {
@@ -200,7 +215,10 @@ public final class VisualLabAutomation
                     }
                     player.stopRiding();
                     player.setNoGravity(true);
-                    if (S20_CAPTURE || S21_B1_CAPTURE || S21_B2_CAPTURE)
+                    if (S20_CAPTURE || S21_B1_CAPTURE || S21_B2_CAPTURE
+                            || S22_ARRIVAL_CAPTURE || S22_DOCK_CAPTURE
+                            || S22_GATE_CAPTURE || S22_DOGMA_CAPTURE
+                            || S22_B20_CAPTURE || S22_CEILING_CAPTURE)
                     {
                         player.teleportTo(geoFront,
                                 28.0D, -416.0D, 342.0D,
@@ -241,7 +259,36 @@ public final class VisualLabAutomation
                 else if (TOKYO3_CAPTURE || TOKYO3_RETRACTION_CAPTURE
                         || TOKYO3_RAMIEL_CAPTURE)
                 {
-                    ThirdTokyoCommands.setupVisualCapture(player.createCommandSourceStack());
+                    // S20/S22 saves already contain their reviewed surface.
+                    // The capture path must remain read-only and must never
+                    // invoke the retired integrated facility generator.
+                    if (!com.projectseele.world.FacilityWorldPolicy
+                            .isS20Rebuild(player.getServer()))
+                    {
+                        ThirdTokyoCommands.setupVisualCapture(
+                                player.createCommandSourceStack());
+                    }
+                    else
+                    {
+                        ServerLevel authored = server.getLevel(
+                                GeoFrontCommands.GEOFRONT);
+                        if (authored == null)
+                        {
+                            throw new IllegalStateException(
+                                    "Authored GeoFront dimension is unavailable");
+                        }
+                        BlockPos origin = IntegratedNervMapBuilder
+                                .tokyo3Origin(authored);
+                        player.stopRiding();
+                        player.teleportTo(authored,
+                                origin.getX() + 0.5D,
+                                origin.getY() + 50.0D,
+                                origin.getZ() + 0.5D,
+                                180.0F, 0.0F);
+                        ProjectSeele.LOGGER.info(
+                                "Visual Lab entered authored Tokyo-3 at {} without map writes",
+                                origin);
+                    }
                 }
                 else if (SILO_CAPTURE)
                 {

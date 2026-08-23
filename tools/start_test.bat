@@ -2,10 +2,15 @@
 setlocal EnableExtensions EnableDelayedExpansion
 title Project SEELE - local test client
 set "SEELE_MANUAL_PLAY=0"
+set "SEELE_MOTION_LAB=0"
 if /i "%~1"=="play" set "SEELE_MANUAL_PLAY=1"
+if /i "%~1"=="motion" set "SEELE_MANUAL_PLAY=1"
+if /i "%~1"=="motion" set "SEELE_MOTION_LAB=1"
 rem Project SEELE - one-click test client.
 rem Uses the standalone JDK 17 if JAVA_HOME is not already set to one.
 if not exist "%JAVA_HOME%\bin\java.exe" set "JAVA_HOME=C:\Users\liboy\jdks\jdk-17.0.19+10"
+set "SEELE_POWERSHELL=%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe"
+if not exist "%SEELE_POWERSHELL%" set "SEELE_POWERSHELL=powershell.exe"
 rem Windows had assigned this JDK to the Intel Iris Xe during an earlier
 rem diagnostic even though the laptop has an RTX 3070 Ti. Register both launch
 rem binaries as high-performance applications before Forge starts.
@@ -27,6 +32,29 @@ rem before a dev launch, so never load their raw copies from run\mods.
 if exist "run\mods\ars_nouveau-1.20.1-4.12.7-all.jar" del /Q "run\mods\ars_nouveau-1.20.1-4.12.7-all.jar"
 if exist "run\mods\curios-forge-5.14.1+1.20.1.jar" del /Q "run\mods\curios-forge-5.14.1+1.20.1.jar"
 if not exist ".Codex\local-mods" mkdir ".Codex\local-mods"
+rem Moving Elevators is the personnel-lift implementation. EVA launch carriers
+rem remain Project SEELE entities; fetch only the pinned personnel-lift jars.
+"%SEELE_POWERSHELL%" -NoProfile -ExecutionPolicy Bypass -File "tools\fetch_moving_elevators.ps1"
+if errorlevel 1 (
+    echo Moving Elevators dependency preparation failed.
+    pause
+    exit /b 1
+)
+rem MTR supplies the non-Create NERV escalators and horizontal moving walks.
+"%SEELE_POWERSHELL%" -NoProfile -ExecutionPolicy Bypass -File "tools\fetch_mtr.ps1"
+if errorlevel 1 (
+    echo Minecraft Transit Railway dependency preparation failed.
+    pause
+    exit /b 1
+)
+rem Farsight is local-client-only and keeps real chunks instead of generating
+rem broken underground LOD meshes for the unusually deep GeoFront dimension.
+"%SEELE_POWERSHELL%" -NoProfile -ExecutionPolicy Bypass -File "tools\fetch_farsight.ps1"
+if errorlevel 1 (
+    echo Farsight client dependency preparation failed.
+    pause
+    exit /b 1
+)
 rem Another Furniture supplies the three real sittable command chairs. Keep
 rem its private evaluation jar outside run\mods so ForgeGradle can remap it.
 if exist "run\mods\another_furniture-forge-1.20.1-3.0.4.jar" copy /Y "run\mods\another_furniture-forge-1.20.1-3.0.4.jar" ".Codex\local-mods\another-furniture-1.20.1-3.0.4.jar" >nul
@@ -83,6 +111,19 @@ if not "!SEELE_CLEAN_STAGE_RESULT!"=="0" (
     pause
     exit /b 1
 )
+if "!SEELE_MOTION_LAB!"=="1" (
+    set "SEELE_OLD_PYTHONPATH=!PYTHONPATH!"
+    if exist ".Codex\pydeps312" set "PYTHONPATH=%SEELE_HOME%\.Codex\pydeps312"
+    "%SEELE_MAP_PY%" tools\prepare_eva_motion_lab.py --if-missing
+    set "SEELE_MOTION_RESULT=!ERRORLEVEL!"
+    set "PYTHONPATH=!SEELE_OLD_PYTHONPATH!"
+    set "SEELE_OLD_PYTHONPATH="
+    if not "!SEELE_MOTION_RESULT!"=="0" (
+        echo EVA motion-lab save preparation failed.
+        pause
+        exit /b 1
+    )
+)
 set "SEELE_CLEAN_STAGE_RESULT="
 set "SEELE_MAP_PY="
 set "SEELE_VISUAL_WORLD=SEELE_VISUAL_TEST_2"
@@ -104,11 +145,14 @@ if exist "run\saves\SEELE_S21_COMMAND_REAR\level.dat" set "SEELE_VISUAL_WORLD=SE
 if exist "run\saves\SEELE_S21_COMMAND_REAR_R02\level.dat" set "SEELE_VISUAL_WORLD=SEELE_S21_COMMAND_REAR_R02"
 if exist "run\saves\SEELE_S21_COMMAND_REAR_R03\level.dat" set "SEELE_VISUAL_WORLD=SEELE_S21_COMMAND_REAR_R03"
 if exist "run\saves\SEELE_S21_COMMAND_REAR_R04\level.dat" set "SEELE_VISUAL_WORLD=SEELE_S21_COMMAND_REAR_R04"
-rem R05 failed human review. Force the last accepted immutable baseline.
+rem R28 is the sole human-approved authority. Rejected experimental worlds must
+rem never override it merely because their save folders happen to exist.
 if exist "run\saves\SEELE_S20_RECOVERY_R28\level.dat" set "SEELE_VISUAL_WORLD=SEELE_S20_RECOVERY_R28"
+if "!SEELE_MOTION_LAB!"=="1" set "SEELE_VISUAL_WORLD=SEELE_EVA_MOTION_LAB"
 rem The v1 Ars sky sphere stored one ticking block entity per shell block.
 rem Migrate it offline, with region backups, before the legacy save opens.
 set "SEELE_MIGRATE_PY=C:\Users\liboy\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe"
+if "!SEELE_MOTION_LAB!"=="1" goto SEELE_MIGRATION_DONE
 if not exist "%SEELE_MIGRATE_PY%" set "SEELE_MIGRATE_PY=python"
 set "SEELE_OLD_PYTHONPATH=!PYTHONPATH!"
 if exist ".Codex\pydeps312" set "PYTHONPATH=%SEELE_HOME%\.Codex\pydeps312"
@@ -123,6 +167,7 @@ if not "!SEELE_MIGRATE_RESULT!"=="0" (
     exit /b 1
 )
 set "SEELE_MIGRATE_RESULT="
+:SEELE_MIGRATION_DONE
 set "SEELE_PREPARE_ASSETS=0"
 if /i "%~1"=="refresh" set "SEELE_PREPARE_ASSETS=1"
 python tools\local_runtime_cache.py check >nul 2>nul
@@ -276,6 +321,23 @@ if errorlevel 1 (
     pause
     exit /b 1
 )
+rem User-supplied private Ultraman FBX. Blender converts the real rigged mesh
+rem into the ignored local runtime pack; it is never embedded in public Git.
+if exist "external-assets\incoming\ultraman-rig-updated\source\ULTRAMAN.fbx" (
+    set "SEELE_BLENDER=C:\Program Files\Blender Foundation\Blender 5.1\blender.exe"
+    if not exist "!SEELE_BLENDER!" (
+        echo Blender 5.1 was not found; Ultraman avatar generation failed.
+        pause
+        exit /b 1
+    )
+    "!SEELE_BLENDER!" --background --python tools\make_ultraman_avatar_pack.py
+    if errorlevel 1 (
+        echo Ultraman avatar generation failed.
+        pause
+        exit /b 1
+    )
+    set "SEELE_BLENDER="
+)
 :SEELE_ASSETS_READY
 set "SEELE_RUN_STATIC_VALIDATION=0"
 if "%SEELE_PREPARE_ASSETS%"=="1" if "%SEELE_MANUAL_PLAY%"=="0" set "SEELE_RUN_STATIC_VALIDATION=1"
@@ -362,12 +424,6 @@ if errorlevel 1 (
     pause
     exit /b 1
 )
-python tools\validate_eva_armament_contract.py
-if errorlevel 1 (
-    echo Persistent EVA armament-rack validation failed.
-    pause
-    exit /b 1
-)
 python tools\validate_multiplayer_operations_contract.py
 if errorlevel 1 (
     echo NERV multiplayer crew and dedicated-server validation failed.
@@ -412,6 +468,7 @@ if /i "%~1"=="offline" (
     pause
     exit /b 0
 )
+if "!SEELE_MOTION_LAB!"=="1" goto SEELE_MOTION_INSTRUCTIONS
 if "%SEELE_MANUAL_PLAY%"=="1" goto SEELE_MANUAL_INSTRUCTIONS
 echo.
 echo Continuous Tokyo-3 / GeoFront test flow:
@@ -426,6 +483,16 @@ echo   8. /seele eva reset unit00^|unit01^|unit02^|all restores the canonical ai
 echo   /seele geofront surface is a developer camera shortcut only.
 echo   /seele geofront exit returns to the original world.
 echo   /seele geofront audit and sortie_audit report both map and EVA links.
+echo.
+goto SEELE_INSTRUCTIONS_DONE
+:SEELE_MOTION_INSTRUCTIONS
+echo.
+echo EVA motion laboratory:
+echo   1. SEELE_EVA_MOTION_LAB opens automatically and never writes R28.
+echo   2. /seele motionlab enter unit00^|unit01^|unit02 links directly to a test EVA.
+echo   3. /seele motionlab weapon unit01 fists^|knife^|rifle^|lance changes the loadout.
+echo   4. /seele motionlab camera opens the elevated external observation view.
+echo   5. /seele motionlab reset rebuilds the three test EVAs and returns the arena to noon.
 echo.
 goto SEELE_INSTRUCTIONS_DONE
 :SEELE_MANUAL_INSTRUCTIONS

@@ -2,7 +2,7 @@ package com.projectseele.registry;
 
 import com.projectseele.ProjectSeele;
 import com.projectseele.world.CommandSeatBackBlock;
-import com.projectseele.world.EvaArmamentRackBlock;
+import com.projectseele.world.OneWayGlassBlock;
 import com.projectseele.world.RetractableBuildingCoreBlock;
 import com.projectseele.world.UmbilicalPylonBlock;
 import net.minecraft.world.level.block.Block;
@@ -27,12 +27,6 @@ public final class ModBlocks
                     .lightLevel(state -> state.getValue(
                             RetractableBuildingCoreBlock.ARMED) ? 10 : 3)));
 
-    public static final RegistryObject<Block> EVA_ARMAMENT_RACK = BLOCKS.register(
-            "eva_armament_rack",
-            () -> new EvaArmamentRackBlock(BlockBehaviour.Properties.copy(
-                    Blocks.REINFORCED_DEEPSLATE).strength(10.0F, 1200.0F)
-                    .lightLevel(state -> 5).noOcclusion()));
-
     public static final RegistryObject<Block> UMBILICAL_PYLON = BLOCKS.register(
             "umbilical_pylon",
             () -> new UmbilicalPylonBlock(BlockBehaviour.Properties.copy(
@@ -44,6 +38,32 @@ public final class ModBlocks
             "clear_glass",
             () -> new GlassBlock(BlockBehaviour.Properties.copy(Blocks.GLASS)
                     .strength(1.2F, 8.0F).noOcclusion()
+                    .isValidSpawn((state, level, position, type) -> false)
+                    .isRedstoneConductor((state, level, position) -> false)
+                    .isSuffocating((state, level, position) -> false)
+                    .isViewBlocking((state, level, position) -> false)));
+
+    /** Commander-office glazing: clear inward, pyramid skin outward. */
+    public static final RegistryObject<Block> ONE_WAY_GLASS = BLOCKS.register(
+            "one_way_glass",
+            () -> new OneWayGlassBlock(
+                    BlockBehaviour.Properties.copy(Blocks.GLASS)
+                            .strength(2.0F, 12.0F).noOcclusion()
+                            .isValidSpawn((state, level, position, type) -> false)
+                            .isRedstoneConductor((state, level, position) -> false)
+                            .isSuffocating((state, level, position) -> false)
+                            .isViewBlocking((state, level, position) -> false)));
+
+    /**
+     * Non-ticking GeoFront equivalent of Ars Nouveau Skyweave. The Ars block
+     * creates one animated block entity per voxel; a 640-diameter sphere has
+     * over 1.8 million shell voxels, so the original material is not viable.
+     */
+    public static final RegistryObject<Block> GEOFRONT_SKYWEAVE = BLOCKS.register(
+            "geofront_skyweave",
+            () -> new GlassBlock(BlockBehaviour.Properties.copy(Blocks.GLASS)
+                    .strength(4.0F, 30.0F).lightLevel(state -> 4)
+                    .noOcclusion()
                     .isValidSpawn((state, level, position, type) -> false)
                     .isRedstoneConductor((state, level, position) -> false)
                     .isSuffocating((state, level, position) -> false)

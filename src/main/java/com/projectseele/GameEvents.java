@@ -14,6 +14,8 @@ import com.projectseele.world.NervCommandTelemetry;
 import com.projectseele.world.NervCommandDisplayState;
 import com.projectseele.world.NervFacilityTopologyBuilder;
 import com.projectseele.world.NervOperationsConsole;
+import com.projectseele.world.CommandRoomSlidingDoorDirector;
+import com.projectseele.world.LiftSlidingDoorDirector;
 import com.projectseele.world.NervRuntimeMaintenance;
 import com.projectseele.world.PerformanceCounters;
 import com.projectseele.world.S20CommandPresentationDirector;
@@ -22,10 +24,12 @@ import com.projectseele.world.S20CommandTransitDirector;
 import com.projectseele.world.S20EvaPlantDirector;
 import com.projectseele.world.S20PersonnelRouteDirector;
 import com.projectseele.world.S20PhysicalElevatorDirector;
+import com.projectseele.world.S20MovingElevatorsAdapter;
 import com.projectseele.world.S20SurfaceCleanupDirector;
 import com.projectseele.world.S20SurfaceTransitDirector;
+import com.projectseele.world.S20SurfaceAccessGate;
+import com.projectseele.world.S22FleetMigration;
 import com.projectseele.world.EvaLogisticsDirector;
-import com.projectseele.world.EvaWeaponLiftDirector;
 import com.projectseele.world.EvaPilotResolver;
 import com.projectseele.world.EntryPlugDirector;
 import com.projectseele.world.FacilityV2ArchitectureDirector;
@@ -35,12 +39,17 @@ import com.projectseele.world.FacilityV2CommandInteriorDirector;
 import com.projectseele.world.FacilityV2ElevatorDirector;
 import com.projectseele.world.FacilityV2ProgrammeDirector;
 import com.projectseele.world.FacilityV2StagedBuildDirector;
+import com.projectseele.world.FacilitySchemaV2;
 import com.projectseele.world.FacilityWorldPolicy;
 import com.projectseele.world.GeoFrontFabricDirector;
 import com.projectseele.world.NervCarrierVisuals;
 import com.projectseele.world.TrainingPilotDirector;
 import com.projectseele.world.IntegratedNervMapBuilder;
 import com.projectseele.world.Tokyo3RetractionDirector;
+import com.projectseele.world.TerminalDogmaBuilder;
+import com.projectseele.world.ThirdTokyoSurfaceBuilder;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -68,6 +77,14 @@ import net.minecraftforge.fml.common.Mod;
 @Mod.EventBusSubscriber(modid = ProjectSeele.MODID, bus = Mod.EventBusSubscriber.Bus.FORGE)
 public class GameEvents
 {
+    private static boolean terminalDogmaSpecimenChecked;
+    private static boolean facilityAmbientMobsCleared;
+    private static int facilitySnowSweepCursor;
+    private static final int TOKYO3_SNOW_RADIUS = 240;
+    private static final int TOKYO3_SNOW_DIAMETER =
+            TOKYO3_SNOW_RADIUS * 2 + 1;
+    private static final int TOKYO3_SNOW_COLUMNS_PER_TICK = 512;
+
     @SubscribeEvent
     public static void onLivingChangeTarget(LivingChangeTargetEvent event)
     {
@@ -132,12 +149,16 @@ public class GameEvents
             return;
         }
         PerformanceCounters.beginProjectTickWork(event.getServer());
+        maintainFacilityEnvironment(event.getServer());
         boolean brokenArchive =
                 FacilityWorldPolicy.isReadOnlyBrokenArchive(
                         event.getServer());
         boolean cleanRebuild =
                 FacilityWorldPolicy.isCleanRebuild(event.getServer());
-        if (FacilityWorldPolicy.isS20Rebuild(event.getServer()))
+        S22FleetMigration.tick(event.getServer());
+        if (FacilityWorldPolicy.isS20Rebuild(event.getServer())
+                && !FacilityWorldPolicy.isS22MigrationFrozen(
+                event.getServer()))
         {
             boolean spatialFrozen =
                     FacilityWorldPolicy.isSpatialPreviewFrozen(
@@ -165,7 +186,7 @@ public class GameEvents
                 if (surface != null)
                 {
                     Tokyo3RetractionDirector.register(surface,
-                            IntegratedNervMapBuilder.TOKYO3_ORIGIN);
+                            IntegratedNervMapBuilder.tokyo3Origin(surface));
                 }
             }
             if (!spatialFrozen)
@@ -181,55 +202,29 @@ public class GameEvents
                     com.projectseele.world.FacilitySchemaV2.DIMENSION);
             if (geoFront != null)
             {
-                for (S20PhysicalElevatorDirector.LiftSpec lift
-                        : S20PhysicalElevatorDirector.s20Lifts())
+                CommandRoomSlidingDoorDirector.tick(geoFront);
+                if (!terminalDogmaSpecimenChecked
+                        && event.getServer().getTickCount() % 100 == 0)
                 {
-                    boolean frozenLiftRuntimeAllowed = spatialFrozen
-                            && s20FrozenLiftRuntimeAllowed(
-                                    event.getServer(), geoFront, lift);
-                    if (spatialFrozen && !frozenLiftRuntimeAllowed)
-                    {
-                        continue;
-                    }
-                    boolean routeReady;
-                    if (frozenLiftRuntimeAllowed)
-                    {
-                        routeReady = true;
-                    }
-                    else if (lift.id().equals(
-                            S20PhysicalElevatorDirector
-                                    .COMMAND_REAR_LIFT_ID))
-                    {
-                        routeReady =
-                                S20CommandTransitDirector.installed(
-                                        geoFront)
-                                        && S20PersonnelRouteDirector
-                                        .installed(geoFront);
-                    }
-                    else if (S20PhysicalElevatorDirector
-                            .isSurfaceTransitLift(lift))
-                    {
-                        routeReady =
-                                S20SurfaceTransitDirector.installed(
-                                        geoFront);
-                    }
-                    else
-                    {
-                        routeReady =
-                                S20EvaPlantDirector.installed(geoFront);
-                    }
-                    if (routeReady
-                            && event.getServer().getTickCount() % 20 == 0
-                            && geoFront.hasChunkAt(
-                            lift.lower().cabinCentre())
-                            && geoFront.hasChunkAt(
-                            lift.upper().cabinCentre()))
-                    {
-                        S20PhysicalElevatorDirector.install(
-                                geoFront, lift);
-                    }
-                    S20PhysicalElevatorDirector.tick(geoFront, lift);
+                    terminalDogmaSpecimenChecked =
+                            TerminalDogmaBuilder.repairRuntimeSpecimen(
+                                    geoFront,
+                                    IntegratedNervMapBuilder.geoFrontOrigin());
                 }
+                for (S20PhysicalElevatorDirector.LiftSpec lift
+                        : S20PhysicalElevatorDirector.s20Lifts(geoFront))
+                {
+                    /*
+                     * The continuous-cage adapter is the sole owner of every
+                     * S20 personnel shaft once Moving Elevators is present.
+                     * A controller needs one server tick to join its group;
+                     * falling through during that bootstrap frame lets the
+                     * retired block copier overwrite the controller and makes
+                     * Moving Elevators dereference a missing group on remove.
+                    */
+                    S20MovingElevatorsAdapter.reconcile(geoFront, lift);
+                }
+                S20SurfaceAccessGate.tick(geoFront);
             }
             /*
              * The S20 freeze marker protects authored blocks; it must not
@@ -272,12 +267,6 @@ public class GameEvents
             // The command room is ~195 blocks from the cages, well past a
             // client's render distance, so only the server sees both ends.
             TrainingPilotDirector.tickFeeds(event.getServer());
-        }
-        // Armament lifts are persistent gameplay machines, not map writers;
-        // their same-UUID payload route remains live in S20 and ordinary saves.
-        for (ServerLevel level : event.getServer().getAllLevels())
-        {
-            EvaWeaponLiftDirector.tick(level);
         }
         if (event.getServer().getTickCount() % 20 == 0)
         {
@@ -338,7 +327,7 @@ public class GameEvents
         }
     }
 
-    @SubscribeEvent
+    @SubscribeEvent(priority = EventPriority.HIGHEST)
     public static void onRightClickBlock(PlayerInteractEvent.RightClickBlock event)
     {
         if (event.getHand() == InteractionHand.MAIN_HAND
@@ -375,13 +364,64 @@ public class GameEvents
             // click sound are the physical acknowledgement for the operator.
             if (s20Rebuild)
             {
+                if (S20SurfaceAccessGate.handleUse(player, event.getPos()))
+                {
+                    event.setCanceled(true);
+                    event.setCancellationResult(InteractionResult.SUCCESS);
+                    return;
+                }
+                if (S20MovingElevatorsAdapter.handleExternalCall(
+                        player, event.getPos()))
+                {
+                    event.setCanceled(true);
+                    event.setCancellationResult(InteractionResult.SUCCESS);
+                    return;
+                }
+                if (S20MovingElevatorsAdapter.isMovingElevatorsBlock(
+                        player.serverLevel().getBlockState(event.getPos())))
+                {
+                    if (S20MovingElevatorsAdapter.handleSecureUse(
+                            player, event.getPos()))
+                    {
+                        event.setCanceled(true);
+                        event.setCancellationResult(
+                                InteractionResult.SUCCESS);
+                    }
+                    else if (S20MovingElevatorsAdapter
+                            .isCabinBackingControl(
+                                    player.serverLevel(), event.getPos()))
+                    {
+                        player.displayClientMessage(Component.literal(
+                                "SELECT FLOOR ON THE PANEL ABOVE"), true);
+                        event.setCanceled(true);
+                        event.setCancellationResult(
+                                InteractionResult.SUCCESS);
+                    }
+                    else
+                    {
+                        S20MovingElevatorsAdapter.prepareDoorsBeforeUse(
+                                player, event.getPos());
+                    }
+                    // A successful card swipe is consumed here; ordinary
+                    // unlocked controls remain owned by Moving Elevators.
+                    return;
+                }
                 boolean handled = false;
                 boolean spatialFrozen =
                         FacilityWorldPolicy.isSpatialPreviewFrozen(
                                 player.getServer());
                 for (S20PhysicalElevatorDirector.LiftSpec lift
-                        : S20PhysicalElevatorDirector.s20Lifts())
+                        : S20PhysicalElevatorDirector.s20Lifts(
+                        player.serverLevel()))
                 {
+                    if (S20MovingElevatorsAdapter.owns(
+                            player.serverLevel(), lift))
+                    {
+                        // The official cage and remote panel now own this
+                        // shaft; never let a leftover legacy button wake the
+                        // retired integer-step mover.
+                        continue;
+                    }
                     if (spatialFrozen
                             && !s20FrozenLiftRuntimeAllowed(
                                     player.getServer(),
@@ -467,8 +507,18 @@ public class GameEvents
         {
             return true;
         }
+        if (FacilityWorldPolicy.isS22Coastal(server)
+                && S20PhysicalElevatorDirector.isCentralDogmaLift(lift))
+        {
+            return true;
+        }
+        if (S20PhysicalElevatorDirector.isCommanderOfficeLift(lift))
+        {
+            return true;
+        }
         return S20PhysicalElevatorDirector.isSurfaceTransitLift(lift)
-                && (S20SurfaceTransitDirector.installed(level)
+                && (FacilityWorldPolicy.isS22Coastal(server)
+                || S20SurfaceTransitDirector.installed(level)
                 || S20PhysicalElevatorDirector.hasHealthyRuntime(
                         level, lift));
     }
@@ -476,6 +526,13 @@ public class GameEvents
     @SubscribeEvent
     public static void onEntityJoinLevel(EntityJoinLevelEvent event)
     {
+        if (event.getLevel() instanceof ServerLevel facilityLevel
+                && facilityLevel.dimension().equals(FacilitySchemaV2.DIMENSION)
+                && isDisallowedFacilityMob(event.getEntity()))
+        {
+            event.setCanceled(true);
+            return;
+        }
         if (event.getLevel() instanceof net.minecraft.server.level.ServerLevel level
                 && FacilityWorldPolicy.legacyGenerationAllowed(
                         level.getServer())
@@ -504,12 +561,121 @@ public class GameEvents
         }
     }
 
+    private static void maintainFacilityEnvironment(MinecraftServer server)
+    {
+        ServerLevel level = server.getLevel(FacilitySchemaV2.DIMENSION);
+        if (level == null)
+        {
+            return;
+        }
+        if (server.getTickCount() % 20 == 0)
+        {
+            // This dimension is an authored NERV/Tokyo-3 set, not a weather
+            // simulation.  Keep a long authoritative clear interval so a
+            // save/reload or command-side weather pulse cannot produce even
+            // one visible snowfall frame between maintenance passes.
+            level.setWeatherParameters(1_000_000, 0, false, false);
+        }
+        /*
+         * Weather is already forced clear.  Existing roof snow is therefore
+         * a finite cleanup job, not something worth 2,048 height-map probes
+         * on every server tick.  Sweep a bounded batch once per second so the
+         * city still self-cleans without consuming the integrated server's
+         * 50 ms tick budget.
+         */
+        if (server.getTickCount() % 20 == 0)
+        {
+            clearTokyo3Snow(level);
+        }
+        if (!facilityAmbientMobsCleared)
+        {
+            java.util.List<Entity> unwanted = new java.util.ArrayList<>();
+            for (Entity entity : level.getAllEntities())
+            {
+                if (isDisallowedFacilityMob(entity))
+                {
+                    unwanted.add(entity);
+                }
+            }
+            unwanted.forEach(Entity::discard);
+            facilityAmbientMobsCleared = true;
+        }
+    }
+
+    /** Removes precipitation only from loaded Tokyo-3 surface columns. */
+    private static void clearTokyo3Snow(ServerLevel level)
+    {
+        BlockPos origin = IntegratedNervMapBuilder.tokyo3Origin(level);
+        int columns = TOKYO3_SNOW_DIAMETER * TOKYO3_SNOW_DIAMETER;
+        for (int checked = 0;
+             checked < TOKYO3_SNOW_COLUMNS_PER_TICK; checked++)
+        {
+            int index = facilitySnowSweepCursor++;
+            if (facilitySnowSweepCursor >= columns)
+            {
+                facilitySnowSweepCursor = 0;
+            }
+            int x = origin.getX() - TOKYO3_SNOW_RADIUS
+                    + index % TOKYO3_SNOW_DIAMETER;
+            int z = origin.getZ() - TOKYO3_SNOW_RADIUS
+                    + index / TOKYO3_SNOW_DIAMETER;
+            BlockPos probe = new BlockPos(x, origin.getY(), z);
+            if (!level.hasChunkAt(probe))
+            {
+                continue;
+            }
+            clearTokyo3SnowColumn(level, x, z);
+        }
+    }
+
+    private static void clearTokyo3SnowColumn(ServerLevel level, int x, int z)
+    {
+        // Call only from the server-tick sweep after hasChunkAt().  Invoking
+        // getHeight() from ChunkEvent.Load recursively waits for the chunk
+        // currently firing that event and deadlocks a dedicated server.
+        int top = level.getHeight(
+                net.minecraft.world.level.levelgen.Heightmap.Types
+                        .MOTION_BLOCKING, x, z);
+        for (int y = top + 1; y >= top - 3; y--)
+        {
+            BlockPos position = new BlockPos(x, y, z);
+            net.minecraft.world.level.block.state.BlockState state =
+                    level.getBlockState(position);
+            if (state.is(net.minecraft.world.level.block.Blocks.SNOW)
+                    || state.is(net.minecraft.world.level.block.Blocks
+                    .SNOW_BLOCK)
+                    || state.is(net.minecraft.world.level.block.Blocks
+                    .POWDER_SNOW))
+            {
+                level.setBlock(position,
+                        net.minecraft.world.level.block.Blocks.AIR
+                                .defaultBlockState(),
+                        net.minecraft.world.level.block.Block.UPDATE_CLIENTS);
+            }
+        }
+    }
+
+    private static boolean isDisallowedFacilityMob(Entity entity)
+    {
+        if (!(entity instanceof Mob))
+        {
+            return false;
+        }
+        return !ProjectSeele.MODID.equals(BuiltInRegistries.ENTITY_TYPE
+                .getKey(entity.getType()).getNamespace());
+    }
     @SubscribeEvent
     public static void onServerStopped(ServerStoppedEvent event)
     {
+        terminalDogmaSpecimenChecked = false;
+        facilityAmbientMobsCleared = false;
+        facilitySnowSweepCursor = 0;
         AngelAlarmSystem.reset();
         NervCommandTelemetry.reset();
         NervOperationsConsole.reset();
+        CommandRoomSlidingDoorDirector.resetRuntime();
+        LiftSlidingDoorDirector.resetRuntime();
+        TrainingPilotDirector.resetRuntime();
         EvaLogisticsDirector.releaseRouteTickets(event.getServer());
         EntryPlugDirector.resetRuntime();
         NervCarrierVisuals.resetRuntime();

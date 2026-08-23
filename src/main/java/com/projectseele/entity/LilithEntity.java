@@ -49,9 +49,10 @@ public class LilithEntity extends PathfinderMob implements GeoEntity
         this.setNoGravity(true);
         this.setDeltaMovement(Vec3.ZERO);
         this.fallDistance = 0.0F;
-        this.setYRot(180.0F);
-        this.yBodyRot = 180.0F;
-        this.yHeadRot = 180.0F;
+        // The imported south-wall mesh faces arrivals at zero yaw.
+        this.setYRot(0.0F);
+        this.yBodyRot = 0.0F;
+        this.yHeadRot = 0.0F;
     }
 
     @Override

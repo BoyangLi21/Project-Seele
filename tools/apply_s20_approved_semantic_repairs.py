@@ -668,15 +668,29 @@ def local_index(change: Change) -> int:
     return (change.y & 15) * 256 + (change.z & 15) * 16 + (change.x & 15)
 
 
-def apply_chunk(root: nbtlib.File, chunk_changes: list[Change]) -> None:
+def apply_chunk(root: nbtlib.File, chunk_changes: list[Change],
+                removable_block_entities: set[tuple[int, int, int]] | None = None
+                ) -> None:
     block_entities = {
         (int(entry.get("x", 0)), int(entry.get("y", 0)), int(entry.get("z", 0)))
         for entry in root.get("block_entities", [])
     }
     touched = {(c.x, c.y, c.z) for c in chunk_changes}
     overlap = touched & block_entities
+    allowed_removals = removable_block_entities or set()
+    forbidden_overlap = overlap - allowed_removals
+    if forbidden_overlap:
+        raise RuntimeError(
+            f"approved diff touches block entities: {sorted(forbidden_overlap)}")
     if overlap:
-        raise RuntimeError(f"approved diff touches block entities: {sorted(overlap)}")
+        # Opt-in only.  The default remains fail-closed; a caller may remove
+        # an explicitly enumerated natural worldgen block entity after it has
+        # inspected both the coordinate and the block state.  Authored/runtime
+        # devices are never accepted through this path.
+        kept = [entry for entry in root.get("block_entities", [])
+                if (int(entry.get("x", 0)), int(entry.get("y", 0)),
+                    int(entry.get("z", 0))) not in overlap]
+        root["block_entities"] = nbtlib.List[nbtlib.Compound](kept)
 
     by_section: dict[int, list[Change]] = defaultdict(list)
     for change in chunk_changes:
@@ -739,7 +753,9 @@ def apply_chunk(root: nbtlib.File, chunk_changes: list[Change]) -> None:
 
 
 def rewrite_region(path: Path,
-                   changes_by_chunk: dict[tuple[int, int], list[Change]]) -> bytes:
+                   changes_by_chunk: dict[tuple[int, int], list[Change]],
+                   removable_block_entities: set[tuple[int, int, int]] | None = None
+                   ) -> bytes:
     source = path.read_bytes()
     if len(source) < HEADER_BYTES:
         raise RuntimeError(f"truncated region header: {path}")
@@ -776,7 +792,7 @@ def rewrite_region(path: Path,
             if int(root.get("xPos", chunk_x)) != chunk_x \
                     or int(root.get("zPos", chunk_z)) != chunk_z:
                 raise RuntimeError(f"chunk coordinate mismatch at {chunk_x},{chunk_z}")
-            apply_chunk(root, selected)
+            apply_chunk(root, selected, removable_block_entities)
             chunks[index] = chunk_blob(root)
             seen_chunks.add((chunk_x, chunk_z))
         else:

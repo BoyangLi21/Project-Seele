@@ -46,7 +46,16 @@ public final class FacilitySchemaV2
      * caverns in the same world.
      */
     public static final int ACTIVE_CANDIDATE_INDEX = 0;
-    public static final int WORLDGEN_SURFACE_DATUM = 96;
+    /**
+     * S22 coastal rebuild datum.  The approved R28 archive keeps its stored
+     * surface receipt at 96; generators explicitly accept that legacy value
+     * so restoring the archive does not reinterpret its coordinates.
+     */
+    public static final int WORLDGEN_SURFACE_DATUM = 68;
+    public static final int R28_LEGACY_SURFACE_DATUM = 96;
+    /** Selected coastal anchor for the separate-seed S24 rebuild. */
+    public static final BlockPos S24_COASTAL_CENTRE =
+            new BlockPos(-1970, 0, -760);
 
     public static final int GF_FLOOR_Y = -360;
     public static final int CV_B2_Y = -368;
@@ -92,7 +101,10 @@ public final class FacilitySchemaV2
                             + surfaceY);
         }
 
-        BlockPos centre = CANDIDATE_CENTRES.get(candidateIndex);
+        BlockPos centre = candidateIndex == ACTIVE_CANDIDATE_INDEX
+                && surfaceY == WORLDGEN_SURFACE_DATUM
+                ? S24_COASTAL_CENTRE
+                : CANDIDATE_CENTRES.get(candidateIndex);
         IntBox region = new IntBox(
                 centre.getX() - REGION_HALF_SIZE, REGION_MIN_Y,
                 centre.getZ() - REGION_HALF_SIZE,

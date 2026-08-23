@@ -9,6 +9,7 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.projectseele.ProjectSeele;
 import com.projectseele.client.render.RibbonRenderer;
+import com.projectseele.client.render.EvaUnit01Renderer;
 import com.projectseele.network.ClientboundAtFieldRipplePacket;
 import com.projectseele.network.ClientboundCannonBeamPacket;
 import com.projectseele.network.ClientboundCrossExplosionPacket;
@@ -159,7 +160,10 @@ public final class ClientFxManager
 
     public static void addRifleTracer(ClientboundRifleTracerPacket packet)
     {
-        ACTIVE.add(new RifleTracer(new Vec3(packet.x1, packet.y1, packet.z1),
+        Vec3 fallback = new Vec3(packet.x1, packet.y1, packet.z1);
+        Vec3 muzzle = EvaUnit01Renderer.rifleMuzzleOrFallback(
+                packet.entityId, fallback);
+        ACTIVE.add(new RifleTracer(muzzle,
                 new Vec3(packet.x2, packet.y2, packet.z2)));
     }
 

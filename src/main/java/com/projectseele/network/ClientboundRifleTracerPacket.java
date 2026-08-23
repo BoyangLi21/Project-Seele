@@ -10,6 +10,7 @@ import net.minecraftforge.network.NetworkEvent;
 /** One short-lived, non-explosive pallet-SMG tracer. */
 public class ClientboundRifleTracerPacket
 {
+    public final int entityId;
     public final double x1;
     public final double y1;
     public final double z1;
@@ -17,9 +18,11 @@ public class ClientboundRifleTracerPacket
     public final double y2;
     public final double z2;
 
-    public ClientboundRifleTracerPacket(double x1, double y1, double z1,
+    public ClientboundRifleTracerPacket(int entityId,
+                                        double x1, double y1, double z1,
                                         double x2, double y2, double z2)
     {
+        this.entityId = entityId;
         this.x1 = x1;
         this.y1 = y1;
         this.z1 = z1;
@@ -30,12 +33,14 @@ public class ClientboundRifleTracerPacket
 
     public ClientboundRifleTracerPacket(FriendlyByteBuf buffer)
     {
-        this(buffer.readDouble(), buffer.readDouble(), buffer.readDouble(),
+        this(buffer.readVarInt(),
+                buffer.readDouble(), buffer.readDouble(), buffer.readDouble(),
                 buffer.readDouble(), buffer.readDouble(), buffer.readDouble());
     }
 
     public void encode(FriendlyByteBuf buffer)
     {
+        buffer.writeVarInt(this.entityId);
         buffer.writeDouble(this.x1);
         buffer.writeDouble(this.y1);
         buffer.writeDouble(this.z1);

@@ -35,6 +35,7 @@ mcmodsrepo
 # (Rei Chikita / EUD). All Rights Reserved — never commit or redistribute.
 /*.jar
 /*.zip
+/*.jar.log
 /external-assets/
 __pycache__/
 

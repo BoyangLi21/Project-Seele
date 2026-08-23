@@ -1,0 +1,8 @@
+{
+  "variants": {
+    "facing=north": { "model": "projectseele:block/one_way_glass" },
+    "facing=east":  { "model": "projectseele:block/one_way_glass", "y": 90 },
+    "facing=south": { "model": "projectseele:block/one_way_glass", "y": 180 },
+    "facing=west":  { "model": "projectseele:block/one_way_glass", "y": 270 }
+  }
+}

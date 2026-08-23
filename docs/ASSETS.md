@@ -15,7 +15,7 @@
 | `sounds/crystal_break.ogg` | 拉米尔死亡 | 同上（下行玻璃音簇+噪声） |
 | `sounds/drill.ogg` | 二阶段钻击 | 同上（锯齿嗡鸣+低通噪声） |
 | `sounds/ramiel_hum.ogg` | 拉米尔环境音 | 同上（110/164.6Hz 拍频） |
-| `sounds/rifle_fire.ogg` | 阳电子步枪 | 同上（锯齿快速下扫） |
+| `sounds/rifle_fire.ogg` | EVA 帕雷特步枪 | 原创合成：机械枪机、爆音噪声与低频尾响，不含影视或现实枪械采样 |
 
 全部由脚本以固定随机种子生成，可复现；无采样、无原作旋律。许可随仓库 MIT。
 
@@ -82,6 +82,7 @@ source licence and is outside the repository's MIT code licence.
 | Mass Production EVA | [Tigerar1 Mass Production Evangelion](https://sketchfab.com/3d-models/mass-production-evangelion-a483209197814af99fc536b396813698), CC BY-SA | Downloaded OBJ; 3,392 body + 1,509 wing triangles imported. The 440-triangle weapon lying at world origin is excluded. A 16-bone local rig carries gameplay `idle_1` / `move` / `attack`, explicit ritual, held Visual-Lab attack and folded revive animations. EUD's local replica lance is now rendered by the offline matrix; the ready pose removed a detected 26-pixel idle penetration. The five-state runtime matrix remains pending. |
 | Positron rifle | [Kantrophe Positron Rifle](https://sketchfab.com/3d-models/positron-rifle-neon-genesis-evangelion-523e4d5b344543aa97b21e885f9dc064), CC Attribution | Download contains Blender 3.04 source and 4K PBR textures only. Portable Blender 3.6 exported and decimated 56,614 source triangles to 20,381; the 5,990-triangle ground cradles are excluded, leaving a 14,391-triangle local cannon. The axis/pivot correction passed an in-game Tigerar1 attachment capture; the two-hand support pose remains under Visual Lab review. |
 | Pallet Rifle | [Oni Anniversary Edition community conversion](https://wiki.oni2.net/AE_talk%3ANew_weapons), provenance/redistribution permission not yet confirmed | Exact TV-style 167-vertex / 292-triangle OBJ and 1024x512 BMP are installed only under ignored external-assets/. tools/make_downloaded_pallet_rifle_pack.py is fingerprint-locked to that pair and emits a local-only runtime derivative. It must not ship until explicit author/licensor approval is recorded; the original 240-triangle MIT procedural rifle remains the distributable fallback. |
+| Ultraman private avatar | User-supplied `ultraman-rig-updated.zip`; no licence or author metadata included | Local/private testing only. FBX contains a 54-bone Character Creator rig and 20,565 exported triangles. `tools/make_ultraman_avatar_pack.py` emits an ignored rigid-bone runtime derivative. Never publish or redistribute the source or derivative without provenance and permission. |
 
 
 ## Local Kiki260100 Lilith evaluation (2026-07-19)

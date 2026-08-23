@@ -68,7 +68,36 @@ public final class EvaHud
         EntryPlugCarrierEntity plug =
                 player.getVehicle() instanceof EntryPlugCarrierEntity carrier
                         ? carrier : null;
-        if ((eva == null || eva.getActivationTicks() <= 0) && plug == null)
+        // Activation and catapult standby are separate pieces of cockpit UI.
+        // LAUNCH_LOCKED intentionally holds activationTicks at 21 until the
+        // operations console authorises release; treating that hold as part of
+        // this overlay left the completed optical-link screen pinned at 100%.
+        float activationProgress = eva == null ? 0.0F
+                : eva.getActivationProgress(partialTick);
+        boolean activationVisualActive = eva != null
+                && eva.isActivationCinematicActive()
+                // Never render the terminal 100% frame.  Dedicated-server
+                // entity data can arrive one packet after the launch phase,
+                // so using the counter alone could leave the completed page
+                // pinned over the already released EVA.
+                && activationProgress < 0.995F;
+        // The synced insertion stage is the visual authority here.  During a
+        // client ride-chain update STAGE_LOCKED can arrive one packet before
+        // hostEvaId/the nested vehicle, making isLockedToEva() briefly (or on
+        // a laggy dedicated server, persistently) false.  That stale predicate
+        // pinned the completed optical-link page at 100% after launch.
+        boolean capsuleStillExternal = plug != null
+                && eva == null
+                && plug.getInsertionStage()
+                        != EntryPlugCarrierEntity.STAGE_LOCKED;
+        boolean recoveredCabinIdle = plug != null
+                && plug.getCabinStage()
+                        == EntryPlugCarrierEntity.CABIN_RECOVERED_IDLE;
+        boolean plugSequenceActive = plug != null
+                && !recoveredCabinIdle
+                && (capsuleStillExternal || activationVisualActive);
+        if (!activationVisualActive
+                && !plugSequenceActive)
         {
             return;
         }
@@ -77,7 +106,9 @@ public final class EvaHud
                 && plug.getCabinStage()
                         == EntryPlugCarrierEntity.CABIN_SEALED_DARK)
         {
-            guiGraphics.fill(0, 0, width, height, 0xFF000000);
+            // Keep the physical plug interior/world view visible immediately
+            // after boarding.  CABIN_SEALED_DARK is retained as a protocol
+            // stage for saved-world compatibility, not as a forced blackout.
             drawPlugCabinFrame(guiGraphics, width, height, 0xD0FF7A00);
             guiGraphics.drawCenteredString(gui.getFont(),
                     Component.translatable("hud.projectseele.plug_sealed")
@@ -91,19 +122,11 @@ public final class EvaHud
             return;
         }
 
-        float progress = plug != null && !plug.isLockedToEva()
-                ? plug.getCabinProgress() / 100.0F
-                : eva == null ? 0.0F : eva.getActivationTicks() > 0
-                        ? eva.getActivationProgress(partialTick) : 1.0F;
-        // The pilot starts in a genuinely disconnected black capsule. LCL is
-        // visible locally, but the outside world only fades in after A10
-        // synchronization and continues smoothly after transfer to the EVA.
-        float blackout = progress < 0.52F ? 1.0F
-                : Mth.clamp(
-                        1.0F - (progress - 0.52F) / 0.48F, 0.0F, 1.0F);
-        guiGraphics.fill(0, 0, width, height,
-                (Mth.clamp(Math.round(blackout * 255.0F), 0, 255) << 24));
-
+        float progress = plugSequenceActive && capsuleStillExternal
+                ? plug.getCabinProgress(partialTick) / 100.0F
+                : activationVisualActive ? activationProgress : 0.0F;
+        // LCL and synchronization graphics overlay the live cabin view; they
+        // never replace it with an opaque black frame.
         float rise = Mth.clamp(progress / 0.45F, 0.0F, 1.0F);
         float fade = progress > 0.76F ? Mth.clamp(1.0F - (progress - 0.76F) / 0.24F, 0.0F, 1.0F) : 1.0F;
         if (rise > 0.0F)
@@ -142,34 +165,15 @@ public final class EvaHud
         guiGraphics.drawCenteredString(gui.getFont(),
                 Component.translatable(stageKey).withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD),
                 width / 2, height / 2 - 34, NERV_ORANGE);
-        boolean launchLocked = eva != null
-                && eva.getLaunchPhase() == EvaUnit01Entity.LAUNCH_LOCKED;
         int barWidth = Math.min(240, width / 2);
         int bx = width / 2 - barWidth / 2;
         int by = height / 2 - 15;
         guiGraphics.fill(bx, by, bx + barWidth, by + 5, 0xB0202020);
-        // While launch-locked the activation clip deliberately holds; a partial
-        // bar there just looks frozen. Show it complete and awaiting command
-        // authorization instead of a gauge stuck part-way.
-        float shownProgress = launchLocked ? 1.0F : progress;
-        int fillColour = launchLocked ? 0xFF35C24A : NERV_ORANGE;
-        guiGraphics.fill(bx, by, bx + Math.round(barWidth * shownProgress), by + 5, fillColour);
+        guiGraphics.fill(bx, by, bx + Math.round(barWidth * progress), by + 5,
+                NERV_ORANGE);
         guiGraphics.drawCenteredString(gui.getFont(),
-                launchLocked ? "LAUNCH READY" : String.format("SYSTEM  %03d%%",
-                        Math.round(progress * 100.0F)),
+                String.format("SYSTEM  %03d%%", Math.round(progress * 100.0F)),
                 width / 2, by + 10, 0xFFE8D2B8);
-        if (launchLocked)
-        {
-            guiGraphics.drawCenteredString(gui.getFont(),
-                    Component.translatable("hud.projectseele.launch_standby")
-                            .withStyle(ChatFormatting.GREEN, ChatFormatting.BOLD),
-                    width / 2, by + 24, 0xFF35C24A);
-            guiGraphics.drawCenteredString(gui.getFont(),
-                    Component.translatable("hud.projectseele.self_launch_hint",
-                                    Keybinds.SELF_LAUNCH.getTranslatedKeyMessage())
-                            .withStyle(ChatFormatting.GOLD),
-                    width / 2, by + 36, NERV_ORANGE);
-        }
     };
 
     private static void drawPlugCabinFrame(GuiGraphics graphics, int width,

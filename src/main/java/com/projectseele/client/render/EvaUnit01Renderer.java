@@ -1,5 +1,7 @@
 package com.projectseele.client.render;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Set;
 import java.util.function.Consumer;
 
@@ -17,6 +19,9 @@ import net.minecraft.client.renderer.culling.Frustum;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.packs.resources.ResourceManager;
+import net.minecraft.util.Mth;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 import software.bernie.geckolib.cache.object.BakedGeoModel;
 import software.bernie.geckolib.cache.object.GeoBone;
@@ -34,6 +39,9 @@ import software.bernie.geckolib.renderer.GeoEntityRenderer;
  */
 public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
 {
+    private static final Map<Integer, MuzzleSample> RIFLE_MUZZLES =
+            new HashMap<>();
+    private static final long MUZZLE_STALE_NANOS = 500_000_000L;
     private static final ResourceLocation MESH_00 =
             new ResourceLocation(ProjectSeele.MODID, "mesh/eva_unit00.mesh.json");
     private static final ResourceLocation MESH_01 =
@@ -88,6 +96,29 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
             "torso_lower", "torso_upper", "pylon_l", "pylon_r");
     private boolean pilotView;
     private boolean strictFailureReported;
+
+    public static void rememberRifleMuzzle(int entityId, Vec3 position)
+    {
+        if (RIFLE_MUZZLES.size() > 24)
+        {
+            RIFLE_MUZZLES.clear();
+        }
+        RIFLE_MUZZLES.put(entityId,
+                new MuzzleSample(position, System.nanoTime()));
+    }
+
+    public static Vec3 rifleMuzzleOrFallback(int entityId, Vec3 fallback)
+    {
+        MuzzleSample sample = RIFLE_MUZZLES.get(entityId);
+        if (sample == null
+                || System.nanoTime() - sample.capturedNanos()
+                > MUZZLE_STALE_NANOS)
+        {
+            RIFLE_MUZZLES.remove(entityId);
+            return fallback;
+        }
+        return sample.position();
+    }
 
     public EvaUnit01Renderer(EntityRendererProvider.Context context)
     {
@@ -162,9 +193,58 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
         // black silhouette despite the illuminated shaft walls.
         boolean nervFloodlit = entity.isNervLogisticsLocked()
                 || entity.getLaunchPhase() == EvaUnit01Entity.LAUNCH_ASCENT;
+        if (entity.hasActiveCarrierMotion())
+        {
+            // The deck is one rigid piece of the rendered EVA assembly.  It
+            // has no independent entity, packet clock or culling lifetime.
+            NervMovingCarrierRenderer.render(poseStack, bufferSource,
+                    nervFloodlit ? LightTexture.FULL_BRIGHT : packedLight,
+                    entity.getUnitVariant());
+        }
         super.render(entity, entityYaw, partialTick, poseStack, bufferSource,
                 entity.isCrucified() || nervFloodlit
                         ? LightTexture.FULL_BRIGHT : packedLight);
+    }
+
+    private record MuzzleSample(Vec3 position, long capturedNanos) {}
+
+    @Override
+    public Vec3 getRenderOffset(EvaUnit01Entity entity, float partialTick)
+    {
+        Vec3 base = super.getRenderOffset(entity, partialTick);
+        if (!entity.hasActiveCarrierMotion())
+        {
+            return base;
+        }
+        /*
+         * The local pilot camera is the empirically verified smooth reference
+         * during logistics.  Anchor the complete EVA/deck render assembly to
+         * that same interpolated passenger and preserve their current rigid
+         * offset.  This cancels any tick boundary disagreement between the
+         * airframe's network history and its nested ride chain.
+         */
+        LivingEntity pilot = entity.getPilotEntity();
+        Vec3 exact;
+        if (pilot != null)
+        {
+            Vec3 rigidOffset = entity.position().subtract(pilot.position());
+            exact = pilot.getPosition(partialTick).add(rigidOffset);
+        }
+        else
+        {
+            exact = entity.sampleCarrierMotion(partialTick);
+        }
+        // EntityRenderDispatcher is fed LevelRenderer's xOld/yOld/zOld
+        // interpolation, not Entity.getPosition(partial)'s xo/yo/zo path.
+        // Subtract the exact baseline the dispatcher will add.
+        Vec3 dispatcherPosition = new Vec3(
+                Mth.lerp((double) partialTick,
+                        entity.xOld, entity.getX()),
+                Mth.lerp((double) partialTick,
+                        entity.yOld, entity.getY()),
+                Mth.lerp((double) partialTick,
+                        entity.zOld, entity.getZ()));
+        return base.add(exact.subtract(dispatcherPosition));
     }
 
     @Override
@@ -257,6 +337,30 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
                 // fallback cannot be idempotent across Gecko render layers.
                 // Their authored aim pose remains stable until regenerated
                 // with the current semantic-parent converter.
+            }
+
+            EvaProceduralAnimator.apply(animatable, model, partialTick);
+
+            // The imported locomotion clips carry a permanent mirrored roll
+            // on both hips and feet. At EVA scale that reads as a pronounced
+            // toe-out stance rather than natural weight transfer. Keep knees
+            // and toes on the sagittal plane; the forward swing and knee bend
+            // remain authored by the clip.
+            if (animatable.isVisuallyMovingForRender()
+                    && !animatable.isPilotCrouching()
+                    && !animatable.isPilotProne()
+                    && !animatable.hasActiveCarrierMotion())
+            {
+                for (String boneName : new String[] {
+                        "leg_l", "leg_r", "foot_l", "foot_r"
+                })
+                {
+                    model.getBone(boneName).ifPresent(bone ->
+                    {
+                        bone.setRotY(0.0F);
+                        bone.setRotZ(0.0F);
+                    });
+                }
             }
         }
         // Weapon visibility applies on top in every view.

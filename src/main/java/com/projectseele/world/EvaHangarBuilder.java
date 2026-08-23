@@ -41,7 +41,7 @@ public final class EvaHangarBuilder
 
     private static final int HALF_WIDTH = 20;
     private static final int HALF_DEPTH = 27;
-    private static final int CHAMBER_HEIGHT = 70;
+    private static final int CHAMBER_HEIGHT = 80;
     private static final int GATE_Z = HANGAR_CENTRE_Z + HALF_DEPTH;
     private static final int CORRIDOR_HALF_WIDTH = 17;
     private static final int CARRIER_HALF = CARRIER_HALF_EXTENT;
@@ -70,6 +70,12 @@ public final class EvaHangarBuilder
             new HashMap<>();
 
     private EvaHangarBuilder() {}
+
+    /** Clears process-local moving-crane ownership between server sessions. */
+    public static void resetRuntime()
+    {
+        CRANE_CELLS.clear();
+    }
 
     public static HangarAudit ensure(ServerLevel level, BlockPos origin)
     {
@@ -218,6 +224,10 @@ public final class EvaHangarBuilder
     public static void buildS20ObservationGallery(
             ServerLevel level, BlockPos origin)
     {
+        if (relocatedObservationInstalled(level, origin))
+        {
+            return;
+        }
         PerformanceCounters.recordBuilderCall();
         buildObservationGallery(level, origin);
 
@@ -270,7 +280,7 @@ public final class EvaHangarBuilder
         PerformanceCounters.recordBuilderCall();
         buildTransportTunnel(level, origin, variant);
         BlockPos bed = hangarBed(origin, variant);
-        BlockPos lower = IntegratedNervMapBuilder.lowerLiftBed(variant);
+        BlockPos lower = IntegratedNervMapBuilder.lowerLiftBed(level, variant);
         set(level, bed, Blocks.LODESTONE.defaultBlockState());
         set(level, lower, Blocks.LODESTONE.defaultBlockState());
 
@@ -324,8 +334,8 @@ public final class EvaHangarBuilder
         PerformanceCounters.recordBuilderCall();
         int floorY = origin.getY() + GALLERY_Y;
         int shaftOuter = IntegratedNervMapBuilder.SHAFT_OUTER_RADIUS;
-        BlockPos westWell = IntegratedNervMapBuilder.lowerLiftBed(0);
-        BlockPos eastWell = IntegratedNervMapBuilder.lowerLiftBed(2);
+        BlockPos westWell = IntegratedNervMapBuilder.lowerLiftBed(level, 0);
+        BlockPos eastWell = IntegratedNervMapBuilder.lowerLiftBed(level, 2);
         int northZ = westWell.getZ() + shaftOuter + 1;
         int southZ = northZ + 6;
         int westX = westWell.getX() - shaftOuter - 7;
@@ -351,8 +361,7 @@ public final class EvaHangarBuilder
             for (int variant = 0; variant < 3; variant++)
             {
                 int distance = Math.abs(x
-                        - IntegratedNervMapBuilder.lowerLiftBed(
-                                variant).getX());
+                        - IntegratedNervMapBuilder.lowerLiftBed(level, variant).getX());
                 if (distance < nearestDistance)
                 {
                     nearestDistance = distance;
@@ -442,7 +451,7 @@ public final class EvaHangarBuilder
         int radius = IntegratedNervMapBuilder.SHAFT_OUTER_RADIUS;
         for (int variant = 0; variant < 3; variant++)
         {
-            BlockPos bed = IntegratedNervMapBuilder.lowerLiftBed(variant);
+            BlockPos bed = IntegratedNervMapBuilder.lowerLiftBed(level, variant);
             for (int y = -2; y <= -1; y++)
             {
                 for (int x = -radius; x <= radius; x++)
@@ -681,18 +690,23 @@ public final class EvaHangarBuilder
          * is a mechanical prerequisite for an already-authored launch line.
          * Treating one replaced lantern as a global plant failure made all
          * command-room buttons inert and prevented missing parked EVAs from
-         * being restored.  Only the two immutable carrier-bed markers are
-         * required here.  This method remains read-only and never repairs map
-         * geometry.
+         * being restored.  The lower carrier marker remains physical; the
+         * Tokyo-3 surface anchor is deliberately air because the animated
+         * hatch and its collision seal live one block above it.  This method
+         * remains read-only and never repairs map geometry.
          */
         for (int variant = 0; variant < 3; variant++)
         {
             if (!level.getBlockState(
-                            IntegratedNervMapBuilder.lowerLiftBed(variant))
-                            .is(Blocks.LODESTONE)
-                    || !level.getBlockState(
-                            IntegratedNervMapBuilder.surfaceLiftBed(variant))
+                            IntegratedNervMapBuilder.lowerLiftBed(level, variant))
                             .is(Blocks.LODESTONE))
+            {
+                return false;
+            }
+            if (!level.getBlockState(
+                            IntegratedNervMapBuilder.surfaceLiftBed(
+                                    level, variant))
+                            .isAir())
             {
                 return false;
             }
@@ -720,6 +734,19 @@ public final class EvaHangarBuilder
         return false;
     }
 
+    public static boolean isHangarBed(ServerLevel level, BlockPos position)
+    {
+        for (int variant = 0; variant < 3; variant++)
+        {
+            if (hangarBed(IntegratedNervMapBuilder.geoFrontOrigin(level),
+                    variant).equals(position))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /**
      * True only while this exact airframe is physically inside its assigned
      * GeoFront wet cage. Coordinate equality alone is not enough because the
@@ -735,7 +762,7 @@ public final class EvaHangarBuilder
             return false;
         }
         BlockPos bed = hangarBed(
-                IntegratedNervMapBuilder.GEOFRONT_ORIGIN, variant);
+                IntegratedNervMapBuilder.geoFrontOrigin(level), variant);
         return Math.abs(unit.getX() - (bed.getX() + 0.5D)) <= HALF_WIDTH - 1
                 && Math.abs(unit.getZ() - (bed.getZ() + 0.5D))
                         <= HALF_DEPTH - 1
@@ -780,7 +807,7 @@ public final class EvaHangarBuilder
         requireVariant(variant);
         BlockPos bed = hangarBed(origin, variant);
         return new Vec3(bed.getX() + 0.5D,
-                bed.getY() + REAR_GANTRY_ABOVE_BED + 1.0D,
+                bed.getY() + REAR_GANTRY_ABOVE_BED + 2.2D,
                 bed.getZ() + REAR_BOARDING_Z_FROM_BED + 0.5D);
     }
 
@@ -865,9 +892,18 @@ public final class EvaHangarBuilder
     public static BlockPos boardingPosition(BlockPos origin, int variant)
     {
         BlockPos bed = hangarBed(origin, variant);
-        return new BlockPos(bed.getX(),
+        return new BlockPos(bed.getX() + 2,
                 bed.getY() + REAR_GANTRY_ABOVE_BED + 1,
-                bed.getZ() + REAR_BOARDING_Z_FROM_BED);
+                bed.getZ() + REAR_BOARDING_Z_FROM_BED + 1);
+    }
+
+    /** Centre of the permanent pilot standby platform facing the EVA. */
+    public static BlockPos pilotStandbyPosition(BlockPos origin, int variant)
+    {
+        BlockPos bed = hangarBed(origin, variant);
+        return new BlockPos(bed.getX(),
+                bed.getY() + CATWALK_FLOOR_ABOVE_BED + 1,
+                bed.getZ() + FRONT_CROSS_Z_FROM_BED);
     }
 
     /**
@@ -895,7 +931,7 @@ public final class EvaHangarBuilder
             case 2 -> new BlockPos(sideX, walkY,
                     bed.getZ() + REAR_GANTRY_Z_FROM_BED - 1);
             // Centre of the extended bridge, beside the external capsule.
-            case 3 -> new BlockPos(bed.getX(), walkY,
+            case 3 -> new BlockPos(bed.getX() + 2, walkY,
                     bed.getZ() + REAR_BOARDING_Z_FROM_BED + 4);
             default -> boardingPosition(origin, variant);
         };
@@ -925,7 +961,16 @@ public final class EvaHangarBuilder
                         bed.getY() + y, origin.getZ() + GATE_Z);
                 if (open)
                 {
-                    clear(level, position);
+                    if (Math.abs(x) == CORRIDOR_HALF_WIDTH
+                            || y == 1 || y == 66)
+                    {
+                        set(level, position,
+                                Blocks.IRON_BLOCK.defaultBlockState());
+                    }
+                    else
+                    {
+                        clear(level, position);
+                    }
                 }
                 else
                 {
@@ -933,8 +978,7 @@ public final class EvaHangarBuilder
                             || y == 1 || y == 66;
                     set(level, position, edge
                             ? Blocks.IRON_BLOCK.defaultBlockState()
-                            : (Math.floorMod(x + y, 9) == 0
-                            ? accent : Blocks.REINFORCED_DEEPSLATE.defaultBlockState()));
+                            : Blocks.BARRIER.defaultBlockState());
                 }
             }
         }
@@ -1167,6 +1211,44 @@ public final class EvaHangarBuilder
         setCarrier(level, origin, variant, station.getZ(), true);
     }
 
+    /**
+     * Reasserts only the visible mechanical guideway on an existing S20
+     * transfer floor. Old R28 saves predate the bright rails and therefore
+     * showed an EVA gliding across an undifferentiated dark slab. This writes
+     * one floor layer only: no air clearing, walls or observation structures.
+     */
+    public static void ensureTransportGuideway(ServerLevel level,
+                                               BlockPos origin, int variant,
+                                               BlockPos start, BlockPos end)
+    {
+        requireVariant(variant);
+        BlockPos hangar = hangarBed(origin, variant);
+        if (start.getX() != hangar.getX() || end.getX() != hangar.getX()
+                || start.getY() != hangar.getY()
+                || end.getY() != hangar.getY())
+        {
+            return;
+        }
+        int minZ = Math.min(start.getZ(), end.getZ());
+        int maxZ = Math.max(start.getZ(), end.getZ());
+        for (int z = minZ; z <= maxZ; z++)
+        {
+            boolean sleeper = Math.floorMod(z - hangar.getZ(), 6) == 0;
+            for (int dx = -10; dx <= 10; dx++)
+            {
+                if (Math.abs(dx) == 5 || dx == 0 || sleeper)
+                {
+                    BlockPos position = new BlockPos(
+                            hangar.getX() + dx, hangar.getY(), z);
+                    set(level, position,
+                            transportFloor(position, origin, variant));
+                }
+            }
+        }
+        set(level, start, Blocks.LODESTONE.defaultBlockState());
+        set(level, end, Blocks.LODESTONE.defaultBlockState());
+    }
+
     private static void buildChamber(ServerLevel level, BlockPos origin,
                                      int variant)
     {
@@ -1349,7 +1431,7 @@ public final class EvaHangarBuilder
                                              int variant)
     {
         BlockPos bed = hangarBed(origin, variant);
-        int destinationZ = IntegratedNervMapBuilder.lowerLiftBed(variant).getZ();
+        int destinationZ = IntegratedNervMapBuilder.lowerLiftBed(level, variant).getZ();
         int shaftPortalZ = destinationZ
                 - IntegratedNervMapBuilder.SHAFT_OUTER_RADIUS;
         for (int z = bed.getZ() + HALF_DEPTH + 1; z <= destinationZ; z++)
@@ -1396,7 +1478,7 @@ public final class EvaHangarBuilder
     {
         requireVariant(variant);
         BlockPos bed = hangarBed(origin, variant);
-        BlockPos silo = IntegratedNervMapBuilder.lowerLiftBed(variant);
+        BlockPos silo = IntegratedNervMapBuilder.lowerLiftBed(origin, variant);
         int shaftPortalZ = silo.getZ()
                 - IntegratedNervMapBuilder.SHAFT_OUTER_RADIUS;
         int minimumZ = bed.getZ() - CARRIER_HALF;
@@ -1419,6 +1501,10 @@ public final class EvaHangarBuilder
 
     private static void buildObservationGallery(ServerLevel level, BlockPos origin)
     {
+        if (relocatedObservationInstalled(level, origin))
+        {
+            return;
+        }
         int minX = IntegratedNervMapBuilder.LIFT_X[0] - HALF_WIDTH
                 - GALLERY_SIDE_MARGIN;
         int maxX = IntegratedNervMapBuilder.LIFT_X[2] + HALF_WIDTH
@@ -1500,6 +1586,18 @@ public final class EvaHangarBuilder
                         Blocks.REINFORCED_DEEPSLATE.defaultBlockState());
             }
         }
+    }
+
+    /** Protects the human-approved S26 rear gallery from legacy regeneration. */
+    private static boolean relocatedObservationInstalled(
+            ServerLevel level, BlockPos origin)
+    {
+        BlockState floor = level.getBlockState(origin.offset(-43, 73, -107));
+        BlockState window = level.getBlockState(origin.offset(-42, 74, -109));
+        return (floor.is(Blocks.POLISHED_DEEPSLATE)
+                || floor.is(Blocks.SEA_LANTERN))
+                && window.is(com.projectseele.registry.ModBlocks
+                        .CLEAR_GLASS.get());
     }
 
     /**
@@ -1699,67 +1797,196 @@ public final class EvaHangarBuilder
         int plugRelativeY = Mth.clamp((int) Math.floor(plugY - bed.getY()),
                 1, railY - 1);
         int plugRelativeZ = Double.isNaN(plugZ) ? REAR_BOARDING_Z_FROM_BED
-                : Mth.clamp((int) Math.round(plugZ) - bed.getZ(),
+                : Mth.clamp(Mth.floor(plugZ) - bed.getZ(),
                         -HALF_DEPTH + 2, REAR_GANTRY_Z_FROM_BED);
-        Map<BlockPos, BlockState> wanted = new LinkedHashMap<>();
-        int yokeY = Math.min(railY - 2, plugRelativeY + 4);
-        // A moving overhead trolley, twin suspension runs and a rigid collar
-        // visibly carry the capsule. The earlier two loose chains made the
-        // plug look like it was simply floating.
-        for (int x = -3; x <= 3; x++)
-        {
-            wanted.put(bed.offset(x, railY, plugRelativeZ),
-                    x == 0
-                            ? Blocks.PISTON.defaultBlockState()
-                                    .setValue(DirectionalBlock.FACING,
-                                            Direction.DOWN)
-                            : Blocks.POLISHED_BLACKSTONE.defaultBlockState());
-            wanted.put(bed.offset(x, yokeY, plugRelativeZ),
-                    x == 0
-                            ? Blocks.COPPER_BLOCK.defaultBlockState()
-                            : Blocks.POLISHED_BLACKSTONE.defaultBlockState());
-        }
-        for (int side : new int[] {-3, 3})
-        {
-            for (int y = yokeY + 1; y < railY; y++)
-            {
-                wanted.put(bed.offset(side, y, plugRelativeZ),
-                        Blocks.CHAIN.defaultBlockState());
-            }
-        }
-        // The parked capsule still needs a rigid mechanical connection. Keep
-        // the side collar attached in both states; withArm only adds the live
-        // centre actuator used while the trolley is travelling.
-        int collarY = Math.min(yokeY - 1, plugRelativeY + 2);
-        for (int side : new int[] {-4, 4})
-        {
-            wanted.put(bed.offset(side, collarY, plugRelativeZ),
-                    Blocks.PISTON.defaultBlockState()
-                            .setValue(DirectionalBlock.FACING,
-                                    side < 0 ? Direction.EAST
-                                            : Direction.WEST));
-            for (int y = collarY + 1; y < yokeY; y++)
-            {
-                wanted.put(bed.offset(side, y, plugRelativeZ),
-                        Blocks.CHAIN.defaultBlockState());
-            }
-        }
-        if (withArm)
-        {
-            wanted.put(bed.offset(0, yokeY - 1, plugRelativeZ),
-                    Blocks.PISTON.defaultBlockState()
-                            .setValue(DirectionalBlock.FACING,
-                                    Direction.DOWN));
-        }
+        Map<BlockPos, BlockState> wanted = craneFrame(bed, railY,
+                plugRelativeY, plugRelativeZ, variant);
         applyCrane(level, origin, variant, wanted);
     }
 
-    /** Retracts the crane completely, leaving the deck and lane clear. */
+    /** Retracts the crane against the ceiling, leaving the deck and lane clear. */
     public static void stowPlugCrane(ServerLevel level, BlockPos origin,
                                       int variant)
     {
         requireVariant(variant);
-        applyCrane(level, origin, variant, Map.of());
+        BlockPos bed = hangarBed(origin, variant);
+        int railY = craneRailAboveBed();
+        Set<BlockPos> live = CRANE_CELLS.get(variant);
+        if (live == null)
+        {
+            live = sweepStaleCrane(level, origin, variant);
+            CRANE_CELLS.put(variant, live);
+        }
+        int relativeZ = REAR_GANTRY_Z_FROM_BED;
+        int bottomY = railY - 2;
+        if (!live.isEmpty())
+        {
+            int minimumWorldY = live.stream().mapToInt(BlockPos::getY)
+                    .min().orElse(bed.getY() + railY - 2);
+            bottomY = Mth.clamp(minimumWorldY - bed.getY() + 2,
+                    1, railY - 2);
+            double averageZ = live.stream()
+                    .filter(position -> position.getY() == minimumWorldY)
+                    .mapToInt(BlockPos::getZ).average()
+                    .orElse(bed.getZ() + REAR_GANTRY_Z_FROM_BED);
+            relativeZ = Mth.clamp((int) Math.round(averageZ) - bed.getZ(),
+                    -HALF_DEPTH + 2, REAR_GANTRY_Z_FROM_BED);
+        }
+        Map<BlockPos, BlockState> wanted = craneFrame(bed, railY,
+                bottomY, relativeZ, variant);
+        if (live != null && live.equals(wanted.keySet()))
+        {
+            return;
+        }
+        applyCrane(level, origin, variant, wanted);
+    }
+
+    /**
+     * Removes only the persisted moving crane palette from its measured
+     * shaft. S20 now renders this mechanism as a transient entity, so old
+     * polished-deepslate yokes must be retired once instead of being painted
+     * back into the authoritative map on every motion tick.
+     */
+    public static int retirePersistedPlugCrane(ServerLevel level,
+                                                BlockPos origin,
+                                                int variant)
+    {
+        requireVariant(variant);
+        Set<BlockPos> stale = CRANE_CELLS.get(variant);
+        if (stale == null)
+        {
+            stale = sweepPersistedS20Crane(level, origin, variant);
+        }
+        int removed = 0;
+        for (BlockPos position : stale)
+        {
+            BlockState state = level.getBlockState(position);
+            if (isRetiredS20CraneBlock(state))
+            {
+                clear(level, position);
+                removed++;
+            }
+        }
+        CRANE_CELLS.put(variant, new LinkedHashSet<>());
+        return removed;
+    }
+
+    /**
+     * S20 briefly persisted a much larger polished-deepslate crane shell.
+     * Polished deepslate is deliberately not part of isCraneHardware(): that
+     * broad predicate is also used by route-clearance checks, where treating
+     * authored floors as movable hardware would be unsafe. The retired S20
+     * crane has an exact, measured shaft, however, and the approved pre-crane
+     * R28 snapshot contains zero polished-deepslate cells in all three such
+     * shafts. Reclaim that legacy girder only inside this bounded owner volume.
+     */
+    private static Set<BlockPos> sweepPersistedS20Crane(
+            ServerLevel level, BlockPos origin, int variant)
+    {
+        BlockPos bed = hangarBed(origin, variant);
+        Set<BlockPos> found = sweepStaleCrane(level, origin, variant);
+        for (int x = -6; x <= 6; x++)
+        {
+            for (int y = REAR_GANTRY_ABOVE_BED - 3;
+                 y <= CHAMBER_HEIGHT - 1; y++)
+            {
+                for (int z = -1; z <= REAR_GANTRY_Z_FROM_BED + 1; z++)
+                {
+                    BlockPos position = bed.offset(x, y, z);
+                    if (isRetiredS20CraneBlock(
+                            level.getBlockState(position)))
+                    {
+                        found.add(position);
+                    }
+                }
+            }
+        }
+        return found;
+    }
+
+    private static boolean isRetiredS20CraneBlock(BlockState state)
+    {
+        return isCraneHardware(state)
+                || state.is(Blocks.POLISHED_DEEPSLATE)
+                || state.is(Blocks.CUT_COPPER)
+                || state.is(Blocks.EXPOSED_CUT_COPPER)
+                || state.is(Blocks.WEATHERED_CUT_COPPER)
+                || state.is(Blocks.OXIDIZED_CUT_COPPER)
+                || state.is(Blocks.WAXED_CUT_COPPER)
+                || state.is(Blocks.WAXED_EXPOSED_CUT_COPPER)
+                || state.is(Blocks.WAXED_WEATHERED_CUT_COPPER)
+                || state.is(Blocks.WAXED_OXIDIZED_CUT_COPPER);
+    }
+
+    /** One coherent vanilla-material bridge trolley and suspended spreader. */
+    private static Map<BlockPos, BlockState> craneFrame(
+            BlockPos bed, int railY, int bottomY, int relativeZ, int variant)
+    {
+        Map<BlockPos, BlockState> wanted = new LinkedHashMap<>();
+        BlockState accent = switch (variant)
+        {
+            case 0 -> Blocks.ORANGE_CONCRETE.defaultBlockState();
+            case 2 -> Blocks.RED_CONCRETE.defaultBlockState();
+            default -> Blocks.PURPLE_CONCRETE.defaultBlockState();
+        };
+        BlockState girder = Blocks.POLISHED_DEEPSLATE.defaultBlockState();
+        BlockState casing = Blocks.COPPER_BLOCK.defaultBlockState();
+        BlockState brass = Blocks.CUT_COPPER.defaultBlockState();
+        BlockState carriage = Blocks.POLISHED_BLACKSTONE.defaultBlockState();
+        BlockState pulley = Blocks.PISTON.defaultBlockState()
+                .setValue(net.minecraft.world.level.block.piston.PistonBaseBlock.FACING,
+                        Direction.DOWN);
+        BlockState magnet = Blocks.EXPOSED_COPPER.defaultBlockState();
+
+        for (int dz : new int[] {-1, 1})
+        {
+            for (int x = -6; x <= 6; x++)
+            {
+                wanted.put(bed.offset(x, railY, relativeZ + dz), girder);
+            }
+        }
+        for (int x : new int[] {-6, 6})
+        {
+            for (int dz = -1; dz <= 1; dz++)
+            {
+                wanted.put(bed.offset(x, railY, relativeZ + dz), girder);
+            }
+        }
+        wanted.put(bed.offset(0, railY, relativeZ), carriage);
+        for (int x = -4; x <= 4; x++)
+        {
+            wanted.put(bed.offset(x, railY - 1, relativeZ),
+                    Math.abs(x) == 3 ? pulley : girder);
+        }
+        for (int x : new int[] {-3, 3})
+        {
+            for (int y = bottomY + 2; y < railY - 1; y++)
+            {
+                wanted.put(bed.offset(x, y, relativeZ),
+                        Blocks.CHAIN.defaultBlockState());
+            }
+            wanted.put(bed.offset(x, bottomY + 1, relativeZ), magnet);
+        }
+        for (int dz : new int[] {-1, 1})
+        {
+            for (int x = -4; x <= 4; x++)
+            {
+                wanted.put(bed.offset(x, bottomY, relativeZ + dz), girder);
+            }
+        }
+        for (int x : new int[] {-4, 4})
+        {
+            for (int dz = -1; dz <= 1; dz++)
+            {
+                wanted.put(bed.offset(x, bottomY, relativeZ + dz), girder);
+            }
+        }
+        for (int x = -2; x <= 2; x++)
+        {
+            wanted.put(bed.offset(x, bottomY, relativeZ),
+                    x == 0 ? accent : Math.abs(x) == 1 ? brass : casing);
+        }
+        return wanted;
     }
 
     private static void applyCrane(ServerLevel level, BlockPos origin,
@@ -1767,13 +1994,25 @@ public final class EvaHangarBuilder
                                     Map<BlockPos, BlockState> wanted)
     {
         /*
-         * Never rediscover moving hardware by block type. The former startup
-         * sweep classified every polished-blackstone/copper/piston cell in the
-         * central cage corridor as stale crane hardware and could erase real
-         * authored structure. Runtime owns only cells it wrote this session.
+         * During this process, mutate only cells recorded in CRANE_CELLS.
+         * After a server restart that ownership table is empty while its
+         * blocks remain persisted, so first use performs one tightly bounded
+         * palette-and-geometry reclaim below instead of a room-wide scan.
          */
-        Set<BlockPos> previous = CRANE_CELLS.computeIfAbsent(variant,
-                key -> new LinkedHashSet<>());
+        Set<BlockPos> previous = CRANE_CELLS.get(variant);
+        if (previous == null)
+        {
+            /*
+             * Dynamic crane cells persist in the save, while CRANE_CELLS does
+             * not survive an integrated/dedicated-server restart.  Starting
+             * with an empty set therefore stacked a new yoke beside every old
+             * one and the orphan hardware subsequently failed the plug-route
+             * interlock.  Reclaim only the crane's measured central shaft on
+             * first use; static rails are iron/accent/beacon and are excluded
+             * by both the palette and the vertical bound below.
+             */
+            previous = sweepStaleCrane(level, origin, variant);
+        }
         for (BlockPos stale : previous)
         {
             if (!wanted.containsKey(stale)
@@ -1803,6 +2042,45 @@ public final class EvaHangarBuilder
     }
 
     /**
+     * Pure geometry form of the moving-crane ownership test. Process-local
+     * CRANE_CELLS disappears on reload, but the persisted yoke is still the
+     * mechanism carrying the plug and must not collide with its own capsule.
+     */
+    public static boolean isPlugCraneCell(BlockPos origin, int variant,
+                                          double craneEyeY,
+                                          double craneEyeZ,
+                                          BlockPos position)
+    {
+        BlockPos bed = hangarBed(origin, variant);
+        int railY = craneRailAboveBed();
+        int plugY = Mth.clamp(Mth.floor(craneEyeY - bed.getY()),
+                1, railY - 1);
+        int plugZ = Mth.clamp(Mth.floor(craneEyeZ) - bed.getZ(),
+                -HALF_DEPTH + 2, REAR_GANTRY_Z_FROM_BED);
+        int dx = position.getX() - bed.getX();
+        int dy = position.getY() - bed.getY();
+        int dz = position.getZ() - bed.getZ();
+        int localZ = dz - plugZ;
+        if (Math.abs(localZ) > 1)
+        {
+            return false;
+        }
+        boolean topBridge = dy == railY
+                && (Math.abs(localZ) == 1 && Math.abs(dx) <= 6
+                        || Math.abs(dx) == 6 && Math.abs(localZ) <= 1
+                        || dx == 0 && localZ == 0);
+        boolean topCrosshead = dy == railY - 1
+                && localZ == 0 && Math.abs(dx) <= 4;
+        boolean suspension = localZ == 0 && Math.abs(dx) == 3
+                && dy > plugY && dy < railY - 1;
+        boolean lowerFrame = dy == plugY
+                && (Math.abs(localZ) == 1 && Math.abs(dx) <= 4
+                        || Math.abs(dx) == 4 && Math.abs(localZ) <= 1
+                        || localZ == 0 && Math.abs(dx) <= 2);
+        return topBridge || topCrosshead || suspension || lowerFrame;
+    }
+
+    /**
      * One bounded corridor pass the first time a cage is driven this session, so
      * crane parts left in the world by an earlier run are collected before the
      * incremental tracking takes over.
@@ -1812,11 +2090,18 @@ public final class EvaHangarBuilder
     {
         BlockPos bed = hangarBed(origin, variant);
         Set<BlockPos> found = new LinkedHashSet<>();
-        for (int x = -4; x <= 4; x++)
+        for (int x = -6; x <= 6; x++)
         {
-            for (int y = 1; y <= CHAMBER_HEIGHT - 1; y++)
+            /*
+             * All authored capsule yokes travel between the dorsal boarding
+             * deck and the ceiling rail.  Restricting recovery to that band
+             * prevents similarly-coloured civil structure lower in the cage
+             * from ever being classified as moving hardware.
+             */
+            for (int y = REAR_GANTRY_ABOVE_BED - 3;
+                 y <= CHAMBER_HEIGHT - 1; y++)
             {
-                for (int z = -HALF_DEPTH + 2; z <= REAR_GANTRY_Z_FROM_BED; z++)
+                for (int z = -1; z <= REAR_GANTRY_Z_FROM_BED + 1; z++)
                 {
                     BlockPos position = bed.offset(x, y, z);
                     if (isCraneHardware(level.getBlockState(position)))
@@ -1943,8 +2228,18 @@ public final class EvaHangarBuilder
                 BlockPos floor = new BlockPos(bed.getX() + x, floorY, z);
                 if (extended && lane)
                 {
-                    set(level, floor, Math.floorMod(x + z, 5) == 0
-                            ? accent : Blocks.IRON_BLOCK.defaultBlockState());
+                    // The final panel splits around the vertical capsule.
+                    boolean capsuleWell = segment >= BRIDGE_SEGMENTS - 1
+                            && Math.abs(x) <= 2;
+                    if (capsuleWell)
+                    {
+                        clear(level, floor);
+                    }
+                    else
+                    {
+                        set(level, floor, Math.floorMod(x + z, 5) == 0
+                                ? accent : Blocks.IRON_BLOCK.defaultBlockState());
+                    }
                 }
                 else if (lane)
                 {
@@ -2046,8 +2341,9 @@ public final class EvaHangarBuilder
                     return "gantry " + failure;
                 }
             }
+            int centreOffset = z <= boardingEndZ + 1 ? 2 : 0;
             String failure = walkable(level,
-                    new BlockPos(bed.getX(), gantryY, z));
+                    new BlockPos(bed.getX() + centreOffset, gantryY, z));
             if (failure != null)
             {
                 return "bridge " + failure;
@@ -2098,7 +2394,19 @@ public final class EvaHangarBuilder
                 || state.is(Blocks.WAXED_WEATHERED_COPPER)
                 || state.is(Blocks.WAXED_OXIDIZED_COPPER)
                 || state.is(Blocks.POLISHED_BLACKSTONE)
-                || state.is(Blocks.PISTON);
+                || state.is(Blocks.PISTON)
+                || state.is(Blocks.LIGHT_GRAY_CONCRETE)
+                || state.is(Blocks.ORANGE_CONCRETE)
+                || state.is(Blocks.PURPLE_CONCRETE)
+                || state.is(Blocks.RED_CONCRETE)
+                || PrivateModVisuals.is(state, "create", "metal_girder")
+                || PrivateModVisuals.is(state, "create", "andesite_casing")
+                || PrivateModVisuals.is(state, "create", "brass_casing")
+                || PrivateModVisuals.is(state, "create", "gantry_carriage")
+                || PrivateModVisuals.is(state, "create", "rope_pulley")
+                || PrivateModVisuals.is(state, "create", "pulley_magnet")
+                || PrivateModVisuals.is(state, "create",
+                        "piston_extension_pole");
     }
 
     /**
@@ -2152,15 +2460,31 @@ public final class EvaHangarBuilder
                                              int variant)
     {
         BlockPos hangar = hangarBed(origin, variant);
-        BlockPos silo = IntegratedNervMapBuilder.lowerLiftBed(variant);
+        BlockPos silo = IntegratedNervMapBuilder.lowerLiftBed(origin, variant);
         if (position.equals(hangar) || position.equals(silo))
         {
             return Blocks.LODESTONE.defaultBlockState();
         }
         int relativeX = position.getX() - hangar.getX();
-        return Math.abs(relativeX) == 5
-                ? Blocks.POLISHED_BASALT.defaultBlockState()
-                : Blocks.POLISHED_DEEPSLATE.defaultBlockState();
+        if (Math.abs(relativeX) == 5)
+        {
+            // The original black-on-black basalt rails disappeared into the
+            // tunnel floor. Keep a bright physical pair under the moving
+            // carrier, and let moveCarrier restore the same pattern behind it.
+            return Math.floorMod(position.getZ() - hangar.getZ(), 8) == 0
+                    ? Blocks.SEA_LANTERN.defaultBlockState()
+                    : Blocks.IRON_BLOCK.defaultBlockState();
+        }
+        if (Math.abs(relativeX) <= 10
+                && Math.floorMod(position.getZ() - hangar.getZ(), 6) == 0)
+        {
+            return Blocks.CUT_COPPER.defaultBlockState();
+        }
+        if (relativeX == 0)
+        {
+            return Blocks.POLISHED_BLACKSTONE.defaultBlockState();
+        }
+        return Blocks.POLISHED_DEEPSLATE.defaultBlockState();
     }
 
     private static BlockState accent(int variant)

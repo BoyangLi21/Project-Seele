@@ -90,9 +90,6 @@ public final class SeeleConfig
     public static final ForgeConfigSpec.DoubleValue EVA_BERSERK_DAMAGE_MULTIPLIER;
     public static final ForgeConfigSpec.IntValue EVA_BERSERK_TARGET_RANGE;
 
-    // ----- common: EVA armament logistics -----
-    public static final ForgeConfigSpec.BooleanValue EVA_ARMAMENT_RACK_ENFORCES_LOADOUT;
-
     public static final ForgeConfigSpec.DoubleValue PLUG_SOCKET_HEIGHT;
     public static final ForgeConfigSpec.DoubleValue PLUG_SOCKET_REAR_OFFSET;
     public static final ForgeConfigSpec.DoubleValue PLUG_APPROACH_CLEARANCE;
@@ -141,9 +138,9 @@ public final class SeeleConfig
                         "Keep false; explicit administrator setup commands own generation.")
                 .define("runtimeWorldRepair", false);
         TRANSPARENT_GEOFRONT_SHELL = common
-                .comment("Allow future generators to build the legacy transparent GeoFront sphere.",
-                        "The rescue pass does not rewrite an existing save; migration removes it later.")
-                .define("transparentGeoFrontShell", false);
+                .comment("Build the non-ticking transparent GeoFront skyweave sphere.",
+                        "This uses Project SEELE's static weave, not Ars Nouveau's per-block tile entity.")
+                .define("transparentGeoFrontShell", true);
         common.pop();
 
         common.push("ramiel");
@@ -326,13 +323,6 @@ public final class SeeleConfig
         EVA_BERSERK_TARGET_RANGE = common
                 .comment("Maximum Angel acquisition range for berserk Unit-01.")
                 .defineInRange("targetRange", 128, 16, 512);
-        common.pop();
-
-        common.push("eva_armament");
-        EVA_ARMAMENT_RACK_ENFORCES_LOADOUT = common
-                .comment("Require an EVA to use only the armament physically loaded from a NERV rack.",
-                        "Disabled by default so existing visual-test worlds keep the complete R-key weapon wheel.")
-                .define("requireRackLoadout", false);
         common.pop();
 
         // Where the capsule visibly sits and travels. The mesh is authored in the

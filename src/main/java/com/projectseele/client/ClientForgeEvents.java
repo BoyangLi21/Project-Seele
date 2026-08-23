@@ -1,17 +1,22 @@
 package com.projectseele.client;
 
 import com.projectseele.ProjectSeele;
+import com.mojang.math.Axis;
 import com.projectseele.client.visual.VisualCaptureManager;
 import com.projectseele.entity.EvaUnit01Entity;
 import com.projectseele.entity.EvaScale;
 import com.projectseele.entity.EntryPlugCarrierEntity;
+import com.projectseele.entity.NervArmamentStationEntity;
 import com.projectseele.network.SeeleNetwork;
 import com.projectseele.network.ServerboundEntryPlugPacket;
+import com.projectseele.network.ServerboundCommandSeatPosePacket;
 import com.projectseele.network.ServerboundEvaControlPacket;
+import com.projectseele.network.ServerboundUltramanTogglePacket;
 import com.projectseele.world.EntryPlugKinematics;
 import com.projectseele.world.EvaPilotResolver;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
@@ -24,20 +29,28 @@ import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.ComputeFovModifierEvent;
+import net.minecraftforge.client.event.ClientPlayerNetworkEvent;
 import net.minecraftforge.client.event.InputEvent;
 import net.minecraftforge.client.event.RenderHandEvent;
 import net.minecraftforge.client.event.RenderGuiOverlayEvent;
 import net.minecraftforge.client.event.RenderPlayerEvent;
+import net.minecraftforge.event.entity.EntityEvent;
+import net.minecraft.client.model.PlayerModel;
+import net.minecraft.world.InteractionHand;
+import com.projectseele.client.render.GendoPoseArmLayer;
 import net.minecraftforge.client.gui.overlay.VanillaGuiOverlay;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import org.lwjgl.glfw.GLFW;
+import org.joml.Quaternionf;
 
 /** Client-side pilot input: keybinds, attack interception, sniper zoom. */
 @Mod.EventBusSubscriber(modid = ProjectSeele.MODID, bus = Mod.EventBusSubscriber.Bus.FORGE, value = Dist.CLIENT)
 public final class ClientForgeEvents
 {
+    private static final ThreadLocal<ArmVisibility> COMMANDER_ARM_VISIBILITY =
+            new ThreadLocal<>();
     /** Tracks the held use-key for cannon charge or N2 arming edges. */
     private static boolean chargeHeld;
     /** Local optical sight state; rifle fire itself remains server-authoritative. */
@@ -137,6 +150,7 @@ public final class ClientForgeEvents
                 chargeHeld = false;
                 rifleAimHeld = false;
                 clearJumpRequest();
+                UltramanClientState.clear();
             }
             return;
         }
@@ -235,6 +249,23 @@ public final class ClientForgeEvents
                 send(ServerboundEvaControlPacket.ACTION_SELF_LAUNCH);
             }
         }
+        while (Keybinds.COMMANDER_POSE.consumeClick())
+        {
+            if (player.isPassenger())
+            {
+                SeeleNetwork.CHANNEL.sendToServer(
+                        new ServerboundCommandSeatPosePacket());
+            }
+        }
+        while (Keybinds.ULTRAMAN_TRANSFORM.consumeClick())
+        {
+            if (eva == null && !player.isPassenger())
+            {
+                SeeleNetwork.CHANNEL.sendToServer(
+                        new ServerboundUltramanTogglePacket());
+            }
+        }
+        UltramanClientState.tick(minecraft.level);
 
         if (eva != null && minecraft.screen == null)
         {
@@ -346,28 +377,30 @@ public final class ClientForgeEvents
         float current = -1.0F;
         if (player.getVehicle() instanceof EntryPlugCarrierEntity plug)
         {
-            if (plug.isLockedToEva() && eva != null)
-            {
-                current = eva.getActivationTicks() > 0
-                        ? eva.getActivationProgress(0.0F) : 1.0F;
-            }
-            else
-            {
-                current = plug.getCabinStage()
-                        == EntryPlugCarrierEntity.CABIN_SEALED_DARK
-                        ? 0.0F : plug.getCabinProgress() / 100.0F;
-            }
-        }
-        else if (eva != null)
-        {
-            if (eva.getActivationTicks() > 0)
+            if (plug.isLockedToEva() && eva != null
+                    && eva.isActivationCinematicActive())
             {
                 current = eva.getActivationProgress(0.0F);
             }
-            else if (cabinSequenceProgress >= 0.0F)
+            else if (!plug.isLockedToEva())
             {
-                current = 1.0F;
+                current = plug.getCabinStage()
+                        == EntryPlugCarrierEntity.CABIN_RECOVERED_IDLE
+                        ? -1.0F
+                        : plug.getCabinStage()
+                                == EntryPlugCarrierEntity.CABIN_SEALED_DARK
+                                ? 0.0F
+                                : plug.getCabinProgress() / 100.0F;
             }
+            else
+            {
+                cabinSequenceProgress = -1.0F;
+                return;
+            }
+        }
+        else if (eva != null && eva.isActivationCinematicActive())
+        {
+            current = eva.getActivationProgress(0.0F);
         }
         if (current < 0.0F)
         {
@@ -399,7 +432,10 @@ public final class ClientForgeEvents
             playPlugSound(minecraft, SoundEvents.BEACON_ACTIVATE,
                     1.0F, 1.18F);
         }
-        cabinSequenceProgress = Math.max(previous, current);
+        // Recovery deliberately runs the same physical sequence backwards.
+        // Retaining the historical maximum pinned audio/UI state at 70% even
+        // after the capsule returned to its cage.
+        cabinSequenceProgress = current;
     }
 
     private static boolean crossed(float previous, float current,
@@ -454,7 +490,15 @@ public final class ClientForgeEvents
             // Never let the pilot eat/place things through the plug wall.
             event.setCanceled(true);
             event.setSwingHand(false);
-            if (eva.isMeleeWeapon())
+            NervArmamentStationEntity station = Minecraft.getInstance().level
+                    == null ? null : NervArmamentStationEntity.nearest(
+                            Minecraft.getInstance().level, eva.position(),
+                            NervArmamentStationEntity.EVA_PICKUP_RANGE, true);
+            if (station != null)
+            {
+                send(ServerboundEvaControlPacket.ACTION_TAKE_ARMAMENT);
+            }
+            else if (eva.isMeleeWeapon())
             {
                 send(ServerboundEvaControlPacket.ACTION_SMASH);
             }
@@ -465,6 +509,37 @@ public final class ClientForgeEvents
     public static void onRenderHand(RenderHandEvent event)
     {
         Minecraft minecraft = Minecraft.getInstance();
+        if (minecraft.player != null
+                && minecraft.options.getCameraType().isFirstPerson()
+                && UltramanClientState.hayataPose(minecraft.player))
+        {
+            if (event.getHand() == InteractionHand.OFF_HAND)
+            {
+                event.setCanceled(true);
+                return;
+            }
+            // Lift the real held Beta Capsule into Hayata's overhead line in
+            // first person; third person uses the synchronized arm pose.
+            event.getPoseStack().translate(0.36D, -0.18D, -0.58D);
+            event.getPoseStack().mulPose(
+                    Axis.XP.rotationDegrees(-68.0F));
+            event.getPoseStack().mulPose(
+                    Axis.ZP.rotationDegrees(-18.0F));
+            return;
+        }
+        if (minecraft.player != null
+                && minecraft.options.getCameraType().isFirstPerson()
+                && CommanderPoseClient.isActive(minecraft.player))
+        {
+            event.setCanceled(true);
+            if (event.getHand() == InteractionHand.MAIN_HAND)
+            {
+                GendoPoseArmLayer.renderFirstPerson(event.getPoseStack(),
+                        event.getMultiBufferSource(), event.getPackedLight(),
+                        minecraft.player);
+            }
+            return;
+        }
         EvaUnit01Entity eva = ridden(minecraft.player);
         if (eva == null || !minecraft.options.getCameraType().isFirstPerson())
         {
@@ -667,7 +742,85 @@ public final class ClientForgeEvents
         if (EvaPilotResolver.controlTarget(event.getEntity()) != null)
         {
             event.setCanceled(true);
+            return;
         }
+        if (event.getEntity() instanceof AbstractClientPlayer clientPlayer
+                && UltramanClientState.hidePlayer(clientPlayer))
+        {
+            event.setCanceled(true);
+            return;
+        }
+        if (CommanderPoseClient.isActive(event.getEntity()))
+        {
+            PlayerModel<?> model = event.getRenderer().getModel();
+            COMMANDER_ARM_VISIBILITY.set(new ArmVisibility(
+                    model.rightArm.visible, model.leftArm.visible,
+                    model.rightSleeve.visible, model.leftSleeve.visible));
+            // Lean the complete player around the hips. Applying one render
+            // transform keeps head, torso, legs and the custom elbow layer in
+            // the same coordinate frame instead of tearing the waist apart.
+            float bodyYaw = Mth.rotLerp(event.getPartialTick(),
+                    event.getEntity().yBodyRotO, event.getEntity().yBodyRot);
+            float facingRadians = (float)Math.toRadians(bodyYaw);
+            double forwardX = -Math.sin(facingRadians) * 0.25D;
+            double forwardZ = Math.cos(facingRadians) * 0.25D;
+            float renderYaw = (float)Math.toRadians(180.0F - bodyYaw);
+            float axisX = (float)Math.cos(renderYaw);
+            float axisZ = (float)-Math.sin(renderYaw);
+            Quaternionf lean = new Quaternionf().fromAxisAngleRad(
+                    axisX, 0.0F, axisZ, (float)Math.toRadians(-20.0D));
+            event.getPoseStack().pushPose();
+            // The authored top slab sits slightly above the vanilla seated
+            // model's visual origin. Raise the complete rendered player by
+            // 1/8 block so the elbow centres rest on, not inside, the slab.
+            event.getPoseStack().translate(forwardX, 0.125D, forwardZ);
+            event.getPoseStack().translate(0.0D, 0.75D, 0.0D);
+            event.getPoseStack().mulPose(lean);
+            event.getPoseStack().translate(0.0D, -0.75D, 0.0D);
+        }
+    }
+
+    @SubscribeEvent
+    public static void onRenderPlayerPost(RenderPlayerEvent.Post event)
+    {
+        ArmVisibility visibility = COMMANDER_ARM_VISIBILITY.get();
+        if (visibility != null)
+        {
+            PlayerModel<?> model = event.getRenderer().getModel();
+            model.rightArm.visible = visibility.rightArm();
+            model.leftArm.visible = visibility.leftArm();
+            model.rightSleeve.visible = visibility.rightSleeve();
+            model.leftSleeve.visible = visibility.leftSleeve();
+            event.getPoseStack().popPose();
+            COMMANDER_ARM_VISIBILITY.remove();
+        }
+    }
+
+    @SubscribeEvent
+    public static void onClientPlayerSize(EntityEvent.Size event)
+    {
+        if (!(event.getEntity() instanceof AbstractClientPlayer player))
+        {
+            return;
+        }
+        float scale = UltramanClientState.scale(player, 0.0F);
+        if (scale <= 1.001F)
+        {
+            return;
+        }
+        event.setNewSize(event.getNewSize().scale(scale));
+        event.setNewEyeHeight(event.getNewEyeHeight() * scale);
+    }
+
+    @SubscribeEvent
+    public static void onClientLogout(ClientPlayerNetworkEvent.LoggingOut event)
+    {
+        EvaCommandFeedClient.resetConnectionState();
+    }
+
+    private record ArmVisibility(boolean rightArm, boolean leftArm,
+                                 boolean rightSleeve, boolean leftSleeve)
+    {
     }
 
     @SubscribeEvent

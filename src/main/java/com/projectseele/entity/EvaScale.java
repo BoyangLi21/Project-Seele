@@ -23,20 +23,21 @@ public final class EvaScale
     public static final float PRONE_HEIGHT = 8.5F * WORLD_MULTIPLIER;
 
     /**
-     * The TV/reviewed model connector is a rigid three-point adapter mounted
-     * on the centre of the rear armour.  It begins below the entry-plug cover
-     * and carries the flexible cable down to the lumbar exit.  Keeping both
-     * endpoints here lets the renderer draw a connector which actually meets
-     * the armour instead of ending a cable at a floating point behind it.
+     * Reviewed upper-back external-power receptacle.  The previous flexible
+     * lead ended at legacy lumbar height, which reads as a cable plugged into
+     * the pelvis after the airframe was enlarged to its final two-times scale.
+     * These two points are now the armour face and the tail of one compact
+     * rigid plug; the cable terminates at the plug instead of continuing down
+     * the body.
      */
     public static final double UMBILICAL_MOUNT_HEIGHT =
-            20.2D * WORLD_MULTIPLIER;
+            25.10D * WORLD_MULTIPLIER;
     public static final double UMBILICAL_MOUNT_REAR_OFFSET =
-            1.90D * WORLD_MULTIPLIER;
+            2.15D * WORLD_MULTIPLIER;
     public static final double UMBILICAL_SOCKET_HEIGHT =
-            16.7D * WORLD_MULTIPLIER;
+            24.55D * WORLD_MULTIPLIER;
     public static final double UMBILICAL_SOCKET_REAR_OFFSET =
-            2.10D * WORLD_MULTIPLIER;
+            3.25D * WORLD_MULTIPLIER;
 
     /**
      * Entry plugs do not scale one-for-one with an EVA. The airframe doubled

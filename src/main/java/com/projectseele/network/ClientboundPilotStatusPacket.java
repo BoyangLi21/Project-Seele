@@ -33,10 +33,29 @@ public final class ClientboundPilotStatusPacket
     }
 
     private final Unit[] units;
+    private final String cityPhase;
+    private final int cityDepth;
+    private final int cityTargetDepth;
+    private final int cityMaximumDepth;
+    private final String armamentState;
+    private final boolean armamentStocked;
+    private final int armamentLiftPercent;
 
-    public ClientboundPilotStatusPacket(Unit[] units)
+    public ClientboundPilotStatusPacket(Unit[] units, String cityPhase,
+                                        int cityDepth, int cityTargetDepth,
+                                        int cityMaximumDepth,
+                                        String armamentState,
+                                        boolean armamentStocked,
+                                        int armamentLiftPercent)
     {
         this.units = units;
+        this.cityPhase = cityPhase;
+        this.cityDepth = cityDepth;
+        this.cityTargetDepth = cityTargetDepth;
+        this.cityMaximumDepth = cityMaximumDepth;
+        this.armamentState = armamentState;
+        this.armamentStocked = armamentStocked;
+        this.armamentLiftPercent = armamentLiftPercent;
     }
 
     public ClientboundPilotStatusPacket(FriendlyByteBuf buffer)
@@ -57,6 +76,13 @@ public final class ClientboundPilotStatusPacket
                     buffer.readVarInt(), buffer.readBoolean(),
                     buffer.readBoolean(), buffer.readBoolean());
         }
+        this.cityPhase = buffer.readUtf(32);
+        this.cityDepth = buffer.readVarInt();
+        this.cityTargetDepth = buffer.readVarInt();
+        this.cityMaximumDepth = buffer.readVarInt();
+        this.armamentState = buffer.readUtf(32);
+        this.armamentStocked = buffer.readBoolean();
+        this.armamentLiftPercent = buffer.readVarInt();
     }
 
     public void encode(FriendlyByteBuf buffer)
@@ -82,6 +108,13 @@ public final class ClientboundPilotStatusPacket
             buffer.writeBoolean(unit.berserk());
             buffer.writeBoolean(unit.liveFeed());
         }
+        buffer.writeUtf(this.cityPhase, 32);
+        buffer.writeVarInt(this.cityDepth);
+        buffer.writeVarInt(this.cityTargetDepth);
+        buffer.writeVarInt(this.cityMaximumDepth);
+        buffer.writeUtf(this.armamentState, 32);
+        buffer.writeBoolean(this.armamentStocked);
+        buffer.writeVarInt(this.armamentLiftPercent);
     }
 
     public void handle(Supplier<NetworkEvent.Context> contextSupplier)
@@ -89,7 +122,11 @@ public final class ClientboundPilotStatusPacket
         NetworkEvent.Context context = contextSupplier.get();
         DistExecutor.unsafeRunWhenOn(Dist.CLIENT,
                 () -> () -> com.projectseele.client.EvaCommandFeedClient
-                        .setPilotStatus(this.units));
+                        .setPilotStatus(this.units, this.cityPhase,
+                                this.cityDepth, this.cityTargetDepth,
+                                this.cityMaximumDepth,
+                                this.armamentState, this.armamentStocked,
+                                this.armamentLiftPercent));
         context.setPacketHandled(true);
     }
 }

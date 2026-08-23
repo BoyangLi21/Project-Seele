@@ -84,11 +84,13 @@ require("attacks.live_visual_matrix",
         and "LIVE_ATTACK_VIEWS" in visual_capture,
         "full Visual Lab runs real player input in external and first-person views")
 require("rifle.visual_muzzle_socket",
-        "rifleMuzzlePosition(dir)" in rifle_body
-        and "RIFLE_STANDING_MUZZLE_FORWARD =\n            EvaScale.fromLegacy(18.3308D)" in entity
-        and "RIFLE_PRONE_MUZZLE_FORWARD =\n            EvaScale.fromLegacy(19.9715D)" in entity
+        "rifleMuzzlePosition(look)" in rifle_body
+        and "RIFLE_STANDING_MUZZLE_FORWARD = 30.8104D" in entity
+        and "RIFLE_PRONE_MUZZLE_FORWARD = 49.5601D" in entity
+        and "new ClipContext(muzzle, farEnd" in rifle_body
+        and "new AABB(muzzle, end)" in rifle_body
         and "pitchedUp.scale(muzzleUp)" in entity,
-        "tracer and sound originate at the measured standing/prone visible muzzle")
+        "collision, tracer and sound originate at the measured visible muzzle")
 require("cannon.visual_muzzle_socket",
         "cannonMuzzlePosition(dir)" in entity
         and "CANNON_STANDING_MUZZLE_FORWARD =\n            EvaScale.fromLegacy(22.4417D)" in entity

@@ -83,6 +83,37 @@ description='''${mod_description}'''
     ordering="AFTER"
     side="BOTH"
 
+# Authored personnel lifts use Moving Elevators. EVA launch carriers remain
+# Project SEELE machinery and do not use personnel-elevator blocks.
+[[dependencies.${mod_id}]]
+    modId="movingelevators"
+    mandatory=true
+    versionRange="[1.4.12,1.5)"
+    ordering="AFTER"
+    side="BOTH"
+[[dependencies.${mod_id}]]
+    modId="supermartijn642configlib"
+    mandatory=true
+    versionRange="[1.1.8,)"
+    ordering="AFTER"
+    side="BOTH"
+[[dependencies.${mod_id}]]
+    modId="supermartijn642corelib"
+    mandatory=true
+    versionRange="[1.1.24,)"
+    ordering="AFTER"
+    side="BOTH"
+
+# NERV personnel circulation uses MTR's non-Create escalators and horizontal
+# moving walkways. The same dependency leaves room for later rail, aircraft
+# and cable-car systems requested for Tokyo-3 and GeoFront.
+[[dependencies.${mod_id}]]
+    modId="mtr"
+    mandatory=true
+    versionRange="[4.0.5,4.1)"
+    ordering="AFTER"
+    side="BOTH"
+
 # Features are specific properties of the game environment, that you may want to declare you require. This example declares
 # that your mod requires GL version 3.2 or higher. Other features will be added. They are side aware so declaring this won't
 # stop your mod loading on the server for example.

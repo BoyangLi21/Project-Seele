@@ -17,10 +17,10 @@ import net.minecraft.server.packs.resources.Resource;
 public final class LocalVisualAssetFingerprint
 {
     private static final Map<String, MeshContract> CONTRACTS = Map.of(
-            "eva_unit00", new MeshContract(4_130, 47),
-            "eva_unit01", new MeshContract(4_666, 47),
-            "eva_unit02", new MeshContract(4_390, 47),
-            "mass_production_eva", new MeshContract(4_901, 15));
+            "eva_unit00", new MeshContract(5_510, 43, true),
+            "eva_unit01", new MeshContract(6_044, 43, true),
+            "eva_unit02", new MeshContract(5_770, 43, true),
+            "mass_production_eva", new MeshContract(4_901, 15, false));
     private static final Map<String, Fingerprint> CACHE = new ConcurrentHashMap<>();
 
     private LocalVisualAssetFingerprint() {}
@@ -58,8 +58,8 @@ public final class LocalVisualAssetFingerprint
                 .allMatch(resource -> sourcePack.equals(resource.sourcePack()));
         String meshTag = LocalTriangleMeshLayer.captureTag(mesh);
         MeshContract contract = CONTRACTS.get(assetName);
-        boolean meshMatches = contract != null && meshTag.startsWith(
-                "triangle-mesh-" + contract.triangles() + "-p" + contract.parts() + "-");
+        boolean meshMatches = contract != null
+                && contract.matches(meshTag, mesh);
         boolean valid = complete && sameSource && meshMatches;
         String reason = !complete ? "missing-resource"
                 : !sameSource ? "mixed-resource-packs"
@@ -117,7 +117,53 @@ public final class LocalVisualAssetFingerprint
         }
     }
 
-    private record MeshContract(int triangles, int parts) {}
+    private record MeshContract(int triangles, int parts,
+                                boolean nativeThumbs)
+    {
+        private boolean matches(String meshTag, ResourceLocation mesh)
+        {
+            if (!meshTag.startsWith("triangle-mesh-" + triangles
+                    + "-p" + parts + "-"))
+            {
+                return false;
+            }
+            if (!nativeThumbs)
+            {
+                return true;
+            }
+            for (String side : new String[] {"l", "r"})
+            {
+                // SmOd already supplies the visible thumb as one authored
+                // mesh.  The other four digits use the generated articulated
+                // three-segment chains.  Requiring this exact split prevents
+                // both the former doubled/overlong thumb and a silently
+                // missing finger chain from passing strict mode.
+                if (!LocalTriangleMeshLayer.hasPart(
+                        mesh, "finger_thumb_" + side)
+                        || LocalTriangleMeshLayer.hasPart(
+                        mesh, "finger_thumb_distal_" + side)
+                        || LocalTriangleMeshLayer.hasPart(
+                        mesh, "finger_thumb_tip_" + side))
+                {
+                    return false;
+                }
+                for (String digit : new String[] {
+                        "index", "middle", "ring", "little"})
+                {
+                    if (!LocalTriangleMeshLayer.hasPart(
+                            mesh, "finger_" + digit + "_" + side)
+                            || !LocalTriangleMeshLayer.hasPart(mesh,
+                            "finger_" + digit + "_distal_" + side)
+                            || !LocalTriangleMeshLayer.hasPart(mesh,
+                            "finger_" + digit + "_tip_" + side))
+                    {
+                        return false;
+                    }
+                }
+            }
+            return true;
+        }
+    }
 
     public record ResourceDigest(boolean present, String sourcePack, String sha256) {}
 

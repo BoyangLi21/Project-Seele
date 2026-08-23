@@ -4,10 +4,13 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.projectseele.ProjectSeele;
 import com.projectseele.entity.LilithEntity;
+import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.culling.Frustum;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.phys.AABB;
+import org.jetbrains.annotations.Nullable;
+import software.bernie.geckolib.cache.object.BakedGeoModel;
 import software.bernie.geckolib.cache.object.GeoBone;
 import software.bernie.geckolib.renderer.GeoEntityRenderer;
 
@@ -18,6 +21,7 @@ import software.bernie.geckolib.renderer.GeoEntityRenderer;
 public final class LilithRenderer extends GeoEntityRenderer<LilithEntity>
 {
     private static final ResourceLocation GEOMETRY = resource("geo/lilith.geo.json");
+    private static final float MODEL_SCALE = 0.82F;
     private static final ResourceLocation FALLBACK_TEXTURE =
             minecraftResource("textures/block/white_concrete.png");
     private static final ResourceLocation ANIMATION =
@@ -43,6 +47,21 @@ public final class LilithRenderer extends GeoEntityRenderer<LilithEntity>
         }
         this.shadowRadius = 0.0F;
     }
+    @Override
+    public void preRender(PoseStack poseStack, LilithEntity animatable,
+                          BakedGeoModel model,
+                          @Nullable MultiBufferSource bufferSource,
+                          @Nullable VertexConsumer buffer,
+                          boolean isReRender, float partialTick,
+                          int packedLight, int packedOverlay,
+                          float red, float green, float blue, float alpha)
+    {
+        poseStack.scale(MODEL_SCALE, MODEL_SCALE, MODEL_SCALE);
+        super.preRender(poseStack, animatable, model, bufferSource, buffer,
+                isReRender, partialTick, packedLight, packedOverlay,
+                red, green, blue, alpha);
+    }
+
 
     @Override
     public void renderCubesOfBone(PoseStack poseStack, GeoBone bone,
@@ -69,10 +88,10 @@ public final class LilithRenderer extends GeoEntityRenderer<LilithEntity>
         }
         // The local spear reaches the observation gallery while the crucified
         // wrists span almost the full 48-block containment chamber.
-        AABB visualBounds = new AABB(entity.getX() - 23.0D,
+        AABB visualBounds = new AABB(entity.getX() - 19.0D,
                 entity.getY() - 1.0D, entity.getZ() - 14.0D,
-                entity.getX() + 23.0D, entity.getY() + 35.0D,
-                entity.getZ() + 52.0D);
+                entity.getX() + 19.0D, entity.getY() + 29.0D,
+                entity.getZ() + 43.0D);
         return frustum.isVisible(visualBounds);
     }
 

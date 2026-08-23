@@ -80,7 +80,22 @@ PALETTE = (
     (102, 109, 123, 255),  # control hardware
     (244, 150, 18, 255),   # warning / harness
     (190, 82, 12, 255),    # LCL-lit interior trim
+    (112, 121, 130, 255),  # variant-owned crane/identification collar
+    (220, 18, 24, 255),    # supplied NERV logo red
 )
+
+COLLAR_INDEX = 10
+FEATURE_INDEX = 2
+VARIANT_FEATURES = {
+    0: PALETTE[FEATURE_INDEX],       # Prototype: retain authored orange band
+    1: (100, 42, 151, 255),         # Test Type: Unit-01 violet band
+    2: (178, 25, 38, 255),          # Production Model: Unit-02 red band
+}
+VARIANT_SEATS = {
+    0: (174, 122, 20, 255),         # Unit-00: ochre prototype seat
+    1: PALETTE[6],                  # Unit-01: violet test-type seat
+    2: (132, 24, 38, 255),          # Unit-02: crimson production seat
+}
 
 MATERIAL_INDEX = {
     "Body2": 0,
@@ -133,7 +148,14 @@ def run_blender(args: argparse.Namespace):
         "--", "--source", str(args.source.resolve()),
         "--output", str(args.output.resolve()),
     ]
-    raise SystemExit(subprocess.call(command, cwd=REPO))
+    result = subprocess.call(command, cwd=REPO)
+    if result == 0:
+        result = subprocess.call([
+            sys.executable,
+            str(REPO / "tools/make_entry_plug_identification.py"),
+            "--output", str(args.output.resolve()),
+        ], cwd=REPO)
+    raise SystemExit(result)
 
 
 def read_obj(path: Path):
@@ -376,12 +398,23 @@ def append_shell_objects(values, objects, bounds):
 
 def add_cockpit(values):
     before = len(values)
-    # Pressure-cavity backing and structural side cheeks.
+    # Pressure-cavity backing and structural side cheeks.  The first cabin
+    # liner stopped roughly 1.0 model unit below the hatch skin, so an occupied
+    # first-person camera could see daylight along both sides even with the
+    # leaves shut.  These walls and bulkheads overlap the pressure-door plane.
     append_box(values, (0.0, -30.0, -5.35), (11.5, 25.0, 0.65), 5)
-    append_box(values, (-5.75, -30.0, -0.25), (0.55, 25.0, 10.0), 5)
-    append_box(values, (5.75, -30.0, -0.25), (0.55, 25.0, 10.0), 5)
-    append_box(values, (0.0, -43.0, -0.4), (11.0, 1.0, 9.5), 4)
-    append_box(values, (0.0, -17.0, -0.4), (11.0, 1.0, 9.5), 4)
+    append_box(values, (-5.75, -30.0, 0.75), (0.55, 25.0, 13.0), 5)
+    append_box(values, (5.75, -30.0, 0.75), (0.55, 25.0, 13.0), 5)
+    append_box(values, (0.0, -43.0, 0.5), (11.0, 1.0, 13.0), 4)
+    append_box(values, (0.0, -17.0, 0.5), (11.0, 1.0, 13.0), 4)
+    # Inward-facing roof jambs bridge the real shell opening to the two moving
+    # leaves.  They overlap both the side cheeks and hatch prism by a small
+    # amount, producing a light-tight pressure seal without closing the hatch.
+    for side in (-1.0, 1.0):
+        append_box(values, (side * 4.98, -30.0, 6.80),
+                   (1.42, 25.0, 0.72), 4)
+    append_box(values, (0.0, -42.25, 6.80), (10.4, 1.65, 0.72), 4)
+    append_box(values, (0.0, -17.75, 6.80), (10.4, 1.65, 0.72), 4)
 
     # Soul Throne silhouette: reclined back, head restraint, cushion and deep
     # side bolsters.  These are clean-room runtime pieces because the supplied
@@ -478,6 +511,17 @@ def hatch_polygon(left: bool):
     return tuple((-x, y) for x, y in reversed(shape))
 
 
+def sealed_hatch_polygon(left: bool):
+    """Slightly overlap the pressure jamb and centre seam when closed."""
+    shape = hatch_polygon(left)
+    centre_x = sum(point[0] for point in shape) / len(shape)
+    centre_y = sum(point[1] for point in shape) / len(shape)
+    return tuple((
+        centre_x + (x - centre_x) * 1.045,
+        centre_y + (y - centre_y) * 1.030,
+    ) for x, y in shape)
+
+
 def make_prism_part(pivot, polygon, z_min, z_max, palette_index):
     values = []
     for index in range(1, len(polygon) - 1):
@@ -514,13 +558,36 @@ def add_hatch_detail(part, polygon, palette_index):
     # Keep raised trim almost flush with the door skin.  At the runtime scale
     # the former 0.12-model-unit standoff read as a visible air gap in oblique
     # first-person views even though the pressure-door prism itself was sealed.
-    hatch_surface = MODEL_DEPTH * 0.5025
+    hatch_surface = MODEL_DEPTH * 0.507
     append_box(values, (centre_x, centre_y, hatch_surface),
                (max(xs) - min(xs) - 1.3, 0.55, 0.22), palette_index)
     append_box(values, (centre_x, centre_y - 3.2, hatch_surface),
                (max(xs) - min(xs) - 1.8, 0.32, 0.20), 2)
     append_box(values, (centre_x, centre_y + 3.2, hatch_surface),
                (max(xs) - min(xs) - 1.8, 0.32, 0.20), 1)
+
+
+def make_crane_collar_part():
+    """Build the rigid wet-cage lock ring around the canonical tail marker.
+
+    This part is authored directly in plug frame P, so unlike source OBJ and
+    hatch geometry it must not pass through ``canonicalise_vertices`` again.
+    The slightly oversized four-jaw ring makes the block-scale crane terminate
+    on visible machinery rather than a bare white pressure shell.
+    """
+    values = []
+    # Four interlocking jaws around the 8x8 pressure shell.
+    append_box(values, (0.0, 4.75, 49.0), (11.0, 1.5, 2.2), COLLAR_INDEX)
+    append_box(values, (0.0, -4.75, 49.0), (11.0, 1.5, 2.2), COLLAR_INDEX)
+    append_box(values, (-4.75, 0.0, 49.0), (1.5, 8.0, 2.2), COLLAR_INDEX)
+    append_box(values, (4.75, 0.0, 49.0), (1.5, 8.0, 2.2), COLLAR_INDEX)
+    # Dorsal lifting lug and paired gussets meet the centre crane ram.
+    append_box(values, (0.0, 5.75, 49.5), (3.2, 1.0, 2.8), 3)
+    append_box(values, (-2.55, 5.05, 48.7),
+               (3.1, 0.65, 0.8), 3, degrees=(0.0, 0.0, 15.0))
+    append_box(values, (2.55, 5.05, 48.7),
+               (3.1, 0.65, 0.8), 3, degrees=(0.0, 0.0, -15.0))
+    return {"pivot": list(PIVOT), "vertices": values}
 
 
 def write_json(path: Path, value):
@@ -537,13 +604,13 @@ def png_chunk(name: bytes, payload: bytes) -> bytes:
     )
 
 
-def write_palette(path: Path):
+def write_palette(path: Path, palette=PALETTE):
     tile = 16
-    width = tile * len(PALETTE)
+    width = tile * len(palette)
     rows = []
     for _ in range(tile):
         row = bytearray((0,))
-        for colour in PALETTE:
+        for colour in palette:
             row.extend(bytes(colour) * tile)
         rows.append(bytes(row))
     data = zlib.compress(b"".join(rows), 9)
@@ -555,6 +622,43 @@ def write_palette(path: Path):
     )
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(png)
+
+
+def write_decal_mesh(path: Path):
+    """One flush top plate; its long texture axis follows the plug spine."""
+    y = 4.46
+    x0, x1 = -3.15, 3.15
+    z0, z1 = 37.0, 46.0
+    normal = (0.0, 1.0, 0.0)
+    vertices = []
+
+    def vertex(point, uv):
+        vertices.extend((point[0], point[1], point[2],
+                         uv[0], uv[1], *normal))
+
+    # Texture width runs from the insertion end toward the coloured collar;
+    # texture height runs across the pressure shell.  This keeps the long
+    # designation readable while the capsule lies on its boarding bridge.
+    for point, uv in (
+            ((x0, y, z0), (0.0, 1.0)),
+            ((x1, y, z0), (0.0, 0.0)),
+            ((x1, y, z1), (1.0, 0.0)),
+            ((x0, y, z0), (0.0, 1.0)),
+            ((x1, y, z1), (1.0, 0.0)),
+            ((x0, y, z1), (1.0, 1.0))):
+        vertex(point, uv)
+    write_json(path, {
+        "format_version": 1,
+        "model_height": 190.0,
+        "stride": 8,
+        "parts": {
+            "entry_plug": {
+                "pivot": [0.0, 0.0, 0.0],
+                "vertices": vertices,
+            },
+        },
+        "triangle_count": 2,
+    })
 
 
 def main():
@@ -584,31 +688,47 @@ def main():
     cockpit_triangles = add_cockpit(shell_values)
     canonicalise_vertices(shell_values)
 
-    # The normalized shell reaches +MODEL_DEPTH/2 on the hatch side.  Sink
-    # the inner face slightly into that surface so a closed pressure door is
-    # watertight from side and oblique views rather than hovering beside it.
-    hatch_inner = MODEL_DEPTH * 0.47
-    hatch_outer = MODEL_DEPTH * 0.50
+    # The leaves must overlap the shell lip in depth, not merely be made wider.
+    # Sink the pressure face into the new inward jamb while retaining one
+    # unambiguous outer skin; this removes the side-light slit from the cabin.
+    hatch_inner = MODEL_DEPTH * 0.440
+    hatch_outer = MODEL_DEPTH * 0.505
+    left_polygon = sealed_hatch_polygon(True)
+    right_polygon = sealed_hatch_polygon(False)
     left = make_prism_part(
-        HATCH_PIVOT, hatch_polygon(True), hatch_inner, hatch_outer, 0
+        HATCH_PIVOT, left_polygon, hatch_inner, hatch_outer, 0
     )
     right = make_prism_part(
-        HATCH_PIVOT, hatch_polygon(False), hatch_inner, hatch_outer, 0
+        HATCH_PIVOT, right_polygon, hatch_inner, hatch_outer, 0
     )
-    add_hatch_detail(left, hatch_polygon(True), 4)
-    add_hatch_detail(right, hatch_polygon(False), 4)
+    add_hatch_detail(left, left_polygon, 4)
+    add_hatch_detail(right, right_polygon, 4)
     canonicalise_vertices(left["vertices"])
     canonicalise_vertices(right["vertices"])
+    # Fixed hinge barrels remain on the pressure shell while the two leaves
+    # rotate around their outer edges.  Three knuckles per side read as actual
+    # load-bearing machinery instead of two detached floating panels.
+    hinge_start = len(shell_values)
+    for hinge_x in (-2.5, 2.5):
+        for hinge_z in (24.0, 29.0, 34.0):
+            append_box(shell_values, (hinge_x, 4.08, hinge_z),
+                       (0.42, 0.34, 3.2), 4)
+    hinge_triangles = (len(shell_values) - hinge_start) // (8 * 3)
     hatch_triangles = (
         len(left["vertices"]) + len(right["vertices"])
     ) // (8 * 3)
+    collar = make_crane_collar_part()
+    collar_triangles = len(collar["vertices"]) // (8 * 3)
 
     parts = {
         "entry_plug": {"pivot": list(PIVOT), "vertices": shell_values},
         "plug_hatch_l": left,
         "plug_hatch_r": right,
+        "plug_crane_collar": collar,
     }
-    total = shell_triangles + cockpit_triangles + hatch_triangles
+    total = (shell_triangles + cockpit_triangles + hinge_triangles
+             + hatch_triangles
+             + collar_triangles)
     write_json(output / "mesh/entry_plug.mesh.json", {
         "format_version": 1,
         "source": (
@@ -633,8 +753,8 @@ def main():
         # detail cannot silently shrink the mechanical safety envelope.
         "collision_contract_blocks": {
             "body_obb": {
-                "centre": [0.0, 0.0, 8.0],
-                "half_extents": [1.5, 1.5, 8.0],
+                "centre": [0.0, 0.0, 5.0],
+                "half_extents": [1.0, 1.0, 5.0],
             },
             "tip_plane_z": 0.0,
             "length": 10.0,
@@ -658,30 +778,42 @@ def main():
         "hatch_transforms_model_units": {
             "left": {
                 "closed_translation": [0.0, 0.0, 0.0],
-                "open_translation": [-4.6, 0.0, 0.0],
+                "hinge_pivot": [-2.5, 4.12, 29.0],
+                "open_rotation_z_degrees": 82.0,
             },
             "right": {
                 "closed_translation": [0.0, 0.0, 0.0],
-                "open_translation": [4.6, 0.0, 0.0],
+                "hinge_pivot": [2.5, 4.12, 29.0],
+                "open_rotation_z_degrees": -82.0,
             },
         },
         "parts": parts,
         "triangle_count": total,
         "audit": {
             "shell_triangles": shell_triangles,
+            "hatch_hinge_triangles": hinge_triangles,
             "cockpit_triangles": cockpit_triangles,
             "hatch_triangles": hatch_triangles,
+            "crane_collar_triangles": collar_triangles,
             "source_triangles": sum(len(value) for value in grouped_faces.values()),
             "hatch_is_real_opening": True,
             "donw999_mesh_available": False,
         },
     })
     write_palette(output / "textures/entity/entry_plug.png")
+    for variant, feature in VARIANT_FEATURES.items():
+        palette = list(PALETTE)
+        # The unit colour belongs to the orange authored pressure-shell band,
+        # not to the extra crane collar added by this converter.
+        palette[FEATURE_INDEX] = feature
+        palette[6] = VARIANT_SEATS[variant]
+        write_palette(output / (
+            f"textures/entity/entry_plug_unit{variant:02d}.png"), palette)
     print(
         "Project SEELE Entry Plug:",
         f"{total} triangles",
         f"(shell={shell_triangles}, cockpit={cockpit_triangles},",
-        f"hatches={hatch_triangles})",
+        f"hatches={hatch_triangles}, collar={collar_triangles})",
         f"dimensions={MODEL_WIDTH}x{MODEL_LENGTH}x{MODEL_DEPTH}px",
     )
 

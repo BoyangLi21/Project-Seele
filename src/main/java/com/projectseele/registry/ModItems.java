@@ -27,11 +27,6 @@ public class ModItems
             () -> new BlockItem(ModBlocks.RETRACTABLE_BUILDING_CORE.get(),
                     new Item.Properties().fireResistant()));
 
-    public static final RegistryObject<Item> EVA_ARMAMENT_RACK = ITEMS.register(
-            "eva_armament_rack",
-            () -> new BlockItem(ModBlocks.EVA_ARMAMENT_RACK.get(),
-                    new Item.Properties().fireResistant()));
-
     public static final RegistryObject<Item> EVA_PROGRESSIVE_KNIFE = ITEMS.register(
             "eva_progressive_knife",
             () -> new Item(new Item.Properties().stacksTo(1).fireResistant()));
@@ -54,6 +49,26 @@ public class ModItems
             "clear_glass",
             () -> new BlockItem(ModBlocks.CLEAR_GLASS.get(),
                     new Item.Properties()));
+
+    public static final RegistryObject<Item> ONE_WAY_GLASS = ITEMS.register(
+            "one_way_glass",
+            () -> new BlockItem(ModBlocks.ONE_WAY_GLASS.get(),
+                    new Item.Properties()));
+
+    public static final RegistryObject<Item> TERMINAL_DOGMA_ACCESS_CARD =
+            ITEMS.register("terminal_dogma_access_card",
+                    () -> new Item(new Item.Properties().stacksTo(1)));
+    public static final RegistryObject<Item> NERV_EMPLOYEE_CARD =
+            ITEMS.register("nerv_employee_card",
+                    () -> new Item(new Item.Properties().stacksTo(1)));
+    public static final RegistryObject<Item> BETA_CAPSULE =
+            ITEMS.register("beta_capsule",
+                    () -> new Item(new Item.Properties().stacksTo(1)));
+
+    public static final RegistryObject<Item> GEOFRONT_SKYWEAVE = ITEMS.register(
+            "geofront_skyweave",
+            () -> new BlockItem(ModBlocks.GEOFRONT_SKYWEAVE.get(),
+                    new Item.Properties().fireResistant()));
 
     public static final RegistryObject<Item> COMMAND_SEAT_BACK = ITEMS.register(
             "command_seat_back",

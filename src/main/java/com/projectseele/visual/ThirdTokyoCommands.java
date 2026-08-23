@@ -101,7 +101,8 @@ public final class ThirdTokyoCommands
         {
             return 0;
         }
-        teleportOverview(player, IntegratedNervMapBuilder.TOKYO3_ORIGIN);
+        teleportOverview(player,
+                IntegratedNervMapBuilder.tokyo3Origin(player.serverLevel()));
         source.sendSuccess(() -> Component.literal(
                 "Tokyo-3 skyline ready above the same GeoFront dimension. "
                         + "Run /seele geofront link, then board from the lower gantry."), false);
@@ -118,7 +119,7 @@ public final class ThirdTokyoCommands
             throw new IllegalStateException("GeoFront dimension is unavailable");
         }
         player.stopRiding();
-        BlockPos origin = IntegratedNervMapBuilder.TOKYO3_ORIGIN;
+        BlockPos origin = IntegratedNervMapBuilder.tokyo3Origin(level);
         level.setDayTime(6000L);
         level.setWeatherParameters(12000, 0, false, false);
         // Do not let a prior manual CITY ARMOUR toggle make this fixed
@@ -147,7 +148,8 @@ public final class ThirdTokyoCommands
         for (EvaUnit01Entity unit : units)
         {
             IntegratedNervMapBuilder.LiftLink lift =
-                    IntegratedNervMapBuilder.liftForUnitVariant(unit.getUnitVariant());
+                    IntegratedNervMapBuilder.lift(
+                            level, unit.getUnitVariant());
             BlockPos bed = lift.surfaceBed();
             unit.clearSortieDestination();
             unit.moveTo(bed.getX() + 0.5D, bed.getY() + 1.0D,
@@ -172,10 +174,17 @@ public final class ThirdTokyoCommands
 
     static BlockPos fixedVisualOrigin(ServerLevel level)
     {
+        // S22 is an authored coastal migration whose surface is valid before
+        // the legacy integrated-map receipt becomes valid.  Falling back to
+        // (0, 96, 0) made visual capture photograph unrelated seed terrain.
+        if (FacilityWorldPolicy.isS22Coastal(level.getServer()))
+        {
+            return IntegratedNervMapBuilder.tokyo3Origin(level);
+        }
         if (level.dimension().equals(GeoFrontCommands.GEOFRONT)
                 && IntegratedNervMapBuilder.inspect(level).valid())
         {
-            return IntegratedNervMapBuilder.TOKYO3_ORIGIN;
+            return IntegratedNervMapBuilder.tokyo3Origin(level);
         }
         return new BlockPos(0,
                 Math.max(level.getMinBuildHeight() + 36,
@@ -282,7 +291,7 @@ public final class ThirdTokyoCommands
             return 0;
         }
         BattleResult result = Tokyo3RamielBattleDirector.start(level,
-                IntegratedNervMapBuilder.TOKYO3_ORIGIN, player);
+                IntegratedNervMapBuilder.tokyo3Origin(level), player);
         if (!result.accepted())
         {
             source.sendFailure(Component.literal(result.message()));
@@ -301,7 +310,8 @@ public final class ThirdTokyoCommands
         }
         ServerPlayer player = source.getPlayerOrException();
         BattleStatus status = Tokyo3RamielBattleDirector.status(
-                player.serverLevel(), IntegratedNervMapBuilder.TOKYO3_ORIGIN);
+                player.serverLevel(), IntegratedNervMapBuilder.tokyo3Origin(
+                        player.serverLevel()));
         source.sendSuccess(() -> Component.literal(status.summary()), false);
         return 1;
     }
@@ -315,7 +325,8 @@ public final class ThirdTokyoCommands
         }
         ServerPlayer player = source.getPlayerOrException();
         BattleResult result = Tokyo3RamielBattleDirector.abort(
-                player.serverLevel(), IntegratedNervMapBuilder.TOKYO3_ORIGIN);
+                player.serverLevel(), IntegratedNervMapBuilder.tokyo3Origin(
+                        player.serverLevel()));
         if (!result.accepted())
         {
             source.sendFailure(Component.literal(result.message()));
@@ -384,7 +395,8 @@ public final class ThirdTokyoCommands
          */
         if (player.serverLevel().dimension().equals(GeoFrontCommands.GEOFRONT))
         {
-            return IntegratedNervMapBuilder.TOKYO3_ORIGIN;
+            return IntegratedNervMapBuilder.tokyo3Origin(
+                    player.serverLevel());
         }
         AABB area = player.getBoundingBox().inflate(220.0D, 128.0D, 220.0D);
         EvaUnit01Entity centreUnit = player.serverLevel()

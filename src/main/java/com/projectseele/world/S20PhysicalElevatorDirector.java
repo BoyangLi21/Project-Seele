@@ -11,6 +11,9 @@ import java.util.UUID;
 import com.projectseele.ProjectSeele;
 import com.projectseele.entity.NervCarrierPlatformEntity;
 import com.projectseele.registry.ModEntities;
+import com.projectseele.registry.ModItems;
+import com.projectseele.registry.ModBlocks;
+import com.supermartijn642.movingelevators.MovingElevators;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -64,8 +67,14 @@ public final class S20PhysicalElevatorDirector
             "s20-command-rear-x12-z253-v4";
     public static final String OBSERVATION_HANGAR_LIFT_ID =
             "s20-observation-hangar-x94-z241-v2";
+    public static final String COMPACT_CAGE_LIFT_ID =
+            "s20-compact-cage-x93-z204-v4";
     public static final String SURFACE_TRANSIT_LIFT_ID =
             "s20-surface-transit-v2";
+    public static final String CENTRAL_DOGMA_LIFT_ID =
+            "s22-central-dogma-x72-z273-v1";
+    public static final String COMMANDER_OFFICE_LIFT_ID =
+            "s23-commander-office-x28-z321-v1";
     private static final int CABIN_RADIUS = 2;
     private static final int CABIN_HEIGHT = 5;
     private static final int CABIN_DOOR_DISTANCE = CABIN_RADIUS;
@@ -128,13 +137,15 @@ public final class S20PhysicalElevatorDirector
          * south, so all four keep the original south exit.
          */
         return new LiftSpec(COMMAND_REAR_LIFT_ID, List.of(
-                new Landing("B-40 LOWER INTERCHANGE",
+                new Landing("TERMINAL DOGMA",
+                        new BlockPos(12, -566, 253), Direction.SOUTH),
+                new Landing("LOWER INTERCHANGE",
                         new BlockPos(12, -448, 253), Direction.SOUTH),
-                new Landing("B-20 COMMAND BRIDGE",
+                new Landing("COMMAND BRIDGE",
                         new BlockPos(12, -423, 253), Direction.SOUTH),
-                new Landing("B-19 REAR SERVICE",
+                new Landing("REAR SERVICE",
                         new BlockPos(12, -419, 253), Direction.SOUTH),
-                new Landing("B-10 COMMAND GALLERY",
+                new Landing("COMMAND GALLERY",
                         new BlockPos(12, -409, 253), Direction.SOUTH)));
     }
 
@@ -142,26 +153,22 @@ public final class S20PhysicalElevatorDirector
     public static LiftSpec observationHangarLift()
     {
         return new LiftSpec(OBSERVATION_HANGAR_LIFT_ID,
-                new Landing("B-40 LAUNCH OBSERVATION",
+                new Landing("LAUNCH OBSERVATION",
                         new BlockPos(94, -418, 241), Direction.WEST),
-                new Landing("B-16 EVA HANGAR ACCESS",
-                        new BlockPos(94, -394, 241), Direction.EAST));
+                new Landing("EVA HANGAR ACCESS",
+                        new BlockPos(94, -394, 241), Direction.NORTH));
     }
 
-    /**
-     * Measured old compact-cage lift axis retained by the human-approved map.
-     *
-     * <p>The lower stop serves the wet-cage logistics floor. The upper stop
-     * serves its observation/command-access circulation. It is intentionally
-     * exposed as a factory rather than installed automatically.</p>
-     */
+    /** Relocated wet-cage lift linking the lower plant to the rear gallery. */
     public static LiftSpec oldCommandToCompactCageLift()
     {
-        return new LiftSpec("s20-old-compact-cage",
-                new Landing("B-40 EVA CAGES",
-                        new BlockPos(108, -442, 192), Direction.SOUTH),
-                new Landing("B-14 COMMAND ACCESS",
-                        new BlockPos(108, -394, 192), Direction.NORTH));
+        return new LiftSpec(COMPACT_CAGE_LIFT_ID, List.of(
+                new Landing("EVA CAGES / LAUNCH PLANT",
+                        new BlockPos(93, -442, 204), Direction.SOUTH),
+                new Landing("HANGAR INTERCHANGE / B-49",
+                        new BlockPos(93, -394, 204), Direction.SOUTH),
+                new Landing("UPPER HANGAR OBSERVATION",
+                        new BlockPos(93, -370, 204), Direction.NORTH)));
     }
 
     /**
@@ -172,7 +179,7 @@ public final class S20PhysicalElevatorDirector
     public static LiftSpec surfaceTransitLift()
     {
         return new LiftSpec(SURFACE_TRANSIT_LIFT_ID,
-                new Landing("B-40 GEOFRONT TRANSIT",
+                new Landing("GEOFRONT TRANSIT",
                         new BlockPos(
                                 S20SurfaceTransitDirector.AXIS_X,
                                 S20SurfaceTransitDirector.LOWER_WALK_Y,
@@ -186,6 +193,53 @@ public final class S20PhysicalElevatorDirector
                         Direction.WEST));
     }
 
+    public static LiftSpec surfaceTransitLift(ServerLevel level)
+    {
+        int upperWalkY = FacilityWorldPolicy.isS22Coastal(level.getServer())
+                ? FacilitySchemaV2.WORLDGEN_SURFACE_DATUM + 1
+                : S20SurfaceTransitDirector.UPPER_WALK_Y;
+        return new LiftSpec(SURFACE_TRANSIT_LIFT_ID,
+                new Landing("GEOFRONT TRANSIT",
+                        new BlockPos(S20SurfaceTransitDirector.AXIS_X,
+                                S20SurfaceTransitDirector.LOWER_WALK_Y,
+                                S20SurfaceTransitDirector.AXIS_Z),
+                        Direction.WEST),
+                new Landing("TOKYO-3 SURFACE",
+                        new BlockPos(S20SurfaceTransitDirector.AXIS_X,
+                                upperWalkY,
+                                S20SurfaceTransitDirector.AXIS_Z),
+                        Direction.WEST));
+    }
+
+    /**
+     * S22 secure descent on the measured R28 Central-Dogma shaft axis.
+     *
+     * <p>The authored floors are at y=-567 and y=-443, therefore the car and
+     * route handoffs stand one block above them.  Both doors open west: the
+     * lower one enters the Terminal-Dogma quarantine vestibule, while the
+     * upper one hands off to the existing NERV access corridor.  Keeping two
+     * stops preserves the approved one-call-button/outside and two-button/
+     * inside control scheme.</p>
+     */
+    public static LiftSpec centralDogmaLift()
+    {
+        return new LiftSpec(CENTRAL_DOGMA_LIFT_ID,
+                new Landing("TERMINAL DOGMA / QUARANTINE",
+                        new BlockPos(72, -566, 273), Direction.WEST),
+                new Landing("CENTRAL DOGMA ACCESS",
+                        new BlockPos(72, -442, 273), Direction.WEST));
+    }
+
+    /** Secure north-facing lift between command access and Ikari's office. */
+    public static LiftSpec commanderOfficeLift()
+    {
+        return new LiftSpec(COMMANDER_OFFICE_LIFT_ID,
+                new Landing("COMMAND ACCESS",
+                        new BlockPos(28, -388, 321), Direction.NORTH),
+                new Landing("COMMANDER OFFICE / RESTRICTED",
+                        new BlockPos(28, -340, 321), Direction.NORTH));
+    }
+
     /**
      * The complete S20 personnel chain. Order is command room first, then the
      * retained compact-cage observation lift reached through B-40.
@@ -195,7 +249,31 @@ public final class S20PhysicalElevatorDirector
         return List.of(commandRearLift(),
                 observationHangarLift(),
                 oldCommandToCompactCageLift(),
-                surfaceTransitLift());
+                surfaceTransitLift(), commanderOfficeLift());
+    }
+
+    public static List<LiftSpec> s20Lifts(ServerLevel level)
+    {
+        List<LiftSpec> lifts;
+        if (FacilityWorldPolicy.isS22Coastal(level.getServer()))
+        {
+            lifts = List.of(commandRearLift(), observationHangarLift(),
+                    oldCommandToCompactCageLift(), surfaceTransitLift(),
+                    centralDogmaLift(), commanderOfficeLift());
+            return lifts.stream().map(spec -> transform(level, spec)).toList();
+        }
+        return List.of(commandRearLift(), observationHangarLift(),
+                oldCommandToCompactCageLift(), surfaceTransitLift(level),
+                commanderOfficeLift());
+    }
+
+    private static LiftSpec transform(ServerLevel level, LiftSpec spec)
+    {
+        return new LiftSpec(spec.id(), spec.stops().stream()
+                .map(landing -> new Landing(landing.label(),
+                        S24CoordinateTransform.apply(level.getServer(),
+                                landing.cabinCentre()), landing.exit()))
+                .toList());
     }
 
     /** Command lift whose fixed shaft/cabin voxels were approved in R10. */
@@ -216,10 +294,20 @@ public final class S20PhysicalElevatorDirector
         return spec.id().equals(SURFACE_TRANSIT_LIFT_ID);
     }
 
+    public static boolean isCentralDogmaLift(LiftSpec spec)
+    {
+        return spec.id().equals(CENTRAL_DOGMA_LIFT_ID);
+    }
+
+    public static boolean isCommanderOfficeLift(LiftSpec spec)
+    {
+        return spec.id().equals(COMMANDER_OFFICE_LIFT_ID);
+    }
+
     /** Retained compact-cage personnel lift already present in the authored map. */
     public static boolean isRetainedCompactCageLift(LiftSpec spec)
     {
-        return spec.id().equals("s20-old-compact-cage");
+        return spec.id().equals(COMPACT_CAGE_LIFT_ID);
     }
 
     /**
@@ -351,6 +439,10 @@ public final class S20PhysicalElevatorDirector
         LiftRuntime recovered = recoverExistingCabin(level, spec);
         if (recovered != null)
         {
+            for (Landing landing : spec.stops())
+            {
+                buildLanding(level, landing);
+            }
             data.put(spec.id(), recovered);
             ProjectSeele.LOGGER.info(
                     "S20 physical lift recovered from world blocks: "
@@ -609,6 +701,10 @@ public final class S20PhysicalElevatorDirector
         {
             return false;
         }
+        if (!terminalDogmaAccessAllowed(player, spec, requested, clicked))
+        {
+            return true;
+        }
         if (runtime.mode == Mode.FAULT)
         {
             message(player, "NERV LIFT  OUT OF SERVICE",
@@ -661,7 +757,7 @@ public final class S20PhysicalElevatorDirector
         {
             return false;
         }
-        LiftSpec spec = s20Lifts().stream()
+        LiftSpec spec = s20Lifts(level).stream()
                 .filter(candidate -> candidate.id().equals(cabin.getLiftId()))
                 .findFirst().orElse(null);
         if (spec == null)
@@ -797,12 +893,16 @@ public final class S20PhysicalElevatorDirector
         }
         if (runtime.mode == Mode.IDLE_OPEN)
         {
-            setLandingDoor(level, spec.lower(), current == spec.lower());
-            setLandingDoor(level, spec.upper(), current == spec.upper());
+            for (Landing landing : spec.stops())
+            {
+                setLandingDoor(level, landing, current == landing);
+            }
             setCabinDoor(level, centre, runtime.cabinExit, true);
         }
-        enforceSingleExteriorCallButton(level, spec.lower());
-        enforceSingleExteriorCallButton(level, spec.upper());
+        for (Landing landing : spec.stops())
+        {
+            enforceSingleExteriorCallButton(level, landing);
+        }
         return true;
     }
 
@@ -1414,6 +1514,11 @@ public final class S20PhysicalElevatorDirector
             Landing target)
     {
         ServerLevel level = player.serverLevel();
+        if (!terminalDogmaAccessAllowed(
+                player, spec, target, acknowledgement))
+        {
+            return true;
+        }
         if (cabin.getPersistentLiftState()
                 == NervCarrierPlatformEntity.LIFT_FAULT)
         {
@@ -1575,7 +1680,8 @@ public final class S20PhysicalElevatorDirector
                 BlockPos position = landing.cabinCentre()
                         .relative(landing.exit(), LANDING_DOOR_DISTANCE)
                         .relative(lateral, side).above(dy);
-                if (!level.getBlockState(position).equals(LANDING_DOOR))
+                if (!level.getBlockState(position).equals(
+                        landingDoorState(landing)))
                 {
                     return false;
                 }
@@ -1624,10 +1730,11 @@ public final class S20PhysicalElevatorDirector
         runtime.cabinExit = current.exit();
         setCabinDoor(level, spec.centreAt(runtime.currentY),
                 runtime.cabinExit, true);
-        setLandingDoor(level, spec.lower(),
-                current.walkY() == spec.lower().walkY());
-        setLandingDoor(level, spec.upper(),
-                current.walkY() == spec.upper().walkY());
+        for (Landing landing : spec.stops())
+        {
+            setLandingDoor(level, landing,
+                    current.walkY() == landing.walkY());
+        }
     }
 
     private static void tickClosing(
@@ -1964,6 +2071,17 @@ public final class S20PhysicalElevatorDirector
     private static void setLandingDoor(
             ServerLevel level, Landing landing, boolean open)
     {
+        LiftSpec owner = s20Lifts(level).stream()
+                .filter(spec -> spec.stops().contains(landing))
+                .findFirst().orElse(null);
+        if (owner != null)
+        {
+            // The smooth entity is visual-only.  Moving Elevators and this
+            // legacy block interlock remain the sole owners of collision;
+            // replacing this plane with barriers breaks cabin discovery.
+            LiftSlidingDoorDirector.setLandingDoor(
+                    level, owner, landing, open);
+        }
         Direction lateral = landing.exit().getClockWise();
         for (int side = -LANDING_DOOR_HALF_WIDTH;
              side <= LANDING_DOOR_HALF_WIDTH; side++)
@@ -1974,14 +2092,41 @@ public final class S20PhysicalElevatorDirector
                         .relative(landing.exit(),
                                 LANDING_DOOR_DISTANCE)
                         .relative(lateral, side).above(dy);
-                set(level, position, open ? AIR : LANDING_DOOR);
+                // Never let a closing glass door destroy a Moving Elevators
+                // controller.  Older saves placed WEST-facing controllers in
+                // this exact plane; the dependency's onRemove path otherwise
+                // dereferences a missing capability group and crashes.
+                if (level.getBlockState(position)
+                        .is(MovingElevators.elevator_block))
+                {
+                    continue;
+                }
+                set(level, position, open ? AIR : landingDoorState(landing));
             }
         }
+    }
+
+    private static BlockState landingDoorState(Landing landing)
+    {
+        BlockPos centre = landing.cabinCentre();
+        if (centre.getX() == 93 && centre.getZ() == 204
+                && (centre.getY() == -442 || centre.getY() == -370))
+        {
+            return ModBlocks.CLEAR_GLASS.get().defaultBlockState();
+        }
+        return LANDING_DOOR;
     }
 
     private static void setCabinDoor(
             ServerLevel level, BlockPos centre, Direction exit,
             boolean open)
+    {
+        setCabinDoor(level, centre, exit, open, CABIN_DOOR_DISTANCE);
+    }
+
+    private static void setCabinDoor(
+            ServerLevel level, BlockPos centre, Direction exit,
+            boolean open, int distance)
     {
         Direction lateral = exit.getClockWise();
         for (int side = -CABIN_DOOR_HALF_WIDTH;
@@ -1990,8 +2135,13 @@ public final class S20PhysicalElevatorDirector
             for (int dy = 0; dy < DOOR_HEIGHT; dy++)
             {
                 BlockPos position = centre
-                        .relative(exit, CABIN_DOOR_DISTANCE)
+                        .relative(exit, distance)
                         .relative(lateral, side).above(dy);
+                if (level.getBlockState(position)
+                        .is(MovingElevators.elevator_block))
+                {
+                    continue;
+                }
                 set(level, position, open ? AIR : CABIN_DOOR);
             }
         }
@@ -2009,7 +2159,7 @@ public final class S20PhysicalElevatorDirector
     private static boolean barriersClosed(
             ServerLevel level, LiftSpec spec, LiftRuntime runtime)
     {
-        for (Landing landing : List.of(spec.lower(), spec.upper()))
+        for (Landing landing : spec.stops())
         {
             Direction lateral = landing.exit().getClockWise();
             for (int side = -LANDING_DOOR_HALF_WIDTH;
@@ -2021,8 +2171,13 @@ public final class S20PhysicalElevatorDirector
                             .relative(landing.exit(),
                                     LANDING_DOOR_DISTANCE)
                             .relative(lateral, side).above(dy);
+                    if (level.getBlockState(position)
+                            .is(MovingElevators.elevator_block))
+                    {
+                        continue;
+                    }
                     if (!level.getBlockState(position)
-                            .equals(LANDING_DOOR))
+                            .equals(landingDoorState(landing)))
                     {
                         return false;
                     }
@@ -2077,12 +2232,58 @@ public final class S20PhysicalElevatorDirector
         return null;
     }
 
+    private static boolean terminalDogmaAccessAllowed(
+            ServerPlayer player, LiftSpec spec, Landing target,
+            BlockPos acknowledgement)
+    {
+        boolean restrictedDogma = spec.id().equals(COMMAND_REAR_LIFT_ID)
+                && target.label().contains("TERMINAL DOGMA");
+        boolean restrictedOffice = spec.id().equals(COMMANDER_OFFICE_LIFT_ID)
+                && target.equals(spec.upper());
+        if (!restrictedDogma && !restrictedOffice)
+        {
+            return true;
+        }
+        boolean authorised = player.getMainHandItem().is(
+                ModItems.TERMINAL_DOGMA_ACCESS_CARD.get())
+                || player.getOffhandItem().is(
+                ModItems.TERMINAL_DOGMA_ACCESS_CARD.get());
+        if (authorised)
+        {
+            player.serverLevel().playSound(null, acknowledgement,
+                    SoundEvents.EXPERIENCE_ORB_PICKUP,
+                    SoundSource.BLOCKS, 0.7F, 1.65F);
+            message(player, "NERV CLEARANCE ACCEPTED / "
+                            + (restrictedOffice ? "COMMANDER OFFICE"
+                            : "TERMINAL DOGMA"),
+                    ChatFormatting.GREEN);
+            return true;
+        }
+        player.serverLevel().playSound(null, acknowledgement,
+                SoundEvents.IRON_DOOR_CLOSE, SoundSource.BLOCKS,
+                0.8F, 0.72F);
+        message(player, "ACCESS DENIED / NERV ACCESS CARD REQUIRED",
+                ChatFormatting.RED);
+        return false;
+    }
+
     public static BlockPos exteriorCallPosition(Landing landing)
     {
         Direction lateral = landing.exit().getClockWise();
         return landing.cabinCentre()
                 .relative(landing.exit(), LANDING_DOOR_DISTANCE + 1)
                 .relative(lateral, 3).above(1);
+    }
+
+    /**
+     * Wall cell behind the old protruding call button.  Moving Elevators uses
+     * a full block remote, so installing it here keeps the control flush with
+     * the authored landing wall instead of leaving a cube on the floor edge.
+     */
+    public static BlockPos movingElevatorLandingPanelPosition(Landing landing)
+    {
+        return exteriorCallPosition(landing).relative(
+                landing.exit().getOpposite());
     }
 
     /**
@@ -2106,6 +2307,13 @@ public final class S20PhysicalElevatorDirector
     {
         return interiorControlColumn(cabinCentre, exit,
                 stopIndex, CABIN_RADIUS - 1);
+    }
+
+    /** Fixed wall cell for the official car panel; it never follows the door. */
+    public static BlockPos movingElevatorCabinPanelPosition(
+            BlockPos cabinCentre, Direction fixedExit)
+    {
+        return interiorBackingPosition(cabinCentre, fixedExit, 0);
     }
 
     private static BlockPos interiorBackingPosition(
@@ -2148,6 +2356,22 @@ public final class S20PhysicalElevatorDirector
     private static boolean legacyEndpointStateAllowed(
             LiftSpec spec, BlockPos position, BlockState state)
     {
+        if (spec.id().equals(CENTRAL_DOGMA_LIFT_ID)
+                && (state.is(Blocks.IRON_BLOCK)
+                || state.is(Blocks.DEEPSLATE_TILES)
+                || state.is(Blocks.POLISHED_DEEPSLATE)
+                || state.is(Blocks.POLISHED_BLACKSTONE)
+                || state.is(Blocks.REINFORCED_DEEPSLATE)
+                || state.is(Blocks.SEA_LANTERN)
+                || state.is(Blocks.LODESTONE)))
+        {
+            /*
+             * These are the measured twelve-block maintenance plates and
+             * the two endpoint floors inside the exact 5x5 car sweep.  The
+             * surrounding 11x11 pressure shell is outside this allowance.
+             */
+            return true;
+        }
         if (spec.id().equals(COMMAND_REAR_LIFT_ID)
                 && (state.is(Blocks.IRON_BLOCK)
                 || state.is(Blocks.BLACK_CONCRETE)
@@ -2256,15 +2480,81 @@ public final class S20PhysicalElevatorDirector
         {
             for (int dz = -CABIN_RADIUS; dz <= CABIN_RADIUS; dz++)
             {
-                if (!level.getBlockState(
-                        centre.offset(dx, -1, dz))
-                        .equals(CABIN_FLOOR))
+                BlockState floor = level.getBlockState(
+                        centre.offset(dx, -1, dz));
+                if (!floor.equals(CABIN_FLOOR)
+                        && !floor.is(MovingElevators.button_block))
                 {
                     return false;
                 }
             }
         }
         return true;
+    }
+
+    /** Read-only bridge used while migrating the proven R28 cabin to Moving Elevators. */
+    public static boolean hasAuthoredCabinAt(
+            ServerLevel level, BlockPos centre)
+    {
+        return cabinFloorPresent(level, centre);
+    }
+
+    /**
+     * Moving Elevators owns the moving cage after migration, so the retired
+     * integer-step runtime must not leave a landing sealed behind its glass
+     * interlock.  Only the exact authored door cells are opened here.
+     */
+    public static void synchronizeMovingElevatorDoors(
+            ServerLevel level, LiftSpec spec, double currentY,
+            boolean moving)
+    {
+        Landing current = null;
+        if (!moving)
+        {
+            double best = 0.35D;
+            for (Landing landing : spec.stops())
+            {
+                double distance = Math.abs(currentY - landing.walkY());
+                if (distance < best)
+                {
+                    best = distance;
+                    current = landing;
+                }
+            }
+        }
+        for (Landing landing : spec.stops())
+        {
+            setLandingDoor(level, landing, landing == current);
+        }
+        int doorDistance = spec.id().equals(SURFACE_TRANSIT_LIFT_ID)
+                ? CABIN_DOOR_DISTANCE + 1 : CABIN_DOOR_DISTANCE;
+        if (current == null)
+        {
+            // A two-sided cage must never carry an already-open opposite
+            // doorway.  The old path returned here and left whichever side
+            // was opened at the previous landing exposed throughout travel.
+            for (Landing landing : spec.stops())
+            {
+                if (!hasAuthoredCabinAt(level, landing.cabinCentre()))
+                {
+                    continue;
+                }
+                for (Direction exit : spec.stops().stream()
+                        .map(Landing::exit).distinct().toList())
+                {
+                    setCabinDoor(level, landing.cabinCentre(), exit,
+                            false, doorDistance);
+                }
+            }
+            return;
+        }
+        BlockPos centre = current.cabinCentre();
+        for (Direction exit : spec.stops().stream()
+                .map(Landing::exit).distinct().toList())
+        {
+            setCabinDoor(level, centre, exit,
+                    exit == current.exit(), doorDistance);
+        }
     }
 
     /**
@@ -2535,10 +2825,30 @@ public final class S20PhysicalElevatorDirector
         /** Same shaft, possibly a different set of floors. */
         public boolean sharesAxisWith(String otherFingerprint)
         {
-            String axis = Long.toString(
-                    lower().cabinCentre().asLong());
-            return otherFingerprint != null
-                    && otherFingerprint.startsWith(axis + ":");
+            if (otherFingerprint == null || otherFingerprint.isBlank())
+            {
+                return false;
+            }
+            String[] tokens = otherFingerprint.split(":");
+            for (int index = 0; index + 1 < tokens.length; index += 2)
+            {
+                try
+                {
+                    BlockPos oldStop = BlockPos.of(
+                            Long.parseLong(tokens[index]));
+                    if (oldStop.getX() == lower().cabinCentre().getX()
+                            && oldStop.getZ()
+                            == lower().cabinCentre().getZ())
+                    {
+                        return true;
+                    }
+                }
+                catch (NumberFormatException ignored)
+                {
+                    return false;
+                }
+            }
+            return false;
         }
     }
 

@@ -8,6 +8,8 @@ import com.projectseele.ProjectSeele;
 import com.projectseele.registry.ModBlocks;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
@@ -32,17 +34,6 @@ public final class ThirdTokyoSurfaceBuilder
     public static final int OBSERVATION_Z = 216;
     public static final int OBSERVATION_Y = 38;
     public static final int ARMOURED_LOT_HALF_SIZE = 12;
-    public static final int WEAPON_LIFT_X = 0;
-    public static final int WEAPON_LIFT_Z = 80;
-
-    private static final int WEAPON_STATION_HALF_X = 12;
-    private static final int WEAPON_STATION_HALF_Z = 8;
-    private static final int WEAPON_STATION_HEIGHT = 21;
-    private static final int WEAPON_DOOR_HALF_X = 9;
-    private static final int WEAPON_DOOR_BOTTOM = 3;
-    private static final int WEAPON_DOOR_TOP = 17;
-    private static final int WEAPON_SHAFT_BOTTOM = -24;
-
     private static final int ROAD_SPACING = 40;
     private static final int ROAD_OFFSET = 20;
     private static final int ROAD_HALF_WIDTH = 4;
@@ -108,7 +99,6 @@ public final class ThirdTokyoSurfaceBuilder
                 else if (x == 0 && z == 80)
                 {
                     buildBattlePlaza(level, centre);
-                    buildWeaponLiftStation(level, centre);
                 }
                 else
                 {
@@ -337,6 +327,19 @@ public final class ThirdTokyoSurfaceBuilder
         return MAX_RETRACTION_DEPTH;
     }
 
+    /** Runtime depth for the active surface frame; S22 uses its shallow dome. */
+    public static int maximumRetractionDepth(BlockPos origin)
+    {
+        if (!origin.equals(IntegratedNervMapBuilder.S22_TOKYO3_ORIGIN))
+        {
+            return MAX_RETRACTION_DEPTH;
+        }
+        return MOVABLE_BUILDINGS.stream()
+                .mapToInt(tower -> ceilingTravelDepth(tower, origin)
+                        + tower.height())
+                .max().orElse(0);
+    }
+
     /** Applies exactly one globally synchronized layer of tower travel. */
     public static void applyRetractionDepth(ServerLevel level, BlockPos origin,
                                             int oldDepth, int newDepth)
@@ -355,9 +358,10 @@ public final class ThirdTokyoSurfaceBuilder
     public static void applyRetractionDepth(ServerLevel level, BlockPos origin,
                                             int oldDepth, int newDepth, int towerIndex)
     {
+        int maximumDepth = maximumRetractionDepth(origin);
         if (Math.abs(newDepth - oldDepth) != 1
-                || oldDepth < 0 || oldDepth > MAX_RETRACTION_DEPTH
-                || newDepth < 0 || newDepth > MAX_RETRACTION_DEPTH)
+                || oldDepth < 0 || oldDepth > maximumDepth
+                || newDepth < 0 || newDepth > maximumDepth)
         {
             throw new IllegalArgumentException(
                     "Tokyo-3 retraction depth must move by one layer");
@@ -365,8 +369,8 @@ public final class ThirdTokyoSurfaceBuilder
         TowerSpec tower = MOVABLE_BUILDINGS.get(towerIndex);
         int oldVisible = Math.max(0, tower.height() - oldDepth);
         int newVisible = Math.max(0, tower.height() - newDepth);
-        int oldCeilingVisible = ceilingVisibleHeight(tower, oldDepth);
-        int newCeilingVisible = ceilingVisibleHeight(tower, newDepth);
+        int oldCeilingVisible = ceilingVisibleHeight(tower, oldDepth, origin);
+        int newCeilingVisible = ceilingVisibleHeight(tower, newDepth, origin);
         if (oldVisible != newVisible)
         {
             BlockPos centre = origin.offset(tower.x(), 0, tower.z());
@@ -466,7 +470,7 @@ public final class ThirdTokyoSurfaceBuilder
         {
             BlockPos centre = origin.offset(tower.x(), 0, tower.z());
             int keepAt = Math.max(0, tower.height() - currentDepth) + 2;
-            int ceilingY = ceilingRoofRelativeY(tower);
+            int ceilingY = ceilingRoofRelativeY(tower, origin);
             for (int y = Math.min(ceilingY, -1); y <= tower.height() + 3; y++)
             {
                 if (y == keepAt)
@@ -750,7 +754,7 @@ public final class ThirdTokyoSurfaceBuilder
                                            TowerSpec tower,
                                            int oldVisible, int newVisible)
     {
-        int roofY = ceilingRoofRelativeY(tower);
+        int roofY = ceilingRoofRelativeY(tower, origin);
         BlockPos centre = origin.offset(tower.x(), 0, tower.z());
         if (oldVisible == 0)
         {
@@ -778,7 +782,7 @@ public final class ThirdTokyoSurfaceBuilder
                                              TowerSpec tower,
                                              int oldVisible, int newVisible)
     {
-        int roofY = ceilingRoofRelativeY(tower);
+        int roofY = ceilingRoofRelativeY(tower, origin);
         BlockPos centre = origin.offset(tower.x(), 0, tower.z());
         int oldWallY = roofY - oldVisible;
         fillSquare(level, centre, oldWallY - 1, tower.halfSize(),
@@ -1311,169 +1315,6 @@ public final class ThirdTokyoSurfaceBuilder
         }
     }
 
-    /**
-     * One TV Episode-3-inspired physical Palette Rifle station.  The facade
-     * follows the confirmed visual hierarchy (armoured shell, front rolling
-     * shutter, four guide posts, roof locks and warning lamps); shaft depth
-     * and maintenance access remain Project SEELE engineering.
-     */
-    private static void buildWeaponLiftStation(ServerLevel level,
-                                               BlockPos centre)
-    {
-        BlockState armor = Blocks.POLISHED_DEEPSLATE.defaultBlockState();
-        BlockState frame = Blocks.IRON_BLOCK.defaultBlockState();
-        BlockState dark = Blocks.BLACK_CONCRETE.defaultBlockState();
-
-        // Clear only the authored building interior.  Roads and neighbouring
-        // lots remain untouched.
-        for (int x = -WEAPON_STATION_HALF_X + 1;
-             x < WEAPON_STATION_HALF_X; x++)
-        {
-            for (int z = -WEAPON_STATION_HALF_Z + 1;
-                 z < WEAPON_STATION_HALF_Z; z++)
-            {
-                for (int y = 1; y < WEAPON_STATION_HEIGHT; y++)
-                {
-                    clear(level, centre.offset(x, y, z));
-                }
-            }
-        }
-
-        for (int y = 1; y <= WEAPON_STATION_HEIGHT; y++)
-        {
-            for (int x = -WEAPON_STATION_HALF_X;
-                 x <= WEAPON_STATION_HALF_X; x++)
-            {
-                set(level, centre.offset(x, y, -WEAPON_STATION_HALF_Z),
-                        y % 6 == 0 ? dark : armor);
-                boolean doorway = Math.abs(x) <= WEAPON_DOOR_HALF_X
-                        && y >= WEAPON_DOOR_BOTTOM
-                        && y <= WEAPON_DOOR_TOP;
-                set(level, centre.offset(x, y, WEAPON_STATION_HALF_Z),
-                        doorway ? frame : (y % 6 == 0 ? dark : armor));
-            }
-            for (int z = -WEAPON_STATION_HALF_Z;
-                 z <= WEAPON_STATION_HALF_Z; z++)
-            {
-                set(level, centre.offset(-WEAPON_STATION_HALF_X, y, z),
-                        y % 6 == 0 ? dark : armor);
-                set(level, centre.offset(WEAPON_STATION_HALF_X, y, z),
-                        y % 6 == 0 ? dark : armor);
-            }
-        }
-        for (int x = -WEAPON_STATION_HALF_X;
-             x <= WEAPON_STATION_HALF_X; x++)
-        {
-            for (int z = -WEAPON_STATION_HALF_Z;
-                 z <= WEAPON_STATION_HALF_Z; z++)
-            {
-                set(level, centre.offset(x, WEAPON_STATION_HEIGHT, z),
-                        Math.abs(x) == WEAPON_STATION_HALF_X
-                                || Math.abs(z) == WEAPON_STATION_HALF_Z
-                                ? frame : armor);
-            }
-        }
-
-        // Reinforced 19x13 clear lift shaft; its vertical payload route never
-        // shares a block with the rear personnel maintenance door.
-        for (int y = WEAPON_SHAFT_BOTTOM; y <= 1; y++)
-        {
-            for (int x = -10; x <= 10; x++)
-            {
-                for (int z = -7; z <= 7; z++)
-                {
-                    boolean shell = Math.abs(x) == 10 || Math.abs(z) == 7;
-                    set(level, centre.offset(x, y, z), shell
-                            ? Blocks.REINFORCED_DEEPSLATE.defaultBlockState()
-                            : Blocks.AIR.defaultBlockState());
-                }
-            }
-        }
-        for (int x = -10; x <= 10; x++)
-        {
-            for (int z = -7; z <= 7; z++)
-            {
-                if (Math.abs(x) >= 9 || Math.abs(z) >= 6)
-                {
-                    set(level, centre.offset(x, 0, z), frame);
-                }
-            }
-        }
-
-        // Rear manual service door and a reachable rack/control pedestal.
-        BlockPos door = centre.offset(0, 1, -WEAPON_STATION_HALF_Z);
-        set(level, door, Blocks.IRON_DOOR.defaultBlockState()
-                .setValue(DoorBlock.FACING, Direction.NORTH)
-                .setValue(DoorBlock.HALF, DoubleBlockHalf.LOWER));
-        set(level, door.above(), Blocks.IRON_DOOR.defaultBlockState()
-                .setValue(DoorBlock.FACING, Direction.NORTH)
-                .setValue(DoorBlock.HALF, DoubleBlockHalf.UPPER));
-        set(level, centre.offset(-2, 2, -WEAPON_STATION_HALF_Z - 1),
-                Blocks.LEVER.defaultBlockState()
-                        .setValue(LeverBlock.FACE, AttachFace.WALL)
-                        .setValue(LeverBlock.FACING, Direction.NORTH));
-        BlockPos rackPos = centre.offset(-10, 1, -6);
-        boolean newRack = !level.getBlockState(rackPos)
-                .is(ModBlocks.EVA_ARMAMENT_RACK.get());
-        set(level, rackPos,
-                ModBlocks.EVA_ARMAMENT_RACK.get().defaultBlockState());
-        if (level.getBlockEntity(rackPos)
-                instanceof EvaArmamentRackBlockEntity rack)
-        {
-            rack.configurePhysicalLift(centre.offset(0, -22, 0),
-                    centre.offset(0, 5, 0), centre);
-            if (newRack)
-            {
-                rack.stockPalletRifleStation();
-            }
-        }
-        updateWeaponLiftFacade(level, centre, 0.0D, false);
-    }
-
-    /** Applies only changed shutter/lock cells, so lift motion does not spam. */
-    public static void updateWeaponLiftFacade(ServerLevel level,
-                                              BlockPos centre,
-                                              double openness,
-                                              boolean sequenceActive)
-    {
-        double clamped = Math.max(0.0D, Math.min(1.0D, openness));
-        int doorRows = WEAPON_DOOR_TOP - WEAPON_DOOR_BOTTOM + 1;
-        int openRows = (int)Math.floor(clamped * doorRows + 1.0E-6D);
-        for (int x = -WEAPON_DOOR_HALF_X; x <= WEAPON_DOOR_HALF_X; x++)
-        {
-            for (int row = 0; row < doorRows; row++)
-            {
-                set(level, centre.offset(x, WEAPON_DOOR_BOTTOM + row,
-                        WEAPON_STATION_HALF_Z), row < openRows
-                        ? Blocks.AIR.defaultBlockState()
-                        : Blocks.IRON_BLOCK.defaultBlockState());
-            }
-        }
-        int extension = (int)Math.round(clamped * 4.0D);
-        for (int x : new int[] {-11, 11})
-        {
-            for (int z : new int[] {-7, 7})
-            {
-                for (int step = 1; step <= 4; step++)
-                {
-                    set(level, centre.offset(x,
-                            WEAPON_STATION_HEIGHT + step, z),
-                            step <= extension
-                                    ? Blocks.IRON_BARS.defaultBlockState()
-                                    : Blocks.AIR.defaultBlockState());
-                }
-                set(level, centre.offset(x, WEAPON_STATION_HEIGHT, z),
-                        extension > 0 ? Blocks.PISTON.defaultBlockState()
-                                : Blocks.IRON_BLOCK.defaultBlockState());
-            }
-        }
-        BlockState warning = Blocks.REDSTONE_LAMP.defaultBlockState()
-                .setValue(BlockStateProperties.LIT, sequenceActive);
-        for (int x : new int[] {-10, 10})
-        {
-            set(level, centre.offset(x, 2, WEAPON_STATION_HALF_Z), warning);
-        }
-    }
 
     private static void buildPowerPylon(ServerLevel level, BlockPos centre)
     {
@@ -1695,9 +1536,55 @@ public final class ThirdTokyoSurfaceBuilder
                 depth - ceilingTravelDepth(tower)));
     }
 
+    private static boolean compatBlockAvailable(String namespace, String path)
+    {
+        return BuiltInRegistries.BLOCK.getOptional(
+                        new ResourceLocation(namespace, path))
+                .filter(block -> block != Blocks.AIR)
+                .isPresent();
+    }
+
+    private static BlockState compatBlock(String namespace, String path,
+                                          BlockState fallback)
+    {
+        return BuiltInRegistries.BLOCK.getOptional(
+                        new ResourceLocation(namespace, path))
+                .filter(block -> block != Blocks.AIR)
+                .map(Block::defaultBlockState)
+                .orElse(fallback);
+    }
+
+    private static BlockState facingIfPresent(BlockState state,
+                                               Direction facing)
+    {
+        return state.hasProperty(BlockStateProperties.FACING)
+                ? state.setValue(BlockStateProperties.FACING, facing)
+                : state;
+    }
+
+    private static BlockState axisIfPresent(BlockState state,
+                                            Direction.Axis axis)
+    {
+        return state.hasProperty(BlockStateProperties.AXIS)
+                ? state.setValue(BlockStateProperties.AXIS, axis)
+                : state;
+    }
+
+    private static int ceilingVisibleHeight(TowerSpec tower, int depth,
+                                            BlockPos origin)
+    {
+        return Math.max(0, Math.min(tower.height(),
+                depth - ceilingTravelDepth(tower, origin)));
+    }
+
     private static int ceilingTravelDepth(TowerSpec tower)
     {
         return Math.max(tower.height(), -ceilingRoofRelativeY(tower));
+    }
+
+    private static int ceilingTravelDepth(TowerSpec tower, BlockPos origin)
+    {
+        return Math.max(tower.height(), -ceilingRoofRelativeY(tower, origin));
     }
 
     /**
@@ -1720,6 +1607,15 @@ public final class ThirdTokyoSurfaceBuilder
                 tower.z() + tower.halfSize());
     }
 
+    public static int ceilingRoofRelativeY(TowerSpec tower, BlockPos origin)
+    {
+        return ceilingRoofRelativeYForBounds(
+                tower.x() - tower.halfSize(),
+                tower.x() + tower.halfSize(),
+                tower.z() - tower.halfSize(),
+                tower.z() + tower.halfSize(), origin);
+    }
+
     /** Curved-ceiling clearance for an arbitrary, possibly rotated footprint. */
     public static int ceilingRoofRelativeYForBounds(int minimumX, int maximumX,
                                                      int minimumZ, int maximumZ)
@@ -1734,6 +1630,35 @@ public final class ThirdTokyoSurfaceBuilder
                 + GeoFrontBuilder.CAVERN_CENTRE_Y + shellRise
                 - CEILING_SHELL_CLEARANCE;
         return worldY - IntegratedNervMapBuilder.TOKYO3_ORIGIN.getY();
+    }
+
+    /** Roof cap for an arbitrary footprint in the supplied Tokyo-3 frame. */
+    public static int ceilingRoofRelativeYForBounds(int minimumX, int maximumX,
+                                                     int minimumZ, int maximumZ,
+                                                     BlockPos origin)
+    {
+        if (!origin.equals(IntegratedNervMapBuilder.S22_TOKYO3_ORIGIN))
+        {
+            return ceilingRoofRelativeYForBounds(
+                    minimumX, maximumX, minimumZ, maximumZ);
+        }
+        BlockPos dome = FacilitySchemaV2.CANDIDATE_CENTRES.get(
+                FacilitySchemaV2.ACTIVE_CANDIDATE_INDEX);
+        int roof = Integer.MAX_VALUE;
+        int[] xs = {minimumX, maximumX};
+        int[] zs = {minimumZ, maximumZ};
+        for (int x : xs)
+        {
+            for (int z : zs)
+            {
+                int relativeX = origin.getX() + x - dome.getX();
+                int relativeZ = origin.getZ() + z - dome.getZ();
+                roof = Math.min(roof,
+                        GeoFrontBoundedChunkGenerator.canonicalRoofHeight(
+                                relativeX, relativeZ, origin.getY()));
+            }
+        }
+        return roof - CEILING_SHELL_CLEARANCE - origin.getY();
     }
 
     private static int distanceToRoadAxis(int value)
@@ -1771,8 +1696,8 @@ public final class ThirdTokyoSurfaceBuilder
     private static boolean ceilingStateMatches(ServerLevel level, BlockPos origin,
                                                TowerSpec tower, int depth)
     {
-        int visible = ceilingVisibleHeight(tower, depth);
-        int roofY = ceilingRoofRelativeY(tower);
+        int visible = ceilingVisibleHeight(tower, depth, origin);
+        int roofY = ceilingRoofRelativeY(tower, origin);
         BlockPos centre = origin.offset(tower.x(), 0, tower.z());
         if (visible == 0)
         {

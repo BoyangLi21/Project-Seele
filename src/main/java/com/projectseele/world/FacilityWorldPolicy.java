@@ -28,6 +28,12 @@ public final class FacilityWorldPolicy
             "Project SEELE - S20 Rebuild";
     public static final String S20_MARKER =
             ".projectseele_s20_rebuild.json";
+    public static final String S22_COASTAL_MARKER =
+            ".projectseele_s22_coastal.json";
+    public static final String S22_MIGRATION_FREEZE_MARKER =
+            ".projectseele_s22_migration_frozen.json";
+    public static final String S22_FLEET_PARKED_RECEIPT =
+            ".projectseele_s22_fleet_parked_v1.json";
     public static final String SPATIAL_PREVIEW_FREEZE_MARKER =
             ".projectseele_spatial_preview_read_only.json";
     public static final String S20_R10_R12_APPROVAL_RECEIPT =
@@ -73,6 +79,7 @@ public final class FacilityWorldPolicy
         Path root = server.getWorldPath(LevelResource.ROOT);
         Path name = root.getFileName();
         return Files.isRegularFile(root.resolve(S20_MARKER))
+                || Files.isRegularFile(root.resolve(S22_COASTAL_MARKER))
                 || S20_LEVEL_NAME.equals(
                         server.getWorldData().getLevelName())
                 || name != null && S20_DIRECTORY.equals(name.toString());
@@ -87,6 +94,21 @@ public final class FacilityWorldPolicy
         Path root = server.getWorldPath(LevelResource.ROOT);
         return Files.isRegularFile(
                 root.resolve(SPATIAL_PREVIEW_FREEZE_MARKER));
+    }
+
+    /** True only for the separate-seed coastal migration world. */
+    public static boolean isS22Coastal(MinecraftServer server)
+    {
+        Path root = server.getWorldPath(LevelResource.ROOT);
+        return Files.isRegularFile(root.resolve(S22_COASTAL_MARKER));
+    }
+
+    /** No S20 map writer may run while approved R28 volumes are in transit. */
+    public static boolean isS22MigrationFrozen(MinecraftServer server)
+    {
+        Path root = server.getWorldPath(LevelResource.ROOT);
+        return Files.isRegularFile(
+                root.resolve(S22_MIGRATION_FREEZE_MARKER));
     }
 
     /**

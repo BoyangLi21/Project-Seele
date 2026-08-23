@@ -27,7 +27,6 @@ import zlib
 
 import nbtlib
 import numpy as np
-from PIL import Image
 
 
 AIR_NAMES = {"minecraft:air", "minecraft:cave_air", "minecraft:void_air"}
@@ -237,6 +236,8 @@ def update_plan(plan_y: np.ndarray, plan_rgb: np.ndarray, indices: np.ndarray,
 
 def inspect_world(world: Path, radius: int, output: Path,
                   slice_levels: list[int] | None = None) -> dict:
+    from PIL import Image
+
     level = read_level(world)
     spawn_x, _, spawn_z = level["spawn"]
     centre_x, centre_z = spawn_x // 16, spawn_z // 16

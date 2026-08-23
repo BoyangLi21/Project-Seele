@@ -15,6 +15,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 PACK_NAME = "Project_SEELE_Private_Test_Pack"
 DEFAULT_OUTPUT = ROOT / "external-assets" / "private-test-bundle"
+WORLD_NAME = "SEELE_S20_RECOVERY_R28"
 
 
 def sha256(path: Path) -> str:
@@ -76,9 +77,9 @@ def copy_tree(source: Path, destination: Path, *, world: bool = False) -> None:
 
 def write_install_note(destination: Path, includes_world: bool) -> None:
     world_line = (
-        "此包包含 SEELE_TOKYO3_REBUILT；单人可直接进入，专用服务器请把 level-name 设为 SEELE_TOKYO3_REBUILT。"
+        f"此包包含 {WORLD_NAME}；单人可直接进入，专用服务器请把 level-name 设为 {WORLD_NAME}。"
         if includes_world
-        else "此包不包含世界存档；主机需要另行私传 SEELE_TOKYO3_REBUILT。"
+        else f"此包不包含世界存档；主机需要另行私传 {WORLD_NAME}。"
     )
     note = f"""Project SEELE 私有测试包
 生成时间：{datetime.now(timezone.utc).isoformat()}
@@ -87,11 +88,11 @@ def write_install_note(destination: Path, includes_world: bool) -> None:
 1. 使用 Minecraft 1.20.1、Forge 47.4.10 和 Java 17。
 2. 将 minecraft 目录中的内容合并到一个独立游戏实例的根目录。
 3. 客户端建议分配 6G 内存；启用 eva_real_model 资源包并将它置于最高优先级。
-4. 专用服务器建议分配 8G 内存；资源包只需要安装在客户端。
+4. 当前私人服务器模板固定分配 14G 内存；资源包只需要安装在客户端。
 5. 进入世界后先运行 /seele geofront audit；如提示结构不完整，再运行 /seele geofront setup。
 6. 驾驶员可用 /seele pilot sync 查看同步率；管理员可用 /seele pilot sync set <0..100> 调试。
 7. 仅限朋友之间本地/私服测试，禁止公开上传或再次分发第三方素材。
-8. 专用服务器直接使用包内 server-template；它带 8G 参数、白名单和人工 EULA 门禁。
+8. 专用服务器直接使用包内 server-template；它带 14G 参数、白名单和人工 EULA 门禁。
 9. 完整说明见仓库 docs/FRIEND_TEST_PACK.md。
 """
     note += (
@@ -106,10 +107,10 @@ def write_server_template(pack_root: Path, includes_world: bool) -> None:
     template = pack_root / "server-template"
     template.mkdir(parents=True, exist_ok=True)
 
-    properties = """# Project SEELE private 1-4 player server
+    properties = f"""# Project SEELE private 1-4 player server
 server-port=25565
 motd=Project SEELE Private Test
-level-name=SEELE_TOKYO3_REBUILT
+level-name={WORLD_NAME}
 gamemode=survival
 difficulty=normal
 hardcore=false
@@ -129,8 +130,8 @@ enable-command-block=false
 """
     (template / "server.properties").write_text(properties, encoding="utf-8")
 
-    jvm_args = """-Xms2G
--Xmx8G
+    jvm_args = """-Xms14G
+-Xmx14G
 -XX:+UseG1GC
 -XX:MaxGCPauseMillis=100
 -XX:+ParallelRefProcEnabled
@@ -139,9 +140,9 @@ enable-command-block=false
     (template / "user_jvm_args.txt").write_text(jvm_args, encoding="utf-8")
 
     world_copy = (
-        'if exist "%PACK_ROOT%\\minecraft\\saves\\SEELE_TOKYO3_REBUILT\\level.dat" '
-        'xcopy /E /I /Y "%PACK_ROOT%\\minecraft\\saves\\SEELE_TOKYO3_REBUILT" '
-        '"SEELE_TOKYO3_REBUILT" >nul\n'
+        f'if exist "%PACK_ROOT%\\minecraft\\saves\\{WORLD_NAME}\\level.dat" '
+        f'xcopy /E /I /Y "%PACK_ROOT%\\minecraft\\saves\\{WORLD_NAME}" '
+        f'"{WORLD_NAME}" >nul\n'
         if includes_world
         else ""
     )
@@ -193,9 +194,9 @@ call run.bat --nogui
     (template / "start-server.bat").write_text(start, encoding="utf-8")
 
     world_note = (
-        "模板会从同一私测包复制 SEELE_TOKYO3_REBUILT 世界。"
+        f"模板会从同一私测包复制 {WORLD_NAME} 世界。"
         if includes_world
-        else "此包没有世界存档；请由主机私下复制 SEELE_TOKYO3_REBUILT。"
+        else f"此包没有世界存档；请由主机私下复制 {WORLD_NAME}。"
     )
     note = f"""Project SEELE 私人专用服务器模板
 {world_note}
@@ -206,7 +207,7 @@ call run.bat --nogui
 4. 在服务器控制台执行 whitelist add <正版玩家名>，再重新启动。模板默认开启正版验证和强制白名单。
 5. 首位管理员进入后执行 /seele geofront audit，要求 valid=true、mapVersion=22、三井均为 3/3。
 6. 客户端仍需安装私测包 minecraft/ 内容，并启用 eva_real_model 资源包。
-7. 默认 JVM 为 2G 起步、8G 上限；如果物理内存不足 12G，请不要同时在主机上启动高精度客户端。
+7. 默认 JVM 固定为 14G；服务器物理内存需至少 18G，且不要同时在主机上启动高精度客户端。
 8. server-template 与整个私测包都不得公开上传。
 """
     note += (
@@ -253,7 +254,7 @@ def create_zip(pack_root: Path, zip_path: Path) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--include-world", action="store_true", help="include SEELE_TOKYO3_REBUILT")
+    parser.add_argument("--include-world", action="store_true", help=f"include {WORLD_NAME}")
     parser.add_argument("--no-zip", action="store_true", help="leave only the unpacked directory")
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     args = parser.parse_args()
@@ -279,6 +280,25 @@ def main() -> int:
         copy_file(ars, mods / ars.name)
         copy_file(curios, mods / curios.name)
 
+    moving_elevator_mods = (
+        local_mods / "movingelevators-1.4.12-forge-mc1.20.1.jar",
+        local_mods / "supermartijn642configlib-1.1.8-forge-mc1.20.jar",
+        local_mods / "supermartijn642corelib-1.1.24-forge-mc1.20.1.jar",
+    )
+    missing_elevator_mods = [path for path in moving_elevator_mods if not path.is_file()]
+    if missing_elevator_mods:
+        raise FileNotFoundError(
+            "Moving Elevators dependency missing: "
+            + ", ".join(str(path) for path in missing_elevator_mods)
+        )
+    for elevator_mod in moving_elevator_mods:
+        copy_file(elevator_mod, mods / elevator_mod.name)
+
+    mtr = local_mods / "MTR-forge-4.0.5+1.20.1.jar"
+    if not mtr.is_file():
+        raise FileNotFoundError("Minecraft Transit Railway dependency missing: " + str(mtr))
+    copy_file(mtr, mods / mtr.name)
+
     copy_tree(
         ROOT / "run" / "resourcepacks" / "eva_real_model",
         minecraft / "resourcepacks" / "eva_real_model",
@@ -297,8 +317,8 @@ def main() -> int:
 
     if args.include_world:
         copy_tree(
-            ROOT / "run" / "saves" / "SEELE_TOKYO3_REBUILT",
-            minecraft / "saves" / "SEELE_TOKYO3_REBUILT",
+            ROOT / "run" / "saves" / WORLD_NAME,
+            minecraft / "saves" / WORLD_NAME,
             world=True,
         )
 

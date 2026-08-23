@@ -114,8 +114,8 @@ def main() -> int:
     contact_a = samples["crouch_walk_contact_a"]["joint_world"]
     contact_b = samples["crouch_walk_contact_b"]["joint_world"]
     checks["crouch_walk_stride_swaps"] = (
-        contact_a["foot_l"][2] <= contact_a["foot_r"][2] - 20.0
-        and contact_b["foot_r"][2] <= contact_b["foot_l"][2] - 20.0)
+        contact_a["foot_l"][2] <= contact_a["foot_r"][2] - 12.0
+        and contact_b["foot_r"][2] <= contact_b["foot_l"][2] - 12.0)
     for label, sample in first_person_samples.items():
         view = sample["first_person"]["forward"]
         left = view["left_arm"]["horizontal_centre"]

@@ -18,15 +18,25 @@ public final class EntryPlugKinematics
 {
     public static final double MODEL_TO_BLOCK =
             EvaScale.ENTRY_PLUG_RENDER_SCALE / 16.0D;
-    public static final double LOCK_DEPTH_BLOCKS = 5.4D;
+    /**
+     * Final travel down the vertical dorsal socket.  The capsule body is ten
+     * blocks long in P-space.  An 11-block lock travel seats the complete
+     * body and its lower collar just inside the dorsal mouth; the old 9.25
+     * value left roughly three quarters of a block visibly hanging outside.
+     * The raked socket still leaves the insertion tip behind the torso centre
+     * plane, so the extra travel cannot cross the front armour.
+     */
+    public static final double LOCK_DEPTH_BLOCKS = 11.0D;
     public static final double DOCK_PHASE_END = 0.45D;
     public static final double ALIGN_PHASE_END = 0.75D;
-    public static final float HATCH_OPEN_TRAVEL_MODEL = 4.6F;
+    /** Opposed pressure leaves hinge upward instead of floating sideways. */
+    public static final float HATCH_OPEN_ANGLE_DEGREES = 82.0F;
+    public static final float HATCH_LEAF_HALF_WIDTH_MODEL = 2.5F;
 
     public static final Vec3 BODY_OBB_CENTRE_P =
             new Vec3(0.0D, 0.0D, 5.0D);
     public static final Vec3 BODY_OBB_HALF_EXTENTS =
-            new Vec3(1.0D, 1.0D, 5.0D);
+            new Vec3(1.2D, 1.2D, 5.15D);
     public static final Vec3 HATCH_PORTAL_HALF_EXTENTS_P =
             modelMarker(2.5D, 0.4D, 7.0D);
     public static final Vec3 HATCH_PORTAL_CENTRE_P =
@@ -47,48 +57,63 @@ public final class EntryPlugKinematics
             modelMarker(-6.4D, 5.2D, 29.0D);
     public static final Vec3 PILOT_DISMOUNT_RIGHT_P =
             modelMarker(6.4D, 5.2D, 29.0D);
-    /** Crane eye at the capsule tail, opposite the lower insertion tip. */
+    /**
+     * Crane eye slightly inside the capsule tail.  The 0.3-block overlap lets
+     * the physical clamp visibly grip the shell instead of ending at a
+     * mathematically coincident face that can render as a gap.
+     */
     public static final Vec3 CRANE_ATTACHMENT_P =
-            modelMarker(0.0D, 0.0D, 50.0D);
+            modelMarker(0.0D, 0.0D, 48.5D);
 
     /*
-     * The reviewed Tiger meshes are 192 model units high at a 5/16
-     * block-per-unit render scale. The dorsal opening is on the upper-back
-     * torso at approximately y=145 and z=+12.8 model units.
+     * Measured from the reviewed Tiger mesh rather than from the torso box:
+     * the symmetric pair of dorsal guide points behind the head is centred at
+     * model y=167.7 and rear z=23.6.  At the 5/16 block-per-unit render scale
+     * that puts the insertion axis 52.4 blocks above the entity origin.  The
+     * previous 50.5-block anchor was almost two blocks low and entered below
+     * the authored pair even though its rear depth was already correct.
      */
-    public static final double SOCKET_HEIGHT_BLOCKS = 50.5D;
-    public static final double SOCKET_REAR_BLOCKS = 4.8D;
+    public static final double SOCKET_HEIGHT_BLOCKS = 52.9D;
+    /*
+     * The measured guide pair is one block farther forward than the previous
+     * provisional anchor.  This mouth position and the 30-degree dorsal rake
+     * seat the capsule between those two points without crossing the chest.
+     */
+    public static final double SOCKET_REAR_BLOCKS = 4.35D;
     private static final Vec3 WORLD_UP = new Vec3(0.0D, 1.0D, 0.0D);
-    /** Entry channel rises 60 degrees behind the upright airframe. */
+    /** The bridge cradle holds the capsule almost horizontal (15 degrees). */
+    private static final double DOCK_REAR_AXIS =
+            0.9659258262890683D;
+    private static final double DOCK_UP_AXIS = 0.25881904510252074D;
+    /**
+     * The production socket is vertical-dominant, not mathematically vertical.
+     * A thirty-degree rearward rake follows the reviewed dorsal guide line.
+     * The matching rear anchor keeps the aggressively inserted tip behind the
+     * torso centre plane instead of allowing it to cross the chest.
+     */
     private static final double SOCKET_REAR_AXIS = 0.5D;
-    private static final double SOCKET_UP_AXIS =
-            0.8660254037844386D;
+    private static final double SOCKET_UP_AXIS = 0.8660254037844386D;
 
     private EntryPlugKinematics() {}
 
     public static RigidTransform socketTransform(EvaUnit01Entity unit)
     {
         Vec3 rear = unit.getRearDirection();
-        Vec3 outward = rear.scale(SOCKET_REAR_AXIS)
-                .add(WORLD_UP.scale(SOCKET_UP_AXIS)).normalize();
-        // Keep plug +Y on the dorsal/hatch side while +Z follows the sloped
-        // spinal channel. Deriving all three orthogonal axes avoids the shear
-        // produced by pairing a tilted Z axis with raw WORLD_UP.
-        Vec3 hatchSide = rear.subtract(
-                outward.scale(rear.dot(outward))).normalize();
-        Vec3 right = hatchSide.cross(outward).normalize();
+        RigidTransform orientation = verticalSocketOrientation(rear);
         Vec3 origin = unit.position()
                 .add(rear.scale(SOCKET_REAR_BLOCKS))
                 .add(0.0D, SOCKET_HEIGHT_BLOCKS, 0.0D);
-        return RigidTransform.fromAxes(
-                origin, right, hatchSide, outward);
+        return new RigidTransform(origin,
+                orientation.qx(), orientation.qy(),
+                orientation.qz(), orientation.qw());
     }
 
     /**
      * Authored cage pose whose hatch marker, not entity centre, lands at the
-     * boarding point. The insertion tip is the lowest point under the crane
-     * and the capsule rises above it; its +Y hatch face looks toward the rear
-     * boarding bridge.
+     * boarding point.  The insertion tip points toward the EVA while the
+     * booster/tail points outward and only slightly upward.  The hatch face is
+     * the orthogonal upper side, so the capsule lies nearly flat on the bridge
+     * and its two doors lift above the pilot instead of opening sideways.
      */
     public static RigidTransform dockTransform(EvaUnit01Entity unit,
                                                 Vec3 hatchCentreWorld)
@@ -112,18 +137,44 @@ public final class EntryPlugKinematics
     private static RigidTransform dockTransform(Vec3 hatchCentreWorld,
                                                  Vec3 hatchFacing)
     {
-        Vec3 normalizedFacing = hatchFacing.multiply(1.0D, 0.0D, 1.0D)
+        Vec3 rear = hatchFacing.multiply(1.0D, 0.0D, 1.0D)
                 .normalize();
-        // x = y cross z keeps the authored plug frame right-handed while
-        // +Z points from the lower insertion tip up through the capsule.
-        Vec3 right = normalizedFacing.cross(WORLD_UP).normalize();
-        RigidTransform orientation = RigidTransform.fromAxes(
-                Vec3.ZERO, right, normalizedFacing, WORLD_UP);
+        RigidTransform orientation = dockOrientation(rear);
         Vec3 tip = hatchCentreWorld.subtract(
                 orientation.transformVector(HATCH_PORTAL_CENTRE_P));
         return new RigidTransform(tip,
                 orientation.qx(), orientation.qy(),
                 orientation.qz(), orientation.qw());
+    }
+
+    /** Stable near-horizontal bridge cradle, independent of the live EVA. */
+    private static RigidTransform dockOrientation(Vec3 rear)
+    {
+        Vec3 outward = rear.scale(DOCK_REAR_AXIS)
+                .add(WORLD_UP.scale(DOCK_UP_AXIS)).normalize();
+        Vec3 hatchUp = WORLD_UP.subtract(
+                outward.scale(WORLD_UP.dot(outward))).normalize();
+        Vec3 right = hatchUp.cross(outward).normalize();
+        return RigidTransform.fromAxes(
+                Vec3.ZERO, right, hatchUp, outward);
+    }
+
+    /**
+     * Dorsal insertion frame. +Z points upward with a slight rearward rake,
+     * therefore the plug's -Z insertion tip travels down and forward through
+     * the two guide points behind the head. The horizontal rear vector fixes
+     * roll, so all three cages present the hatch on the same side.
+     */
+    private static RigidTransform verticalSocketOrientation(Vec3 rear)
+    {
+        Vec3 horizontalRear = rear.multiply(1.0D, 0.0D, 1.0D).normalize();
+        Vec3 outward = horizontalRear.scale(SOCKET_REAR_AXIS)
+                .add(WORLD_UP.scale(SOCKET_UP_AXIS)).normalize();
+        Vec3 hatchUp = WORLD_UP.subtract(
+                outward.scale(WORLD_UP.dot(outward))).normalize();
+        Vec3 right = hatchUp.cross(outward).normalize();
+        return RigidTransform.fromAxes(
+                Vec3.ZERO, right, hatchUp, outward);
     }
 
     /**
@@ -145,12 +196,32 @@ public final class EntryPlugKinematics
     public static RigidTransform insertionTransform(
             EvaUnit01Entity unit, RigidTransform dockWorld, double progress)
     {
-        double linear = Mth.clamp(progress, 0.0D, 1.0D);
+        return insertionTransform(unit, dockWorld, progress, progress);
+    }
+
+    /**
+     * Evaluates one insertion pose.  The second clock remains in the method
+     * signature for saved-state compatibility; the physical route now uses a
+     * single continuous clock so translation and standing rotation cannot
+     * fight each other or create a one-frame pivot kick.
+     */
+    public static RigidTransform insertionTransform(
+            EvaUnit01Entity unit, RigidTransform dockWorld,
+            double translationProgress, double rotationProgress)
+    {
+        double linear = Mth.clamp(translationProgress, 0.0D, 1.0D);
         RigidTransform socket = socketTransform(unit);
         RigidTransform dockInSocket = socket.inverse().compose(
                 dockWorld);
+        /*
+         * Once upright, three blocks above the mouth give the lower insertion
+         * tip a visible lead-in while keeping the 10-block capsule below the
+         * wet-cage roof.  Interpolation from dockInSocket also performs the
+         * one continuous flat-to-vertical presentation; there is no discrete
+         * face flip at the mouth.
+         */
         RigidTransform approachInSocket = new RigidTransform(
-                new Vec3(0.0D, 5.0D, 8.4D),
+                new Vec3(0.0D, 0.0D, 3.0D),
                 0.0F, 0.0F, 0.0F, 1.0F);
         RigidTransform mouthInSocket = RigidTransform.identity();
         RigidTransform plugInSocket;
@@ -244,13 +315,14 @@ public final class EntryPlugKinematics
         return sweep;
     }
 
-    /** Both pressure-door leaves travel laterally by this distance. */
+    /** Conservative volume swept by both upward-hinged pressure leaves. */
     public static AABB hatchClosingSweep(RigidTransform transform)
     {
-        double travel = HATCH_OPEN_TRAVEL_MODEL * MODEL_TO_BLOCK;
+        double rise = (HATCH_LEAF_HALF_WIDTH_MODEL + 0.5D)
+                * MODEL_TO_BLOCK;
         Vec3 expanded = new Vec3(
-                HATCH_PORTAL_HALF_EXTENTS_P.x + travel,
-                HATCH_PORTAL_HALF_EXTENTS_P.y,
+                HATCH_PORTAL_HALF_EXTENTS_P.x + 0.25D,
+                HATCH_PORTAL_HALF_EXTENTS_P.y + rise,
                 HATCH_PORTAL_HALF_EXTENTS_P.z);
         return worldBounds(transform, HATCH_PORTAL_CENTRE_P, expanded);
     }

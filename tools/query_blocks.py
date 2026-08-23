@@ -42,11 +42,18 @@ def dimension_dir(world: Path, dimension: str) -> Path:
 
 
 def read_box(world: Path, dimension: str,
-             lo: tuple[int, int, int], hi: tuple[int, int, int]
+             lo: tuple[int, int, int], hi: tuple[int, int, int],
+             namespace: str | None = None,
              ) -> dict[tuple[int, int, int], str]:
+    return dict(iter_box_cells(world, dimension, lo, hi, namespace))
+
+
+def iter_box_cells(world: Path, dimension: str,
+                   lo: tuple[int, int, int], hi: tuple[int, int, int],
+                   namespace: str | None = None):
+    """Yield exact loaded cells without materializing a large world box."""
     root = dimension_dir(world, dimension)
     bounds = (lo[0] >> 4, hi[0] >> 4, lo[2] >> 4, hi[2] >> 4)
-    cells: dict[tuple[int, int, int], str] = {}
     for chunk_x, chunk_z, chunk in iter_chunks(root, bounds):
         base_x, base_z = chunk_x * 16, chunk_z * 16
         for section in chunk.get("sections", []):
@@ -58,6 +65,12 @@ def read_box(world: Path, dimension: str,
             if not palette:
                 continue
             names = [palette_state(entry) for entry in palette]
+            accepted = None if namespace is None else {
+                index for index, state in enumerate(names)
+                if state.startswith(namespace + ":")
+            }
+            if accepted is not None and not accepted:
+                continue
             for offset in range(4096):
                 y = base_y + (offset >> 8)
                 if not lo[1] <= y <= hi[1]:
@@ -68,8 +81,24 @@ def read_box(world: Path, dimension: str,
                 x = base_x + (offset & 15)
                 if not lo[0] <= x <= hi[0]:
                     continue
-                cells[(x, y, z)] = names[indices[offset]]
-    return cells
+                if accepted is not None and indices[offset] not in accepted:
+                    continue
+                yield (x, y, z), names[indices[offset]]
+
+
+def iter_block_entities(world: Path, dimension: str,
+                        lo: tuple[int, int, int], hi: tuple[int, int, int]):
+    """Yield exact block-entity NBT entries inside a loaded world box."""
+    root = dimension_dir(world, dimension)
+    bounds = (lo[0] >> 4, hi[0] >> 4, lo[2] >> 4, hi[2] >> 4)
+    for _chunk_x, _chunk_z, chunk in iter_chunks(root, bounds):
+        for entry in chunk.get("block_entities", []):
+            if not all(key in entry for key in ("x", "y", "z")):
+                continue
+            x, y, z = int(entry["x"]), int(entry["y"]), int(entry["z"])
+            if (lo[0] <= x <= hi[0] and lo[1] <= y <= hi[1]
+                    and lo[2] <= z <= hi[2]):
+                yield (x, y, z), entry
 
 
 def short(state: str) -> str:
@@ -87,12 +116,14 @@ def main() -> None:
     parser.add_argument("--limit", type=int, default=400)
     parser.add_argument("--air", action="store_true",
                         help="include air cells in list mode")
+    parser.add_argument("--namespace",
+                        help="only report states in this namespace (for example: create)")
     args = parser.parse_args()
 
     x0, y0, z0, x1, y1, z1 = args.box
     lo = (min(x0, x1), min(y0, y1), min(z0, z1))
     hi = (max(x0, x1), max(y0, y1), max(z0, z1))
-    cells = read_box(args.world, args.dim, lo, hi)
+    cells = read_box(args.world, args.dim, lo, hi, args.namespace)
 
     if args.mode == "census":
         counter = Counter(cells.values())

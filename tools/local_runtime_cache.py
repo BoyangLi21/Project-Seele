@@ -20,6 +20,8 @@ GENERATOR_GLOBS = (
     "tools/make_entry_plug_model.py",
     "tools/make_kantrophe_positron_pack.py",
     "tools/make_original_*.py",
+    "tools/make_ultraman_*.py",
+    "tools/eva_finger_axis_repair.py",
     "tools/validate_local_eva_pack.py",
 )
 SOURCE_ROOTS = (
@@ -37,11 +39,18 @@ REQUIRED_OUTPUTS = (
     "mesh/eva_unit02.mesh.json",
     "mesh/mass_production_eva.mesh.json",
     "mesh/entry_plug.mesh.json",
+    "mesh/entry_plug_unit00.mesh.json",
+    "mesh/entry_plug_unit01.mesh.json",
+    "mesh/entry_plug_unit02.mesh.json",
     "mesh/progressive_knife.mesh.json",
     "mesh/longinus_lance.mesh.json",
     "mesh/positron_cannon.mesh.json",
     "mesh/eva_pallet_smg.mesh.json",
     "mesh/eva_n2_device.mesh.json",
+    "mesh/ultraman_avatar.mesh.json",
+    "geo/ultraman_avatar.geo.json",
+    "animations/ultraman_avatar.animation.json",
+    "textures/entity/ultraman_avatar.png",
     "textures/entity/eva_unit01.png",
 )
 OUTPUT_ROOT = (ROOT / "run" / "resourcepacks" / "eva_real_model"

@@ -172,19 +172,27 @@ for ($i = 0; $i -lt $n; $i++) {
 }
 Write-Wav "$env:TEMP\seele_ramiel_hum.wav" $buf
 
-# ---------- 9. rifle_fire: 0.5s positron rifle zap ----------
+# ---------- 9. rifle_fire: 0.34s mechanical assault-rifle report ----------
 Write-Host "synth: rifle_fire"
-$buf = New-Buf 0.5
+$buf = New-Buf 0.34
 $n = $buf.Count
-$ph = 0.0
+$previousNoise = 0.0
 for ($i = 0; $i -lt $n; $i++) {
     $t = $i / [double]$SampleRate
-    $f = 1350.0 * [Math]::Pow(0.16, $t * 2.2)
-    $ph += $f / $SampleRate
-    $zap = 0.6 * (Saw $ph) + 0.3 * [Math]::Sin(2 * [Math]::PI * $ph * 2.02)
-    $click = 0.0
-    if ($t -lt 0.012) { $click = ($rng.NextDouble() * 2 - 1) * (1 - $t / 0.012) }
-    $buf[$i] = [float]($zap * [Math]::Exp(-9.5 * $t) + $click * 0.8)
+    $noise = $rng.NextDouble() * 2.0 - 1.0
+    $crack = ($noise - $previousNoise) * [Math]::Exp(-58.0 * $t)
+    $previousNoise = $noise
+    $boom = [Math]::Sin(2 * [Math]::PI * 82.0 * $t) * [Math]::Exp(-13.0 * $t)
+    $body = [Math]::Sin(2 * [Math]::PI * 238.0 * $t) * [Math]::Exp(-24.0 * $t)
+    $bolt = 0.0
+    foreach ($centre in @(0.056, 0.112)) {
+        $distance = [Math]::Abs($t - $centre)
+        if ($distance -lt 0.006) {
+            $bolt += ($rng.NextDouble() * 2.0 - 1.0) * (1.0 - $distance / 0.006)
+        }
+    }
+    $tail = ($rng.NextDouble() * 2.0 - 1.0) * 0.12 * [Math]::Exp(-9.0 * $t)
+    $buf[$i] = [float](0.92 * $crack + 0.76 * $boom + 0.34 * $body + 0.42 * $bolt + $tail)
 }
 Write-Wav "$env:TEMP\seele_rifle_fire.wav" $buf
 

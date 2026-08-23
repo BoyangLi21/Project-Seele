@@ -19,6 +19,7 @@ public final class TrainingPilotEntity extends PathfinderMob
     public static final int STAGE_WALKING = 0;
     public static final int STAGE_IN_PLUG = 1;
     public static final int STAGE_LINKED = 2;
+    public static final int STAGE_STANDBY = 3;
 
     private static final EntityDataAccessor<Integer> DATA_VARIANT =
             SynchedEntityData.defineId(TrainingPilotEntity.class,

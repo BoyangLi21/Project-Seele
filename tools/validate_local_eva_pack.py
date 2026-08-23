@@ -29,18 +29,41 @@ STANDARD_EVA_FINGER_ROOTS = {
     for digit in ("thumb", "index", "middle", "ring", "little")
     for side in ("l", "r")
 }
+GENERATED_EVA_DIGITS = ("thumb", "index", "middle", "ring", "little")
 STANDARD_EVA_FINGER_TIPS = {
     f"finger_{digit}_tip_{side}"
+    for digit in GENERATED_EVA_DIGITS
+    for side in ("l", "r")
+}
+STANDARD_EVA_FINGER_DISTALS = {
+    f"finger_{digit}_distal_{side}"
+    for digit in GENERATED_EVA_DIGITS
+    for side in ("l", "r")
+}
+STANDARD_EVA_FINGER_AXES = {
+    f"finger_{digit}_axis_{side}"
     for digit in ("thumb", "index", "middle", "ring", "little")
     for side in ("l", "r")
 }
-STANDARD_EVA_FINGER_BONES = STANDARD_EVA_FINGER_ROOTS | STANDARD_EVA_FINGER_TIPS
-# The detached thumb cap remains on its proximal bone; its child is an
-# animation socket without triangles. The four long digits per hand have a
-# real distal mesh segment, giving 18 finger mesh parts and 20 finger bones.
-STANDARD_EVA_FINGER_MESH_PARTS = STANDARD_EVA_FINGER_ROOTS | {
-    name for name in STANDARD_EVA_FINGER_TIPS if "finger_thumb_tip_" not in name
+STANDARD_EVA_FINGER_BONES = (
+    STANDARD_EVA_FINGER_ROOTS
+    | STANDARD_EVA_FINGER_TIPS
+    | STANDARD_EVA_FINGER_DISTALS
+)
+# The Tiger body supplies the thumb root while the clean rig supplies its two
+# articulated descendants.  All five digits therefore have a root, tip and
+# distal part.  Per EVA this is 30 visible finger mesh parts and 47 total mesh
+# parts; keeping this exact set in sync with the Java fail-closed contract is
+# what prevents a newly generated EVA from being rejected as invisible.
+THUMB_DISTAL_CONTROL_BONES = {
+    f"finger_thumb_distal_{side}" for side in ("l", "r")
 }
+# The imported palm retains the thumb mound and the clean replacement uses
+# two visible phalanges.  The distal thumb names remain in the Gecko skeleton
+# and animation contract for compatibility, but deliberately carry no mesh.
+STANDARD_EVA_FINGER_MESH_PARTS = (
+    STANDARD_EVA_FINGER_BONES - THUMB_DISTAL_CONTROL_BONES
+)
 STANDARD_EVA_MESH_PARTS = {
     "torso_upper", "torso_lower", "head",
     "pylon_r", "pylon_l",
@@ -54,8 +77,13 @@ STANDARD_EVA_FOOT_PARENTS = {
 }
 STANDARD_EVA_BONE_PARENTS = {
     **STANDARD_EVA_FOOT_PARENTS,
-    **{name: "hand_" + name[-1] for name in STANDARD_EVA_FINGER_ROOTS},
+    **{name: "hand_" + name[-1] for name in STANDARD_EVA_FINGER_AXES},
+    **{f"finger_{digit}_{side}": f"finger_{digit}_axis_{side}"
+       for digit in ("thumb", "index", "middle", "ring", "little")
+       for side in ("l", "r")},
     **{name: name.replace("_tip_", "_") for name in STANDARD_EVA_FINGER_TIPS},
+    **{name: name.replace("_distal_", "_tip_")
+       for name in STANDARD_EVA_FINGER_DISTALS},
     "aim_pitch": "torso_upper",
     "arm_l": "aim_pitch",
     "arm_r": "aim_pitch",
@@ -67,7 +95,9 @@ STANDARD_EVA_ATTACHMENT_CUBES = {
     "plug_hatch_l": 1,
     "plug_hatch_r": 1,
 }
-NO_LEGACY_BODY_CUBES = STANDARD_EVA_MESH_PARTS | {"horn", "cannon"}
+NO_LEGACY_BODY_CUBES = (
+    STANDARD_EVA_MESH_PARTS | THUMB_DISTAL_CONTROL_BONES | {"horn", "cannon"}
+)
 MASS_MESH_PARTS = {
     "torso_upper", "torso_lower", "head",
     "arm_r", "arm_l", "forearm_r", "forearm_l", "hand_r", "hand_l",
@@ -103,18 +133,19 @@ ASSETS = {
     "unit01": {
         "stem": "eva_unit01",
         "minimum_triangles": 4_000,
-        "expected_triangles": 4_226,
+        "expected_triangles": 6_402,
         "minimum_parts": len(STANDARD_EVA_MESH_PARTS),
         "expected_parts": len(STANDARD_EVA_MESH_PARTS),
         "required_parts": STANDARD_EVA_MESH_PARTS,
         "required_bone_parents": STANDARD_EVA_BONE_PARENTS,
         "minimum_bone_cubes": STANDARD_EVA_ATTACHMENT_CUBES,
         "required_animation_bones": STANDARD_EVA_ANIMATION_BONES,
-        "required_geo_bones": {"root", "aim_pitch", "knife", "cannon", "lance", "n2", "entry_plug", "plug_hatch_l", "plug_hatch_r"},
+        "required_geo_bones": {"root", "aim_pitch", "knife", "cannon", "lance", "n2", "entry_plug", "plug_hatch_l", "plug_hatch_r"} | STANDARD_EVA_FINGER_AXES,
         "forbidden_cube_bones": NO_LEGACY_BODY_CUBES,
         "expected_texture_size": (1024, 512),
         "required_animations": {
-            "animation.eva_unit01.idle", "animation.eva_unit01.walk",
+            "animation.eva_unit01.idle", "animation.eva_unit01.dormant",
+            "animation.eva_unit01.walk",
             "animation.eva_unit01.crouch", "animation.eva_unit01.prone",
             "animation.eva_unit01.aim", "animation.eva_unit01.prone_aim",
             "animation.eva_unit01.crucified", "animation.eva_unit01.activation",
@@ -135,18 +166,19 @@ ASSETS = {
     "unit00": {
         "stem": "eva_unit00",
         "minimum_triangles": 3_000,
-        "expected_triangles": 3_692,
+        "expected_triangles": 5_866,
         "minimum_parts": len(STANDARD_EVA_MESH_PARTS),
         "expected_parts": len(STANDARD_EVA_MESH_PARTS),
         "required_parts": STANDARD_EVA_MESH_PARTS,
         "required_bone_parents": {**STANDARD_EVA_BONE_PARENTS, "shield": "forearm_l"},
         "minimum_bone_cubes": {**STANDARD_EVA_ATTACHMENT_CUBES, "shield": 2},
         "required_animation_bones": STANDARD_EVA_ANIMATION_BONES,
-        "required_geo_bones": {"root", "aim_pitch", "knife", "cannon", "lance", "n2", "shield", "entry_plug", "plug_hatch_l", "plug_hatch_r"},
+        "required_geo_bones": {"root", "aim_pitch", "knife", "cannon", "lance", "n2", "shield", "entry_plug", "plug_hatch_l", "plug_hatch_r"} | STANDARD_EVA_FINGER_AXES,
         "forbidden_cube_bones": NO_LEGACY_BODY_CUBES,
         "expected_texture_size": (1024, 512),
         "required_animations": {
-            "animation.eva_unit01.idle", "animation.eva_unit01.walk",
+            "animation.eva_unit01.idle", "animation.eva_unit01.dormant",
+            "animation.eva_unit01.walk",
             "animation.eva_unit01.crouch", "animation.eva_unit01.prone",
             "animation.eva_unit01.aim", "animation.eva_unit01.prone_aim",
             "animation.eva_unit01.crucified", "animation.eva_unit01.activation",
@@ -167,18 +199,19 @@ ASSETS = {
     "unit02": {
         "stem": "eva_unit02",
         "minimum_triangles": 3_500,
-        "expected_triangles": 3_952,
+        "expected_triangles": 6_126,
         "minimum_parts": len(STANDARD_EVA_MESH_PARTS),
         "expected_parts": len(STANDARD_EVA_MESH_PARTS),
         "required_parts": STANDARD_EVA_MESH_PARTS,
         "required_bone_parents": STANDARD_EVA_BONE_PARENTS,
         "minimum_bone_cubes": STANDARD_EVA_ATTACHMENT_CUBES,
         "required_animation_bones": STANDARD_EVA_ANIMATION_BONES,
-        "required_geo_bones": {"root", "aim_pitch", "knife", "cannon", "lance", "n2", "entry_plug", "plug_hatch_l", "plug_hatch_r"},
+        "required_geo_bones": {"root", "aim_pitch", "knife", "cannon", "lance", "n2", "entry_plug", "plug_hatch_l", "plug_hatch_r"} | STANDARD_EVA_FINGER_AXES,
         "forbidden_cube_bones": NO_LEGACY_BODY_CUBES,
         "expected_texture_size": (1024, 512),
         "required_animations": {
-            "animation.eva_unit01.idle", "animation.eva_unit01.walk",
+            "animation.eva_unit01.idle", "animation.eva_unit01.dormant",
+            "animation.eva_unit01.walk",
             "animation.eva_unit01.crouch", "animation.eva_unit01.prone",
             "animation.eva_unit01.aim", "animation.eva_unit01.prone_aim",
             "animation.eva_unit01.crucified", "animation.eva_unit01.activation",
@@ -203,9 +236,9 @@ ASSETS = {
         "minimum_parts": len(MASS_MESH_PARTS),
         "expected_parts": len(MASS_MESH_PARTS),
         "required_parts": MASS_MESH_PARTS,
-        "required_geo_bones": {"root", "wing_l", "wing_r", "replica_lance"},
-        "required_bone_parents": {"replica_lance": "forearm_r"},
-        "minimum_bone_cubes": {"replica_lance": 40},
+        "required_geo_bones": {"root", "wing_l", "wing_r"},
+        "required_bone_parents": {},
+        "minimum_bone_cubes": {},
         "required_animations": {
             "animation.entity_mp.idle_1", "animation.entity_mp.move",
             "animation.entity_mp.ritual", "animation.entity_mp.attack",
@@ -226,8 +259,9 @@ ASSETS = {
             },
         },
         "forbidden_cube_bones": MASS_MESH_PARTS,
-        # EUD's replica-lance texture occupies the extra 64-pixel column.
-        "expected_texture_size": (1088, 512),
+        # Body and wing atlases occupy the left/right 512-pixel halves.  The
+        # replica lance is authored as Gecko cubes and needs no extra column.
+        "expected_texture_size": (1024, 512),
         "minimum_right_half_alpha_pixels": 8_000,
     },
     "cannon": {
@@ -260,8 +294,11 @@ ACCESSORY_ASSETS = {
         "texture_stem": "eva02_weapons",
     },
     "entry_plug": {
-        "expected_triangles": 11_654,
-        "required_parts": {"entry_plug", "plug_hatch_l", "plug_hatch_r"},
+        "expected_triangles": 11_810,
+        "required_parts": {
+            "entry_plug", "plug_hatch_l", "plug_hatch_r",
+            "plug_crane_collar",
+        },
     },
     "longinus_lance": {
         "expected_triangles": 384,

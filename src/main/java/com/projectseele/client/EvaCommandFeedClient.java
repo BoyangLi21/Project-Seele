@@ -1,10 +1,22 @@
 package com.projectseele.client;
 
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.util.Iterator;
 import java.util.Locale;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+
+import javax.imageio.IIOImage;
+import javax.imageio.ImageIO;
+import javax.imageio.ImageWriteParam;
+import javax.imageio.ImageWriter;
+import javax.imageio.stream.ImageOutputStream;
 
 import com.mojang.blaze3d.platform.NativeImage;
+import com.mojang.blaze3d.pipeline.RenderTarget;
+import com.mojang.blaze3d.pipeline.TextureTarget;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.math.Axis;
@@ -13,6 +25,7 @@ import com.projectseele.client.visual.VisualCaptureManager;
 import com.projectseele.config.SeeleConfig;
 import com.projectseele.entity.EvaUnit01Entity;
 import com.projectseele.network.ClientboundPilotStatusPacket;
+import com.projectseele.network.EvaVideoFrameTransport;
 import com.projectseele.network.SeeleNetwork;
 import com.projectseele.network.ServerboundEvaVideoFramePacket;
 import com.projectseele.visual.GeoFrontCommands;
@@ -26,6 +39,7 @@ import com.projectseele.world.PerformanceCounters;
 import com.projectseele.world.S20CommandPresentationDirector;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.Screenshot;
+import net.minecraft.client.CameraType;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.LightTexture;
 import net.minecraft.client.renderer.MultiBufferSource;
@@ -34,6 +48,7 @@ import net.minecraft.client.gui.Font;
 import net.minecraft.client.renderer.texture.DynamicTexture;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.util.Mth;
 import net.minecraft.Util;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.api.distmarker.Dist;
@@ -45,7 +60,7 @@ import org.joml.Matrix3f;
 import org.joml.Matrix4f;
 
 /**
- * Captures the final cockpit view at low resolution and renders authenticated
+ * Captures an independent first-person optical view and renders authenticated
  * remote frames on three physical 16:9 screens in NERV operations.
  */
 @Mod.EventBusSubscriber(modid = ProjectSeele.MODID, bus = Mod.EventBusSubscriber.Bus.FORGE,
@@ -53,15 +68,16 @@ import org.joml.Matrix4f;
 public final class EvaCommandFeedClient
 {
     public static final IGuiOverlay CAPTURE_OVERLAY =
-            (gui, graphics, partialTick, width, height) -> captureIfDue();
+            (gui, graphics, partialTick, width, height) ->
+                    captureIfDue(partialTick);
 
     /**
-     * A full render-target readback and PNG upload is intentionally low-rate.
-     * Four captures per second stalled the pilot client even when nobody was
-     * actively watching the operations-room screen.
+     * The 720p optical pass runs only while a remote operator is physically in
+     * the command room. JPEG keeps five frames per second below Minecraft's
+     * one-megabyte custom-payload ceiling without burdening solo play.
      */
-    private static final int CAPTURE_INTERVAL_TICKS = 20;
-    private static final long FRAME_STALE_NANOS = 3_000_000_000L;
+    private static final int CAPTURE_INTERVAL_TICKS = 4;
+    private static final long FRAME_STALE_NANOS = 1_500_000_000L;
     private static final double DISPLAY_RANGE_SQR = 150.0D * 150.0D;
     private static final float SCREEN_WIDTH = 10.5F;
     private static final float SCREEN_HEIGHT =
@@ -104,10 +120,21 @@ public final class EvaCommandFeedClient
      */
     private static final float S20_LOWER_SCREEN_PITCH = -61.8F;
     private static final long SCREEN_TRANSITION_NANOS = 400_000_000L;
-    private static final float[] SCREEN_VISIBILITY = {1.0F, 1.0F, 1.0F, 1.0F};
-    private static final float[] SCREEN_TARGET = {1.0F, 1.0F, 1.0F, 1.0F};
+    private static final float[] SCREEN_VISIBILITY =
+            {1.0F, 1.0F, 1.0F, 1.0F, 1.0F};
+    private static final float[] SCREEN_TARGET =
+            {1.0F, 1.0F, 1.0F, 1.0F, 1.0F};
     private static final AtomicBoolean CAPTURE_IN_FLIGHT =
             new AtomicBoolean();
+    private static final AtomicInteger NEXT_CAPTURE_FRAME_ID =
+            new AtomicInteger();
+    private static final AtomicInteger CONNECTION_GENERATION =
+            new AtomicInteger();
+    private static final EvaVideoFrameTransport.Assembly[] INCOMING_FRAMES =
+            new EvaVideoFrameTransport.Assembly[3];
+    private static TextureTarget firstPersonCaptureTarget;
+    private static RenderTarget captureTargetOverride;
+    private static boolean captureRenderPass;
     private static final DynamicTexture[] TEXTURES =
             new DynamicTexture[3];
     private static final long[] LAST_FRAME_NANOS = new long[3];
@@ -133,6 +160,20 @@ public final class EvaCommandFeedClient
     private static final ResourceLocation TACTICAL_TEXTURE_ID =
             new ResourceLocation(ProjectSeele.MODID,
                     "dynamic/nerv_tactical_overview");
+    private static DynamicTexture cityTexture;
+    private static final ResourceLocation CITY_TEXTURE_ID =
+            new ResourceLocation(ProjectSeele.MODID,
+                    "dynamic/tokyo3_retraction_monitor");
+    private static final int CITY_TEXTURE_WIDTH = 768;
+    private static final int CITY_TEXTURE_HEIGHT = 256;
+    private static String cityPhase = "STANDBY";
+    private static int cityDepth;
+    private static int cityTargetDepth;
+    private static int cityMaximumDepth = 1;
+    private static String armamentState = "OFFLINE";
+    private static boolean armamentStocked;
+    private static int armamentLiftPercent;
+    private static boolean cityTextureDirty = true;
     /*
      * The board is 15 blocks wide.  At 1/0.070 font pixels per block a line of
      * thirty-five characters just fits between its amber margins, which is the
@@ -156,7 +197,7 @@ public final class EvaCommandFeedClient
 
     private EvaCommandFeedClient() {}
 
-    private static void captureIfDue()
+    private static void captureIfDue(float partialTick)
     {
         Minecraft minecraft = Minecraft.getInstance();
         EvaUnit01Entity eva = minecraft.player == null
@@ -190,8 +231,7 @@ public final class EvaCommandFeedClient
         NativeImage full;
         try
         {
-            full = Screenshot.takeScreenshot(
-                    minecraft.getMainRenderTarget());
+            full = captureFirstPersonFrame(minecraft, partialTick);
             PerformanceCounters.recordFramebufferCapture();
         }
         catch (RuntimeException exception)
@@ -202,8 +242,63 @@ public final class EvaCommandFeedClient
             return;
         }
         int variant = eva.getUnitVariant();
+        int generation = CONNECTION_GENERATION.get();
         Util.ioPool().execute(() -> encodeAndSend(
-                minecraft, variant, full));
+                minecraft, variant, generation, full));
+    }
+
+    /**
+     * Produces the pilot's optical view without changing the camera selected
+     * on the pilot's monitor.  When the player is using third person, one
+     * additional world+hand pass is rendered into a private target while the
+     * normal framebuffer remains untouched.
+     */
+    private static NativeImage captureFirstPersonFrame(
+            Minecraft minecraft, float partialTick)
+    {
+        if (minecraft.options.getCameraType().isFirstPerson())
+        {
+            return Screenshot.takeScreenshot(
+                    minecraft.getMainRenderTarget());
+        }
+        if (firstPersonCaptureTarget == null)
+        {
+            firstPersonCaptureTarget = new TextureTarget(
+                    ServerboundEvaVideoFramePacket.FRAME_WIDTH,
+                    ServerboundEvaVideoFramePacket.FRAME_HEIGHT,
+                    true, Minecraft.ON_OSX);
+        }
+
+        CameraType originalCamera = minecraft.options.getCameraType();
+        RenderTarget mainTarget = minecraft.getMainRenderTarget();
+        try
+        {
+            minecraft.options.setCameraType(CameraType.FIRST_PERSON);
+            captureTargetOverride = firstPersonCaptureTarget;
+            captureRenderPass = true;
+            firstPersonCaptureTarget.setClearColor(0.0F, 0.0F, 0.0F, 1.0F);
+            firstPersonCaptureTarget.clear(Minecraft.ON_OSX);
+            firstPersonCaptureTarget.bindWrite(true);
+            minecraft.gameRenderer.renderLevel(
+                    partialTick, Util.getNanos(), new PoseStack());
+            // renderLevel already includes GameRenderer's first-person hand
+            // pass.  Calling it a second time produces doubled arms and depth
+            // flicker in the command-room feed.
+            return Screenshot.takeScreenshot(firstPersonCaptureTarget);
+        }
+        finally
+        {
+            captureTargetOverride = null;
+            captureRenderPass = false;
+            minecraft.options.setCameraType(originalCamera);
+            mainTarget.bindWrite(true);
+        }
+    }
+
+    /** Used only by the Minecraft render-target mixin during the extra pass. */
+    public static RenderTarget captureTargetOverride()
+    {
+        return captureRenderPass ? captureTargetOverride : null;
     }
 
     /**
@@ -215,6 +310,7 @@ public final class EvaCommandFeedClient
     {
         captureDemanded = demanded;
     }
+
 
     /** Applies the server-authoritative power state; rendering eases to it. */
     public static void setCommandScreenMask(int visibleMask)
@@ -250,7 +346,7 @@ public final class EvaCommandFeedClient
     }
 
     private static void encodeAndSend(Minecraft minecraft, int variant,
-                                      NativeImage full)
+                                      int generation, NativeImage full)
     {
         try (full;
              NativeImage reduced = new NativeImage(
@@ -259,12 +355,14 @@ public final class EvaCommandFeedClient
         {
             full.resizeSubRectTo(0, 0, full.getWidth(), full.getHeight(),
                     reduced);
-            byte[] png = reduced.asByteArray();
+            byte[] png = encodeJpeg(reduced);
             PerformanceCounters.recordPngEncode();
             if (png.length <= ServerboundEvaVideoFramePacket.MAX_FRAME_BYTES)
             {
-                minecraft.execute(() -> SeeleNetwork.CHANNEL.sendToServer(
-                        new ServerboundEvaVideoFramePacket(variant, png)));
+                int frameId = NEXT_CAPTURE_FRAME_ID.incrementAndGet();
+                int chunks = EvaVideoFrameTransport.chunkCount(png.length);
+                minecraft.execute(() -> sendFrameChunks(minecraft, variant,
+                        generation, frameId, chunks, png));
             }
         }
         catch (IOException | RuntimeException exception)
@@ -275,6 +373,73 @@ public final class EvaCommandFeedClient
         finally
         {
             CAPTURE_IN_FLIGHT.set(false);
+        }
+    }
+
+    private static void sendFrameChunks(Minecraft minecraft, int variant,
+                                        int generation, int frameId,
+                                        int chunks, byte[] frame)
+    {
+        if (generation != CONNECTION_GENERATION.get()
+                || !captureDemanded || minecraft.player == null
+                || minecraft.level == null || minecraft.getConnection() == null)
+        {
+            return;
+        }
+        for (int index = 0; index < chunks; index++)
+        {
+            SeeleNetwork.CHANNEL.sendToServer(
+                    new ServerboundEvaVideoFramePacket(variant, frameId,
+                            index, chunks, frame.length,
+                            EvaVideoFrameTransport.chunk(frame, index)));
+        }
+    }
+
+    public static void acceptFrameChunk(int variant, int frameId,
+                                        int chunkIndex, int chunkCount,
+                                        int totalBytes, byte[] chunk)
+    {
+        if (variant < EvaUnit01Entity.UNIT_00
+                || variant > EvaUnit01Entity.UNIT_02
+                || !EvaVideoFrameTransport.validHeader(chunkIndex,
+                chunkCount, totalBytes, chunk))
+        {
+            return;
+        }
+        EvaVideoFrameTransport.Assembly assembly = INCOMING_FRAMES[variant];
+        if (assembly == null || assembly.expired(System.nanoTime())
+                || !assembly.matches(frameId, chunkCount, totalBytes))
+        {
+            assembly = new EvaVideoFrameTransport.Assembly(frameId,
+                    chunkCount, totalBytes);
+            INCOMING_FRAMES[variant] = assembly;
+        }
+        if (!assembly.accept(chunkIndex, chunk))
+        {
+            INCOMING_FRAMES[variant] = null;
+            return;
+        }
+        if (assembly.complete())
+        {
+            INCOMING_FRAMES[variant] = null;
+            byte[] frame = assembly.join();
+            if (frame != null)
+            {
+                acceptFrame(variant, frame);
+            }
+        }
+    }
+
+    public static void resetConnectionState()
+    {
+        captureDemanded = false;
+        CONNECTION_GENERATION.incrementAndGet();
+        CAPTURE_IN_FLIGHT.set(false);
+        captureLevel = null;
+        captureEvaId = Integer.MIN_VALUE;
+        for (int variant = 0; variant < INCOMING_FRAMES.length; variant++)
+        {
+            INCOMING_FRAMES[variant] = null;
         }
     }
 
@@ -344,6 +509,10 @@ public final class EvaCommandFeedClient
     @SubscribeEvent
     public static void onRenderLevelStage(RenderLevelStageEvent event)
     {
+        if (captureRenderPass)
+        {
+            return;
+        }
         /*
          * Screens must be drawn before the translucent chunk layer.  Glass
          * writes depth, so the old AFTER_PARTICLES pass rejected every screen
@@ -421,6 +590,7 @@ public final class EvaCommandFeedClient
         if (s20)
         {
             ensureTacticalTexture(minecraft);
+            ensureCityTexture(minecraft);
         }
         long now = System.nanoTime();
         Vec3 camera = event.getCamera().getPosition();
@@ -480,17 +650,100 @@ public final class EvaCommandFeedClient
             renderPilotStatusBoard(event.getPoseStack(), camera, minecraft,
                     SCREEN_VISIBILITY[3]);
         }
-        // The un-switched rear city-status wall is a server-maintained
-        // TextDisplay in S20.  Keeping it out of this client-only renderer
-        // makes it visible to every operator and prevents command glass or a
-        // late marker chunk from silently suppressing all of its data.
+        if (s20 && cityTexture != null)
+        {
+            renderScreen(event.getPoseStack(), camera, new Vec3(
+                            S20CommandPresentationDirector.CITY_STATUS_CENTRE_X,
+                            (S20CommandPresentationDirector.CITY_STATUS_FACE_TOP
+                                    + S20CommandPresentationDirector
+                                    .CITY_STATUS_FACE_BOTTOM) * 0.5D,
+                            S20CommandPresentationDirector.CITY_STATUS_Z),
+                    CITY_TEXTURE_ID, minecraft, 38.0F, 12.5F,
+                    180.0F, 0.0F, SCREEN_VISIBILITY[4]);
+        }
     }
 
     /** Receives the server-sampled fleet telemetry for the tactical board. */
     public static void setPilotStatus(
-            ClientboundPilotStatusPacket.Unit[] units)
+            ClientboundPilotStatusPacket.Unit[] units,
+            String phase, int depth, int targetDepth, int maximumDepth,
+            String towerState, boolean towerStocked, int towerLiftPercent)
     {
         pilotStatus = units;
+        armamentState = towerState == null ? "OFFLINE" : towerState;
+        armamentStocked = towerStocked;
+        armamentLiftPercent = Mth.clamp(towerLiftPercent, 0, 100);
+        String safePhase = phase == null ? "UNKNOWN" : phase;
+        int safeMaximum = Math.max(1, maximumDepth);
+        if (!safePhase.equals(cityPhase) || cityDepth != depth
+                || cityTargetDepth != targetDepth
+                || cityMaximumDepth != safeMaximum)
+        {
+            cityPhase = safePhase;
+            cityDepth = Math.max(0, depth);
+            cityTargetDepth = Math.max(0, targetDepth);
+            cityMaximumDepth = safeMaximum;
+            cityTextureDirty = true;
+        }
+    }
+
+    private static byte[] encodeJpeg(NativeImage image) throws IOException
+    {
+        int width = image.getWidth();
+        int height = image.getHeight();
+        int[] rgb = new int[width * height];
+        for (int y = 0; y < height; y++)
+        {
+            for (int x = 0; x < width; x++)
+            {
+                int abgr = image.getPixelRGBA(x, y);
+                rgb[y * width + x] = (abgr & 0xFF) << 16
+                        | (abgr >> 8 & 0xFF) << 8
+                        | abgr >> 16 & 0xFF;
+            }
+        }
+        BufferedImage buffered = new BufferedImage(
+                width, height, BufferedImage.TYPE_INT_RGB);
+        buffered.setRGB(0, 0, width, height, rgb, 0, width);
+
+        byte[] encoded = writeJpeg(buffered, 0.78F);
+        if (encoded.length > ServerboundEvaVideoFramePacket.MAX_FRAME_BYTES)
+        {
+            encoded = writeJpeg(buffered, 0.64F);
+        }
+        if (encoded.length > ServerboundEvaVideoFramePacket.MAX_FRAME_BYTES)
+        {
+            encoded = writeJpeg(buffered, 0.48F);
+        }
+        return encoded;
+    }
+
+    private static byte[] writeJpeg(BufferedImage image, float quality)
+            throws IOException
+    {
+        Iterator<ImageWriter> writers =
+                ImageIO.getImageWritersByFormatName("jpeg");
+        if (!writers.hasNext())
+        {
+            throw new IOException("No JPEG encoder is available");
+        }
+        ImageWriter writer = writers.next();
+        try (ByteArrayOutputStream output = new ByteArrayOutputStream();
+             ImageOutputStream imageOutput =
+                     ImageIO.createImageOutputStream(output))
+        {
+            writer.setOutput(imageOutput);
+            ImageWriteParam parameters = writer.getDefaultWriteParam();
+            parameters.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
+            parameters.setCompressionQuality(quality);
+            writer.write(null, new IIOImage(image, null, null), parameters);
+            imageOutput.flush();
+            return output.toByteArray();
+        }
+        finally
+        {
+            writer.dispose();
+        }
     }
 
     /**
@@ -593,8 +846,17 @@ public final class EvaCommandFeedClient
             row = line(font, pose, buffers, row,
                     "-------------------------------", rule);
         }
-        line(font, pose, buffers, row,
+        row = line(font, pose, buffers, row,
                 "GEOFRONT COMMAND LINK   ONLINE", amber);
+        row++;
+        row = line(font, pose, buffers, row,
+                String.format(Locale.ROOT,
+                        "ARMAMENT TOWER  %-12s %3d%%",
+                        armamentState, armamentLiftPercent), amber);
+        line(font, pose, buffers, row,
+                "PALLET RIFLE    "
+                        + (armamentStocked ? "LOADED" : "ISSUED / EMPTY"),
+                armamentStocked ? value : alert);
         buffers.endBatch();
         poseStack.popPose();
     }
@@ -661,6 +923,179 @@ public final class EvaCommandFeedClient
         tacticalTexture = new DynamicTexture(image);
         minecraft.getTextureManager().register(
                 TACTICAL_TEXTURE_ID, tacticalTexture);
+    }
+
+    /**
+     * Animated cross-section of the armoured Tokyo-3 blocks retracting into
+     * GeoFront.  The rear wall is intentionally a model, not another page of
+     * status text: each server telemetry update moves the tower silhouettes
+     * along their guide shafts toward the reported depth.
+     */
+    private static void ensureCityTexture(Minecraft minecraft)
+    {
+        if (cityTexture != null && !cityTextureDirty)
+        {
+            return;
+        }
+        NativeImage image = new NativeImage(
+                CITY_TEXTURE_WIDTH, CITY_TEXTURE_HEIGHT, false);
+        int background = rgba(2, 9, 15, 255);
+        int grid = rgba(8, 39, 52, 255);
+        int cyan = rgba(75, 229, 240, 255);
+        int dimCyan = rgba(14, 79, 91, 255);
+        int amber = rgba(249, 155, 28, 255);
+        int red = rgba(223, 54, 48, 255);
+        for (int y = 0; y < CITY_TEXTURE_HEIGHT; y++)
+        {
+            for (int x = 0; x < CITY_TEXTURE_WIDTH; x++)
+            {
+                boolean major = x % 64 == 0 || y % 64 == 0;
+                boolean minor = x % 16 == 0 || y % 16 == 0;
+                image.setPixelRGBA(x, y,
+                        major ? dimCyan : minor ? grid : background);
+            }
+        }
+        fillRect(image, 0, 0, CITY_TEXTURE_WIDTH, 4, amber);
+        fillRect(image, 0, CITY_TEXTURE_HEIGHT - 4,
+                CITY_TEXTURE_WIDTH, 4, amber);
+        fillRect(image, 0, 0, 4, CITY_TEXTURE_HEIGHT, amber);
+        fillRect(image, CITY_TEXTURE_WIDTH - 4, 0,
+                4, CITY_TEXTURE_HEIGHT, amber);
+
+        String title = "CITY RETRACTION MONITOR";
+        int titleScale = 4;
+        int titleWidth = title.length() * 6 * titleScale - titleScale;
+        drawMonitorText(image, (CITY_TEXTURE_WIDTH - titleWidth) / 2,
+                13, title, titleScale, amber);
+
+        /*
+         * Keep a dedicated header band.  At the former surfaceY=72 the
+         * tallest 65-pixel tower started at y=12 and crossed the four-times
+         * scale title at y=13.  The city now begins below y=64 while retaining
+         * enough shaft travel to make retraction legible.
+         */
+        int surfaceY = 126;
+        int chamberY = 222;
+        fillRect(image, 24, surfaceY, CITY_TEXTURE_WIDTH - 48, 3, cyan);
+        fillRect(image, 24, chamberY, CITY_TEXTURE_WIDTH - 48, 3, cyan);
+        for (int shaftX = 48; shaftX < CITY_TEXTURE_WIDTH - 40;
+             shaftX += 48)
+        {
+            fillRect(image, shaftX, surfaceY + 4, 1,
+                    chamberY - surfaceY - 5, dimCyan);
+            for (int y = surfaceY + 8; y < chamberY - 5; y += 12)
+            {
+                fillRect(image, shaftX - 2, y, 5, 2, dimCyan);
+            }
+        }
+
+        float depthFraction = Math.min(1.0F,
+                cityDepth / (float) Math.max(1, cityMaximumDepth));
+        float targetFraction = Math.min(1.0F,
+                cityTargetDepth / (float) Math.max(1, cityMaximumDepth));
+        int deckY = surfaceY + 5
+                + Math.round(depthFraction * (chamberY - surfaceY - 25));
+        int targetY = surfaceY + 5
+                + Math.round(targetFraction * (chamberY - surfaceY - 25));
+        fillRect(image, 28, targetY, CITY_TEXTURE_WIDTH - 56, 2, amber);
+
+        int[] towerHeight = {28, 48, 34, 60, 40, 52, 30, 65, 38, 55,
+                31, 46, 58, 36};
+        int[] towerWidth = {25, 30, 22, 34, 26, 29, 23, 35, 24, 31,
+                22, 28, 33, 25};
+        for (int index = 0; index < towerHeight.length; index++)
+        {
+            int x = 38 + index * 49;
+            int width = towerWidth[index];
+            int height = towerHeight[index];
+            int top = Math.max(64, deckY - height);
+            height = deckY - top;
+            drawCityTower(image, x, top, width, height, cyan, dimCyan,
+                    background);
+        }
+        fillRect(image, 25, deckY, CITY_TEXTURE_WIDTH - 50, 5, cyan);
+        fillRect(image, 25, deckY + 5, CITY_TEXTURE_WIDTH - 50, 3,
+                dimCyan);
+        int stateColour = cityPhase.contains("FAULT")
+                || cityPhase.contains("ABORT") ? red : amber;
+        fillRect(image, 28, 44, 150, 5, stateColour);
+        fillRect(image, CITY_TEXTURE_WIDTH - 178, 44, 150, 5,
+                stateColour);
+
+        if (cityTexture == null)
+        {
+            cityTexture = new DynamicTexture(image);
+            minecraft.getTextureManager().register(
+                    CITY_TEXTURE_ID, cityTexture);
+        }
+        else
+        {
+            NativeImage previous = cityTexture.getPixels();
+            cityTexture.setPixels(image);
+            if (previous != null)
+            {
+                previous.close();
+            }
+            cityTexture.upload();
+        }
+        cityTextureDirty = false;
+    }
+
+    private static void drawCityTower(NativeImage image, int x, int y,
+                                      int width, int height,
+                                      int outline, int dim, int background)
+    {
+        fillRect(image, x + 3, y + 4, width, height, dim);
+        fillRect(image, x, y, width, height, background);
+        fillRect(image, x, y, width, 2, outline);
+        fillRect(image, x, y, 2, height, outline);
+        fillRect(image, x + width - 2, y, 2, height, outline);
+        fillRect(image, x, y + height - 2, width, 2, outline);
+        fillRect(image, x + 4, y + 5, width - 8, 2, dim);
+        for (int floor = y + 12; floor < y + height - 4; floor += 9)
+        {
+            fillRect(image, x + 4, floor, width - 8, 1, dim);
+        }
+    }
+
+    private static void drawMonitorText(NativeImage image, int x, int y,
+                                        String text, int scale, int colour)
+    {
+        int cursor = x;
+        for (int index = 0; index < text.length(); index++)
+        {
+            int[] rows = monitorGlyph(text.charAt(index));
+            for (int row = 0; row < rows.length; row++)
+            {
+                for (int column = 0; column < 5; column++)
+                {
+                    if ((rows[row] & 1 << (4 - column)) != 0)
+                    {
+                        fillRect(image, cursor + column * scale,
+                                y + row * scale, scale, scale, colour);
+                    }
+                }
+            }
+            cursor += 6 * scale;
+        }
+    }
+
+    private static int[] monitorGlyph(char character)
+    {
+        return switch (character)
+        {
+            case 'A' -> new int[] {14, 17, 17, 31, 17, 17, 17};
+            case 'C' -> new int[] {14, 17, 16, 16, 16, 17, 14};
+            case 'E' -> new int[] {31, 16, 16, 30, 16, 16, 31};
+            case 'I' -> new int[] {31, 4, 4, 4, 4, 4, 31};
+            case 'M' -> new int[] {17, 27, 21, 21, 17, 17, 17};
+            case 'N' -> new int[] {17, 25, 25, 21, 19, 19, 17};
+            case 'O' -> new int[] {14, 17, 17, 17, 17, 17, 14};
+            case 'R' -> new int[] {30, 17, 17, 30, 20, 18, 17};
+            case 'T' -> new int[] {31, 4, 4, 4, 4, 4, 4};
+            case 'Y' -> new int[] {17, 17, 10, 4, 4, 4, 4};
+            default -> new int[] {0, 0, 0, 0, 0, 0, 0};
+        };
     }
 
     private static void ensureStandbyTextures(Minecraft minecraft)

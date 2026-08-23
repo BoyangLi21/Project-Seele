@@ -44,6 +44,27 @@ public final class ServerboundGeoFrontCameraPacket
              {130.0D, -441.0D, 273.0D},
              {130.0D, 81.0D, 273.0D},
      };
+    private static final double[][] S22_ARRIVAL_TRACKING_POSITIONS = {
+            {-145.0D, -448.0D, 123.0D},
+            {-130.0D, -446.0D, 156.0D},
+            {-86.0D, -436.0D, 225.0D},
+            {-122.0D, -446.0D, 210.0D},
+            {320.0D, -448.0D, 295.0D},
+            {355.0D, -448.0D, 342.0D},
+            {128.0D, -452.0D, 560.0D},
+    };
+    private static final double[][] S22_DOCK_TRACKING_POSITIONS = {
+            {-130.0D, -446.0D, 156.0D},
+    };
+    private static final double[][] S22_GATE_TRACKING_POSITIONS = {
+            {-86.0D, -436.0D, 225.0D},
+    };
+    private static final double[][] S22_DOGMA_TRACKING_POSITIONS = {
+            {30.0D, -570.0D, 300.0D},
+    };
+    private static final double[][] S22_CEILING_TRACKING_POSITIONS = {
+            {30.0D, -180.0D, 285.0D},
+    };
 
     private final int view;
 
@@ -106,14 +127,27 @@ public final class ServerboundGeoFrontCameraPacket
                 return;
             }
             int s20View = this.view - S20_VIEW_BASE;
+            String captureUnit = System.getProperty(
+                    "projectseele.visualCaptureUnit");
+            double[][] tracking = "s22_arrival".equals(captureUnit)
+                    ? S22_ARRIVAL_TRACKING_POSITIONS
+                    : "s22_dock".equals(captureUnit)
+                    ? S22_DOCK_TRACKING_POSITIONS
+                    : "s22_gate".equals(captureUnit)
+                    ? S22_GATE_TRACKING_POSITIONS
+                    : "s22_dogma".equals(captureUnit)
+                    ? S22_DOGMA_TRACKING_POSITIONS
+                    : "s22_ceiling".equals(captureUnit)
+                    ? S22_CEILING_TRACKING_POSITIONS
+                    : S20_TRACKING_POSITIONS;
             if (!com.projectseele.world.FacilityWorldPolicy.isS20Rebuild(
                     player.getServer())
                     || s20View < 0
-                    || s20View >= S20_TRACKING_POSITIONS.length)
+                    || s20View >= tracking.length)
             {
                 return;
             }
-            double[] position = S20_TRACKING_POSITIONS[s20View];
+            double[] position = tracking[s20View];
             movePlayer(level, player, this.view,
                     position[0], position[1], position[2]);
             return;
@@ -121,7 +155,7 @@ public final class ServerboundGeoFrontCameraPacket
         BlockPos origin = GeoFrontCommands.ORIGIN;
         if (this.view < 0)
         {
-            BlockPos surface = IntegratedNervMapBuilder.TOKYO3_ORIGIN;
+            BlockPos surface = IntegratedNervMapBuilder.tokyo3Origin(level);
             player.setNoGravity(false);
             player.setDeltaMovement(Vec3.ZERO);
             player.fallDistance = 0.0F;

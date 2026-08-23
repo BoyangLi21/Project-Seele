@@ -126,8 +126,9 @@ def translate_bone_geometry(bone, delta):
             cube["pivot"] = [cube["pivot"][axis] + delta[axis] for axis in range(3)]
 
 
-def build_unit_skeleton(config, scale, minimum_y, finger_pivots=None):
+def build_unit_skeleton(config, scale, minimum_y, finger_pivots=None, finger_frames=None):
     finger_pivots = finger_pivots or {}
+    finger_frames = finger_frames or {}
     source_pivots = {**tiger.SOURCE_PIVOTS, **finger_pivots}
     data = json.loads(config["base_geo"].read_text(encoding="utf-8"))
     geometry = data["minecraft:geometry"][0]
@@ -199,7 +200,12 @@ def build_unit_skeleton(config, scale, minimum_y, finger_pivots=None):
             for cube in bone.get("cubes", []):
                 if "uv" in cube:
                     cube["uv"] = shift_uv(cube["uv"], 512)
-    return data, {bone["name"]: bone.get("pivot", [0, 0, 0]) for bone in bones}
+    pivots = {bone["name"]: bone.get("pivot", [0, 0, 0]) for bone in bones}
+    if tiger.CLEAN_GRIP_FINGERS:
+        tiger.fingerfix.install_axis_adapters(
+            geometry, pivots, finger_frames,
+            tiger.CLEAN_FINGER_LENGTHS, scale)
+    return data, pivots
 
 
 def sync_shared_rig_animations(animation, canonical_path=UNIT01_BASE_ANIMATION):
@@ -289,11 +295,13 @@ def validate_mesh(mesh):
 def write_unit(config, output):
     obj_text, texture = read_unit_source(config)
     positions, texcoords, normals, triangles = tiger.parse_obj(obj_text)
-    finger_faces, finger_pivots = tiger.discover_finger_rig(positions, triangles)
+    finger_faces, finger_pivots, finger_frames = tiger.discover_finger_rig(positions, triangles)
     minimum_y = min(position[1] for position in positions)
     height = max(position[1] for position in positions) - minimum_y
     scale = UNIT_MODEL_HEIGHT / height
-    skeleton, pivots = build_unit_skeleton(config, scale, minimum_y, finger_pivots)
+    skeleton, pivots = build_unit_skeleton(
+        config, scale, minimum_y, finger_pivots, finger_frames)
+    tiger.validate_clean_finger_bind(pivots, scale, finger_frames)
     mesh, counts = tiger.build_mesh(
         positions, texcoords, normals, triangles, pivots, scale, minimum_y,
         finger_faces)
@@ -313,6 +321,10 @@ def write_unit(config, output):
 
     write_json(output / "geo" / f"{target}.geo.json", skeleton)
     write_json(output / "animations" / f"{target}.animation.json", animation)
+    # Match the packaged fallback to the generated private pack.  Both files
+    # use the same semantic rig; allowing them to diverge made EVA-00/02 fall
+    # back to stale arm joints on a fresh client/server installation.
+    write_json(config["base_animation"], animation)
     write_json(output / "mesh" / f"{target}.mesh.json", mesh, compact=True)
     texture_path = output / "textures/entity" / f"{target}.png"
     texture_path.parent.mkdir(parents=True, exist_ok=True)
@@ -689,6 +701,12 @@ def main():
             write_mass(output)
         else:
             write_unit(UNIT_VARIANTS[key], output)
+    if any(key in ("unit00", "unit02") for key in selected):
+        from make_eva_power_textures import MASKS, split_texture
+        for key in selected:
+            if key in ("unit00", "unit02"):
+                name = "eva_" + key
+                split_texture(name, MASKS[name])
     update_pack_metadata(output, selected)
     print(f"local Tiger variant pack written incrementally -> {output}")
 

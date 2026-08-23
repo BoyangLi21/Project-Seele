@@ -124,11 +124,11 @@ public final class NervCommandTelemetry
 
         List<EvaUnit01Entity> units = evaUnits(level, origin);
         Component[] text = {
-                unitPanel(level, findVariant(units, EvaUnit01Entity.UNIT_00),
+                unitPanel(level, findVariant(level, units, EvaUnit01Entity.UNIT_00),
                         EvaUnit01Entity.UNIT_00),
-                unitPanel(level, findVariant(units, EvaUnit01Entity.UNIT_01),
+                unitPanel(level, findVariant(level, units, EvaUnit01Entity.UNIT_01),
                         EvaUnit01Entity.UNIT_01),
-                unitPanel(level, findVariant(units, EvaUnit01Entity.UNIT_02),
+                unitPanel(level, findVariant(level, units, EvaUnit01Entity.UNIT_02),
                         EvaUnit01Entity.UNIT_02),
                 strategicPanel(level, units, origin),
                 sensorPanel(level, units)
@@ -246,10 +246,11 @@ public final class NervCommandTelemetry
                 EvaUnit01Entity.class, bounds, Entity::isAlive));
     }
 
-    private static EvaUnit01Entity findVariant(List<EvaUnit01Entity> units,
+    private static EvaUnit01Entity findVariant(ServerLevel level,
+                                                List<EvaUnit01Entity> units,
                                                 int variant)
     {
-        BlockPos station = IntegratedNervMapBuilder.lowerLiftBed(variant);
+        BlockPos station = IntegratedNervMapBuilder.lowerLiftBed(level, variant);
         Vec3 stationCentre = Vec3.atCenterOf(station);
         return units.stream()
                 .filter(unit -> unit.getUnitVariant() == variant)
@@ -302,8 +303,7 @@ public final class NervCommandTelemetry
                 .withStyle(unit.isAtFieldOn()
                         ? ChatFormatting.GREEN : ChatFormatting.GRAY));
         result.append(Component.literal("\n" + weaponName(unit.getWeapon())
-                        + " / " + stanceName(unit)
-                        + " / RACK " + armamentRackStock(level, variant) + "/5")
+                        + " / " + stanceName(unit))
                 .withStyle(ChatFormatting.WHITE));
         if (unit.isBerserk())
         {
@@ -319,7 +319,7 @@ public final class NervCommandTelemetry
                             Math.max(0, unit.getBerserkRecoveryTicks() / 20)))
                     .withStyle(ChatFormatting.GOLD));
         }
-        result.append(Component.literal("\n" + launchReadout(unit, variant))
+        result.append(Component.literal("\n" + launchReadout(level, unit, variant))
                 .withStyle(unit.getLaunchPhase() == EvaUnit01Entity.LAUNCH_ASCENT
                         ? ChatFormatting.YELLOW : ChatFormatting.GRAY));
         return result;
@@ -366,7 +366,7 @@ public final class NervCommandTelemetry
         }
 
         AngelSiegeDirector.SiegeStatus siege = AngelSiegeDirector.status(
-                level, IntegratedNervMapBuilder.TOKYO3_ORIGIN);
+                level, IntegratedNervMapBuilder.tokyo3Origin(level));
         if (siege.active())
         {
             result.append(Component.literal(String.format(Locale.ROOT,
@@ -378,7 +378,8 @@ public final class NervCommandTelemetry
         }
         EvaUnit01Entity feed = units.stream()
                 .filter(unit -> activePilot(unit) != null)
-                .findFirst().orElse(findVariant(units, EvaUnit01Entity.UNIT_01));
+                .findFirst().orElse(findVariant(level, units,
+                        EvaUnit01Entity.UNIT_01));
         LivingEntity pilot = activePilot(feed);
         if (feed != null && pilot != null)
         {
@@ -412,7 +413,7 @@ public final class NervCommandTelemetry
                 .withStyle(ChatFormatting.GREEN));
         Tokyo3RetractionDirector.Status city =
                 Tokyo3RetractionDirector.status(level,
-                        IntegratedNervMapBuilder.TOKYO3_ORIGIN);
+                        IntegratedNervMapBuilder.tokyo3Origin(level));
         result.append(Component.literal(String.format(Locale.ROOT,
                         "\nCITY ARMOUR: %s %02d/%02d",
                         city.phase(), city.depth(), city.maximumDepth()))
@@ -648,10 +649,11 @@ public final class NervCommandTelemetry
         return ChatFormatting.DARK_GRAY;
     }
 
-    private static String launchReadout(EvaUnit01Entity unit, int variant)
+    private static String launchReadout(ServerLevel level,
+                                        EvaUnit01Entity unit, int variant)
     {
-        BlockPos lower = IntegratedNervMapBuilder.lowerLiftBed(variant);
-        BlockPos upper = IntegratedNervMapBuilder.surfaceLiftBed(variant);
+        BlockPos lower = IntegratedNervMapBuilder.lowerLiftBed(level, variant);
+        BlockPos upper = IntegratedNervMapBuilder.surfaceLiftBed(level, variant);
         int progress = Mth.clamp(Math.round((float) ((unit.getY()
                 - (lower.getY() + 1.0D))
                 / Math.max(1.0D, upper.getY() - lower.getY())) * 100.0F), 0, 100);
@@ -668,24 +670,6 @@ public final class NervCommandTelemetry
                     ? "TOKYO-3 SURFACE / READY"
                     : "GEOFRONT BAY / STANDBY";
         };
-    }
-
-    private static int armamentRackStock(ServerLevel level, int variant)
-    {
-        if (!(level.getBlockEntity(IntegratedNervMapBuilder.lowerArmamentRack(variant))
-                instanceof EvaArmamentRackBlockEntity rack))
-        {
-            return 0;
-        }
-        int count = 0;
-        for (int slot = 0; slot < rack.getContainerSize(); slot++)
-        {
-            if (!rack.getItem(slot).isEmpty())
-            {
-                count++;
-            }
-        }
-        return count;
     }
 
     private static String weaponName(int weapon)

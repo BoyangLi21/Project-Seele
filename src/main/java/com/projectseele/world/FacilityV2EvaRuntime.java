@@ -41,11 +41,16 @@ public final class FacilityV2EvaRuntime
     private static final int BRIDGE_MIN_Z = 820;
     private static final int BRIDGE_MAX_Z = 832;
     private static final int BRIDGE_MAX_X = 58;
-    private static final int CRANE_TROLLEY_Y = -353;
+    private static final int CRANE_TROLLEY_Y = -343;
+    /** Visible hoist recovery speed after the capsule locks into the EVA. */
+    private static final int CRANE_STOW_BLOCKS_PER_TICK = 2;
     private static final int CRANE_MIN_Y = -430;
     private static final int CRANE_MIN_Z_OFFSET = 2;
     private static final int CRANE_MAX_Z_OFFSET = 30;
-    private static final int CRANE_HALF_SPAN = 23;
+    private static final int CRANE_HALF_SPAN = 6;
+    private static final int CRANE_DEPTH = 1;
+    /** Width used by the retired full-span trolley persisted in older saves. */
+    private static final int CRANE_LEGACY_HALF_SPAN = 23;
     private static final int CRANE_CABLE_X = 3;
 
     private static final BlockState AIR = Blocks.AIR.defaultBlockState();
@@ -100,6 +105,18 @@ public final class FacilityV2EvaRuntime
                 "UNIT" + unit + "_SURFACE_HEAD"));
     }
 
+    /**
+     * The crane is a transient entity visual and does not depend on every
+     * civil-zone receipt being complete.  A clean S20 rebuild must never fall
+     * back to the retired block-painting crane merely because one unrelated
+     * facility zone is still awaiting commissioning.
+     */
+    public static boolean supportsPlugCrane(ServerLevel level, int variant)
+    {
+        return FacilityWorldPolicy.isCleanRebuild(level.getServer())
+                && variant >= 0 && variant < LINE_X.length;
+    }
+
     public static boolean readyAll(ServerLevel level)
     {
         return ready(level, 0) && ready(level, 1) && ready(level, 2);
@@ -133,7 +150,7 @@ public final class FacilityV2EvaRuntime
     public static Vec3 plugRestPosition(ServerLevel level, int variant)
     {
         BlockPos bed = hangarBed(level, variant);
-        return new Vec3(bed.getX() + 0.5D, -407.0D,
+        return new Vec3(bed.getX() + 0.5D, -405.8D,
                 bed.getZ() + 28.5D);
     }
 
@@ -166,7 +183,7 @@ public final class FacilityV2EvaRuntime
     public static BlockPos boardingPosition(ServerLevel level, int variant)
     {
         BlockPos bed = hangarBed(level, variant);
-        return new BlockPos(bed.getX(), -408, bed.getZ() + 28);
+        return new BlockPos(bed.getX() + 2, -408, bed.getZ() + 27);
     }
 
     public static BlockPos rescueFootPosition(
@@ -182,7 +199,7 @@ public final class FacilityV2EvaRuntime
      */
     public static void ensureControls(ServerLevel level, int variant)
     {
-        if (!ready(level, variant))
+        if (!supportsPlugCrane(level, variant))
         {
             return;
         }
@@ -239,7 +256,7 @@ public final class FacilityV2EvaRuntime
     public static boolean isInsideAssignedCage(
             ServerLevel level, Vec3 position, int variant)
     {
-        if (!ready(level, variant))
+        if (!supportsPlugCrane(level, variant))
         {
             return false;
         }
@@ -405,8 +422,15 @@ public final class FacilityV2EvaRuntime
                         bed.getX() + localX, BRIDGE_Y, worldZ);
                 BlockState floorState = Math.floorMod(
                         localX + worldZ, 10) <= 1 ? LIGHT : FLOOR;
+                // The canonical capsule is 1.6 blocks wide, and each hatch
+                // leaf travels another 0.92 blocks while open. Keep a true
+                // five-block service well around it instead of letting the
+                // bridge floor cut through the shell and moving doors.
+                boolean capsuleWell = localX <= 2
+                        && worldZ >= bed.getZ() + 26
+                        && worldZ <= bed.getZ() + 30;
                 setOwned(level, owners, floor,
-                        present ? floorState : AIR);
+                        present && !capsuleWell ? floorState : AIR);
                 boolean edge = localZ == BRIDGE_MIN_Z
                         || localZ == BRIDGE_MAX_Z;
                 if (edge)
@@ -439,15 +463,79 @@ public final class FacilityV2EvaRuntime
                         ? Blocks.LODESTONE.defaultBlockState()
                         : (rim ? CARRIER_RIM : CARRIER);
                 setOwned(level, owners, centre.offset(dx, 0, dz),
-                        present ? platform : AIR);
+                        present ? platform
+                                : carrierTrackState(dx, dz));
             }
         }
+    }
+
+    /** Mechanical guideway left visible whenever the transfer deck departs. */
+    private static BlockState carrierTrackState(int dx, int dz)
+    {
+        if (Math.abs(dx) == 5)
+        {
+            return Math.floorMod(dz, 8) == 0
+                    ? LIGHT : Blocks.IRON_BLOCK.defaultBlockState();
+        }
+        if (Math.abs(dx) <= 10 && Math.floorMod(dz, 6) == 0)
+        {
+            return Blocks.CUT_COPPER.defaultBlockState();
+        }
+        if (dx == 0)
+        {
+            return Blocks.POLISHED_BLACKSTONE.defaultBlockState();
+        }
+        return FLOOR;
     }
 
     public static void restoreStaticCarrier(ServerLevel level, int variant,
                                             BlockPos centre)
     {
         setCarrier(level, variant, centre, true);
+    }
+
+    /** Floor-only guideway upgrade for already-commissioned clean worlds. */
+    public static void ensureTransportGuideway(ServerLevel level, int variant,
+                                               BlockPos start, BlockPos end)
+    {
+        if (!ready(level, variant) || start.getX() != end.getX()
+                || start.getY() != end.getY())
+        {
+            return;
+        }
+        FacilitySchemaV2.IntBox[] owners = owners(level, variant);
+        int minZ = Math.min(start.getZ(), end.getZ());
+        int maxZ = Math.max(start.getZ(), end.getZ());
+        for (int z = minZ; z <= maxZ; z++)
+        {
+            int relativeZ = z - start.getZ();
+            boolean sleeper = Math.floorMod(relativeZ, 6) == 0;
+            for (int dx = -10; dx <= 10; dx++)
+            {
+                if (Math.abs(dx) != 5 && dx != 0 && !sleeper)
+                {
+                    continue;
+                }
+                BlockState state;
+                if (Math.abs(dx) == 5)
+                {
+                    state = Math.floorMod(relativeZ, 8) == 0
+                            ? LIGHT : Blocks.IRON_BLOCK.defaultBlockState();
+                }
+                else if (sleeper)
+                {
+                    state = Blocks.CUT_COPPER.defaultBlockState();
+                }
+                else
+                {
+                    state = Blocks.POLISHED_BLACKSTONE.defaultBlockState();
+                }
+                setOwned(level, owners,
+                        new BlockPos(start.getX() + dx, start.getY(), z), state);
+            }
+        }
+        setOwned(level, owners, start, Blocks.LODESTONE.defaultBlockState());
+        setOwned(level, owners, end, Blocks.LODESTONE.defaultBlockState());
     }
 
     /**
@@ -475,10 +563,14 @@ public final class FacilityV2EvaRuntime
             return;
         }
         BlockPos bed = hangarBed(level, variant);
-        int trolleyZ = Mth.clamp(Mth.floor(craneEyeZ + 0.5D),
+        // A block occupies [floor(n), floor(n)+1). Snapping upward put the
+        // bottom clamp beside the model-space tail marker and left a visible
+        // air seam. Floor both axes so the marker is physically inside the
+        // terminal clamp/collar volume.
+        int trolleyZ = Mth.clamp(Mth.floor(craneEyeZ),
                 bed.getZ() + CRANE_MIN_Z_OFFSET,
                 bed.getZ() + CRANE_MAX_Z_OFFSET);
-        int cableBottomY = Mth.clamp(Mth.ceil(craneEyeY + 0.35D),
+        int cableBottomY = Mth.clamp(Mth.floor(craneEyeY),
                 CRANE_MIN_Y, CRANE_TROLLEY_Y - 1);
         CraneFrame[] frames = CRANE_FRAMES.computeIfAbsent(
                 level, ignored -> new CraneFrame[LINE_X.length]);
@@ -488,16 +580,9 @@ public final class FacilityV2EvaRuntime
             sweepOrphanCrane(level, variant);
         }
         CraneFrame wanted = new CraneFrame(trolleyZ, cableBottomY);
-        if (wanted.equals(previous))
-        {
-            return;
-        }
-        if (previous != null)
-        {
-            paintCraneFrame(level, variant, previous, false);
-        }
-        paintCraneFrame(level, variant, wanted, true);
         frames[variant] = wanted;
+        NervCarrierVisuals.updatePlugCrane(level, variant,
+                bed.getX(), CRANE_TROLLEY_Y, wanted.z(), wanted.bottomY());
     }
 
     public static void stowPlugCrane(ServerLevel level, int variant)
@@ -511,11 +596,98 @@ public final class FacilityV2EvaRuntime
         CraneFrame previous = frames[variant];
         if (previous == null)
         {
+            /*
+             * A save can contain more than one pre-upgrade yoke while the
+             * process-local frame table is empty.  Recovering only the first
+             * one left its siblings in place and then painted another frame.
+             * Sweep the complete dedicated crane lane once and publish one
+             * canonical compact trolley instead.
+             */
+            previous = findPersistedCraneFrame(level, variant);
             sweepOrphanCrane(level, variant);
+            if (previous == null)
+            {
+                CraneFrame compact = new CraneFrame(
+                        hangarBed(level, variant).getZ()
+                                + CRANE_MAX_Z_OFFSET,
+                        CRANE_TROLLEY_Y - 2);
+                frames[variant] = compact;
+                NervCarrierVisuals.updatePlugCrane(level, variant,
+                        hangarBed(level, variant).getX(), CRANE_TROLLEY_Y,
+                        compact.z(), compact.bottomY());
+                return;
+            }
+            frames[variant] = previous;
+        }
+        int nextBottomY = Math.min(CRANE_TROLLEY_Y - 2,
+                previous.bottomY() + CRANE_STOW_BLOCKS_PER_TICK);
+        CraneFrame stowed = new CraneFrame(previous.z(), nextBottomY);
+        if (stowed.equals(previous))
+        {
+            NervCarrierVisuals.updatePlugCrane(level, variant,
+                    hangarBed(level, variant).getX(), CRANE_TROLLEY_Y,
+                    previous.z(), previous.bottomY());
             return;
         }
-        paintCraneFrame(level, variant, previous, false);
-        frames[variant] = null;
+        // Move the visible yoke upward in small deterministic steps.  The
+        // logistics PLUG_LOCKING phase calls this every tick, so the hoist
+        // clears the transfer lane continuously instead of teleporting from
+        // the seated capsule to its ceiling frame.
+        frames[variant] = stowed;
+        NervCarrierVisuals.updatePlugCrane(level, variant,
+                hangarBed(level, variant).getX(), CRANE_TROLLEY_Y,
+                stowed.z(), stowed.bottomY());
+    }
+
+    /**
+     * Reconstructs the moving frame after a server/runtime reload.  The
+     * centre of the authored lower yoke is the only copper-block cell on the
+     * centre actuator column, so it is an unambiguous persisted bottom pose.
+     * Recovering it lets the normal two-block-per-tick retraction continue;
+     * the former null-cache path erased the full crane and drew the ceiling
+     * frame in one tick.
+     */
+    private static CraneFrame findPersistedCraneFrame(ServerLevel level,
+                                                       int variant)
+    {
+        BlockPos bed = hangarBed(level, variant);
+        for (int z = bed.getZ() + CRANE_MIN_Z_OFFSET;
+             z <= bed.getZ() + CRANE_MAX_Z_OFFSET; z++)
+        {
+            for (int y = CRANE_MIN_Y; y <= CRANE_TROLLEY_Y - 2; y++)
+            {
+                BlockState centre = level.getBlockState(
+                        new BlockPos(bed.getX(), y, z));
+                BlockState left = level.getBlockState(new BlockPos(
+                        bed.getX() - CRANE_CABLE_X, y, z));
+                BlockState right = level.getBlockState(new BlockPos(
+                        bed.getX() + CRANE_CABLE_X, y, z));
+                boolean legacyCable = left.is(Blocks.CHAIN)
+                        || right.is(Blocks.CHAIN);
+                boolean joinedCrosshead = left.is(Blocks.EXPOSED_COPPER)
+                        && right.is(Blocks.EXPOSED_COPPER);
+                BlockState upperLeft = level.getBlockState(new BlockPos(
+                        bed.getX() - CRANE_CABLE_X, y + 1, z));
+                BlockState upperRight = level.getBlockState(new BlockPos(
+                        bed.getX() + CRANE_CABLE_X, y + 1, z));
+                boolean newSpreader = (centre.is(Blocks.ORANGE_CONCRETE)
+                        || centre.is(Blocks.PURPLE_CONCRETE)
+                        || centre.is(Blocks.RED_CONCRETE)
+                        || PrivateModVisuals.is(centre, "create", "brass_casing"))
+                        && (PrivateModVisuals.is(upperLeft, "create",
+                                    "pulley_magnet")
+                                || upperLeft.is(Blocks.EXPOSED_COPPER))
+                        && (PrivateModVisuals.is(upperRight, "create",
+                                    "pulley_magnet")
+                                || upperRight.is(Blocks.EXPOSED_COPPER));
+                if ((centre.is(Blocks.COPPER_BLOCK)
+                        && (legacyCable || joinedCrosshead)) || newSpreader)
+                {
+                    return new CraneFrame(z, y);
+                }
+            }
+        }
+        return null;
     }
 
     public static void resetRuntime()
@@ -535,23 +707,142 @@ public final class FacilityV2EvaRuntime
             case 2 -> Blocks.RED_CONCRETE.defaultBlockState();
             default -> Blocks.PURPLE_CONCRETE.defaultBlockState();
         };
-        for (int dx = -CRANE_HALF_SPAN;
-             dx <= CRANE_HALF_SPAN; dx++)
+        BlockState girder = Blocks.POLISHED_DEEPSLATE.defaultBlockState();
+        BlockState casing = Blocks.COPPER_BLOCK.defaultBlockState();
+        BlockState brassCasing = Blocks.CUT_COPPER.defaultBlockState();
+        BlockState carriage = Blocks.POLISHED_BLACKSTONE.defaultBlockState();
+        BlockState pulley = Blocks.PISTON.defaultBlockState()
+                .setValue(net.minecraft.world.level.block.piston.PistonBaseBlock.FACING,
+                        Direction.DOWN);
+        BlockState magnet = Blocks.EXPOSED_COPPER.defaultBlockState();
+
+        // A real rectangular bridge trolley: two parallel structural girders,
+        // end ties and a central carriage. The old single row of unrelated
+        // copper blocks read as floating debris from every oblique view.
+        for (int dz : new int[] {-CRANE_DEPTH, CRANE_DEPTH})
         {
-            BlockState state = Math.abs(dx) <= 2 ? accent : CRANE_BEAM;
+            for (int dx = -CRANE_HALF_SPAN; dx <= CRANE_HALF_SPAN; dx++)
+            {
+                setOwned(level, owners,
+                        new BlockPos(bed.getX() + dx, CRANE_TROLLEY_Y,
+                                frame.z() + dz),
+                        present ? girder : AIR);
+            }
+        }
+        for (int dx : new int[] {-CRANE_HALF_SPAN, CRANE_HALF_SPAN})
+        {
+            for (int dz = -CRANE_DEPTH; dz <= CRANE_DEPTH; dz++)
+            {
+                setOwned(level, owners,
+                        new BlockPos(bed.getX() + dx, CRANE_TROLLEY_Y,
+                                frame.z() + dz),
+                        present ? girder : AIR);
+            }
+        }
+        setOwned(level, owners,
+                new BlockPos(bed.getX(), CRANE_TROLLEY_Y, frame.z()),
+                present ? carriage : AIR);
+
+        // The underside crosshead visibly carries two rope pulleys.  Both
+        // suspension lines terminate in magnets on the lower spreader, so no
+        // cable or piston is left hovering beside the capsule.
+        for (int dx = -4; dx <= 4; dx++)
+        {
+            BlockState crosshead = Math.abs(dx) == CRANE_CABLE_X
+                    ? pulley : girder;
             setOwned(level, owners,
-                    new BlockPos(bed.getX() + dx, CRANE_TROLLEY_Y,
-                            frame.z()), present ? state : AIR);
+                    new BlockPos(bed.getX() + dx, CRANE_TROLLEY_Y - 1,
+                            frame.z()), present ? crosshead : AIR);
         }
         for (int dx : new int[] {-CRANE_CABLE_X, CRANE_CABLE_X})
         {
-            for (int y = frame.bottomY(); y < CRANE_TROLLEY_Y; y++)
+            for (int y = frame.bottomY() + 2;
+                  y < CRANE_TROLLEY_Y - 1; y++)
             {
                 setOwned(level, owners,
                         new BlockPos(bed.getX() + dx, y, frame.z()),
                         present ? CRANE_CABLE : AIR);
             }
         }
+        for (int dx : new int[] {-CRANE_CABLE_X, CRANE_CABLE_X})
+        {
+            setOwned(level, owners,
+                    new BlockPos(bed.getX() + dx, frame.bottomY() + 1,
+                            frame.z()), present ? magnet : AIR);
+        }
+
+        // Four-sided lower spreader.  Its centre collar touches the entry-plug
+        // crane marker while the rectangular frame remains legible from the
+        // gallery and from either side of the cage.
+        for (int dz : new int[] {-CRANE_DEPTH, CRANE_DEPTH})
+        {
+            for (int dx = -4; dx <= 4; dx++)
+            {
+                setOwned(level, owners,
+                        new BlockPos(bed.getX() + dx, frame.bottomY(),
+                                frame.z() + dz),
+                        present ? girder : AIR);
+            }
+        }
+        for (int dx : new int[] {-4, 4})
+        {
+            for (int dz = -CRANE_DEPTH; dz <= CRANE_DEPTH; dz++)
+            {
+                setOwned(level, owners,
+                        new BlockPos(bed.getX() + dx, frame.bottomY(),
+                                frame.z() + dz),
+                        present ? girder : AIR);
+            }
+        }
+        for (int dx = -2; dx <= 2; dx++)
+        {
+            BlockState collar = dx == 0 ? accent
+                    : Math.abs(dx) == 1 ? brassCasing : casing;
+            setOwned(level, owners,
+                    new BlockPos(bed.getX() + dx, frame.bottomY(), frame.z()),
+                    present ? collar : AIR);
+        }
+    }
+
+    /** Exact persisted crane volume, independent of the process-local cache. */
+    public static boolean isPlugCraneCell(ServerLevel level, int variant,
+                                          double craneEyeY,
+                                          double craneEyeZ,
+                                          BlockPos position)
+    {
+        if (!ready(level, variant))
+        {
+            return false;
+        }
+        BlockPos bed = hangarBed(level, variant);
+        int trolleyZ = Mth.clamp(Mth.floor(craneEyeZ),
+                bed.getZ() + CRANE_MIN_Z_OFFSET,
+                bed.getZ() + CRANE_MAX_Z_OFFSET);
+        int bottomY = Mth.clamp(Mth.floor(craneEyeY),
+                CRANE_MIN_Y, CRANE_TROLLEY_Y - 1);
+        int dx = position.getX() - bed.getX();
+        int dz = position.getZ() - trolleyZ;
+        if (Math.abs(dz) > CRANE_DEPTH)
+        {
+            return false;
+        }
+        int y = position.getY();
+        boolean topBridge = y == CRANE_TROLLEY_Y
+                && (Math.abs(dz) == CRANE_DEPTH
+                        && Math.abs(dx) <= CRANE_HALF_SPAN
+                        || Math.abs(dx) == CRANE_HALF_SPAN
+                        && Math.abs(dz) <= CRANE_DEPTH
+                        || dx == 0 && dz == 0);
+        boolean topCrosshead = y == CRANE_TROLLEY_Y - 1
+                && dz == 0 && Math.abs(dx) <= 4;
+        boolean suspension = dz == 0
+                && Math.abs(dx) == CRANE_CABLE_X
+                && y > bottomY && y < CRANE_TROLLEY_Y - 1;
+        boolean lowerFrame = y == bottomY
+                && (Math.abs(dz) == CRANE_DEPTH && Math.abs(dx) <= 4
+                        || Math.abs(dx) == 4 && Math.abs(dz) <= CRANE_DEPTH
+                        || dz == 0 && Math.abs(dx) <= 2);
+        return topBridge || topCrosshead || suspension || lowerFrame;
     }
 
     /**
@@ -563,36 +854,80 @@ public final class FacilityV2EvaRuntime
     {
         BlockPos bed = hangarBed(level, variant);
         FacilitySchemaV2.IntBox[] owners = owners(level, variant);
-        for (int z = bed.getZ() + CRANE_MIN_Z_OFFSET;
-             z <= bed.getZ() + CRANE_MAX_Z_OFFSET; z++)
+        for (int z = bed.getZ() + CRANE_MIN_Z_OFFSET - CRANE_DEPTH;
+             z <= bed.getZ() + CRANE_MAX_Z_OFFSET + CRANE_DEPTH; z++)
         {
-            for (int dx = -CRANE_HALF_SPAN;
-                 dx <= CRANE_HALF_SPAN; dx++)
+            // Save-upgrade cleanup for the retired 47-block trolley.  Only its
+            // exact ceiling plane and known crane palette are eligible; civil
+            // shell cells elsewhere in the owner remain untouched.
+            for (int dx = -CRANE_LEGACY_HALF_SPAN;
+                 dx <= CRANE_LEGACY_HALF_SPAN; dx++)
             {
                 BlockPos trolley = new BlockPos(
                         bed.getX() + dx, CRANE_TROLLEY_Y, z);
                 BlockState state = level.getBlockState(trolley);
-                if (state.is(Blocks.LIGHT_GRAY_CONCRETE)
-                        || state.is(Blocks.ORANGE_CONCRETE)
-                        || state.is(Blocks.PURPLE_CONCRETE)
-                        || state.is(Blocks.RED_CONCRETE))
+                if (isCraneTrolleyMaterial(state))
                 {
                     setOwned(level, owners, trolley, AIR);
                 }
             }
-            for (int dx : new int[] {-CRANE_CABLE_X, CRANE_CABLE_X})
+            // The moving mechanism owns a narrow nine-block-wide air shaft.
+            // Sweep the complete legacy palette here, including pistons and
+            // polished blackstone omitted by the old cleaner; those omissions
+            // are the source of the detached blocks seen after restart.
+            for (int dx = -CRANE_HALF_SPAN;
+                 dx <= CRANE_HALF_SPAN; dx++)
             {
                 for (int y = CRANE_MIN_Y; y < CRANE_TROLLEY_Y; y++)
                 {
-                    BlockPos cable = new BlockPos(
+                    BlockPos hardware = new BlockPos(
                             bed.getX() + dx, y, z);
-                    if (level.getBlockState(cable).is(Blocks.CHAIN))
+                    if (isCraneMovingMaterial(level.getBlockState(hardware)))
                     {
-                        setOwned(level, owners, cable, AIR);
+                        setOwned(level, owners, hardware, AIR);
                     }
                 }
             }
         }
+    }
+
+    private static boolean isCraneTrolleyMaterial(BlockState state)
+    {
+        return state.is(Blocks.POLISHED_DEEPSLATE)
+                || state.is(Blocks.LIGHT_GRAY_CONCRETE)
+                || state.is(Blocks.ORANGE_CONCRETE)
+                || state.is(Blocks.PURPLE_CONCRETE)
+                || state.is(Blocks.RED_CONCRETE)
+                || state.is(Blocks.POLISHED_BLACKSTONE)
+                || state.is(Blocks.PISTON)
+                || state.is(Blocks.COPPER_BLOCK)
+                || state.is(Blocks.EXPOSED_COPPER)
+                || isCreateCraneMaterial(state);
+    }
+
+    private static boolean isCraneMovingMaterial(BlockState state)
+    {
+        return state.is(Blocks.POLISHED_DEEPSLATE)
+                || state.is(Blocks.CHAIN)
+                || state.is(Blocks.COPPER_BLOCK)
+                || state.is(Blocks.EXPOSED_COPPER)
+                || state.is(Blocks.WEATHERED_COPPER)
+                || state.is(Blocks.OXIDIZED_COPPER)
+                || state.is(Blocks.PISTON)
+                || state.is(Blocks.POLISHED_BLACKSTONE)
+                || isCreateCraneMaterial(state);
+    }
+
+    private static boolean isCreateCraneMaterial(BlockState state)
+    {
+        return PrivateModVisuals.is(state, "create", "metal_girder")
+                || PrivateModVisuals.is(state, "create", "andesite_casing")
+                || PrivateModVisuals.is(state, "create", "brass_casing")
+                || PrivateModVisuals.is(state, "create", "gantry_carriage")
+                || PrivateModVisuals.is(state, "create", "rope_pulley")
+                || PrivateModVisuals.is(state, "create", "pulley_magnet")
+                || PrivateModVisuals.is(state, "create",
+                        "piston_extension_pole");
     }
 
     private static boolean complete(FacilityV2SavedData data,

@@ -15,6 +15,8 @@ import com.projectseele.ProjectSeele;
 import com.projectseele.config.SeeleConfig;
 import com.projectseele.entity.EntryPlugCarrierEntity;
 import com.projectseele.entity.EvaUnit01Entity;
+import com.projectseele.entity.NervSiloDoorEntity;
+import com.projectseele.entity.NervHangarDoorEntity;
 import com.projectseele.registry.ModEntities;
 import com.projectseele.visual.GeoFrontCommands;
 import com.projectseele.world.EvaFleetSavedData.FleetEntry;
@@ -43,9 +45,9 @@ public final class EvaLogisticsDirector
 {
     private static final int FLUID_LAYER_TICKS = 4;
     private static final int BRIDGE_RETRACTION_TICKS = 40;
-    private static final int PREPARE_ABORT_TICKS =
-            BRIDGE_RETRACTION_TICKS + 80;
     private static final int PLUG_LOCK_TICKS = 60;
+    /** Two seconds for the opposed wet-cage clamps to fold clear. */
+    private static final int RESTRAINT_TRAVEL_TICKS = 40;
     private static final int INSERTION_ABORT_TICKS =
             EntryPlugDirector.INSERTION_TICKS + 80;
     /** Slow, readable wet-cage rail speed; duration is derived from route length. */
@@ -64,7 +66,7 @@ public final class EvaLogisticsDirector
      * PARKED airframes and reject their real saved UUIDs a frame later.
      */
     private static final long FLEET_ENTITY_LOAD_GRACE_NANOS =
-            5_000_000_000L;
+            15_000_000_000L;
     private static final Map<UUID, Boolean> ROUTE_TICKET_STATE = new HashMap<>();
     private static final Map<UUID, Long> PHASE_STARTED_AT = new HashMap<>();
     private static final Map<UUID, Integer> LAST_ENTITY_TICK = new HashMap<>();
@@ -129,7 +131,7 @@ public final class EvaLogisticsDirector
              * Chunk futures complete before their entity sections attach.
              * Repairing a PARKED UUID in that short window creates a second
              * airframe, after which the real persisted EVA is rejected as a
-             * duplicate.  S20 uses the same two-second attachment barrier as
+             * duplicate.  S20 uses the same fifteen-second attachment barrier as
              * Facility-v2 before it is allowed to create or replace anything.
              */
             return List.of();
@@ -144,7 +146,7 @@ public final class EvaLogisticsDirector
         if (FacilityWorldPolicy.isS20Rebuild(level.getServer()))
         {
             if (!EvaHangarBuilder.runtimeInfrastructurePresent(level,
-                    IntegratedNervMapBuilder.GEOFRONT_ORIGIN))
+                    IntegratedNervMapBuilder.geoFrontOrigin(level)))
             {
                 ProjectSeele.LOGGER.error(
                         "S20 fleet reconciliation refused: compact EVA plant markers are incomplete");
@@ -154,7 +156,7 @@ public final class EvaLogisticsDirector
         else
         {
             EvaHangarBuilder.ensure(level,
-                    IntegratedNervMapBuilder.GEOFRONT_ORIGIN);
+                    IntegratedNervMapBuilder.geoFrontOrigin(level));
         }
         loadFleetStations(level);
         EntryPlugDirector.sweepStrayPlugs(level);
@@ -175,7 +177,7 @@ public final class EvaLogisticsDirector
             if (unit == null && canonical == null && !candidates.isEmpty())
             {
                 BlockPos bed = EvaHangarBuilder.hangarBed(
-                        IntegratedNervMapBuilder.GEOFRONT_ORIGIN, variant);
+                        IntegratedNervMapBuilder.geoFrontOrigin(level), variant);
                 unit = candidates.stream().min(Comparator.comparingDouble(
                         candidate -> candidate.distanceToSqr(bed.getCenter()))).orElse(null);
                 if (unit != null)
@@ -226,15 +228,15 @@ public final class EvaLogisticsDirector
             if (entry.phase() == Phase.PARKED && !unit.isVehicle())
             {
                 BlockPos bed = EvaHangarBuilder.hangarBed(
-                        IntegratedNervMapBuilder.GEOFRONT_ORIGIN, variant);
+                        IntegratedNervMapBuilder.geoFrontOrigin(level), variant);
                 placeAt(unit, bed);
                 unit.setSortieDestination(level.dimension(),
-                        IntegratedNervMapBuilder.surfaceLiftBed(variant));
+                        surfaceLiftBed(level, variant));
                 unit.setSortieParkingBed(bed);
                 unit.setNervLogisticsLocked(true);
                 unit.enterHangarStandby();
                 EvaHangarBuilder.setBoardingBridgeExtension(level,
-                        IntegratedNervMapBuilder.GEOFRONT_ORIGIN, variant,
+                        IntegratedNervMapBuilder.geoFrontOrigin(level), variant,
                         EvaHangarBuilder.BRIDGE_SEGMENTS);
                 EntryPlugDirector.ensureSuspended(level, variant, unit);
             }
@@ -436,7 +438,7 @@ public final class EvaLogisticsDirector
         }
         if (FacilityWorldPolicy.isS20Rebuild(level.getServer())
                 && !EvaHangarBuilder.ensureRuntimePowerPylon(level,
-                IntegratedNervMapBuilder.GEOFRONT_ORIGIN, variant))
+                IntegratedNervMapBuilder.geoFrontOrigin(level), variant))
         {
             return new ActionResult(false, label(variant)
                     + " cage external-power socket is obstructed.");
@@ -565,7 +567,7 @@ public final class EvaLogisticsDirector
         double dz = unit.getZ() - (surface.getZ() + 0.5D);
         double horizontal = Math.sqrt(dx * dx + dz * dz);
         if (horizontal > RECOVERY_RADIUS
-                || Math.abs(unit.getY() - (surface.getY() + 1.0D)) > 8.0D)
+                || Math.abs(unit.getY() - (surface.getY() + 2.0D)) > 8.0D)
         {
             return new ActionResult(false, label(variant)
                     + " must stand on its own Tokyo-3 recovery deck.");
@@ -578,10 +580,10 @@ public final class EvaLogisticsDirector
         unit.prepareForNervRecovery();
         unit.setNervLogisticsLocked(true);
         unit.moveOnNervCarrier(surface.getX() + 0.5D,
-                surface.getY() + 1.0D, surface.getZ() + 0.5D,
+                surface.getY() + 2.0D, surface.getZ() + 0.5D,
                 EvaUnit01Entity.SILO_BAY_YAW);
         put(level, variant, entry.withPhase(Phase.DESCENDING, 0,
-                surface.getY(), 0));
+                surface.getY() + 1, 0));
         level.playSound(null, surface, SoundEvents.PISTON_CONTRACT,
                 SoundSource.BLOCKS, 4.0F, 0.48F);
         return new ActionResult(true, label(variant)
@@ -678,7 +680,7 @@ public final class EvaLogisticsDirector
                         passenger.stopRiding();
                         if (passenger instanceof ServerPlayer player)
                         {
-                            BlockPos gallery = IntegratedNervMapBuilder.GEOFRONT_ORIGIN.offset(
+                            BlockPos gallery = IntegratedNervMapBuilder.geoFrontOrigin(level).offset(
                                     IntegratedNervMapBuilder.LIFT_X[variant],
                                     EvaHangarBuilder.GALLERY_Y + 1,
                                     EvaHangarBuilder.GALLERY_Z + 2);
@@ -687,13 +689,11 @@ public final class EvaLogisticsDirector
                                     180.0F, 0.0F);
                         }
                     }
-                    NervCarrierVisuals.remove(dimension, unit);
+                    NervCarrierVisuals.removeAll(dimension, unit);
                     unit.discard();
                 }
             }
         }
-        BlockPos recoveryDeck = IntegratedNervMapBuilder.surfaceLiftBed(variant);
-        setVerticalCarrier(level, recoveryDeck, recoveryDeck.getY(), true);
         EvaUnit01Entity replacement = createUnit(level, variant);
         if (replacement == null)
         {
@@ -713,17 +713,18 @@ public final class EvaLogisticsDirector
         }
         EntryPlugDirector.reset(level, variant, replacement);
         EvaHangarBuilder.setBoardingBridgeExtension(level,
-                IntegratedNervMapBuilder.GEOFRONT_ORIGIN, variant,
+                IntegratedNervMapBuilder.geoFrontOrigin(level), variant,
                 EvaHangarBuilder.BRIDGE_SEGMENTS);
-        EvaHangarBuilder.setGate(level, IntegratedNervMapBuilder.GEOFRONT_ORIGIN,
+        EvaHangarBuilder.setGate(level, IntegratedNervMapBuilder.geoFrontOrigin(level),
                 variant, false);
-        EvaHangarBuilder.setLclLevel(level, IntegratedNervMapBuilder.GEOFRONT_ORIGIN,
+        EvaHangarBuilder.setLclLevel(level, IntegratedNervMapBuilder.geoFrontOrigin(level),
                 variant, EvaHangarBuilder.LCL_SHOULDER_LAYERS);
         EvaHangarBuilder.restoreStaticCarrier(level,
-                IntegratedNervMapBuilder.GEOFRONT_ORIGIN, variant, bed);
+                IntegratedNervMapBuilder.geoFrontOrigin(level), variant, bed);
         replacement.setSortieDestination(level.dimension(),
-                IntegratedNervMapBuilder.surfaceLiftBed(variant));
+                surfaceLiftBed(level, variant));
         replacement.setSortieParkingBed(bed);
+        TrainingPilotDirector.resetToStandby(level, variant);
         ProjectSeele.LOGGER.warn("NERV forced canonical reset: {} uuid={} bed={}",
                 label(variant), replacement.getStringUUID(), bed.toShortString());
         return replacement;
@@ -761,7 +762,7 @@ public final class EvaLogisticsDirector
                                 180.0F, 0.0F);
                     }
                 }
-                NervCarrierVisuals.remove(dimension, unit);
+                NervCarrierVisuals.removeAll(dimension, unit);
                 unit.discard();
             }
         }
@@ -799,6 +800,7 @@ public final class EvaLogisticsDirector
                 lowerLiftBed(level, variant));
         restoreStaticCarrier(level, variant,
                 surfaceLiftBed(level, variant));
+        TrainingPilotDirector.resetToStandby(level, variant);
         ProjectSeele.LOGGER.warn(
                 "NERV S19 forced canonical reset: {} uuid={} bed={}",
                 label(variant), replacement.getStringUUID(),
@@ -898,7 +900,7 @@ public final class EvaLogisticsDirector
         for (int variant = 0; variant < 3; variant++)
         {
             if (!Tokyo3RecoveryConsole.controlPosition(
-                    IntegratedNervMapBuilder.TOKYO3_ORIGIN, variant)
+                    IntegratedNervMapBuilder.tokyo3Origin(level), variant)
                     .equals(position))
             {
                 continue;
@@ -910,7 +912,7 @@ public final class EvaLogisticsDirector
             return true;
         }
 
-        BlockPos origin = IntegratedNervMapBuilder.GEOFRONT_ORIGIN;
+        BlockPos origin = IntegratedNervMapBuilder.geoFrontOrigin(level);
         for (int variant = 0; variant < 3; variant++)
         {
             if (EvaHangarBuilder.cancelControlPosition(origin, variant)
@@ -987,6 +989,19 @@ public final class EvaLogisticsDirector
             }
             return;
         }
+        if (compactS20 && event.getServer().getTickCount() % 20 == 0)
+        {
+            /*
+             * These no-save visual gates must exist before the delayed fleet
+             * reconciliation finishes.  Otherwise a freshly opened world
+             * shows only invisible barrier collision for up to fifteen
+             * seconds when viewed from inside a wet cage.
+             */
+            for (int variant = 0; variant < 3; variant++)
+            {
+                maintainHangarDoor(level, variant, false);
+            }
+        }
         if (!SeeleConfig.dynamicEvaFacilityBlocksEnabled())
         {
             if (RESCUE_TICKETS_RELEASED.add(level))
@@ -1032,14 +1047,14 @@ public final class EvaLogisticsDirector
             }
             boolean ready = compactS20
                     ? EvaHangarBuilder.runtimeInfrastructurePresent(
-                    level, IntegratedNervMapBuilder.GEOFRONT_ORIGIN)
+                    level, IntegratedNervMapBuilder.geoFrontOrigin(level))
                     && compactLiftMarkersPresent(level)
                     : FacilityV2RescueDirector.isTargetWorld(
                     event.getServer())
                     ? IntegratedNervMapBuilder.rescueMechanicalReady(level)
                     : IntegratedNervMapBuilder.isInstalled(level)
                     && EvaHangarBuilder.runtimeInfrastructurePresent(level,
-                    IntegratedNervMapBuilder.GEOFRONT_ORIGIN);
+                    IntegratedNervMapBuilder.geoFrontOrigin(level));
             if (!ready)
             {
                 return;
@@ -1061,10 +1076,56 @@ public final class EvaLogisticsDirector
         {
             EntryPlugDirector.sweepStrayPlugs(level);
         }
+        boolean maintenanceTick = event.getServer().getTickCount() % 20 == 0;
         for (int variant = 0; variant < 3; variant++)
         {
+            FleetEntry fleet = entry(level, variant);
+            if (maintenanceTick
+                    || fleet != null && fleet.phase() != Phase.PARKED)
+            {
+                maintainSurfaceSiloDoor(level, variant);
+            }
             tickUnit(level, variant);
         }
+    }
+
+    private static void maintainSurfaceSiloDoor(ServerLevel level,
+                                                int variant)
+    {
+        FleetEntry fleet = entry(level, variant);
+        BlockPos surface = surfaceLiftBed(level, variant);
+        boolean active = fleet != null && fleet.phase() != Phase.PARKED;
+        if (!active && !level.hasChunkAt(surface))
+        {
+            return;
+        }
+        EvaUnit01Entity unit = fleet == null ? null
+                : canonical(level, variant);
+        float target = 0.0F;
+        if (unit != null)
+        {
+            if (unit.getLaunchPhase() == EvaUnit01Entity.LAUNCH_LOCKED
+                    && unit.isLaunchCommandReleased())
+            {
+                target = 1.0F;
+            }
+            else if (unit.getLaunchPhase() == EvaUnit01Entity.LAUNCH_ASCENT
+                    || fleet.phase() == Phase.DESCENDING)
+            {
+                // Once command releases a sortie, the owned hatch remains
+                // fully open for the complete ascent/descent.  Closing it at
+                // the bottom of the shaft and reopening near the surface
+                // created a race with the final route check and served no
+                // mechanical purpose.
+                target = 1.0F;
+            }
+            else if (unit.getLaunchPhase() == EvaUnit01Entity.LAUNCH_CLEAR)
+            {
+                target = Mth.clamp(unit.getLaunchTicks() / 18.0F,
+                        0.0F, 1.0F);
+            }
+        }
+        NervSiloDoorEntity.reconcile(level, variant, surface, target);
     }
 
     private static void tickUnit(ServerLevel level, int variant)
@@ -1084,6 +1145,16 @@ public final class EvaLogisticsDirector
         // stationary facility only needs this self-heal once per second;
         // every animated logistics phase below remains full 20 Hz.
         boolean maintenanceTick = level.getServer().getTickCount() % 20 == 0;
+        if (maintenanceTick && entry.phase() == Phase.PARKED)
+        {
+            TrainingPilotDirector.ensureStandby(level, variant);
+        }
+        boolean hangarDoorMoving = entry.phase() == Phase.TO_SILO
+                || entry.phase() == Phase.TO_HANGAR;
+        if (maintenanceTick || hangarDoorMoving)
+        {
+            maintainHangarDoor(level, variant, entry);
+        }
         if (entry.phase() == Phase.PARKED && !maintenanceTick)
         {
             return;
@@ -1113,9 +1184,33 @@ public final class EvaLogisticsDirector
         BlockPos hangar = hangarBed(level, variant);
         BlockPos silo = lowerLiftBed(level, variant);
         BlockPos surface = surfaceLiftBed(level, variant);
+        NervCarrierVisuals.updateLclSurface(level, unit,
+                hangar.getX() + 0.5D, hangar.getY(),
+                hangar.getZ() + 0.5D, visualLclLevel(entry));
         if (isHangarConstrained(entry.phase()))
         {
             holdOnHangarBed(unit, hangar);
+        }
+        /*
+         * The wet-cage towers belong to the hangar, not to the carrier deck.
+         * Keep their fixed visual entity alive throughout plug insertion,
+         * transfer, launch and recovery; once released their jaws retract but
+         * the machinery itself remains in the bay.
+         */
+        if (entry.phase() != Phase.PARKED
+                && entry.phase() != Phase.DRAINING
+                && entry.phase() != Phase.FILLING)
+        {
+            float hangarRestraint = switch (entry.phase())
+            {
+                case BRIDGE_RETRACTING, PLUG_INSERTING,
+                        PLUG_ABORT_RETURNING, PLUG_ABORT_DOCKED,
+                        PLUG_FAULT, PLUG_LOCKING -> 1.0F;
+                default -> 0.0F;
+            };
+            NervCarrierVisuals.updateRestraints(level, unit,
+                    hangar.getX() + 0.5D, hangar.getY(),
+                    hangar.getZ() + 0.5D, hangarRestraint);
         }
         switch (entry.phase())
         {
@@ -1125,6 +1220,9 @@ public final class EvaLogisticsDirector
                 unit.enterHangarStandby();
                 unit.setSortieDestination(level.dimension(), surface);
                 unit.setSortieParkingBed(hangar);
+                NervCarrierVisuals.update(level, unit,
+                        hangar.getX() + 0.5D, hangar.getY(),
+                        hangar.getZ() + 0.5D, 1.0F);
                 EntryPlugDirector.ensureSuspended(level, variant, unit);
             }
             case BRIDGE_RETRACTING ->
@@ -1154,18 +1252,13 @@ public final class EvaLogisticsDirector
                     }
                     else
                     {
-                        if (ticks >= PREPARE_ABORT_TICKS)
-                        {
-                            abortPlugSequence(level, variant, unit,
-                                    entry, hangar,
-                                    "hatch/crane interlock did not arm");
-                        }
-                        else
-                        {
-                            put(level, variant, entry.withPhase(
-                                    Phase.BRIDGE_RETRACTING, ticks,
-                                    entry.carrier(), entry.lclLayers()));
-                        }
+                        // Route preflight is deterministic for the current
+                        // world snapshot. Re-running it every tick only spammed
+                        // the log and made the suspended capsule/yoke appear to
+                        // shiver for six seconds before the same abort.
+                        abortPlugSequence(level, variant, unit,
+                                entry, hangar,
+                                "hatch/crane interlock did not arm");
                     }
                 }
                 else
@@ -1294,6 +1387,11 @@ public final class EvaLogisticsDirector
             {
                 unit.setNervLogisticsLocked(true);
                 int ticks = entry.ticks() + 1;
+                // The hoist recovers continuously throughout this 60-tick
+                // mechanical lock phase. FacilityV2EvaRuntime advances its
+                // lower yoke by two blocks per call and becomes idempotent at
+                // the ceiling, leaving the launch/transfer lane unobstructed.
+                EntryPlugDirector.ensureCraneStowed(level, variant);
                 if (!EntryPlugDirector.hasLaunchLock(level, variant, unit))
                 {
                     abortPlugSequence(level, variant, unit, entry,
@@ -1316,6 +1414,11 @@ public final class EvaLogisticsDirector
             case DRAINING ->
             {
                 unit.setNervLogisticsLocked(true);
+                EntryPlugDirector.ensureCraneStowed(level, variant);
+                // The fixed wet-cage gantry stays closed until the LCL is
+                // fully drained, then opens mechanically.  It must remain in
+                // the bay after opening; the moving deck has separate
+                // ownership and cannot delete it.
                 if (!EntryPlugDirector.hasLaunchLock(level, variant, unit))
                 {
                     holdPlugFault(level, variant, unit, entry,
@@ -1324,7 +1427,19 @@ public final class EvaLogisticsDirector
                 }
                 int ticks = entry.ticks() + 1;
                 int lcl = entry.lclLayers();
-                if (ticks % FLUID_LAYER_TICKS == 0 && lcl > 0)
+                int confirmedDry = DRAIN_ZERO_TICKS.getOrDefault(
+                        entry.canonicalId(), 0);
+                float restraint = lcl > 0 ? 1.0F
+                        : 1.0F - Mth.clamp(confirmedDry
+                                / (float) RESTRAINT_TRAVEL_TICKS,
+                                0.0F, 1.0F);
+                NervCarrierVisuals.updateRestraints(level, unit,
+                        hangar.getX() + 0.5D, hangar.getY(),
+                        hangar.getZ() + 0.5D, restraint);
+                // Remove each physical top layer at the start of its interval;
+                // the client surface then descends continuously to the next
+                // real layer instead of waiting and dropping one full block.
+                if ((ticks - 1) % FLUID_LAYER_TICKS == 0 && lcl > 0)
                 {
                     setLclLayer(level, variant, lcl, false);
                     lcl--;
@@ -1336,7 +1451,7 @@ public final class EvaLogisticsDirector
                     {
                         int confirmations = DRAIN_ZERO_TICKS.merge(
                                 entry.canonicalId(), 1, Integer::sum);
-                        if (confirmations >= 2)
+                        if (confirmations >= RESTRAINT_TRAVEL_TICKS)
                         {
                             DRAIN_ZERO_TICKS.remove(entry.canonicalId());
                             setGate(level, variant, true);
@@ -1372,6 +1487,7 @@ public final class EvaLogisticsDirector
             }
             case TO_SILO ->
             {
+                EntryPlugDirector.ensureCraneStowed(level, variant);
                 if (!EntryPlugDirector.hasLaunchLock(level, variant, unit))
                 {
                     holdPlugFault(level, variant, unit, entry,
@@ -1384,6 +1500,7 @@ public final class EvaLogisticsDirector
             case SILO_READY ->
             {
                 unit.setNervLogisticsLocked(true);
+                EntryPlugDirector.ensureCraneStowed(level, variant);
                 if (!EntryPlugDirector.hasLaunchLock(level, variant, unit))
                 {
                     holdPlugFault(level, variant, unit, entry,
@@ -1437,6 +1554,12 @@ public final class EvaLogisticsDirector
                 setGate(level, variant, false);
                 setBoardingBridgeExtension(level, variant, 0);
                 int ticks = entry.ticks() + 1;
+                float restraint = Mth.clamp(
+                        ticks / (float) RESTRAINT_TRAVEL_TICKS,
+                        0.0F, 1.0F);
+                NervCarrierVisuals.update(level, unit,
+                        hangar.getX() + 0.5D, hangar.getY(),
+                        hangar.getZ() + 0.5D, restraint);
                 EntryPlugCarrierEntity plug =
                         EntryPlugDirector.canonical(level, variant);
                 if (plug == null)
@@ -1473,8 +1596,15 @@ public final class EvaLogisticsDirector
                             ticks, entry.carrier(), 0));
                     break;
                 }
+                // Extraction has reached the parked dock but LCL refill and
+                // bridge restoration continue for several seconds.  Keep the
+                // same crane lease alive at the capsule instead of letting it
+                // time out and respawn only when PARKED begins.
+                EntryPlugDirector.maintainCraneAtCurrentPlug(
+                        level, variant, plug);
                 int lcl = entry.lclLayers();
-                if (ticks % FLUID_LAYER_TICKS == 0
+                if (ticks >= RESTRAINT_TRAVEL_TICKS
+                        && ticks % FLUID_LAYER_TICKS == 0
                         && lcl
                         < FacilityV2EvaRuntime.LCL_SHOULDER_LAYERS)
                 {
@@ -1502,6 +1632,32 @@ public final class EvaLogisticsDirector
         }
     }
 
+    private static void maintainHangarDoor(ServerLevel level, int variant,
+                                           FleetEntry entry)
+    {
+        // R28 retains the compact, human-approved three-cage pressure doors
+        // even when partial Facility-v2 receipts are present elsewhere.
+        boolean moving = entry.phase() == Phase.TO_SILO
+                || entry.phase() == Phase.TO_HANGAR;
+        maintainHangarDoor(level, variant, moving);
+    }
+
+    private static void maintainHangarDoor(ServerLevel level, int variant,
+                                           boolean moving)
+    {
+        BlockPos bed = EvaHangarBuilder.hangarBed(
+                IntegratedNervMapBuilder.geoFrontOrigin(level), variant);
+        if (!moving && !level.hasChunkAt(bed))
+        {
+            return;
+        }
+        Vec3 centre = new Vec3(bed.getX() + 0.5D,
+                bed.getY() + 1.0D,
+                EvaHangarBuilder.gateZ(
+                        IntegratedNervMapBuilder.geoFrontOrigin(level)) + 0.5D);
+        NervHangarDoorEntity.reconcile(level, variant, centre, moving);
+    }
+
     private static void requireCompactLogistics(
             ServerLevel level, String operation)
     {
@@ -1527,11 +1683,17 @@ public final class EvaLogisticsDirector
         for (int variant = 0; variant < 3; variant++)
         {
             if (!level.getBlockState(
-                    IntegratedNervMapBuilder.lowerLiftBed(variant))
-                    .is(net.minecraft.world.level.block.Blocks.LODESTONE)
-                    || !level.getBlockState(
-                    IntegratedNervMapBuilder.surfaceLiftBed(variant))
+                    IntegratedNervMapBuilder.lowerLiftBed(level, variant))
                     .is(net.minecraft.world.level.block.Blocks.LODESTONE))
+            {
+                return false;
+            }
+            // Surface stations are logical coordinates.  Their Y=79 cells
+            // must stay open; the synchronized hatch and collision seal live
+            // one block above them.
+            if (!level.getBlockState(
+                    IntegratedNervMapBuilder.surfaceLiftBed(level, variant))
+                    .isAir())
             {
                 return false;
             }
@@ -1546,7 +1708,7 @@ public final class EvaLogisticsDirector
             return FacilityV2EvaRuntime.hangarBed(level, variant);
         }
         return EvaHangarBuilder.hangarBed(
-                IntegratedNervMapBuilder.GEOFRONT_ORIGIN, variant);
+                IntegratedNervMapBuilder.geoFrontOrigin(level), variant);
     }
 
     private static BlockPos lowerLiftBed(ServerLevel level, int variant)
@@ -1555,7 +1717,7 @@ public final class EvaLogisticsDirector
         {
             return FacilityV2EvaRuntime.lowerLiftBed(level, variant);
         }
-        return IntegratedNervMapBuilder.lowerLiftBed(variant);
+        return IntegratedNervMapBuilder.lowerLiftBed(level, variant);
     }
 
     /**
@@ -1581,7 +1743,7 @@ public final class EvaLogisticsDirector
         {
             return FacilityV2EvaRuntime.surfaceLiftBed(level, variant);
         }
-        return IntegratedNervMapBuilder.surfaceLiftBed(variant);
+        return IntegratedNervMapBuilder.surfaceLiftBed(level, variant);
     }
 
     private static int lclLevel(ServerLevel level, int variant)
@@ -1591,7 +1753,7 @@ public final class EvaLogisticsDirector
             return FacilityV2EvaRuntime.lclLevel(level, variant);
         }
         return EvaHangarBuilder.lclLevel(level,
-                IntegratedNervMapBuilder.GEOFRONT_ORIGIN, variant);
+                IntegratedNervMapBuilder.geoFrontOrigin(level), variant);
     }
 
     private static void setLclLayer(ServerLevel level, int variant,
@@ -1604,7 +1766,7 @@ public final class EvaLogisticsDirector
             return;
         }
         EvaHangarBuilder.setLclLayer(level,
-                IntegratedNervMapBuilder.GEOFRONT_ORIGIN,
+                IntegratedNervMapBuilder.geoFrontOrigin(level),
                 variant, layer, filled);
     }
 
@@ -1615,7 +1777,7 @@ public final class EvaLogisticsDirector
             return FacilityV2EvaRuntime.drainLclEnvelope(level, variant);
         }
         return EvaHangarBuilder.drainLclEnvelope(level,
-                IntegratedNervMapBuilder.GEOFRONT_ORIGIN, variant);
+                IntegratedNervMapBuilder.geoFrontOrigin(level), variant);
     }
 
     private static void setBoardingBridgeExtension(
@@ -1628,7 +1790,7 @@ public final class EvaLogisticsDirector
             return;
         }
         EvaHangarBuilder.setBoardingBridgeExtension(level,
-                IntegratedNervMapBuilder.GEOFRONT_ORIGIN,
+                IntegratedNervMapBuilder.geoFrontOrigin(level),
                 variant, segments);
     }
 
@@ -1641,7 +1803,7 @@ public final class EvaLogisticsDirector
             return;
         }
         EvaHangarBuilder.setGate(level,
-                IntegratedNervMapBuilder.GEOFRONT_ORIGIN,
+                IntegratedNervMapBuilder.geoFrontOrigin(level),
                 variant, open);
     }
 
@@ -1655,13 +1817,34 @@ public final class EvaLogisticsDirector
             return;
         }
         EvaHangarBuilder.setCarrier(level,
-                IntegratedNervMapBuilder.GEOFRONT_ORIGIN,
+                IntegratedNervMapBuilder.geoFrontOrigin(level),
                 variant, centre.getZ(), present);
+    }
+
+    private static void ensureTransportGuideway(ServerLevel level, int variant,
+                                                BlockPos start, BlockPos end)
+    {
+        if (FacilityV2EvaRuntime.ready(level, variant))
+        {
+            FacilityV2EvaRuntime.ensureTransportGuideway(
+                    level, variant, start, end);
+            return;
+        }
+        EvaHangarBuilder.ensureTransportGuideway(level,
+                IntegratedNervMapBuilder.geoFrontOrigin(level),
+                variant, start, end);
     }
 
     private static void restoreStaticCarrier(
             ServerLevel level, int variant, BlockPos centre)
     {
+        // The surface head is closed by NervSiloDoorEntity at Y+1.  A second
+        // 29x29 carrier at the logical Y=79 anchor is redundant, obstructs
+        // the shaft and used to leave a visible centre block after opening.
+        if (centre.equals(surfaceLiftBed(level, variant)))
+        {
+            return;
+        }
         if (FacilityV2EvaRuntime.ready(level, variant))
         {
             FacilityV2EvaRuntime.restoreStaticCarrier(
@@ -1669,7 +1852,7 @@ public final class EvaLogisticsDirector
             return;
         }
         EvaHangarBuilder.restoreStaticCarrier(level,
-                IntegratedNervMapBuilder.GEOFRONT_ORIGIN,
+                IntegratedNervMapBuilder.geoFrontOrigin(level),
                 variant, centre);
     }
 
@@ -1695,6 +1878,11 @@ public final class EvaLogisticsDirector
     {
         boolean started = EntryPlugDirector.abortInsertionToDock(
                 level, variant, unit);
+        if (!started)
+        {
+            started = EntryPlugDirector.abortDockedPreparation(
+                    level, variant, unit);
+        }
         unit.setNervLogisticsLocked(true);
         setBoardingBridgeExtension(level, variant, 0);
         if (!started)
@@ -1703,9 +1891,13 @@ public final class EvaLogisticsDirector
                     reason + "; canonical capsule unavailable");
             return;
         }
+        EntryPlugCarrierEntity plug = EntryPlugDirector.canonical(
+                level, variant);
+        Phase rollback = plug != null && plug.getInsertionStage()
+                == EntryPlugCarrierEntity.STAGE_ABORT_DOCKED
+                ? Phase.PLUG_ABORT_DOCKED : Phase.PLUG_ABORT_RETURNING;
         put(level, variant, entry.withPhase(
-                Phase.PLUG_ABORT_RETURNING, 0, 0,
-                entry.lclLayers()));
+                rollback, 0, 0, entry.lclLayers()));
         ProjectSeele.LOGGER.warn(
                 "NERV EVA-0{} PREPARE abort return started: {}",
                 variant, reason);
@@ -1736,7 +1928,7 @@ public final class EvaLogisticsDirector
                 Math.sqrt(dx * dx + dz * dz)
                         / HORIZONTAL_BLOCKS_PER_TICK));
         int ticks = Math.min(duration, entry.ticks() + 1);
-        double progress = ticks / (double) duration;
+        double progress = smoothCarrierProgress(ticks / (double) duration);
         double exactX = Mth.lerp(progress, start.getX(), end.getX());
         double exactZ = Mth.lerp(progress, start.getZ(), end.getZ());
         int carrierZ = Mth.floor(exactZ + 0.5D);
@@ -1751,7 +1943,13 @@ public final class EvaLogisticsDirector
              * state machine moves only its carrier/entity; authored scenery is
              * never destructively "repaired" during a sortie.
              */
+            ensureTransportGuideway(level, variant, start, end);
             setCarrier(level, variant, start, false);
+            unit.beginNervCarrierMotion(
+                    new Vec3(start.getX() + 0.5D, start.getY() + 1.0D,
+                            start.getZ() + 0.5D),
+                    new Vec3(end.getX() + 0.5D, end.getY() + 1.0D,
+                            end.getZ() + 0.5D), duration);
         }
         NervCarrierVisuals.update(level, unit, exactX + 0.5D,
                 start.getY(), exactZ + 0.5D);
@@ -1768,6 +1966,7 @@ public final class EvaLogisticsDirector
         // Repainting it as AIR and immediately rebuilding it doubled the
         // largest block update spike for no visible result.
         NervCarrierVisuals.remove(level, unit);
+        unit.endNervCarrierMotion();
         restoreStaticCarrier(level, variant, end);
         unit.moveOnNervCarrier(end.getX() + 0.5D, end.getY() + 1.0D,
                 end.getZ() + 0.5D, EvaUnit01Entity.SILO_BAY_YAW);
@@ -1815,28 +2014,28 @@ public final class EvaLogisticsDirector
                                     EvaUnit01Entity unit, FleetEntry entry,
                                     BlockPos surface, BlockPos silo)
     {
-        int distance = surface.getY() - silo.getY();
+        int surfaceCarrierY = surface.getY() + 1;
+        int distance = surfaceCarrierY - silo.getY();
         int duration = Math.max(1, Mth.ceil(distance / VERTICAL_BLOCKS_PER_TICK));
         int ticks = Math.min(duration, entry.ticks() + 1);
-        double progress = ticks / (double) duration;
-        double exactY = Mth.lerp(progress, surface.getY(), silo.getY());
+        double progress = smoothCarrierProgress(ticks / (double) duration);
+        double exactY = Mth.lerp(progress, surfaceCarrierY, silo.getY());
         int carrierY = Mth.floor(exactY + 0.5D);
         if (entry.ticks() == 0)
         {
-            setVerticalCarrier(level, variant, surface,
-                    surface.getY(), false);
+            unit.beginNervCarrierMotion(
+                    new Vec3(surface.getX() + 0.5D,
+                            surface.getY() + 2.0D,
+                            surface.getZ() + 0.5D),
+                    new Vec3(silo.getX() + 0.5D,
+                            silo.getY() + 1.0D,
+                            silo.getZ() + 0.5D), duration);
         }
         NervCarrierVisuals.update(level, unit, surface.getX() + 0.5D,
-                carrierY, surface.getZ() + 0.5D);
+                exactY, surface.getZ() + 0.5D);
         unit.setNervLogisticsLocked(true);
         unit.moveOnNervCarrier(surface.getX() + 0.5D, exactY + 1.0D,
                 surface.getZ() + 0.5D, EvaUnit01Entity.SILO_BAY_YAW);
-        if (entry.carrier() >= surface.getY() - 34
-                && carrierY < surface.getY() - 34)
-        {
-            setVerticalCarrier(level, variant, surface,
-                    surface.getY(), true);
-        }
         if (ticks < duration)
         {
             put(level, variant, entry.withPhase(Phase.DESCENDING,
@@ -1844,12 +2043,46 @@ public final class EvaLogisticsDirector
             return;
         }
         NervCarrierVisuals.remove(level, unit);
+        unit.endNervCarrierMotion();
         restoreStaticCarrier(level, variant, silo);
         setGate(level, variant, true);
         unit.moveOnNervCarrier(silo.getX() + 0.5D, silo.getY() + 1.0D,
                 silo.getZ() + 0.5D, EvaUnit01Entity.SILO_BAY_YAW);
         put(level, variant, entry.withPhase(Phase.TO_HANGAR,
                 0, silo.getZ(), 0));
+    }
+
+    /** Quintic S-curve: zero jerk at both carrier endpoints. */
+    private static double smoothCarrierProgress(double progress)
+    {
+        double t = Mth.clamp(progress, 0.0D, 1.0D);
+        return t * t * t * (t * (t * 6.0D - 15.0D) + 10.0D);
+    }
+
+    private static float visualLclLevel(FleetEntry entry)
+    {
+        float layers = entry.lclLayers();
+        if (entry.phase() == Phase.DRAINING && layers > 0.0F)
+        {
+            int phase = Math.floorMod(entry.ticks(), FLUID_LAYER_TICKS);
+            if (phase != 0)
+            {
+                layers += (FLUID_LAYER_TICKS - phase)
+                        / (float) FLUID_LAYER_TICKS;
+            }
+        }
+        else if (entry.phase() == Phase.FILLING)
+        {
+            int visualStart = RESTRAINT_TRAVEL_TICKS - FLUID_LAYER_TICKS;
+            if (entry.ticks() >= visualStart)
+            {
+                int phase = Math.floorMod(entry.ticks() - visualStart,
+                        FLUID_LAYER_TICKS);
+                layers += phase / (float) FLUID_LAYER_TICKS;
+            }
+        }
+        return Mth.clamp(layers, 0.0F,
+                FacilityV2EvaRuntime.LCL_SHOULDER_LAYERS);
     }
 
     private static void setVerticalCarrier(ServerLevel level, BlockPos shaft,
@@ -1984,6 +2217,8 @@ public final class EvaLogisticsDirector
         DRAIN_ZERO_TICKS.clear();
         VERIFIED_INFRASTRUCTURE.clear();
         RESCUE_TICKETS_RELEASED.clear();
+        FLEET_STATION_LOAD_DEADLINE.clear();
+        FLEET_STATIONS_SETTLED.clear();
     }
 
     /**
@@ -2023,7 +2258,7 @@ public final class EvaLogisticsDirector
         BlockPos boardingStart = FacilityV2EvaRuntime.ready(level, variant)
                 ? FacilityV2EvaRuntime.statusControl(level, variant)
                         .offset(0, 0, -5)
-                : IntegratedNervMapBuilder.GEOFRONT_ORIGIN.offset(
+                : IntegratedNervMapBuilder.geoFrontOrigin(level).offset(
                         IntegratedNervMapBuilder.LIFT_X[variant],
                         EvaHangarBuilder.GALLERY_Y + 1,
                         EvaHangarBuilder.GALLERY_Z - 1);
@@ -2074,7 +2309,7 @@ public final class EvaLogisticsDirector
 
     /**
      * Chunk loading and persistent-entity attachment complete on different
-     * server tasks. Give the three wet-cage entity sections two seconds to
+     * server tasks. Give the three wet-cage entity sections fifteen seconds to
      * attach before a missing PARKED receipt is eligible for repair; otherwise
      * startup can clone every canonical EVA and discover the originals one
      * tick later.
@@ -2092,7 +2327,7 @@ public final class EvaLogisticsDirector
             FLEET_STATION_LOAD_DEADLINE.put(level,
                     System.nanoTime() + FLEET_ENTITY_LOAD_GRACE_NANOS);
             ProjectSeele.LOGGER.info(
-                    "NERV fleet reconciliation waiting 5 real seconds for wet-cage entities");
+                    "NERV fleet reconciliation waiting 15 real seconds for wet-cage entities");
             return false;
         }
         if (System.nanoTime() < deadline)

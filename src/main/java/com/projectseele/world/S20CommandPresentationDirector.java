@@ -16,6 +16,7 @@ import java.util.Set;
 
 import com.projectseele.ProjectSeele;
 import com.projectseele.entity.EvaUnit01Entity;
+import com.projectseele.entity.NervArmamentStationEntity;
 import com.projectseele.entity.NervCommandSeatEntity;
 import com.projectseele.network.ClientboundPilotStatusPacket;
 import com.projectseele.network.SeeleNetwork;
@@ -141,10 +142,10 @@ public final class S20CommandPresentationDirector
      * front of it - there is no glazing at this height.  Those are block
      * coordinates, so the face spans world x 9..48 and world y -435..-422.
      */
-    private static final double CITY_STATUS_CENTRE_X = 28.5D;
-    private static final double CITY_STATUS_FACE_TOP = -422.0D;
-    private static final double CITY_STATUS_FACE_BOTTOM = -435.0D;
-    private static final double CITY_STATUS_Z = 361.55D;
+    public static final double CITY_STATUS_CENTRE_X = 28.5D;
+    public static final double CITY_STATUS_FACE_TOP = -422.0D;
+    public static final double CITY_STATUS_FACE_BOTTOM = -435.0D;
+    public static final double CITY_STATUS_Z = 361.55D;
     private static final int CITY_STATUS_LINES = 10;
     /**
      * Thirteen rows of face divided by the block a ten-line display occupies.
@@ -560,7 +561,7 @@ public final class S20CommandPresentationDirector
             removeGuessedFurnitureChairs(level);
             ensureCityStatusDisplay(level);
         }
-        if (tick % 20 == 0 && hasNearbyViewer(level))
+        if (tick % 5 == 0 && hasNearbyViewer(level))
         {
             broadcastPilotStatus(level);
         }
@@ -602,9 +603,19 @@ public final class S20CommandPresentationDirector
                     ServerboundEvaVideoFramePacket.isFeedActive(
                             level, variant));
         }
+        Tokyo3RetractionDirector.Status city =
+                Tokyo3RetractionDirector.status(level,
+                        IntegratedNervMapBuilder.tokyo3Origin(level));
+        NervArmamentStationEntity armament =
+                NervArmamentStationEntity.commandStation(level);
         SeeleNetwork.CHANNEL.send(
                 PacketDistributor.DIMENSION.with(level::dimension),
-                new ClientboundPilotStatusPacket(units));
+                new ClientboundPilotStatusPacket(units,
+                        String.valueOf(city.phase()), city.depth(),
+                        city.targetDepth(), city.maximumDepth(),
+                        armament == null ? "OFFLINE" : armament.stateName(),
+                        armament != null && armament.isStocked(),
+                        armament == null ? 0 : armament.getLiftPercent()));
     }
 
     /**
@@ -627,112 +638,17 @@ public final class S20CommandPresentationDirector
         }
     }
 
-    /** Keeps the rear wall display readable, server-backed and switchable. */
+    /** Removes the retired text entity; the client now draws a live city model. */
     private static void ensureCityStatusDisplay(ServerLevel level)
     {
         Vec3 anchor = new Vec3(CITY_STATUS_CENTRE_X, cityStatusBaseY(),
                 CITY_STATUS_Z);
         AABB bounds = AABB.ofSize(anchor, 96.0D, 48.0D, 24.0D);
-        List<Display.TextDisplay> matches = new ArrayList<>(
-                level.getEntitiesOfClass(Display.TextDisplay.class, bounds,
-                        display -> display.getTags().contains(
-                                CITY_STATUS_TAG)));
-        matches.sort(Comparator.comparingInt(Entity::getId));
-        /*
-         * The board answers to the fifth physical key on the operator wall.
-         * A text display has no fade, so switching it off removes the entity
-         * outright rather than leaving a dimmed ghost on the wall.
-         */
-        if (!NervCommandDisplayState.get(level.getServer())
-                .isVisible(NervCommandDisplayState.CITY_SCREEN))
+        for (Display.TextDisplay stale : level.getEntitiesOfClass(
+                Display.TextDisplay.class, bounds,
+                display -> display.getTags().contains(CITY_STATUS_TAG)))
         {
-            for (Display.TextDisplay stale : matches)
-            {
-                stale.discard();
-            }
-            return;
-        }
-        Display.TextDisplay display;
-        boolean created = matches.isEmpty();
-        if (created)
-        {
-            display = EntityType.TEXT_DISPLAY.create(level);
-            if (display == null)
-            {
-                return;
-            }
-            display.addTag(CITY_STATUS_TAG);
-            display.setNoGravity(true);
-            display.setInvulnerable(true);
-            display.setSilent(true);
-        }
-        else
-        {
-            display = matches.get(0);
-            for (int index = 1; index < matches.size(); index++)
-            {
-                matches.get(index).discard();
-            }
-        }
-
-        Tokyo3RetractionDirector.Status city =
-                Tokyo3RetractionDirector.status(level,
-                        IntegratedNervMapBuilder.TOKYO3_ORIGIN);
-        EvaFleetSavedData fleet = EvaFleetSavedData.get(level.getServer());
-        /*
-         * Forty columns is the budget: at the scale that fills the physical
-         * face, a longer line would run past the black area on to the cornice.
-         * Every substitution is therefore clipped, not padded open-endedly.
-         */
-        String text = String.format(Locale.ROOT,
-                "TOKYO-3 / CIVIL DEFENCE STATUS\n"
-                        + "MAGI SURFACE CONTROL         ONLINE\n"
-                        + "CITY ARMOUR  %-14s DEPTH %02d/%02d\n"
-                        + "ROAD / POWER / SENSOR GRID   ONLINE\n"
-                        + "PUBLIC LIFT TO GEOFRONT      STANDBY\n"
-                        + "-----------------------------------\n"
-                        + "EVA-00  %s\n"
-                        + "EVA-01  %s\n"
-                        + "EVA-02  %s\n"
-                        + "NERV COMMAND AUTHORITY       ACTIVE",
-                clip(String.valueOf(city.phase()), 14),
-                city.depth(), city.maximumDepth(),
-                fleetPhase(fleet, 0), fleetPhase(fleet, 1),
-                fleetPhase(fleet, 2));
-        CompoundTag tag = display.saveWithoutId(new CompoundTag());
-        tag.putString("text", Component.Serializer.toJson(
-                Component.literal(text)));
-        tag.putInt("line_width", 400);
-        tag.putInt("background", 0xE0060A0E);
-        tag.putByte("text_opacity", (byte) -1);
-        tag.putBoolean("shadow", true);
-        /*
-         * see_through draws the glyphs with the depth test disabled, so the
-         * board bled through the sloped pilot screens, the command glazing and
-         * the wall itself from anywhere in the room.  There is no glass in
-         * front of this face, so depth testing costs nothing and is the only
-         * thing that makes the text sit on the wall instead of floating over
-         * everything between the viewer and it.
-         */
-        tag.putBoolean("see_through", false);
-        tag.putBoolean("default_background", false);
-        tag.putString("alignment", "left");
-        tag.putString("billboard", "fixed");
-        tag.putFloat("view_range", 4.0F);
-        tag.putFloat("width", 40.0F);
-        tag.putFloat("height", 16.0F);
-        CompoundTag brightness = new CompoundTag();
-        brightness.putInt("block", 15);
-        brightness.putInt("sky", 15);
-        tag.put("brightness", brightness);
-        tag.put("transformation", displayTransform(CITY_STATUS_SCALE));
-        display.load(tag);
-        display.setPos(anchor.x, anchor.y, anchor.z);
-        display.setYRot(180.0F);
-        display.setXRot(0.0F);
-        if (created)
-        {
-            level.addFreshEntity(display);
+            stale.discard();
         }
     }
 

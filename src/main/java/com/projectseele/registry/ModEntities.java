@@ -4,16 +4,21 @@ import com.projectseele.ProjectSeele;
 import com.projectseele.entity.EntryPlugCarrierEntity;
 import com.projectseele.entity.EvaScale;
 import com.projectseele.entity.EvaUnit01Entity;
-import com.projectseele.entity.EvaWeaponEntity;
 import com.projectseele.entity.LilithEntity;
 import com.projectseele.entity.NervCarrierPlatformEntity;
 import com.projectseele.entity.NervCommandSeatEntity;
+import com.projectseele.entity.NervArmamentStationEntity;
+import com.projectseele.entity.NervSiloDoorEntity;
+import com.projectseele.entity.NervHangarDoorEntity;
+import com.projectseele.entity.NervSlidingDoorEntity;
+import com.projectseele.entity.NervLiftDoorEntity;
 import com.projectseele.entity.RamielEntity;
 import com.projectseele.entity.SachielEntity;
 import com.projectseele.entity.MassProductionEvaEntity;
 import com.projectseele.entity.ShamshelEntity;
 import com.projectseele.entity.ZeruelEntity;
 import com.projectseele.entity.TrainingPilotEntity;
+import com.projectseele.entity.UltramanAvatarEntity;
 import com.projectseele.entity.IsrafelEntity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MobCategory;
@@ -40,6 +45,7 @@ public class ModEntities
                     .sized(EvaScale.NORMAL_WIDTH, EvaScale.NORMAL_HEIGHT)
                     .fireImmune()
                     .clientTrackingRange(64)
+                    .updateInterval(1)
                     .build("eva_unit01"));
 
     public static final RegistryObject<EntityType<EvaUnit01Entity>> EVA_UNIT00 = ENTITY_TYPES.register("eva_unit00",
@@ -47,6 +53,7 @@ public class ModEntities
                     .sized(EvaScale.NORMAL_WIDTH, EvaScale.NORMAL_HEIGHT)
                     .fireImmune()
                     .clientTrackingRange(12)
+                    .updateInterval(1)
                     .build("eva_unit00"));
 
     public static final RegistryObject<EntityType<EvaUnit01Entity>> EVA_UNIT02 = ENTITY_TYPES.register("eva_unit02",
@@ -54,6 +61,7 @@ public class ModEntities
                     .sized(EvaScale.NORMAL_WIDTH, EvaScale.NORMAL_HEIGHT)
                     .fireImmune()
                     .clientTrackingRange(12)
+                    .updateInterval(1)
                     .build("eva_unit02"));
 
     public static final RegistryObject<EntityType<EntryPlugCarrierEntity>> ENTRY_PLUG_CARRIER =
@@ -66,17 +74,6 @@ public class ModEntities
                             .clientTrackingRange(24)
                             .updateInterval(1)
                             .build("entry_plug_carrier"));
-
-    public static final RegistryObject<EntityType<EvaWeaponEntity>>
-            EVA_WEAPON = ENTITY_TYPES.register("eva_weapon",
-                    () -> EntityType.Builder.of(EvaWeaponEntity::new,
-                                    MobCategory.MISC)
-                            .sized(3.0F, 20.0F)
-                            .fireImmune()
-                            .clientTrackingRange(64)
-                            .updateInterval(1)
-                            .setShouldReceiveVelocityUpdates(false)
-                            .build("eva_weapon"));
 
     public static final RegistryObject<EntityType<NervCarrierPlatformEntity>>
             NERV_CARRIER_PLATFORM = ENTITY_TYPES.register(
@@ -113,6 +110,87 @@ public class ModEntities
                             .updateInterval(20)
                             .setShouldReceiveVelocityUpdates(false)
                             .build("nerv_command_seat"));
+
+    public static final RegistryObject<EntityType<NervArmamentStationEntity>>
+            NERV_ARMAMENT_STATION = ENTITY_TYPES.register(
+                    "nerv_armament_station",
+                    () -> EntityType.Builder.of(
+                                    NervArmamentStationEntity::new,
+                                    MobCategory.MISC)
+                            .sized(9.0F, 42.0F)
+                            .fireImmune()
+                            .clientTrackingRange(48)
+                            .updateInterval(1)
+                            .setShouldReceiveVelocityUpdates(false)
+                            .build("nerv_armament_station"));
+
+    public static final RegistryObject<EntityType<NervSiloDoorEntity>>
+            NERV_SILO_DOOR = ENTITY_TYPES.register(
+                    "nerv_silo_door",
+                    () -> EntityType.Builder.of(NervSiloDoorEntity::new,
+                                    MobCategory.MISC)
+                            .noSave()
+                            // Visual leaves are non-pickable and no-cull; a
+                            // 64-block server AABB only bloats entity-section
+                            // bookkeeping without affecting their renderer.
+                            .sized(1.0F, 1.0F)
+                            .fireImmune()
+                            .clientTrackingRange(96)
+                            .updateInterval(1)
+                            .setShouldReceiveVelocityUpdates(false)
+                            .build("nerv_silo_door"));
+
+    public static final RegistryObject<EntityType<NervHangarDoorEntity>>
+            NERV_HANGAR_DOOR = ENTITY_TYPES.register(
+                    "nerv_hangar_door",
+                    () -> EntityType.Builder.of(NervHangarDoorEntity::new,
+                                    MobCategory.MISC)
+                            .noSave()
+                            .sized(1.0F, 1.0F)
+                            .fireImmune()
+                            .clientTrackingRange(64)
+                            .updateInterval(1)
+                            .setShouldReceiveVelocityUpdates(false)
+                            .build("nerv_hangar_door"));
+
+    public static final RegistryObject<EntityType<NervSlidingDoorEntity>>
+            NERV_SLIDING_DOOR = ENTITY_TYPES.register(
+                    "nerv_sliding_door",
+                    () -> EntityType.Builder.of(NervSlidingDoorEntity::new,
+                                    MobCategory.MISC)
+                            .noSave()
+                            .sized(1.0F, 1.0F)
+                            .fireImmune()
+                            .clientTrackingRange(16)
+                            .updateInterval(1)
+                            .setShouldReceiveVelocityUpdates(false)
+                            .build("nerv_sliding_door"));
+
+    public static final RegistryObject<EntityType<NervLiftDoorEntity>>
+            NERV_LIFT_DOOR = ENTITY_TYPES.register(
+                    "nerv_lift_door",
+                    () -> EntityType.Builder.of(NervLiftDoorEntity::new,
+                                    MobCategory.MISC)
+                            .noSave()
+                            .sized(1.0F, 1.0F)
+                            .fireImmune()
+                            .clientTrackingRange(24)
+                            .updateInterval(1)
+                            .setShouldReceiveVelocityUpdates(false)
+                            .build("nerv_lift_door"));
+
+    public static final RegistryObject<EntityType<UltramanAvatarEntity>>
+            ULTRAMAN_AVATAR = ENTITY_TYPES.register(
+                    "ultraman_avatar",
+                    () -> EntityType.Builder.of(UltramanAvatarEntity::new,
+                                    MobCategory.MISC)
+                            .noSave()
+                            .sized(1.0F, 1.0F)
+                            .fireImmune()
+                            .clientTrackingRange(128)
+                            .updateInterval(1)
+                            .setShouldReceiveVelocityUpdates(false)
+                            .build("ultraman_avatar"));
 
     public static final RegistryObject<EntityType<TrainingPilotEntity>> TRAINING_PILOT =
             ENTITY_TYPES.register("training_pilot",

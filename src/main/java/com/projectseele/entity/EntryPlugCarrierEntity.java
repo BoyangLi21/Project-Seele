@@ -4,7 +4,12 @@ import java.util.UUID;
 
 import com.projectseele.world.EntryPlugDirector;
 import com.projectseele.world.EntryPlugKinematics;
+import com.projectseele.world.EvaHangarBuilder;
+import com.projectseele.world.FacilityV2EvaRuntime;
+import com.projectseele.world.IntegratedNervMapBuilder;
 import com.projectseele.world.RigidTransform;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.syncher.EntityDataAccessor;
@@ -12,6 +17,7 @@ import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.damagesource.DamageSource;
@@ -19,16 +25,21 @@ import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.PathfinderMob;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.phys.HitResult;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Quaternionf;
+import org.joml.Vector3f;
 import org.jetbrains.annotations.Nullable;
 import software.bernie.geckolib.animatable.GeoEntity;
 import software.bernie.geckolib.core.animatable.instance.AnimatableInstanceCache;
@@ -42,6 +53,9 @@ import software.bernie.geckolib.util.GeckoLibUtil;
 public final class EntryPlugCarrierEntity extends PathfinderMob
         implements GeoEntity
 {
+    private static final int[] SAFE_DISMOUNT_VERTICAL_OFFSETS = {
+            0, 1, -1, 2, -2, 3, -3, 4, -4
+    };
     public static final int STAGE_SUSPENDED = 0;
     public static final int STAGE_OCCUPIED = 1;
     public static final int STAGE_INSERTING = 2;
@@ -70,6 +84,8 @@ public final class EntryPlugCarrierEntity extends PathfinderMob
     public static final int CABIN_SYNCHRONIZING = 3;
     /** Optical feed is live; ownership is about to transfer to the airframe. */
     public static final int CABIN_ONLINE = 4;
+    /** Returned to the wet cage: hatch sealed, normal cabin view, no overlay. */
+    public static final int CABIN_RECOVERED_IDLE = 5;
     /** Percent reached outside the EVA before the seated plug takes over. */
     public static final int CABIN_TRANSFER_PERCENT = 70;
     /** Door animation is eight percentage points per server tick. */
@@ -116,6 +132,9 @@ public final class EntryPlugCarrierEntity extends PathfinderMob
     private static final EntityDataAccessor<Boolean> DATA_CANONICAL_POSE =
             SynchedEntityData.defineId(EntryPlugCarrierEntity.class,
                     EntityDataSerializers.BOOLEAN);
+    private static final EntityDataAccessor<Vector3f> DATA_POSE_TRANSLATION =
+            SynchedEntityData.defineId(EntryPlugCarrierEntity.class,
+                    EntityDataSerializers.VECTOR3);
     private static final EntityDataAccessor<Float> DATA_POSE_QX =
             SynchedEntityData.defineId(EntryPlugCarrierEntity.class,
                     EntityDataSerializers.FLOAT);
@@ -148,6 +167,9 @@ public final class EntryPlugCarrierEntity extends PathfinderMob
     private RigidTransform clientPreviousRotation = RigidTransform.identity();
     private RigidTransform clientCurrentRotation = RigidTransform.identity();
     private int clientRotationUpdateTick = Integer.MIN_VALUE;
+    private float clientPreviousCabinProgress;
+    private float clientCurrentCabinProgress;
+    private int clientCabinProgressUpdateTick = Integer.MIN_VALUE;
     @Nullable
     private UUID hostEvaUuid;
     private int nextBoardingDiagnosticTick;
@@ -160,6 +182,7 @@ public final class EntryPlugCarrierEntity extends PathfinderMob
     {
         super(type, level);
         this.noPhysics = true;
+        this.noCulling = true;
         this.setNoGravity(true);
         this.setPersistenceRequired();
     }
@@ -190,6 +213,7 @@ public final class EntryPlugCarrierEntity extends PathfinderMob
         this.entityData.define(DATA_CABIN_PROGRESS, 0);
         this.entityData.define(DATA_HATCH_OPEN, 100);
         this.entityData.define(DATA_CANONICAL_POSE, false);
+        this.entityData.define(DATA_POSE_TRANSLATION, new Vector3f());
         this.entityData.define(DATA_POSE_QX, 0.0F);
         this.entityData.define(DATA_POSE_QY, 0.0F);
         this.entityData.define(DATA_POSE_QZ, 0.0F);
@@ -207,7 +231,11 @@ public final class EntryPlugCarrierEntity extends PathfinderMob
 
     public RigidTransform getCanonicalTransform()
     {
-        return new RigidTransform(this.position(),
+        Vector3f syncedTranslation = this.entityData.get(DATA_POSE_TRANSLATION);
+        Vec3 translation = this.hasCanonicalPose()
+                ? new Vec3(syncedTranslation.x(), syncedTranslation.y(),
+                        syncedTranslation.z()) : this.position();
+        return new RigidTransform(translation,
                 this.entityData.get(DATA_POSE_QX),
                 this.entityData.get(DATA_POSE_QY),
                 this.entityData.get(DATA_POSE_QZ),
@@ -224,8 +252,80 @@ public final class EntryPlugCarrierEntity extends PathfinderMob
         {
             return this.clientCurrentRotation.rotation();
         }
-        return this.clientPreviousRotation.interpolate(
-                this.clientCurrentRotation, partialTick).rotation();
+        /*
+         * The dock and socket frames cross the quaternion hemisphere seam
+         * near the first insertion movement.  Canonical persistence keeps
+         * w >= 0, but two adjacent network samples can consequently describe
+         * the same continuous motion with opposite q/-q representatives.
+         * A renderer-side slerp then produced one 33 ms, roughly 180-degree
+         * inversion (visible in the 2026-08-14 capture at 7.85 s).  Unwrap
+         * the target into the previous sample's hemisphere and use nlerp;
+         * pose deltas are one server tick apart, so nlerp is both smooth and
+         * incapable of taking the long arc through the inverted capsule.
+         */
+        Quaternionf previous = this.clientPreviousRotation.rotation();
+        Quaternionf current = this.clientCurrentRotation.rotation();
+        if (previous.dot(current) < 0.0F)
+        {
+            current.set(-current.x, -current.y, -current.z, -current.w);
+        }
+        float alpha = Mth.clamp(partialTick, 0.0F, 1.0F);
+        return new Quaternionf(
+                Mth.lerp(alpha, previous.x, current.x),
+                Mth.lerp(alpha, previous.y, current.y),
+                Mth.lerp(alpha, previous.z, current.z),
+                Mth.lerp(alpha, previous.w, current.w)).normalize();
+    }
+
+    /** Render-frame transform shared by the shell and first-person camera. */
+    public RigidTransform getInterpolatedCanonicalTransform(float partialTick)
+    {
+        if (!this.level().isClientSide || !this.hasCanonicalPose())
+        {
+            return this.getCanonicalTransform();
+        }
+        float alpha = Mth.clamp(partialTick, 0.0F, 1.0F);
+        Vec3 translation = new Vec3(
+                Mth.lerp(alpha, this.xo, this.getX()),
+                Mth.lerp(alpha, this.yo, this.getY()),
+                Mth.lerp(alpha, this.zo, this.getZ()));
+        Quaternionf rotation = this.getCanonicalRotation(partialTick);
+        return new RigidTransform(translation, rotation.x, rotation.y,
+                rotation.z, rotation.w);
+    }
+
+    /** Camera marker inside the sealed capsule, never on its exterior AABB. */
+    public Vec3 getInterpolatedPilotEyePosition(float partialTick)
+    {
+        return this.getInterpolatedCanonicalTransform(partialTick)
+                .transformPoint(EntryPlugKinematics.PILOT_EYE_P);
+    }
+
+    /**
+     * Vanilla mobile-entity packets normally ease position over several
+     * client ticks.  The entry plug's canonical quaternion is a one-server-
+     * tick pose stream, so letting vanilla use its longer translation clock
+     * makes the mesh rotate around a stale pivot.  That mismatch is most
+     * visible at the dock-to-insertion boundary and while the observer turns
+     * their camera.  Consume every authoritative pose over the same single
+     * tick used by {@link #getCanonicalRotation(float)}.
+     */
+    @Override
+    public void lerpTo(double x, double y, double z, float yRot, float xRot,
+                       int lerpSteps, boolean teleport)
+    {
+        if (this.level().isClientSide && this.hasCanonicalPose())
+        {
+            /*
+             * Translation is part of DATA_POSE_SEQUENCE below.  Consuming the
+             * separate vanilla movement packet as a second interpolation
+             * clock is what made the capsule and its first-person seat drift
+             * by one render frame while the crane changed pitch.
+             */
+            this.lerpSteps = 0;
+            return;
+        }
+        super.lerpTo(x, y, z, yRot, xRot, 1, teleport);
     }
 
     /**
@@ -234,7 +334,24 @@ public final class EntryPlugCarrierEntity extends PathfinderMob
      */
     public void setCanonicalTransform(RigidTransform transform)
     {
+        RigidTransform current = this.getCanonicalTransform();
+        boolean unchanged = this.hasCanonicalPose()
+                && current.translation().distanceToSqr(transform.translation())
+                        <= 1.0D / (4096.0D * 4096.0D)
+                && current.rotationErrorDegrees(transform) <= 0.01D;
+        if (unchanged)
+        {
+            // Do not publish a fresh pose sequence for the same dock frame.
+            // The stage edge used to send an otherwise-identical quaternion
+            // and restart client interpolation, which read as a one-frame
+            // kick immediately before the capsule began its insertion arc.
+            return;
+        }
         this.setPos(transform.translation());
+        this.entityData.set(DATA_POSE_TRANSLATION, new Vector3f(
+                (float) transform.translation().x,
+                (float) transform.translation().y,
+                (float) transform.translation().z));
         this.entityData.set(DATA_POSE_QX, transform.qx());
         this.entityData.set(DATA_POSE_QY, transform.qy());
         this.entityData.set(DATA_POSE_QZ, transform.qz());
@@ -242,6 +359,22 @@ public final class EntryPlugCarrierEntity extends PathfinderMob
         this.entityData.set(DATA_CANONICAL_POSE, true);
         this.entityData.set(DATA_POSE_SEQUENCE,
                 this.entityData.get(DATA_POSE_SEQUENCE) + 1);
+        if (!this.level().isClientSide && this.isVehicle())
+        {
+            /*
+             * Logistics advances the canonical pose from the server-level
+             * END tick, after the ordinary entity/passenger tick has already
+             * run.  Without this reconciliation the authoritative pilot seat
+             * remained one pose sample behind the rendered capsule and was
+             * corrected on the next tick, which reads as first-person shake
+             * while looking around.  Move only position here; player view
+             * yaw/pitch remains wholly mouse-owned in positionRider().
+             */
+            for (Entity passenger : this.getPassengers())
+            {
+                this.positionRider(passenger, Entity::setPos);
+            }
+        }
     }
 
     public Vec3 transformPlugMarker(Vec3 marker)
@@ -318,7 +451,8 @@ public final class EntryPlugCarrierEntity extends PathfinderMob
         {
             case STAGE_SUSPENDED -> to == STAGE_OCCUPIED;
             case STAGE_OCCUPIED -> to == STAGE_SUSPENDED
-                    || to == STAGE_INSERTING;
+                    || to == STAGE_INSERTING
+                    || to == STAGE_ABORT_DOCKED;
             case STAGE_INSERTING -> to == STAGE_LOCKED
                     || to == STAGE_ABORT_RETURNING;
             case STAGE_LOCKED -> to == STAGE_INSERTING
@@ -437,7 +571,6 @@ public final class EntryPlugCarrierEntity extends PathfinderMob
         this.lockedSocketToPlug = socket.inverse().compose(seated);
         this.hostEvaUuid = unit.getUUID();
         this.entityData.set(DATA_HOST_EVA_ID, unit.getId());
-        this.entityData.set(DATA_SHELL_VISIBLE, false);
         this.clearInsertionAbortRequest();
         this.setCanonicalTransform(seated);
         if (!this.startRiding(unit, true))
@@ -455,6 +588,10 @@ public final class EntryPlugCarrierEntity extends PathfinderMob
             this.entityData.set(DATA_SHELL_VISIBLE, true);
             return false;
         }
+        // Hide only after the nested EVA -> plug -> pilot ride chain exists.
+        // Hiding before startRiding exposed one outside-world frame to the
+        // first-person camera at the end of insertion.
+        this.entityData.set(DATA_SHELL_VISIBLE, false);
         this.setInsertionProgress(100);
         this.setCabinSequenceProgress(CABIN_TRANSFER_PERCENT);
         return true;
@@ -514,6 +651,18 @@ public final class EntryPlugCarrierEntity extends PathfinderMob
         return this.entityData.get(DATA_CABIN_PROGRESS);
     }
 
+    public float getCabinProgress(float partialTick)
+    {
+        if (!this.level().isClientSide
+                || this.tickCount != this.clientCabinProgressUpdateTick)
+        {
+            return this.entityData.get(DATA_CABIN_PROGRESS);
+        }
+        return Mth.lerp(Mth.clamp(partialTick, 0.0F, 1.0F),
+                this.clientPreviousCabinProgress,
+                this.clientCurrentCabinProgress);
+    }
+
     public boolean isHatchOpen()
     {
         return this.getCabinStage() == CABIN_OPEN && !this.isVehicle();
@@ -538,14 +687,16 @@ public final class EntryPlugCarrierEntity extends PathfinderMob
 
     public void beginCabinPreparation()
     {
-        if (this.isVehicle() && this.getCabinStage() <= CABIN_SEALED_DARK)
+        if (this.isVehicle())
         {
             /*
              * PREPARE may be pressed immediately after boarding, while the two
              * pressure-door leaves are still travelling.  Keep the capsule
-             * optically black until the hatch is physically shut; the
-             * logistics director starts LCL only after the zero-travel
-             * interlock is true.
+             * optically offline until the hatch is physically shut.  A plug
+             * returned through RECOVER legitimately begins at
+             * CABIN_RECOVERED_IDLE; PARKED + occupied is the higher-level
+             * authority to restart the sequence, so reset every stale visual
+             * stage here instead of silently ignoring the next PREPARE.
              */
             this.entityData.set(DATA_CABIN_STAGE, CABIN_SEALED_DARK);
             this.entityData.set(DATA_CABIN_PROGRESS, 0);
@@ -645,6 +796,18 @@ public final class EntryPlugCarrierEntity extends PathfinderMob
         // slim insertion collision body.  This only extends selection; the
         // server still validates hatch state, range and line of sight.
         return 3.5F;
+    }
+
+    @Override
+    public boolean isPickable()
+    {
+        return this.entityData.get(DATA_SHELL_VISIBLE);
+    }
+
+    @Override
+    public boolean canBeCollidedWith()
+    {
+        return this.entityData.get(DATA_SHELL_VISIBLE);
     }
 
     /**
@@ -798,6 +961,19 @@ public final class EntryPlugCarrierEntity extends PathfinderMob
             // EVA. During crane motion the capsule frame still owns yaw/pitch.
             return;
         }
+        if (passenger instanceof Player)
+        {
+            /*
+             * Never fight a real pilot's mouse at 20 Hz.  The former code
+             * rewrote yaw and pitch from the plug frame every server tick;
+             * client mouse-look then moved between those packets and snapped
+             * back on the next one.  From first person that made both the plug
+             * and every fixed cage prop appear to jitter or flicker whenever
+             * the player looked around.  The capsule still owns the passenger
+             * position, while a human remains free to look around the cabin.
+             */
+            return;
+        }
         Vec3 view = this.hasCanonicalPose()
                 ? this.getCanonicalTransform().transformVector(
                         EntryPlugKinematics.PILOT_VIEW_FORWARD_P)
@@ -832,20 +1008,163 @@ public final class EntryPlugCarrierEntity extends PathfinderMob
     public Vec3 getDismountLocationForPassenger(
             net.minecraft.world.entity.LivingEntity passenger)
     {
+        /*
+         * At the wet cage the reviewed boarding endpoint is authoritative.
+         * Searching down from the capsule first used to find incidental solid
+         * faces as much as twenty blocks below the bridge, then drop the pilot
+         * into the surrounding LCL.  Prefer the actual bridge/service landing
+         * while the capsule is docked.
+         */
+        Vec3 dockExit = this.findDockBoardingDismount(passenger, 3);
+        if (dockExit != null)
+        {
+            return dockExit;
+        }
+
+        Vec3 preferred;
         if (!this.hasCanonicalPose())
         {
             float radians = (float) Math.toRadians(this.getYRot());
-            return this.position().add(Math.cos(radians) * 2.0D,
+            preferred = this.position().add(Math.cos(radians) * 2.0D,
                     -2.0D, Math.sin(radians) * 2.0D);
+            Vec3 safe = this.findDryDismount(passenger, preferred);
+            if (safe != null)
+            {
+                return safe;
+            }
+            Vec3 boarding = this.formalDockBoardingAnchor();
+            return boarding != null ? boarding : passenger.position();
         }
         Vec3 left = this.transformPlugMarker(
                 EntryPlugKinematics.PILOT_DISMOUNT_LEFT_P);
         Vec3 right = this.transformPlugMarker(
                 EntryPlugKinematics.PILOT_DISMOUNT_RIGHT_P);
-        return this.level().noCollision(passenger,
-                passenger.getBoundingBox().move(
-                        left.subtract(passenger.position())))
-                ? left : right;
+        Vec3 safeLeft = this.findDryDismount(passenger, left);
+        if (safeLeft != null)
+        {
+            return safeLeft;
+        }
+        Vec3 safeRight = this.findDryDismount(passenger, right);
+        if (safeRight != null)
+        {
+            return safeRight;
+        }
+        if (this.getInsertionStage() == STAGE_FIELD_LANDED)
+        {
+            // A field-ejected capsule has no relationship to the wet-cage
+            // boarding bridge.  The former generic fallback used that bridge
+            // and teleported a surviving pilot hundreds of blocks back into
+            // the hangar. Search only around the landed capsule; if damaged
+            // terrain offers no proven standing cell, remain beside it under
+            // the slow-falling protection granted by removePassenger().
+            Vec3 local = this.findDryDismount(passenger,
+                    this.position(), 12);
+            return local != null ? local
+                    : this.position().add(0.0D, 0.75D, 0.0D);
+        }
+        Vec3 safeBoarding = this.findDockBoardingDismount(passenger, 12);
+        if (safeBoarding != null)
+        {
+            return safeBoarding;
+        }
+        // A docked capsule is suspended over LCL, so the passenger's current
+        // vehicle-space coordinate is never a safe last resort.  Fall back to
+        // the reviewed bridge endpoint even if damaged scenery prevented the
+        // collision scan from proving a nearby standing cell.
+        Vec3 boarding = this.formalDockBoardingAnchor();
+        return boarding != null ? boarding : passenger.position();
+    }
+
+    @Nullable
+    private Vec3 findDockBoardingDismount(LivingEntity passenger,
+                                          int horizontalRadius)
+    {
+        int stage = this.getInsertionStage();
+        if (!(this.level() instanceof ServerLevel server)
+                || this.isPassenger()
+                || (stage != STAGE_SUSPENDED && stage != STAGE_OCCUPIED
+                    && stage != STAGE_ABORT_DOCKED))
+        {
+            return null;
+        }
+        Vec3 boarding = this.formalDockBoardingAnchor();
+        if (boarding == null)
+        {
+            return null;
+        }
+        return this.findDryDismount(passenger,
+                boarding, horizontalRadius);
+    }
+
+    @Nullable
+    private Vec3 formalDockBoardingAnchor()
+    {
+        if (!(this.level() instanceof ServerLevel server))
+        {
+            return null;
+        }
+        int variant = this.getAssignedVariant();
+        BlockPos boarding = FacilityV2EvaRuntime.ready(server, variant)
+                ? FacilityV2EvaRuntime.boardingPosition(server, variant)
+                : EvaHangarBuilder.boardingPosition(
+                        IntegratedNervMapBuilder.GEOFRONT_ORIGIN, variant);
+        return Vec3.atBottomCenterOf(boarding);
+    }
+
+    /** Finds a real catwalk floor and never ejects a pilot into wet-cage LCL. */
+    @Nullable
+    private Vec3 findDryDismount(LivingEntity passenger, Vec3 anchor)
+    {
+        return this.findDryDismount(passenger, anchor, 12);
+    }
+
+    @Nullable
+    private Vec3 findDryDismount(LivingEntity passenger, Vec3 anchor,
+                                 int horizontalRadius)
+    {
+        BlockPos centre = BlockPos.containing(anchor);
+        for (int radius = 0; radius <= horizontalRadius; radius++)
+        {
+            for (int dy : SAFE_DISMOUNT_VERTICAL_OFFSETS)
+            {
+                for (int dx = -radius; dx <= radius; dx++)
+                {
+                    for (int dz = -radius; dz <= radius; dz++)
+                    {
+                        if (radius > 0 && Math.max(Math.abs(dx), Math.abs(dz))
+                                != radius)
+                        {
+                            continue;
+                        }
+                        BlockPos floor = centre.offset(dx, dy - 1, dz);
+                        BlockPos feet = floor.above();
+                        BlockPos head = feet.above();
+                        if (!this.level().getBlockState(floor)
+                                .isFaceSturdy(this.level(), floor, Direction.UP)
+                                || !this.level().getFluidState(feet).isEmpty()
+                                || !this.level().getFluidState(head).isEmpty()
+                                || !this.level().getBlockState(feet)
+                                        .getCollisionShape(this.level(), feet)
+                                        .isEmpty()
+                                || !this.level().getBlockState(head)
+                                        .getCollisionShape(this.level(), head)
+                                        .isEmpty())
+                        {
+                            continue;
+                        }
+                        Vec3 candidate = new Vec3(feet.getX() + 0.5D,
+                                feet.getY(), feet.getZ() + 0.5D);
+                        AABB moved = passenger.getBoundingBox().move(
+                                candidate.subtract(passenger.position()));
+                        if (this.level().noCollision(passenger, moved))
+                        {
+                            return candidate;
+                        }
+                    }
+                }
+            }
+        }
+        return null;
     }
 
     @Override
@@ -856,6 +1175,11 @@ public final class EntryPlugCarrierEntity extends PathfinderMob
         this.setNoGravity(true);
         this.setDeltaMovement(Vec3.ZERO);
         this.fallDistance = 0.0F;
+        if (!this.level().isClientSide
+                && this.entityData.get(DATA_SHELL_VISIBLE))
+        {
+            this.keepPlayersOutsideShell();
+        }
         for (Entity passenger : this.getPassengers())
         {
             this.positionRider(passenger, Entity::setPos);
@@ -869,7 +1193,6 @@ public final class EntryPlugCarrierEntity extends PathfinderMob
                 {
                     this.hostEvaUuid = host.getUUID();
                     this.entityData.set(DATA_HOST_EVA_ID, host.getId());
-                    this.entityData.set(DATA_SHELL_VISIBLE, false);
                     RigidTransform wanted =
                             host.getEntryPlugSocketTransform()
                                     .compose(this.lockedSocketToPlug);
@@ -884,6 +1207,10 @@ public final class EntryPlugCarrierEntity extends PathfinderMob
                     if (this.getVehicle() != host && !this.startRiding(host, true))
                     {
                         host.markEntryPlugLinkFault(this);
+                    }
+                    else
+                    {
+                        this.entityData.set(DATA_SHELL_VISIBLE, false);
                     }
                 }
             }
@@ -921,6 +1248,130 @@ public final class EntryPlugCarrierEntity extends PathfinderMob
             }
             EntryPlugDirector.keepPassengerState(this);
         }
+    }
+
+    /**
+     * The crane must remain no-physics so blocks cannot derail its scripted
+     * path, but that normally also lets a standing player enter the rendered
+     * capsule and make it disappear at the near plane.  Resolve only foreign
+     * players against the authored oriented body box; the seated pilot is an
+     * intentional occupant and is excluded.
+     */
+    private void keepPlayersOutsideShell()
+    {
+        if (!this.hasCanonicalPose())
+        {
+            return;
+        }
+        RigidTransform pose = this.getCanonicalTransform();
+        AABB envelope = EntryPlugKinematics.worldBounds(pose,
+                EntryPlugKinematics.BODY_OBB_CENTRE_P,
+                EntryPlugKinematics.BODY_OBB_HALF_EXTENTS)
+                .inflate(0.45D);
+        RigidTransform inverse = pose.inverse();
+        Vec3 axisX = pose.transformVector(new Vec3(1.0D, 0.0D, 0.0D));
+        Vec3 axisY = pose.transformVector(new Vec3(0.0D, 1.0D, 0.0D));
+        Vec3 axisZ = pose.transformVector(new Vec3(0.0D, 0.0D, 1.0D));
+        for (Player player : this.level().getEntitiesOfClass(Player.class,
+                envelope, candidate -> !candidate.isSpectator()
+                        && !this.hasPassenger(candidate)))
+        {
+            AABB playerBox = player.getBoundingBox();
+            Vec3 centre = playerBox.getCenter();
+            Vec3 local = inverse.transformPoint(centre)
+                    .subtract(EntryPlugKinematics.BODY_OBB_CENTRE_P);
+            double halfX = playerBox.getXsize() * 0.5D;
+            double halfY = playerBox.getYsize() * 0.5D;
+            double halfZ = playerBox.getZsize() * 0.5D;
+            double projectedX = projectedHalfExtent(
+                    axisX, halfX, halfY, halfZ);
+            double projectedY = projectedHalfExtent(
+                    axisY, halfX, halfY, halfZ);
+            double projectedZ = projectedHalfExtent(
+                    axisZ, halfX, halfY, halfZ);
+            double penetrationX =
+                    EntryPlugKinematics.BODY_OBB_HALF_EXTENTS.x
+                            + projectedX - Math.abs(local.x);
+            double penetrationY =
+                    EntryPlugKinematics.BODY_OBB_HALF_EXTENTS.y
+                            + projectedY - Math.abs(local.y);
+            double penetrationZ =
+                    EntryPlugKinematics.BODY_OBB_HALF_EXTENTS.z
+                            + projectedZ - Math.abs(local.z);
+            if (penetrationX <= 0.0D || penetrationY <= 0.0D
+                    || penetrationZ <= 0.0D)
+            {
+                continue;
+            }
+
+            Vec3 escapeAxis = axisX;
+            double localCoordinate = local.x;
+            double penetration = penetrationX;
+            if (penetrationY < penetration)
+            {
+                escapeAxis = axisY;
+                localCoordinate = local.y;
+                penetration = penetrationY;
+            }
+            if (penetrationZ < penetration)
+            {
+                escapeAxis = axisZ;
+                localCoordinate = local.z;
+                penetration = penetrationZ;
+            }
+            double side = localCoordinate < 0.0D ? -1.0D : 1.0D;
+            Vec3 correction = escapeAxis.scale(side * (penetration + 0.04D));
+            Vec3 corrected = player.position().add(correction);
+            if (player instanceof ServerPlayer serverPlayer)
+            {
+                /*
+                 * setPos alone is not an authoritative client correction for
+                 * a remote player.  The client can consequently spend several
+                 * frames inside the no-physics shell, clip its near plane and
+                 * make the capsule appear to vanish.  Publish the exact OBB
+                 * escape while preserving the observer's view direction.
+                 */
+                serverPlayer.connection.teleport(
+                        corrected.x, corrected.y, corrected.z,
+                        serverPlayer.getYRot(), serverPlayer.getXRot());
+            }
+            else
+            {
+                player.setPos(corrected);
+            }
+            player.hasImpulse = true;
+            player.hurtMarked = true;
+            Vec3 velocity = player.getDeltaMovement();
+            double inwardVelocity = velocity.dot(escapeAxis) * side;
+            if (inwardVelocity < 0.0D)
+            {
+                player.setDeltaMovement(velocity.subtract(
+                        escapeAxis.scale(inwardVelocity * side)));
+            }
+        }
+    }
+
+    /** Plays the cockpit sequence backwards while the capsule is extracted. */
+    public void setCabinRecoveryProgress(int progress)
+    {
+        int safe = Math.max(0, Math.min(CABIN_TRANSFER_PERCENT, progress));
+        if (safe <= 0)
+        {
+            this.entityData.set(DATA_CABIN_PROGRESS, 0);
+            this.entityData.set(DATA_CABIN_STAGE, CABIN_RECOVERED_IDLE);
+            return;
+        }
+        this.setCabinSequenceProgress(safe);
+    }
+
+    private static double projectedHalfExtent(Vec3 axis,
+                                               double halfX,
+                                               double halfY,
+                                               double halfZ)
+    {
+        return Math.abs(axis.x) * halfX
+                + Math.abs(axis.y) * halfY
+                + Math.abs(axis.z) * halfZ;
     }
 
     /** Holds the physical door open while any foreign collision occupies the
@@ -1017,7 +1468,8 @@ public final class EntryPlugCarrierEntity extends PathfinderMob
         if (tag.contains("CabinStage"))
         {
             this.entityData.set(DATA_CABIN_STAGE, Math.max(CABIN_OPEN,
-                    Math.min(CABIN_ONLINE, tag.getInt("CabinStage"))));
+                    Math.min(CABIN_RECOVERED_IDLE,
+                            tag.getInt("CabinStage"))));
             this.entityData.set(DATA_CABIN_PROGRESS, Math.max(0,
                     Math.min(CABIN_TRANSFER_PERCENT,
                             tag.getInt("CabinProgress"))));
@@ -1124,13 +1576,40 @@ public final class EntryPlugCarrierEntity extends PathfinderMob
             this.clientPreviousRotation = rotation;
             this.clientCurrentRotation = rotation;
             this.clientRotationUpdateTick = Integer.MIN_VALUE;
-            this.xo = this.getX();
-            this.yo = this.getY();
-            this.zo = this.getZ();
+            // Stage changes are labels, not translation teleports. Preserve
+            // xo/yo/zo so shell, crane and camera finish the same blend.
+            return;
+        }
+        if (DATA_CABIN_PROGRESS.equals(key))
+        {
+            if (this.level().isClientSide)
+            {
+                this.clientPreviousCabinProgress =
+                        this.clientCurrentCabinProgress;
+                this.clientCurrentCabinProgress =
+                        this.entityData.get(DATA_CABIN_PROGRESS);
+                this.clientCabinProgressUpdateTick = this.tickCount;
+            }
             return;
         }
         if (DATA_POSE_SEQUENCE.equals(key))
         {
+            if (this.level().isClientSide)
+            {
+                double oldX = this.getX();
+                double oldY = this.getY();
+                double oldZ = this.getZ();
+                RigidTransform pose = this.getCanonicalTransform();
+                this.setPos(pose.translation());
+                this.xo = oldX;
+                this.yo = oldY;
+                this.zo = oldZ;
+                this.lerpSteps = 0;
+                for (Entity passenger : this.getPassengers())
+                {
+                    this.positionRider(passenger, Entity::setPos);
+                }
+            }
             this.clientPreviousRotation = this.clientCurrentRotation;
             RigidTransform current = this.getCanonicalTransform();
             this.clientCurrentRotation = new RigidTransform(Vec3.ZERO,

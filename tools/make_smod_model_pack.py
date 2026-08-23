@@ -27,10 +27,19 @@ BONE_MAP = {
     "foot_l": "bone5", "leg_r": "Rightleg", "shin_r": "bone16",
     "foot_r": "bone17", "head": "Head",
     "hand_l": "LeftHand", "hand_r": "RightHand",
-    "knife": "knife", "lance": "lance",
+    "knife": "knife", "cannon": "cannon", "lance": "lance",
+    "n2": "n2",
     "entry_plug": "entry_plug",
     "plug_hatch_l": "plug_hatch_l", "plug_hatch_r": "plug_hatch_r",
 }
+
+# The active Tigerar1 bodies, installed later in start_test.bat, carry the
+# articulated MCP/PIP/DIP finger rig.  SmOd is only the private fallback/base
+# layer and has solid hand cubes with no matching finger bones.  Silently
+# mapping thirty independent channels onto LeftHand/RightHand would overwrite
+# poses nondeterministically, so omit only this explicitly namespaced optional
+# rig while keeping every other unknown canonical bone fail-closed.
+OPTIONAL_TIGER_BONE_PREFIXES = ("finger_",)
 
 
 def read_suffix(archive, suffix):
@@ -136,6 +145,7 @@ def weapon_bones(bones, eud_lance=None):
              "rotation": [0, 0, 7], "pivot": [px, socket_y - 222, pz]},
             {"origin": [px - 9, socket_y - 6, pz - 9], "size": [18, 18, 18], "uv": [472, 220]},
         ]},
+        {"name": "n2", "parent": "RightHand", "pivot": [px, hand_y, pz]},
         {"name": "entry_plug", "parent": "Upperbody", "pivot": [ux, uy, uz + 12], "cubes": [
             {"origin": [ux - 6, uy - 28, uz + 10], "size": [12, 58, 12], "uv": [400, 80]},
             {"origin": [ux - 8, uy + 26, uz + 8], "size": [16, 10, 16], "uv": [472, 80]},
@@ -178,14 +188,20 @@ def scale_geometry(data, eud_lance=None, unit=1):
 
 
 def remap_animation(animation):
-    unknown = set(animation.get("bones", {})) - set(BONE_MAP)
+    source_bones = animation.get("bones", {})
+    optional = {
+        name for name in source_bones
+        if name.startswith(OPTIONAL_TIGER_BONE_PREFIXES)
+    }
+    unknown = set(source_bones) - set(BONE_MAP) - optional
     if unknown:
         raise RuntimeError(
             "canonical animation uses unmapped SmOd bones: "
             + ", ".join(sorted(unknown)))
     result = copy.deepcopy(animation)
     result["bones"] = {
-        BONE_MAP[name]: channels for name, channels in animation.get("bones", {}).items()
+        BONE_MAP[name]: channels for name, channels in source_bones.items()
+        if name in BONE_MAP
     }
     return result
 

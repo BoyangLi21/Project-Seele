@@ -23,8 +23,11 @@ public class ModCreativeTabs
                         output.accept(ModItems.RETRACTABLE_BUILDING_CORE.get());
                         output.accept(ModItems.UMBILICAL_PYLON.get());
                         output.accept(ModItems.CLEAR_GLASS.get());
+                        output.accept(ModItems.ONE_WAY_GLASS.get());
+                        output.accept(ModItems.TERMINAL_DOGMA_ACCESS_CARD.get());
+                        output.accept(ModItems.NERV_EMPLOYEE_CARD.get());
+                        output.accept(ModItems.BETA_CAPSULE.get());
                         output.accept(ModItems.COMMAND_SEAT_BACK.get());
-                        output.accept(ModItems.EVA_ARMAMENT_RACK.get());
                         output.accept(ModItems.EVA_PROGRESSIVE_KNIFE.get());
                         output.accept(ModItems.EVA_PALLET_RIFLE.get());
                         output.accept(ModItems.EVA_POSITRON_CANNON.get());

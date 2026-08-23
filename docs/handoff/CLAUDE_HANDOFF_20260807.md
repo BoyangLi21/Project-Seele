@@ -236,8 +236,8 @@
   `FacilityV2EvaRuntime.java`
 - Tokyo-3 升降：`Tokyo3RetractionDirector.java`、
   `Tokyo3RetractionSavedData.java`、`ThirdTokyoSurfaceBuilder.java`
-- EVA 姿态/武器：`EvaUnit01Renderer.java`、`EvaWeaponRenderer.java`、
-  `eva_unit01.animation.json`、`solve_eva_grip_pose.py`
+- EVA 姿态/武器：`EvaUnit01Renderer.java`、`eva_unit01.animation.json`、
+  `solve_eva_grip_pose.py`
 - 本地事实日志：`.Codex/ACTIVE_WORKLOG.md`（gitignored，不发布）。
 
 ## 11. 给下一位执行者的最后约束

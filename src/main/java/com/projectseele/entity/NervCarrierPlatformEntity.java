@@ -1,8 +1,5 @@
 package com.projectseele.entity;
 
-import java.util.Optional;
-import java.util.UUID;
-
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
@@ -50,17 +47,22 @@ public final class NervCarrierPlatformEntity extends Entity
     private static final EntityDataAccessor<Integer> DATA_LIFT_EXIT =
             SynchedEntityData.defineId(NervCarrierPlatformEntity.class,
                     EntityDataSerializers.INT);
-    private static final EntityDataAccessor<Boolean> DATA_ARMAMENT_LIFT =
+    private static final EntityDataAccessor<Integer> DATA_RESTRAINT_PROGRESS =
+            SynchedEntityData.defineId(NervCarrierPlatformEntity.class,
+                    EntityDataSerializers.INT);
+    private static final EntityDataAccessor<Boolean> DATA_RESTRAINT_GANTRY =
             SynchedEntityData.defineId(NervCarrierPlatformEntity.class,
                     EntityDataSerializers.BOOLEAN);
-    private static final EntityDataAccessor<String> DATA_ARMAMENT_SYSTEM_ID =
+    private static final EntityDataAccessor<Boolean> DATA_PLUG_CRANE =
             SynchedEntityData.defineId(NervCarrierPlatformEntity.class,
-                    EntityDataSerializers.STRING);
-    private static final EntityDataAccessor<Optional<UUID>>
-            DATA_ARMAMENT_PAYLOAD_ID = SynchedEntityData.defineId(
-                    NervCarrierPlatformEntity.class,
-                    EntityDataSerializers.OPTIONAL_UUID);
-    private static final int CONTROL_TIMEOUT_TICKS = 10;
+                    EntityDataSerializers.BOOLEAN);
+    private static final EntityDataAccessor<Integer> DATA_CRANE_BOTTOM_OFFSET =
+            SynchedEntityData.defineId(NervCarrierPlatformEntity.class,
+                    EntityDataSerializers.INT);
+    private static final EntityDataAccessor<Integer> DATA_LCL_LEVEL_MILLI =
+            SynchedEntityData.defineId(NervCarrierPlatformEntity.class,
+                    EntityDataSerializers.INT);
+    private static final int CONTROL_TIMEOUT_TICKS = 40;
     public static final int LIFT_IDLE_OPEN = 0;
     public static final int LIFT_DOOR_CLOSING = 1;
     public static final int LIFT_STARTING = 2;
@@ -94,6 +96,12 @@ public final class NervCarrierPlatformEntity extends Entity
     private double persistentLiftLowerY = Double.NaN;
     private double persistentLiftUpperY = Double.NaN;
     private long lastPersistentLiftControlTick = Long.MIN_VALUE;
+    private float clientCranePreviousOffset = -2.0F;
+    private float clientCraneCurrentOffset = -2.0F;
+    private boolean clientCraneOffsetInitialized;
+    private float clientLclPreviousLevel;
+    private float clientLclCurrentLevel;
+    private boolean clientLclLevelInitialized;
 
     public NervCarrierPlatformEntity(
             EntityType<? extends NervCarrierPlatformEntity> type, Level level)
@@ -114,9 +122,11 @@ public final class NervCarrierPlatformEntity extends Entity
         this.entityData.define(DATA_LIFT_ID, "");
         this.entityData.define(DATA_LIFT_EXIT,
                 Direction.NORTH.get2DDataValue());
-        this.entityData.define(DATA_ARMAMENT_LIFT, false);
-        this.entityData.define(DATA_ARMAMENT_SYSTEM_ID, "");
-        this.entityData.define(DATA_ARMAMENT_PAYLOAD_ID, Optional.empty());
+        this.entityData.define(DATA_RESTRAINT_PROGRESS, 0);
+        this.entityData.define(DATA_RESTRAINT_GANTRY, false);
+        this.entityData.define(DATA_PLUG_CRANE, false);
+        this.entityData.define(DATA_CRANE_BOTTOM_OFFSET, -2000);
+        this.entityData.define(DATA_LCL_LEVEL_MILLI, 0);
     }
 
     public int getUnitVariant()
@@ -126,8 +136,114 @@ public final class NervCarrierPlatformEntity extends Entity
 
     public void assignVariant(int variant)
     {
-        this.entityData.set(DATA_VARIANT, Math.max(EvaUnit01Entity.UNIT_00,
-                Math.min(EvaUnit01Entity.UNIT_02, variant)));
+        int safe = Math.max(EvaUnit01Entity.UNIT_00,
+                Math.min(EvaUnit01Entity.UNIT_02, variant));
+        if (this.entityData.get(DATA_VARIANT) != safe)
+        {
+            this.entityData.set(DATA_VARIANT, safe);
+        }
+    }
+
+    /**
+     * Visual extension of the wet-cage restraint towers, encoded as 0..1000
+     * so every client renders the same hydraulic travel without trusting its
+     * frame rate. The logistics lock remains the physical authority.
+     */
+    public void setRestraintProgress(float progress)
+    {
+        int quantized = Math.round(Math.max(0.0F,
+                Math.min(1.0F, progress)) * 1000.0F);
+        if (this.entityData.get(DATA_RESTRAINT_PROGRESS) != quantized)
+        {
+            this.entityData.set(DATA_RESTRAINT_PROGRESS, quantized);
+        }
+    }
+
+    public float getRestraintProgress()
+    {
+        return this.entityData.get(DATA_RESTRAINT_PROGRESS) / 1000.0F;
+    }
+
+    /**
+     * Marks this visual as the fixed wet-cage restraint gantry rather than the
+     * moving transport deck.  Progress zero therefore means "jaws fully
+     * retracted", not "turn into a carrier and leave the hangar".
+     */
+    public void configureRestraintGantry()
+    {
+        this.noCulling = true;
+        if (this.entityData.get(DATA_PLUG_CRANE))
+        {
+            this.entityData.set(DATA_PLUG_CRANE, false);
+        }
+        if (!this.entityData.get(DATA_RESTRAINT_GANTRY))
+        {
+            this.entityData.set(DATA_RESTRAINT_GANTRY, true);
+        }
+        if (this.entityData.get(DATA_PERSONNEL_LIFT))
+        {
+            this.entityData.set(DATA_PERSONNEL_LIFT, false);
+        }
+        if (this.entityData.get(DATA_PERSISTENT_LIFT))
+        {
+            this.entityData.set(DATA_PERSISTENT_LIFT, false);
+        }
+        this.ticksWithoutControl = 0;
+    }
+
+    public boolean isRestraintGantry()
+    {
+        return this.entityData.get(DATA_RESTRAINT_GANTRY);
+    }
+
+    /** Non-saving visual for the moving entry-plug bridge crane. */
+    public void configurePlugCrane(int variant, double bottomOffset)
+    {
+        this.noCulling = true;
+        this.assignVariant(variant);
+        this.entityData.set(DATA_PLUG_CRANE, true);
+        this.entityData.set(DATA_RESTRAINT_GANTRY, false);
+        this.entityData.set(DATA_PERSONNEL_LIFT, false);
+        this.entityData.set(DATA_PERSISTENT_LIFT, false);
+        int quantized = (int) Math.round(
+                Math.min(-0.001D, bottomOffset) * 1000.0D);
+        int current = this.entityData.get(DATA_CRANE_BOTTOM_OFFSET);
+        if (current != quantized)
+        {
+            this.entityData.set(DATA_CRANE_BOTTOM_OFFSET, quantized);
+        }
+        this.ticksWithoutControl = 0;
+    }
+
+    public boolean isPlugCrane()
+    {
+        return this.entityData.get(DATA_PLUG_CRANE);
+    }
+
+    public float getCraneBottomOffset(float partialTick)
+    {
+        return this.clientCranePreviousOffset
+                + (this.clientCraneCurrentOffset
+                - this.clientCranePreviousOffset)
+                * Math.max(0.0F, Math.min(1.0F, partialTick));
+    }
+
+    public void setLclVisualLevel(float layers)
+    {
+        int quantized = Math.round(Math.max(0.0F,
+                Math.min(44.0F, layers)) * 1000.0F);
+        if (this.entityData.get(DATA_LCL_LEVEL_MILLI) != quantized)
+        {
+            this.entityData.set(DATA_LCL_LEVEL_MILLI, quantized);
+        }
+    }
+
+    public float getLclVisualLevel(float partialTick)
+    {
+        float alpha = Math.max(0.0F, Math.min(1.0F, partialTick));
+        return this.clientLclPreviousLevel
+                + (this.clientLclCurrentLevel
+                - this.clientLclPreviousLevel) * alpha;
     }
 
     /**
@@ -137,6 +253,8 @@ public final class NervCarrierPlatformEntity extends Entity
      */
     public void configurePersonnelLift(int accent)
     {
+        this.entityData.set(DATA_PLUG_CRANE, false);
+        this.entityData.set(DATA_RESTRAINT_GANTRY, false);
         this.entityData.set(DATA_PERSONNEL_LIFT, true);
         this.entityData.set(DATA_LIFT_ACCENT, Math.max(0,
                 Math.min(4, accent)));
@@ -169,55 +287,6 @@ public final class NervCarrierPlatformEntity extends Entity
         this.persistentLiftStateRevision++;
         this.setLiftDoorOpen(true);
         this.ticksWithoutControl = 0;
-    }
-
-    /**
-     * Configures a saved payload-only lift. It deliberately does not enable
-     * personnel-lift state or its autonomous door/motion controller: one
-     * {@link EvaWeaponEntity} is the only legal passenger and the armament
-     * director owns every transform.
-     */
-    public void configureArmamentLift(String systemId, int variant)
-    {
-        this.configureArmamentLift(systemId, variant, null);
-    }
-
-    public void configureArmamentLift(String systemId, int variant,
-                                      UUID payloadId)
-    {
-        this.assignVariant(variant);
-        this.entityData.set(DATA_PERSONNEL_LIFT, false);
-        this.entityData.set(DATA_PERSISTENT_LIFT, false);
-        this.entityData.set(DATA_ARMAMENT_LIFT, true);
-        this.entityData.set(DATA_ARMAMENT_SYSTEM_ID,
-                systemId == null ? "" : systemId);
-        this.entityData.set(DATA_ARMAMENT_PAYLOAD_ID,
-                Optional.ofNullable(payloadId));
-        this.setLiftDoorOpen(false);
-        this.ticksWithoutControl = 0;
-    }
-
-    public boolean isArmamentLift()
-    {
-        return this.entityData.get(DATA_ARMAMENT_LIFT);
-    }
-
-    public String getArmamentSystemId()
-    {
-        return this.entityData.get(DATA_ARMAMENT_SYSTEM_ID);
-    }
-
-    public Optional<UUID> getArmamentPayloadId()
-    {
-        return this.entityData.get(DATA_ARMAMENT_PAYLOAD_ID);
-    }
-
-    public boolean isExpectedArmamentPayload(Entity entity)
-    {
-        return this.isArmamentLift()
-                && entity instanceof EvaWeaponEntity
-                && this.getArmamentPayloadId().filter(
-                        id -> id.equals(entity.getUUID())).isPresent();
     }
 
     public boolean isPersistentLift()
@@ -470,6 +539,29 @@ public final class NervCarrierPlatformEntity extends Entity
         this.hasImpulse = true;
     }
 
+    @Override
+    public void lerpTo(double x, double y, double z, float yRot, float xRot,
+                       int lerpSteps, boolean teleport)
+    {
+        // The plug and its crane publish one sample per server tick.  A
+        // two-tick crane interpolation trails the capsule by one whole sample;
+        // use the same one-tick render interval as EntryPlugCarrierEntity.
+        super.lerpTo(x, y, z, yRot, xRot, 1, teleport);
+    }
+
+    /** Keeps a fixed visual alive without publishing a teleport every tick. */
+    public void holdStatic(double x, double y, double z)
+    {
+        this.ticksWithoutControl = 0;
+        this.setDeltaMovement(Vec3.ZERO);
+        if (this.distanceToSqr(x, y, z) > 1.0E-8D)
+        {
+            this.setPos(x, y, z);
+            this.resetInterpolationFrame();
+            this.hasImpulse = true;
+        }
+    }
+
     /** Prevents one-frame interpolation from an obsolete pre-unload pose. */
     public void resetInterpolationFrame()
     {
@@ -484,11 +576,44 @@ public final class NervCarrierPlatformEntity extends Entity
     public void tick()
     {
         super.tick();
+        if (this.level().isClientSide && this.isPlugCrane())
+        {
+            float synced = this.entityData.get(DATA_CRANE_BOTTOM_OFFSET)
+                    / 1000.0F;
+            if (!this.clientCraneOffsetInitialized)
+            {
+                this.clientCranePreviousOffset = synced;
+                this.clientCraneCurrentOffset = synced;
+                this.clientCraneOffsetInitialized = true;
+            }
+            else
+            {
+                this.clientCranePreviousOffset =
+                        this.clientCraneCurrentOffset;
+                this.clientCraneCurrentOffset = synced;
+            }
+        }
+        if (this.level().isClientSide && this.isRestraintGantry())
+        {
+            float synced = this.entityData.get(DATA_LCL_LEVEL_MILLI)
+                    / 1000.0F;
+            if (!this.clientLclLevelInitialized)
+            {
+                this.clientLclPreviousLevel = synced;
+                this.clientLclCurrentLevel = synced;
+                this.clientLclLevelInitialized = true;
+            }
+            else
+            {
+                this.clientLclPreviousLevel = this.clientLclCurrentLevel;
+                this.clientLclCurrentLevel = synced;
+            }
+        }
         this.noPhysics = true;
         this.setNoGravity(true);
         this.setDeltaMovement(Vec3.ZERO);
         if (!this.level().isClientSide
-                && !this.isPersistentLift() && !this.isArmamentLift()
+                && !this.isPersistentLift()
                 && ++this.ticksWithoutControl > CONTROL_TIMEOUT_TICKS)
         {
             this.discard();
@@ -510,6 +635,10 @@ public final class NervCarrierPlatformEntity extends Entity
         {
             this.configurePersonnelLift(tag.getInt("LiftAccent"));
             this.setLiftDoorOpen(tag.getBoolean("LiftDoorOpen"));
+        }
+        if (tag.getBoolean("RestraintGantry"))
+        {
+            this.configureRestraintGantry();
         }
         if (tag.getBoolean("PersistentLift"))
         {
@@ -541,13 +670,6 @@ public final class NervCarrierPlatformEntity extends Entity
                 this.setLiftDoorOpen(false);
             }
         }
-        if (tag.getBoolean("ArmamentLift"))
-        {
-            this.configureArmamentLift(tag.getString("ArmamentSystemId"),
-                    tag.getInt("EvaVariant"),
-                    tag.hasUUID("ArmamentPayloadId")
-                            ? tag.getUUID("ArmamentPayloadId") : null);
-        }
     }
 
     @Override
@@ -555,6 +677,7 @@ public final class NervCarrierPlatformEntity extends Entity
     {
         tag.putInt("EvaVariant", this.getUnitVariant());
         tag.putBoolean("PersonnelLift", this.isPersonnelLift());
+        tag.putBoolean("RestraintGantry", this.isRestraintGantry());
         tag.putInt("LiftAccent", this.getLiftAccent());
         tag.putBoolean("LiftDoorOpen", this.isLiftDoorOpen());
         tag.putBoolean("PersistentLift", this.isPersistentLift());
@@ -574,10 +697,16 @@ public final class NervCarrierPlatformEntity extends Entity
         tag.putInt("LiftStateRevision", this.persistentLiftStateRevision);
         tag.putLong("LiftLastMotionEpoch",
                 this.persistentLiftLastMotionEpoch);
-        tag.putBoolean("ArmamentLift", this.isArmamentLift());
-        tag.putString("ArmamentSystemId", this.getArmamentSystemId());
-        this.getArmamentPayloadId().ifPresent(id ->
-                tag.putUUID("ArmamentPayloadId", id));
+    }
+
+    @Override
+    public boolean shouldBeSaved()
+    {
+        // Lifts are authored world infrastructure. Carrier decks and wet-cage
+        // gantries are reconstructed by their runtime owners after loading;
+        // serialising them used to leave an unowned copy behind and the next
+        // runtime copy then z-fought with it every frame.
+        return this.isPersistentLift();
     }
 
     @Override
@@ -589,7 +718,7 @@ public final class NervCarrierPlatformEntity extends Entity
     @Override
     public boolean isPickable()
     {
-        return this.isPersistentLift() || this.isArmamentLift();
+        return this.isPersistentLift();
     }
 
     @Override
@@ -601,7 +730,7 @@ public final class NervCarrierPlatformEntity extends Entity
     @Override
     public InteractionResult interact(Player player, InteractionHand hand)
     {
-        if (this.isArmamentLift() || !this.isPersistentLift()
+        if (!this.isPersistentLift()
                 || !this.isPersistentLiftIdle()
                 || !this.isLiftDoorOpen())
         {
@@ -655,11 +784,6 @@ public final class NervCarrierPlatformEntity extends Entity
     @Override
     protected boolean canAddPassenger(Entity passenger)
     {
-        if (this.isArmamentLift())
-        {
-            return this.isExpectedArmamentPayload(passenger)
-                    && this.getPassengers().isEmpty();
-        }
         return this.isPersistentLift()
                 && passenger instanceof Player
                 && this.getPassengers().size() < MAX_LIFT_PASSENGERS;
@@ -670,19 +794,6 @@ public final class NervCarrierPlatformEntity extends Entity
     {
         if (!this.hasPassenger(passenger))
         {
-            return;
-        }
-        if (this.isArmamentLift())
-        {
-            if (!this.isExpectedArmamentPayload(passenger))
-            {
-                passenger.stopRiding();
-                return;
-            }
-            move.accept(passenger, this.getX(), this.getY() + 0.34D,
-                    this.getZ());
-            passenger.setYRot(this.getYRot());
-            passenger.setXRot(0.0F);
             return;
         }
         int index = Math.max(0, this.getPassengers().indexOf(passenger));

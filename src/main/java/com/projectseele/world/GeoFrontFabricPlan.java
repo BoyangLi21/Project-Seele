@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+import com.projectseele.registry.ModBlocks;
 import com.projectseele.registry.ModFluids;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.Blocks;
@@ -1670,15 +1671,7 @@ public final class GeoFrontFabricPlan
 
     private static BlockState skyweaveState()
     {
-        /*
-         * Ars Nouveau's sky_block owns a ticking block entity. A shell at
-         * GeoFront scale creates millions of them and makes an otherwise idle
-         * world unplayable. The static rescue shell preserves the authored
-         * boundary without any per-block runtime cost; a future client-side
-         * sky renderer can provide the visual illusion once the map route is
-         * accepted.
-         */
-        return Blocks.CYAN_TERRACOTTA.defaultBlockState();
+        return ModBlocks.GEOFRONT_SKYWEAVE.get().defaultBlockState();
     }
 
     private static FabricBlock relative(BlockPos centre, int x, int y,

@@ -12,7 +12,7 @@ import net.minecraftforge.network.simple.SimpleChannel;
  */
 public final class SeeleNetwork
 {
-    private static final String PROTOCOL_VERSION = "16";
+    private static final String PROTOCOL_VERSION = "22";
 
     public static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(
             new ResourceLocation(ProjectSeele.MODID, "main"),
@@ -132,6 +132,30 @@ public final class SeeleNetwork
                 .encoder(ClientboundPilotStatusPacket::encode)
                 .decoder(ClientboundPilotStatusPacket::new)
                 .consumerMainThread(ClientboundPilotStatusPacket::handle)
+                .add();
+        CHANNEL.messageBuilder(ServerboundCommandSeatPosePacket.class, id++,
+                        NetworkDirection.PLAY_TO_SERVER)
+                .encoder(ServerboundCommandSeatPosePacket::encode)
+                .decoder(ServerboundCommandSeatPosePacket::new)
+                .consumerMainThread(ServerboundCommandSeatPosePacket::handle)
+                .add();
+        CHANNEL.messageBuilder(ClientboundCommandSeatPosePacket.class, id++,
+                        NetworkDirection.PLAY_TO_CLIENT)
+                .encoder(ClientboundCommandSeatPosePacket::encode)
+                .decoder(ClientboundCommandSeatPosePacket::new)
+                .consumerMainThread(ClientboundCommandSeatPosePacket::handle)
+                .add();
+        CHANNEL.messageBuilder(ServerboundUltramanTogglePacket.class, id++,
+                        NetworkDirection.PLAY_TO_SERVER)
+                .encoder(ServerboundUltramanTogglePacket::encode)
+                .decoder(ServerboundUltramanTogglePacket::new)
+                .consumerMainThread(ServerboundUltramanTogglePacket::handle)
+                .add();
+        CHANNEL.messageBuilder(ClientboundUltramanStatePacket.class, id++,
+                        NetworkDirection.PLAY_TO_CLIENT)
+                .encoder(ClientboundUltramanStatePacket::encode)
+                .decoder(ClientboundUltramanStatePacket::new)
+                .consumerMainThread(ClientboundUltramanStatePacket::handle)
                 .add();
     }
 }

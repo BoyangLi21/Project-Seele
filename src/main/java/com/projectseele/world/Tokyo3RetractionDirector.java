@@ -156,7 +156,8 @@ public final class Tokyo3RetractionDirector
         ThirdTokyoSurfaceBuilder.sweepLegacySurfaceCaps(level, origin,
                 current.depth());
         ThirdTokyoSurfaceBuilder.sweepStrayMasts(level, origin, current.depth());
-        int target = retract ? ThirdTokyoSurfaceBuilder.maximumRetractionDepth() : 0;
+        int target = retract
+                ? ThirdTokyoSurfaceBuilder.maximumRetractionDepth(origin) : 0;
         boolean layerInFlight = current.cursor() > 0
                 || current.voxelCursor() > 0;
         if (layerInFlight)
@@ -213,7 +214,7 @@ public final class Tokyo3RetractionDirector
     {
         if (!FacilityWorldPolicy.isS20Rebuild(level.getServer())
                 || !retainedOrigin.equals(
-                IntegratedNervMapBuilder.TOKYO3_ORIGIN))
+                IntegratedNervMapBuilder.tokyo3Origin(level)))
         {
             return;
         }
@@ -249,7 +250,8 @@ public final class Tokyo3RetractionDirector
                     "Tokyo-3 rapid block travel is inhibited by performance rescue mode.");
         }
         StoredDistrict current = ensure(level, origin);
-        int target = retract ? ThirdTokyoSurfaceBuilder.maximumRetractionDepth() : 0;
+        int target = retract
+                ? ThirdTokyoSurfaceBuilder.maximumRetractionDepth(origin) : 0;
         if (current.faulted())
         {
             acquireTravelTickets(level, origin);
@@ -321,7 +323,7 @@ public final class Tokyo3RetractionDirector
                     ? "DESCENDING" : "RISING";
         }
         return new Status(phase, district.depth(), district.targetDepth(),
-                ThirdTokyoSurfaceBuilder.maximumRetractionDepth());
+                ThirdTokyoSurfaceBuilder.maximumRetractionDepth(origin));
     }
 
     @SubscribeEvent

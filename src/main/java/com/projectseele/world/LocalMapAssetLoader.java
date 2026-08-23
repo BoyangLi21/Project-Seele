@@ -415,7 +415,8 @@ public final class LocalMapAssetLoader
         {
             SkyscraperPlacement placement = SKYSCRAPERS[index];
             Vec3i rotatedSize = template.getSize(placement.rotation());
-            int drop = skyscraperDrop(placement, rotatedSize, retractionDepth);
+            int drop = skyscraperDrop(placement, rotatedSize, retractionDepth,
+                    tokyo3Origin);
             BlockPos surfaceBase = tokyo3Origin.offset(placement.offset());
             BlockPos base = surfaceBase.below(drop);
             BlockPos travelMarker = skyscraperMarker(base, index);
@@ -519,8 +520,10 @@ public final class LocalMapAssetLoader
             return new SkyscraperTravelStep(false, true, voxelCursor, 0);
         }
         Vec3i rotatedSize = template.getSize(placement.rotation());
-        int oldDrop = skyscraperDrop(placement, rotatedSize, oldDepth);
-        int newDrop = skyscraperDrop(placement, rotatedSize, newDepth);
+        int oldDrop = skyscraperDrop(placement, rotatedSize, oldDepth,
+                tokyo3Origin);
+        int newDrop = skyscraperDrop(placement, rotatedSize, newDepth,
+                tokyo3Origin);
         if (oldDrop == newDrop)
         {
             return new SkyscraperTravelStep(true, false, 0, 0);
@@ -797,8 +800,10 @@ public final class LocalMapAssetLoader
 
         SkyscraperPlacement placement = SKYSCRAPERS[index];
         Vec3i rotatedSize = template.getSize(placement.rotation());
-        int oldDrop = skyscraperDrop(placement, rotatedSize, oldDepth);
-        int newDrop = skyscraperDrop(placement, rotatedSize, newDepth);
+        int oldDrop = skyscraperDrop(placement, rotatedSize, oldDepth,
+                tokyo3Origin);
+        int newDrop = skyscraperDrop(placement, rotatedSize, newDepth,
+                tokyo3Origin);
         BlockPos surfaceBase = tokyo3Origin.offset(placement.offset());
         BlockPos oldBase = surfaceBase.below(oldDrop);
         BlockPos newBase = surfaceBase.below(newDrop);
@@ -1016,7 +1021,8 @@ public final class LocalMapAssetLoader
         {
             SkyscraperPlacement placement = SKYSCRAPERS[index];
             Vec3i rotatedSize = rotatedSkyscraperSize(placement.rotation());
-            int drop = skyscraperDrop(placement, rotatedSize, retractionDepth);
+            int drop = skyscraperDrop(placement, rotatedSize, retractionDepth,
+                    tokyo3Origin);
             BlockPos base = tokyo3Origin.offset(placement.offset()).below(drop);
             if (level.getBlockState(skyscraperStateMarker(tokyo3Origin, index))
                     .is(Blocks.LODESTONE)
@@ -1043,7 +1049,7 @@ public final class LocalMapAssetLoader
             SkyscraperPlacement placement = SKYSCRAPERS[index];
             Vec3i rotatedSize = rotatedSkyscraperSize(placement.rotation());
             int drop = skyscraperDrop(placement, rotatedSize,
-                    retractionDepth);
+                    retractionDepth, tokyo3Origin);
             BlockPos surfaceBase = tokyo3Origin.offset(placement.offset());
             BlockPos expectedBase = surfaceBase.below(drop);
             SkyscraperBounds bounds = skyscraperBounds(placement.rotation());
@@ -1052,7 +1058,7 @@ public final class LocalMapAssetLoader
             int originalTop = surfaceBase.getY()
                     + SKYSCRAPER_TEMPLATE_SIZE.getY() - 1;
             int lowestBase = surfaceBase.getY()
-                    - ThirdTokyoSurfaceBuilder.maximumRetractionDepth();
+                    - ThirdTokyoSurfaceBuilder.maximumRetractionDepth(tokyo3Origin);
             int belowCurrentTop = Math.min(expectedBase.getY() - 1,
                     tokyo3Origin.getY() - 1);
             for (int y = lowestBase; y <= belowCurrentTop; y++)
@@ -1173,8 +1179,10 @@ public final class LocalMapAssetLoader
         for (SkyscraperPlacement placement : SKYSCRAPERS)
         {
             Vec3i rotatedSize = rotatedSkyscraperSize(placement.rotation());
-            int oldDrop = skyscraperDrop(placement, rotatedSize, oldDepth);
-            int newDrop = skyscraperDrop(placement, rotatedSize, newDepth);
+            int oldDrop = skyscraperDrop(placement, rotatedSize, oldDepth,
+                    tokyo3Origin);
+            int newDrop = skyscraperDrop(placement, rotatedSize, newDepth,
+                    tokyo3Origin);
             SkyscraperBounds bounds = skyscraperBounds(placement.rotation());
             BlockPos surfaceBase = tokyo3Origin.offset(placement.offset());
             int minimumY = surfaceBase.getY() - Math.max(oldDrop, newDrop);
@@ -1240,10 +1248,12 @@ public final class LocalMapAssetLoader
         Vec3i rotatedSize = rotatedSkyscraperSize(placement.rotation());
         BlockPos surfaceBase = tokyo3Origin.offset(placement.offset());
         int previousDrop = Integer.MIN_VALUE;
-        int maximumDepth = ThirdTokyoSurfaceBuilder.maximumRetractionDepth();
+        int maximumDepth = ThirdTokyoSurfaceBuilder.maximumRetractionDepth(
+                tokyo3Origin);
         for (int depth = 0; depth <= maximumDepth; depth++)
         {
-            int drop = skyscraperDrop(placement, rotatedSize, depth);
+            int drop = skyscraperDrop(placement, rotatedSize, depth,
+                    tokyo3Origin);
             if (drop == previousDrop)
             {
                 continue;
@@ -1310,7 +1320,8 @@ public final class LocalMapAssetLoader
     }
 
     private static int skyscraperDrop(SkyscraperPlacement placement,
-                                      Vec3i size, int depth)
+                                      Vec3i size, int depth,
+                                      BlockPos tokyo3Origin)
     {
         SkyscraperBounds bounds = skyscraperBounds(placement.rotation());
         int minimumX = placement.offset().getX() + bounds.minimumX();
@@ -1320,7 +1331,8 @@ public final class LocalMapAssetLoader
         int topAtSurface = placement.offset().getY() + size.getY() - 1;
         int targetDrop = Math.max(0, topAtSurface
                 - ThirdTokyoSurfaceBuilder.ceilingRoofRelativeYForBounds(
-                        minimumX, maximumX, minimumZ, maximumZ));
+                        minimumX, maximumX, minimumZ, maximumZ,
+                        tokyo3Origin));
         int bounded = Math.max(0, Math.min(depth, targetDrop));
         if (bounded == targetDrop)
         {

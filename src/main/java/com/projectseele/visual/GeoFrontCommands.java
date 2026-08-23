@@ -22,6 +22,7 @@ import com.projectseele.world.IntegratedNervMapBuilder.IntegratedAudit;
 import com.projectseele.world.IntegratedNervMapBuilder.LiftLink;
 import com.projectseele.world.LocalMapAssetLoader;
 import com.projectseele.world.NervOperationsCentreBuilder;
+import com.projectseele.world.S24CoordinateTransform;
 import com.projectseele.world.TerminalDogmaBuilder;
 import com.projectseele.world.ThirdTokyoSurfaceBuilder;
 import com.projectseele.world.Tokyo3RetractionDirector;
@@ -63,6 +64,13 @@ public final class GeoFrontCommands
     private static final String RETURN_Z = "SeeleGeoFrontReturnZ";
     private static final int SORTIE_CHUNK_RADIUS = 4;
     private static final double SORTIE_ENTITY_RADIUS = 72.0D;
+    /** Measured, read-only S22 review landings; never repair geometry here. */
+    private static final BlockPos S22_MAIN_ENTRANCE_FEET =
+            new BlockPos(-80, -443, 210);
+    private static final BlockPos S22_LAKE_TERMINAL_FEET =
+            new BlockPos(-220, -460, 120);
+    private static final BlockPos S22_EVA_DOCK_FEET =
+            new BlockPos(-140, -450, 151);
     private static final Set<UUID> VISUAL_SORTIE_UNITS = new HashSet<>();
     private static boolean visualLinkInProgress;
 
@@ -96,7 +104,25 @@ public final class GeoFrontCommands
                         .then(Commands.literal("dogma")
                                 .executes(context -> dogma(context.getSource())))
                         .then(Commands.literal("overview")
-                                .executes(context -> overview(context.getSource())))));
+                                .executes(context -> overview(context.getSource())))
+                        .then(Commands.literal("coastal")
+                                .then(Commands.literal("entrance")
+                                        .executes(context -> coastalLanding(
+                                                context.getSource(),
+                                                S22_MAIN_ENTRANCE_FEET,
+                                                "NERV main entrance", 90.0F, 0.0F)))
+                                .then(Commands.literal("lake")
+                                        .executes(context -> coastalLanding(
+                                                context.getSource(),
+                                                S22_LAKE_TERMINAL_FEET,
+                                                "GeoFront underground-lake terminal",
+                                                -90.0F, 0.0F)))
+                                .then(Commands.literal("dock")
+                                        .executes(context -> coastalLanding(
+                                                context.getSource(),
+                                                S22_EVA_DOCK_FEET,
+                                                "three-berth EVA docking apron",
+                                                90.0F, 0.0F))))));
     }
 
     /**
@@ -198,7 +224,8 @@ public final class GeoFrontCommands
         }
         saveReturn(player);
         IntegratedAudit result = IntegratedNervMapBuilder.ensure(level);
-        Tokyo3RetractionDirector.register(level, TOKYO3_ORIGIN);
+        Tokyo3RetractionDirector.register(level,
+                IntegratedNervMapBuilder.tokyo3Origin(level));
         logIntegratedAudit("setup", result);
         if (!result.valid())
         {
@@ -245,7 +272,8 @@ public final class GeoFrontCommands
                         + "gallery concourse, cavern shell). This can take a moment..."),
                 false);
         IntegratedAudit result = IntegratedNervMapBuilder.build(level);
-        Tokyo3RetractionDirector.register(level, TOKYO3_ORIGIN);
+        Tokyo3RetractionDirector.register(level,
+                IntegratedNervMapBuilder.tokyo3Origin(level));
         logIntegratedAudit("rebuild", result);
         if (!result.valid())
         {
@@ -279,7 +307,7 @@ public final class GeoFrontCommands
         // the fixed-camera audit; changing SavedData alone can leave a valid
         // looking marker set above an empty skyline.
         RequestResult cityReset = Tokyo3RetractionDirector.forceDepth(level,
-                IntegratedNervMapBuilder.TOKYO3_ORIGIN, false);
+                IntegratedNervMapBuilder.tokyo3Origin(level), false);
         if (cityReset.accepted())
         {
             throw new IllegalStateException(
@@ -328,7 +356,8 @@ public final class GeoFrontCommands
         }
         ProjectSeele.LOGGER.info(
                 "GeoFront navigation smoke test passed: overview landing is dry and operations routes are valid");
-        BlockPos hiddenPlatform = ORIGIN.offset(0, 3, 0);
+        BlockPos hiddenPlatform = IntegratedNervMapBuilder
+                .geoFrontOrigin(level).offset(0, 3, 0);
         level.setBlock(hiddenPlatform, net.minecraft.world.level.block.Blocks.BARRIER
                 .defaultBlockState(), net.minecraft.world.level.block.Block.UPDATE_CLIENTS);
         player.teleportTo(level, hiddenPlatform.getX() + 0.5D,
@@ -384,7 +413,8 @@ public final class GeoFrontCommands
         }
         IntegratedNervMapBuilder.RuntimeAudit mapAudit =
                 IntegratedNervMapBuilder.prepareRuntime(geoFront);
-        Tokyo3RetractionDirector.register(geoFront, TOKYO3_ORIGIN);
+        Tokyo3RetractionDirector.register(geoFront,
+                IntegratedNervMapBuilder.tokyo3Origin(geoFront));
         if (!mapAudit.launchReady())
         {
             source.sendFailure(Component.literal(
@@ -423,7 +453,8 @@ public final class GeoFrontCommands
         {
             saveReturn(player);
         }
-        BlockPos centralTerminal = IntegratedNervMapBuilder.lowerLiftBed(1);
+        BlockPos centralTerminal = IntegratedNervMapBuilder.lowerLiftBed(
+                geoFront, 1);
         player.teleportTo(geoFront, centralTerminal.getX() + 0.5D,
                 centralTerminal.getY() + 27.0D,
                 centralTerminal.getZ() + 6.5D, 180.0F, -8.0F);
@@ -452,7 +483,8 @@ public final class GeoFrontCommands
         // the surface frame cannot inherit a previous retraction session and
         // report misleading 56/66 tower counts.
         RequestResult cityReset = Tokyo3RetractionDirector.forceDepth(
-                geoFront, TOKYO3_ORIGIN, false);
+                geoFront, IntegratedNervMapBuilder.tokyo3Origin(geoFront),
+                false);
         if (cityReset.accepted())
         {
             throw new IllegalStateException(
@@ -474,10 +506,11 @@ public final class GeoFrontCommands
         }
         loadSortieChunks(geoFront);
         restoreManualPlayerPhysics(player);
+        BlockPos origin = IntegratedNervMapBuilder.geoFrontOrigin(geoFront);
         player.teleportTo(geoFront,
-                ORIGIN.getX() + 0.5D,
-                ORIGIN.getY() + GeoFrontBuilder.OBSERVATION_Y + 1.0D,
-                ORIGIN.getZ() + GeoFrontBuilder.OBSERVATION_Z + 0.5D,
+                origin.getX() + 0.5D,
+                origin.getY() + GeoFrontBuilder.OBSERVATION_Y + 1.0D,
+                origin.getZ() + GeoFrontBuilder.OBSERVATION_Z + 0.5D,
                 180.0F, 0.0F);
         ProjectSeele.LOGGER.info(
                 "Visual GeoFront sortie preloaded the three launch-bay chunk columns "
@@ -515,7 +548,7 @@ public final class GeoFrontCommands
     {
         loadSortieChunks(geoFront);
 
-        BlockPos centre = IntegratedNervMapBuilder.lowerLiftBed(1);
+        BlockPos centre = IntegratedNervMapBuilder.lowerLiftBed(geoFront, 1);
         List<EvaUnit01Entity> stale = geoFront.getEntitiesOfClass(
                 EvaUnit01Entity.class,
                 new AABB(centre).inflate(SORTIE_ENTITY_RADIUS,
@@ -532,7 +565,7 @@ public final class GeoFrontCommands
 
     private static void loadSortieChunks(ServerLevel geoFront)
     {
-        BlockPos centre = IntegratedNervMapBuilder.lowerLiftBed(1);
+        BlockPos centre = IntegratedNervMapBuilder.lowerLiftBed(geoFront, 1);
         int originChunkX = centre.getX() >> 4;
         int originChunkZ = centre.getZ() >> 4;
         int chunkRadius = SORTIE_CHUNK_RADIUS;
@@ -602,7 +635,7 @@ public final class GeoFrontCommands
         // small prototype decks beside the shaft beds and must not veto a
         // fleet whose runtime hangar gate has already passed.
         boolean gantries = EvaHangarBuilder.runtimeInfrastructurePresent(
-                geoFront, ORIGIN);
+                geoFront, IntegratedNervMapBuilder.geoFrontOrigin(geoFront));
         boolean valid = units.size() == 3 && linked == 3 && validDestinations == 3
                 && variants && gantries;
         return new SortieAudit(valid, units.size(), linked, validDestinations,
@@ -620,7 +653,8 @@ public final class GeoFrontCommands
         }
         List<EvaUnit01Entity> loaded = geoFront.getEntitiesOfClass(
                 EvaUnit01Entity.class,
-                new AABB(IntegratedNervMapBuilder.lowerLiftBed(1)).inflate(
+                new AABB(IntegratedNervMapBuilder.lowerLiftBed(
+                        geoFront, 1)).inflate(
                         SORTIE_ENTITY_RADIUS, 384.0D, SORTIE_ENTITY_RADIUS));
         int removed = 0;
         for (EvaUnit01Entity unit : loaded)
@@ -699,14 +733,64 @@ public final class GeoFrontCommands
         }
         prepareSurfaceLanding(destination);
         restoreManualPlayerPhysics(player);
+        BlockPos surfaceOrigin =
+                IntegratedNervMapBuilder.tokyo3Origin(destination);
         player.teleportTo(destination,
-                TOKYO3_ORIGIN.getX() + 0.5D,
-                TOKYO3_ORIGIN.getY() + ThirdTokyoSurfaceBuilder.OBSERVATION_Y + 1.0D,
-                TOKYO3_ORIGIN.getZ() + ThirdTokyoSurfaceBuilder.OBSERVATION_Z + 0.5D,
+                surfaceOrigin.getX() + 0.5D,
+                surfaceOrigin.getY()
+                        + ThirdTokyoSurfaceBuilder.OBSERVATION_Y + 1.0D,
+                surfaceOrigin.getZ()
+                        + ThirdTokyoSurfaceBuilder.OBSERVATION_Z + 0.5D,
                 180.0F, 18.0F);
         source.sendSuccess(() -> Component.literal(
                 "Tokyo-3 skyline deck. Normal EVA sorties reach this surface through "
                         + "the physical shaft; this command is only a developer camera shortcut."), false);
+        return 1;
+    }
+
+    /**
+     * Teleports only onto an already measured S22 walking cell.  Unlike the
+     * retired overview shortcuts this path never creates a deck, clears a
+     * volume or repairs a facility, so visual review cannot mutate the map.
+     */
+    private static int coastalLanding(CommandSourceStack source,
+                                      BlockPos feet, String label,
+                                      float yaw, float pitch)
+            throws CommandSyntaxException
+    {
+        ServerPlayer player = source.getPlayerOrException();
+        if (!FacilityWorldPolicy.isS22Coastal(source.getServer()))
+        {
+            source.sendFailure(Component.literal(
+                    "Coastal review shortcuts are available only in "
+                            + "SEELE_S22_COASTAL."));
+            return 0;
+        }
+        ServerLevel level = geoFront(player);
+        if (level == null)
+        {
+            source.sendFailure(Component.literal(
+                    "GeoFront dimension is unavailable."));
+            return 0;
+        }
+        feet = S24CoordinateTransform.apply(source.getServer(), feet);
+        level.getChunkAt(feet);
+        if (!player.serverLevel().dimension().equals(GEOFRONT))
+        {
+            saveReturn(player);
+        }
+        restoreManualPlayerPhysics(player);
+        if (!teleportToLoadedSafeCell(player, level, feet))
+        {
+            source.sendFailure(Component.literal(
+                    "S22 review landing is no longer safe at "
+                            + feet.toShortString() + "; no blocks were changed."));
+            return 0;
+        }
+        player.setYRot(yaw);
+        player.setXRot(pitch);
+        source.sendSuccess(() -> Component.literal(
+                "S22 visual review: " + label + "."), false);
         return 1;
     }
 
@@ -811,8 +895,9 @@ public final class GeoFrontCommands
                     "The connected map is not installed. Run /seele geofront setup first."));
             return 0;
         }
+        BlockPos origin = IntegratedNervMapBuilder.geoFrontOrigin(level);
         NervOperationsCentreBuilder.OperationsAudit result =
-                NervOperationsCentreBuilder.repairRuntimeAccess(level, ORIGIN);
+                NervOperationsCentreBuilder.repairRuntimeAccess(level, origin);
         if (!result.runtimePhysicalValid())
         {
             source.sendFailure(Component.literal(
@@ -826,9 +911,9 @@ public final class GeoFrontCommands
         }
         prepareOperationsLanding(level);
         restoreManualPlayerPhysics(player);
-        player.teleportTo(level, ORIGIN.getX() + 0.5D,
-                ORIGIN.getY() + 8.0D,
-                ORIGIN.getZ() + 18.5D, 180.0F, 0.0F);
+        player.teleportTo(level, origin.getX() + 0.5D,
+                origin.getY() + 8.0D,
+                origin.getZ() + 18.5D, 180.0F, 0.0F);
         source.sendSuccess(() -> Component.literal(
                 "NERV operations centre: tactical command level."), false);
         return 1;
@@ -847,7 +932,8 @@ public final class GeoFrontCommands
             source.sendFailure(Component.literal("GeoFront dimension is unavailable."));
             return 0;
         }
-        GeoFrontAudit result = GeoFrontBuilder.inspect(level, ORIGIN);
+        BlockPos origin = IntegratedNervMapBuilder.geoFrontOrigin(level);
+        GeoFrontAudit result = GeoFrontBuilder.inspect(level, origin);
         if (!result.terminalDogma().valid())
         {
             source.sendFailure(Component.literal(
@@ -860,10 +946,10 @@ public final class GeoFrontCommands
             saveReturn(player);
         }
         restoreManualPlayerPhysics(player);
-        player.teleportTo(level, ORIGIN.getX() + 0.5D,
-                ORIGIN.getY() + TerminalDogmaBuilder.FACILITY_Y_OFFSET
+        player.teleportTo(level, origin.getX() + 0.5D,
+                origin.getY() + TerminalDogmaBuilder.FACILITY_Y_OFFSET
                         + TerminalDogmaBuilder.OBSERVATION_Y + 1.0D,
-                ORIGIN.getZ() + TerminalDogmaBuilder.OBSERVATION_Z + 0.5D,
+                origin.getZ() + TerminalDogmaBuilder.OBSERVATION_Z + 0.5D,
                 180.0F, 0.0F);
         source.sendSuccess(() -> Component.literal(
                 "Terminal Dogma observation gallery. This is a developer camera shortcut; "
@@ -881,10 +967,11 @@ public final class GeoFrontCommands
     {
         prepareOverviewLanding(level);
         restoreManualPlayerPhysics(player);
+        BlockPos origin = IntegratedNervMapBuilder.geoFrontOrigin(level);
         player.teleportTo(level,
-                ORIGIN.getX() + 0.5D,
-                ORIGIN.getY() + GeoFrontBuilder.OBSERVATION_Y + 1.0D,
-                ORIGIN.getZ() + GeoFrontBuilder.OBSERVATION_Z + 0.5D,
+                origin.getX() + 0.5D,
+                origin.getY() + GeoFrontBuilder.OBSERVATION_Y + 1.0D,
+                origin.getZ() + GeoFrontBuilder.OBSERVATION_Z + 0.5D,
                 180.0F, 16.0F);
     }
 
@@ -909,7 +996,8 @@ public final class GeoFrontCommands
 
     private static void prepareOverviewLanding(ServerLevel level)
     {
-        BlockPos floor = ORIGIN.offset(0, GeoFrontBuilder.OBSERVATION_Y,
+        BlockPos floor = IntegratedNervMapBuilder.geoFrontOrigin(level).offset(
+                0, GeoFrontBuilder.OBSERVATION_Y,
                 GeoFrontBuilder.OBSERVATION_Z);
         prepareSafeLanding(level, floor, 4,
                 Blocks.SMOOTH_STONE.defaultBlockState(), true);
@@ -923,7 +1011,8 @@ public final class GeoFrontCommands
         {
             return false;
         }
-        BlockPos expectedFloor = ORIGIN.offset(0,
+        BlockPos expectedFloor = IntegratedNervMapBuilder
+                .geoFrontOrigin(level).offset(0,
                 GeoFrontBuilder.OBSERVATION_Y,
                 GeoFrontBuilder.OBSERVATION_Z);
         if (Math.abs(player.getX() - (expectedFloor.getX() + 0.5D)) > 12.0D
@@ -943,7 +1032,7 @@ public final class GeoFrontCommands
 
     private static void prepareSurfaceLanding(ServerLevel level)
     {
-        BlockPos floor = TOKYO3_ORIGIN.offset(0,
+        BlockPos floor = IntegratedNervMapBuilder.tokyo3Origin(level).offset(0,
                 ThirdTokyoSurfaceBuilder.OBSERVATION_Y,
                 ThirdTokyoSurfaceBuilder.OBSERVATION_Z);
         prepareSafeLanding(level, floor, 2,
@@ -953,7 +1042,7 @@ public final class GeoFrontCommands
 
     private static void prepareOperationsLanding(ServerLevel level)
     {
-        BlockPos floor = ORIGIN.offset(0,
+        BlockPos floor = IntegratedNervMapBuilder.geoFrontOrigin(level).offset(0,
                 NervOperationsCentreBuilder.OPERATIONS_FLOOR_Y,
                 NervOperationsCentreBuilder.OPERATIONS_ENTRY_Z);
         prepareSafeLanding(level, floor, 1,

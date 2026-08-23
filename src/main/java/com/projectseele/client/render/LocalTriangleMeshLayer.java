@@ -18,6 +18,7 @@ import com.google.gson.JsonParser;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.projectseele.ProjectSeele;
+import com.projectseele.entity.EvaUnit01Entity;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.LightTexture;
 import net.minecraft.client.renderer.MultiBufferSource;
@@ -25,8 +26,10 @@ import net.minecraft.client.renderer.RenderType;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.packs.resources.Resource;
 import net.minecraft.server.packs.resources.ResourceManager;
+import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix3f;
 import org.joml.Matrix4f;
+import org.joml.Vector3f;
 import software.bernie.geckolib.cache.object.GeoBone;
 import software.bernie.geckolib.core.animatable.GeoAnimatable;
 import software.bernie.geckolib.renderer.GeoRenderer;
@@ -90,7 +93,8 @@ public final class LocalTriangleMeshLayer<T extends GeoAnimatable> extends GeoRe
         {
             return;
         }
-        MeshData mesh = getMesh(this.meshSelector.apply(animatable));
+        ResourceLocation meshLocation = this.meshSelector.apply(animatable);
+        MeshData mesh = getMesh(meshLocation);
         if (mesh == null)
         {
             return;
@@ -103,6 +107,18 @@ public final class LocalTriangleMeshLayer<T extends GeoAnimatable> extends GeoRe
 
         Matrix4f pose = poseStack.last().pose();
         Matrix3f normal = poseStack.last().normal();
+        if (animatable instanceof EvaUnit01Entity eva
+                && eva.getWeapon() == EvaUnit01Entity.WEAPON_RIFLE
+                && "cannon".equals(bone.getName())
+                && meshLocation.getPath().endsWith("eva_pallet_smg.mesh.json"))
+        {
+            Vector3f rendered = pose.transformPosition(new Vector3f(
+                    part.muzzleX(), part.muzzleY(), part.muzzleZ()));
+            Vec3 camera = Minecraft.getInstance().gameRenderer
+                    .getMainCamera().getPosition();
+            EvaUnit01Renderer.rememberRifleMuzzle(eva.getId(),
+                    camera.add(rendered.x, rendered.y, rendered.z));
+        }
         VertexConsumer targetBuffer = this.textureSelector == null ? buffer
                 : bufferSource.getBuffer(RenderType.entityCutoutNoCull(
                         this.textureSelector.apply(animatable)));
@@ -303,9 +319,14 @@ public final class LocalTriangleMeshLayer<T extends GeoAnimatable> extends GeoRe
                 {
                     throw new IOException("Incomplete triangles in " + entry.getKey());
                 }
+                float pivotX = pivot.get(0).getAsFloat();
+                float pivotY = pivot.get(1).getAsFloat();
+                float pivotZ = pivot.get(2).getAsFloat();
+                float[] muzzle = farCap(vertices, stride,
+                        pivotX, pivotY, pivotZ);
                 parts.put(entry.getKey(), new MeshPart(
-                        pivot.get(0).getAsFloat(), pivot.get(1).getAsFloat(),
-                        pivot.get(2).getAsFloat(), vertices));
+                        pivotX, pivotY, pivotZ, vertices,
+                        muzzle[0], muzzle[1], muzzle[2]));
             }
             int triangleCount = parts.values().stream()
                     .mapToInt(part -> part.vertices().length / (stride * 3)).sum();
@@ -350,10 +371,45 @@ public final class LocalTriangleMeshLayer<T extends GeoAnimatable> extends GeoRe
         }
     }
 
+    private static float[] farCap(float[] vertices, int stride,
+                                  float pivotX, float pivotY, float pivotZ)
+    {
+        float minimumY = Float.POSITIVE_INFINITY;
+        for (int index = 0; index < vertices.length; index += stride)
+        {
+            minimumY = Math.min(minimumY, vertices[index + 1]);
+        }
+        float sumX = 0.0F;
+        float sumY = 0.0F;
+        float sumZ = 0.0F;
+        int samples = 0;
+        for (int index = 0; index < vertices.length; index += stride)
+        {
+            if (vertices[index + 1] > minimumY + 0.85F)
+            {
+                continue;
+            }
+            sumX += vertices[index] + pivotX;
+            sumY += vertices[index + 1] + pivotY;
+            sumZ += vertices[index + 2] + pivotZ;
+            samples++;
+        }
+        if (samples == 0)
+        {
+            return new float[] {-pivotX / 16.0F,
+                    pivotY / 16.0F, pivotZ / 16.0F};
+        }
+        return new float[] {-(sumX / samples) / 16.0F,
+                (sumY / samples) / 16.0F,
+                (sumZ / samples) / 16.0F};
+    }
+
     private record MeshData(int stride, Map<String, MeshPart> parts,
                             int triangleCount, String captureTag,
                             float centreX, float minimumY,
                             float centreZ) {}
 
-    private record MeshPart(float pivotX, float pivotY, float pivotZ, float[] vertices) {}
+    private record MeshPart(float pivotX, float pivotY, float pivotZ,
+                            float[] vertices, float muzzleX,
+                            float muzzleY, float muzzleZ) {}
 }

@@ -7,6 +7,7 @@ import java.util.Locale;
 
 import com.projectseele.ProjectSeele;
 import com.projectseele.entity.EvaUnit01Entity;
+import com.projectseele.entity.NervArmamentStationEntity;
 import com.projectseele.event.Tokyo3RamielBattleDirector;
 import com.projectseele.event.Tokyo3RamielBattleDirector.BattleResult;
 import com.projectseele.visual.GeoFrontCommands;
@@ -39,7 +40,7 @@ import net.minecraft.world.phys.Vec3;
 public final class NervOperationsConsole
 {
     public static final int CONTROL_COUNT = 7;
-    public static final int S20_CONTROL_COUNT = 15;
+    public static final int S20_CONTROL_COUNT = 21;
 
     /**
      * Exact controls physically authored by the human on the S20 glass dais.
@@ -97,14 +98,14 @@ public final class NervOperationsConsole
             new BlockPos(24, -408, 287)  // EVA-00 recover
     };
     /**
-     * Latest human-authored ground-recovery row.  Unlike the older red-to-
-     * yellow bank, this row is ordered EVA-00, EVA-01, EVA-02 along +Z.
+     * Human-authored cancel-sortie row. It is ordered EVA-02, EVA-01,
+     * EVA-00 along +Z, matching the adjacent prepare/launch banks.
      * These are aliases only; runtime must never replace the map blocks.
      */
-    private static final BlockPos[] S20_GROUND_RECOVERY_CONTROLS = {
-            new BlockPos(24, -407, 285), // EVA-00 recover
-            new BlockPos(24, -407, 286), // EVA-01 recover
-            new BlockPos(24, -407, 287)  // EVA-02 recover
+    private static final BlockPos[] S20_CANCEL_CONTROLS = {
+            new BlockPos(24, -407, 285), // EVA-02 cancel launch
+            new BlockPos(24, -407, 286), // EVA-01 cancel launch
+            new BlockPos(24, -407, 287)  // EVA-00 cancel launch
     };
     /**
      * Human-added fifth display key, a stone button dropped in the middle of
@@ -114,7 +115,16 @@ public final class NervOperationsConsole
      */
     private static final BlockPos S20_CITY_SCREEN_CONTROL =
             new BlockPos(28, -409, 289);
+    private static final BlockPos S20_ARMAMENT_DEPLOY_CONTROL =
+            new BlockPos(30, -408, 290);
+    private static final BlockPos S20_ARMAMENT_RECALL_CONTROL =
+            new BlockPos(26, -408, 290);
     private static final int S20_CITY_SCREEN_ACTION = 15;
+    private static final int S20_CANCEL_UNIT02_ACTION = 16;
+    private static final int S20_CANCEL_UNIT01_ACTION = 17;
+    private static final int S20_CANCEL_UNIT00_ACTION = 18;
+    private static final int S20_ARMAMENT_DEPLOY_ACTION = 19;
+    private static final int S20_ARMAMENT_RECALL_ACTION = 20;
     private static final String[] S20_IDS = {
             "city_rise", "city_lower",
             "screen_unit00", "screen_unit01", "screen_unit02",
@@ -457,7 +467,8 @@ public final class NervOperationsConsole
         ServerLevel level = player.serverLevel();
         if (FacilityWorldPolicy.isS20Rebuild(level.getServer()))
         {
-            int s20Action = s20ActionAt(position);
+            int s20Action = s20ActionAt(S24CoordinateTransform.inverse(
+                    level.getServer(), position));
             if (s20Action >= 0)
             {
                 return handleS20Action(player, level, s20Action, position);
@@ -472,7 +483,7 @@ public final class NervOperationsConsole
         BlockPos origin = FacilityWorldPolicy.isCleanRebuild(
                 level.getServer())
                 ? FacilityV2SavedData.get(level).manifest().centre()
-                : IntegratedNervMapBuilder.GEOFRONT_ORIGIN;
+                : IntegratedNervMapBuilder.geoFrontOrigin(level);
         int action = actionAt(level, origin, position);
         if (action < 0)
         {
@@ -542,17 +553,25 @@ public final class NervOperationsConsole
 
     private static int s20ActionAt(BlockPos position)
     {
+        if (S20_ARMAMENT_DEPLOY_CONTROL.equals(position))
+        {
+            return S20_ARMAMENT_DEPLOY_ACTION;
+        }
+        if (S20_ARMAMENT_RECALL_CONTROL.equals(position))
+        {
+            return S20_ARMAMENT_RECALL_ACTION;
+        }
         if (S20_CITY_SCREEN_CONTROL.equals(position))
         {
             return S20_CITY_SCREEN_ACTION;
         }
-        for (int index = 0; index < S20_GROUND_RECOVERY_CONTROLS.length;
+        for (int index = 0; index < S20_CANCEL_CONTROLS.length;
              index++)
         {
-            if (S20_GROUND_RECOVERY_CONTROLS[index].equals(position))
+            if (S20_CANCEL_CONTROLS[index].equals(position))
             {
-                // Action 14 is EVA-00 recovery, 13 EVA-01, 12 EVA-02.
-                return 14 - index;
+                // The physical row follows EVA-02, EVA-01, EVA-00 along +Z.
+                return S20_CANCEL_UNIT02_ACTION + index;
             }
         }
         for (int index = 0; index < S20_CONTROLS.length; index++)
@@ -577,7 +596,7 @@ public final class NervOperationsConsole
             boolean retract = action == 1;
             Tokyo3RetractionDirector.RequestResult city =
                     Tokyo3RetractionDirector.request(level,
-                            IntegratedNervMapBuilder.TOKYO3_ORIGIN,
+                            IntegratedNervMapBuilder.tokyo3Origin(level),
                             retract);
             result = new ActionResult(city.accepted(), city.message());
         }
@@ -598,6 +617,43 @@ public final class NervOperationsConsole
             };
             result = new ActionResult(true,
                     label + (visible ? " powering on." : " shutting down."));
+        }
+        else if (action >= S20_CANCEL_UNIT02_ACTION
+                && action <= S20_CANCEL_UNIT00_ACTION)
+        {
+            int variant = switch (action)
+            {
+                case S20_CANCEL_UNIT02_ACTION -> EvaUnit01Entity.UNIT_02;
+                case S20_CANCEL_UNIT01_ACTION -> EvaUnit01Entity.UNIT_01;
+                default -> EvaUnit01Entity.UNIT_00;
+            };
+            EvaLogisticsDirector.loadControlTarget(level, variant);
+            EvaLogisticsDirector.ActionResult requested =
+                    EvaLogisticsDirector.requestCancel(level, variant);
+            result = new ActionResult(requested.accepted(),
+                    requested.message());
+        }
+        else if (action == S20_ARMAMENT_DEPLOY_ACTION
+                || action == S20_ARMAMENT_RECALL_ACTION)
+        {
+            NervArmamentStationEntity station =
+                    NervArmamentStationEntity.commandStation(level);
+            if (station == null)
+            {
+                result = new ActionResult(false,
+                        "No loaded NERV armament building is linked.");
+            }
+            else
+            {
+                boolean deploy = action == S20_ARMAMENT_DEPLOY_ACTION;
+                boolean changed = deploy ? station.deploy() : station.recall();
+                result = new ActionResult(changed,
+                        changed ? deploy
+                                ? "Armament building deploying."
+                                : "Armament building returning underground."
+                                : "Armament building rejected the command in "
+                                + station.stateName() + ".");
+            }
         }
         else
         {
@@ -649,8 +705,16 @@ public final class NervOperationsConsole
             }
         }
 
-        String id = action == S20_CITY_SCREEN_ACTION
-                ? "screen_city" : S20_IDS[action];
+        String id = switch (action)
+        {
+            case S20_CITY_SCREEN_ACTION -> "screen_city";
+            case S20_CANCEL_UNIT02_ACTION -> "unit02_cancel_launch";
+            case S20_CANCEL_UNIT01_ACTION -> "unit01_cancel_launch";
+            case S20_CANCEL_UNIT00_ACTION -> "unit00_cancel_launch";
+            case S20_ARMAMENT_DEPLOY_ACTION -> "armament_deploy";
+            case S20_ARMAMENT_RECALL_ACTION -> "armament_recall";
+            default -> S20_IDS[action];
+        };
         record(level, id + ": " + result.message());
         player.displayClientMessage(Component.literal(
                         "[NERV S20] " + result.message())
@@ -751,7 +815,7 @@ public final class NervOperationsConsole
                 level.getServer());
         boolean plantReady = compact
                 ? EvaHangarBuilder.runtimeInfrastructurePresent(
-                        level, IntegratedNervMapBuilder.GEOFRONT_ORIGIN)
+                        level, IntegratedNervMapBuilder.geoFrontOrigin(level))
                 : modern ? FacilityV2EvaRuntime.readyAll(level)
                 : IntegratedNervMapBuilder.prepareRuntime(level).launchReady();
         if (!plantReady)
@@ -861,10 +925,10 @@ public final class NervOperationsConsole
         }
         Tokyo3RetractionDirector.Status status =
                 Tokyo3RetractionDirector.status(level,
-                        IntegratedNervMapBuilder.TOKYO3_ORIGIN);
+                        IntegratedNervMapBuilder.tokyo3Origin(level));
         Tokyo3RetractionDirector.RequestResult result =
                 Tokyo3RetractionDirector.request(level,
-                        IntegratedNervMapBuilder.TOKYO3_ORIGIN,
+                        IntegratedNervMapBuilder.tokyo3Origin(level),
                         status.targetDepth() == 0);
         return new ActionResult(result.accepted(), result.message());
     }
@@ -894,7 +958,7 @@ public final class NervOperationsConsole
                     "Operation Yashima inhibited: live sortie route failed its gate.");
         }
         BattleResult result = Tokyo3RamielBattleDirector.start(level,
-                IntegratedNervMapBuilder.TOKYO3_ORIGIN, commander);
+                IntegratedNervMapBuilder.tokyo3Origin(level), commander);
         return new ActionResult(result.accepted(), result.message());
     }
 
@@ -911,13 +975,13 @@ public final class NervOperationsConsole
                     "No S19 Yashima operation is active.");
         }
         BattleResult result = Tokyo3RamielBattleDirector.abort(level,
-                IntegratedNervMapBuilder.TOKYO3_ORIGIN);
+                IntegratedNervMapBuilder.tokyo3Origin(level));
         return new ActionResult(result.accepted(), result.message());
     }
 
     private static List<EvaUnit01Entity> evaUnits(ServerLevel level)
     {
-        BlockPos centre = IntegratedNervMapBuilder.TOKYO3_ORIGIN;
+        BlockPos centre = IntegratedNervMapBuilder.tokyo3Origin(level);
         AABB map = new AABB(centre.getX() - 320.0D,
                 level.getMinBuildHeight(), centre.getZ() - 320.0D,
                 centre.getX() + 320.0D, level.getMaxBuildHeight(),
@@ -949,6 +1013,11 @@ public final class NervOperationsConsole
                     : imported
                     ? importedV2ControlPosition(origin, index)
                     : controlPosition(origin, index);
+            if (s20)
+            {
+                expected = S24CoordinateTransform.apply(
+                        level.getServer(), expected);
+            }
             /*
              * The authored command desks use a two-block-high switch bank:
              * each selected local coordinate has an otherwise identical real
@@ -970,10 +1039,10 @@ public final class NervOperationsConsole
             ServerLevel level, int variant)
     {
         return level.getBlockState(
-                        IntegratedNervMapBuilder.lowerLiftBed(variant))
+                        IntegratedNervMapBuilder.lowerLiftBed(level, variant))
                 .is(Blocks.LODESTONE)
                 && level.getBlockState(
-                        IntegratedNervMapBuilder.surfaceLiftBed(variant))
+                        IntegratedNervMapBuilder.surfaceLiftBed(level, variant))
                 .is(Blocks.LODESTONE);
     }
 

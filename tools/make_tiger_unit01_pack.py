@@ -17,6 +17,16 @@ from pathlib import Path
 
 from PIL import Image
 
+try:
+    import eva_finger_axis_repair as fingerfix
+except ModuleNotFoundError:  # Allows import as tools.make_tiger_unit01_pack.
+    from tools import eva_finger_axis_repair as fingerfix
+
+try:
+    import eva_animation_geometry_repairs as animationfix
+except ModuleNotFoundError:  # Allows import as tools.make_tiger_unit01_pack.
+    from tools import eva_animation_geometry_repairs as animationfix
+
 REPO = Path(__file__).resolve().parent.parent
 SOURCE = Path(sys.argv[1]) if len(sys.argv) > 1 else (
     REPO / "external-assets/incoming/evangelion-unit-01.zip")
@@ -53,6 +63,10 @@ SOURCE_PIVOTS = {
 }
 BODY_MESH_BONES = frozenset(SOURCE_PIVOTS) - {"root"}
 FINGER_ORDER = ("thumb", "index", "middle", "ring", "little")
+# The Tiger source already contains an authored thumb.  Only the four long
+# fingers need replacement geometry; generating another thumb is what produced
+# the visibly over-long double joint reported in game.
+CLEAN_FINGER_ORDER = FINGER_ORDER[1:]
 # The Tiger OBJ welds each finger root into the continuous arm shell but keeps
 # a small distal armour cap as a detached component.  Cut the continuous shell
 # at the knuckle line so the imported hand can actually close around a weapon;
@@ -74,15 +88,44 @@ CLEAN_FINGER_LENGTHS = {
     # real knife scale that put the distal plates through the opposite side
     # of the hilt even when the joints were solved correctly.  These lengths
     # retain the Unit's long hand silhouette but fit a three-phalange chain
-    # around the measured 2.5-pixel weapon grips.  The last two entries sum to
-    # the former distal length, so legacy root/tip animation channels keep the
-    # exact same fingertip position while the new DIP child starts neutral.
-    "thumb": (0.060, 0.025, 0.020),
+    # around the measured 2.5-pixel weapon grips.  A human thumb has only two
+    # visible phalanges; its empty distal contract bone remains for animation
+    # compatibility while its tip mesh uses the combined final length. The
+    # The source palm already contains the metacarpal mound.  Only two visible
+    # phalanges are generated; the former 0.045 distal plate was long enough to
+    # look like a third thumb joint.  Keep the root and shorten the terminal
+    # plate to a human two-phalange proportion.
+    "thumb": (0.060, 0.020, 0.007),
     "index": (0.080, 0.040, 0.030),
     "middle": (0.085, 0.043, 0.032),
     "ring": (0.080, 0.040, 0.030),
     "little": (0.070, 0.034, 0.026),
 }
+# Bind directions live in source OBJ space.  The four long digits retain the
+# authored neutral -Y axis; a human thumb does not.  Giving the thumb its own
+# oblique metacarpal axis prevents the old five-parallel-rods silhouette while
+# keeping every PIP/DIP endpoint derived from the preceding segment.
+THUMB_BIND_Y = -0.90
+THUMB_BIND_OUT_X = 0.32
+THUMB_BIND_OUT_Z = 0.29
+FINGER_ROOT_EMBED = 0.005
+
+
+def clean_finger_source_direction(digit, side):
+    if digit != "thumb":
+        return (0.0, -1.0, 0.0)
+    side_sign = 1.0 if side == "l" else -1.0
+    raw = (-THUMB_BIND_OUT_X * side_sign,
+           THUMB_BIND_Y,
+           THUMB_BIND_OUT_Z)
+    magnitude = math.sqrt(sum(value * value for value in raw))
+    return tuple(value / magnitude for value in raw)
+
+
+def clean_finger_model_direction(digit, side):
+    source = clean_finger_source_direction(digit, side)
+    # build_mesh reflects source Z once before Gecko consumes the mesh.
+    return (source[0], source[1], -source[2])
 
 
 def read_source():
@@ -247,6 +290,54 @@ def component_bounds(component, positions, triangles):
     points = [positions[ref[0]] for face_index in component for ref in triangles[face_index]]
     return ([min(point[axis] for point in points) for axis in range(3)],
             [max(point[axis] for point in points) for axis in range(3)])
+
+
+def closest_point_on_segment(point, start, end):
+    direction = tuple(end[axis] - start[axis] for axis in range(3))
+    length_squared = sum(value * value for value in direction)
+    if length_squared == 0.0:
+        return start
+    fraction = sum((point[axis] - start[axis]) * direction[axis]
+                   for axis in range(3)) / length_squared
+    fraction = min(1.0, max(0.0, fraction))
+    return tuple(start[axis] + fraction * direction[axis]
+                 for axis in range(3))
+
+
+def complete_face_owners(positions, triangles, face_bones):
+    """Resolve every source face to its retained semantic bone."""
+    face_family = {}
+    for component in connected_components(positions, triangles):
+        family = component_family(
+            component, component_bounds(component, positions, triangles),
+            positions, triangles)
+        for face_index in component:
+            face_family[face_index] = family
+    owners = {}
+    for face_index, triangle in enumerate(triangles):
+        points = [positions[ref[0]] for ref in triangle]
+        centroid = tuple(sum(point[axis] for point in points) / 3.0
+                         for axis in range(3))
+        owners[face_index] = face_bones.get(
+            face_index, assign_bone(centroid, face_family[face_index]))
+    return owners
+
+
+def finger_palm_contacts(positions, triangles, face_bones, source_pivots,
+                         owners=None):
+    """Return the welded, length-weighted digit/palm seam centres.
+
+    OBJ UV seams duplicate position indices, so raw-index boundary edges are
+    not anatomical seams. Only edges with one digit owner and one matching
+    hand owner are accepted; silhouette/unclassified edges are rejected.
+    """
+    owners = owners or complete_face_owners(
+        positions, triangles, face_bones)
+    _, frames, _ = fingerfix.recover_finger_frames(
+        positions, triangles, face_bones, owners, source_pivots,
+        FINGER_ORDER, FINGER_ROOT_EMBED)
+    return {name: frame["seam_center_source"]
+            for name, frame in frames.items()}
 
 
 def discover_finger_rig(positions, triangles):
@@ -437,26 +528,34 @@ def discover_finger_rig(positions, triangles):
                     f"invalid two-joint split for {root_name}: "
                     f"root={root_count}, tip={tip_count}")
 
+    finger_frames = {}
     if CLEAN_GRIP_FINGERS:
-        # Keep the measured four digit lanes, but replace the corrupt distal
-        # pivots with a true two-link chain.  The thumb begins on the inner
-        # palm edge rather than orbiting from the wrist centre.
+        # Recover the bind tangent and flexion frame from the authored mesh.
+        # Do not flatten all long digits to source -Y and do not select one
+        # nearest palm vertex/edge as the MCP.
+        owners = complete_face_owners(positions, triangles, face_bones)
+        clean_roots, finger_frames, _ = fingerfix.recover_finger_frames(
+            positions, triangles, face_bones, owners, source_pivots,
+            CLEAN_FINGER_ORDER, FINGER_ROOT_EMBED)
+        fingerfix.validate_axis_frames(finger_frames)
         for side in ("l", "r"):
-            sign = 1.0 if side == "l" else -1.0
-            thumb = f"finger_thumb_{side}"
-            source_pivots[thumb] = (
-                0.525 * sign, 2.105, source_pivots[thumb][2])
-            for digit in FINGER_ORDER:
+            for digit in CLEAN_FINGER_ORDER:
                 root_name = f"finger_{digit}_{side}"
                 tip_name = f"finger_{digit}_tip_{side}"
                 distal_name = f"finger_{digit}_distal_{side}"
-                root = source_pivots[root_name]
-                source_pivots[tip_name] = (
-                    root[0], root[1] - CLEAN_FINGER_LENGTHS[digit][0], root[2])
+                direction = finger_frames[root_name]["bind_tangent_source"]
+                root = clean_roots[root_name]
+                source_pivots[root_name] = root
+                source_pivots[tip_name] = tuple(
+                    root[axis] + direction[axis]
+                    * CLEAN_FINGER_LENGTHS[digit][0]
+                    for axis in range(3))
                 tip = source_pivots[tip_name]
-                source_pivots[distal_name] = (
-                    tip[0], tip[1] - CLEAN_FINGER_LENGTHS[digit][1], tip[2])
-    return face_bones, source_pivots
+                source_pivots[distal_name] = tuple(
+                    tip[axis] + direction[axis]
+                    * CLEAN_FINGER_LENGTHS[digit][1]
+                    for axis in range(3))
+    return face_bones, source_pivots, finger_frames
 
 
 def side_name(x, left, right):
@@ -534,8 +633,9 @@ def shift_uv(uv, x_offset):
     return uv
 
 
-def build_skeleton(scale, minimum_y, finger_pivots=None):
+def build_skeleton(scale, minimum_y, finger_pivots=None, finger_frames=None):
     finger_pivots = finger_pivots or {}
+    finger_frames = finger_frames or {}
     source_pivots = {**SOURCE_PIVOTS, **finger_pivots}
     data = json.loads(BASE_GEO.read_text(encoding="utf-8"))
     geometry = data["minecraft:geometry"][0]
@@ -613,6 +713,9 @@ def build_skeleton(scale, minimum_y, finger_pivots=None):
         if name == "cannon":
             bone.pop("cubes", None)
         pivots[name] = new_pivot
+    if CLEAN_GRIP_FINGERS:
+        fingerfix.install_axis_adapters(
+            geometry, pivots, finger_frames, CLEAN_FINGER_LENGTHS, scale)
     return data, pivots
 
 
@@ -662,8 +765,13 @@ def build_mesh(positions, texcoords, normals, triangles, pivots, scale, minimum_
             face_family[face_index] = family
     parts = {}
     counts = {}
+    skipped_finger_faces = set()
     for face_index, triangle in enumerate(triangles):
-        if CLEAN_GRIP_FINGERS and face_index in finger_faces:
+        finger_owner = finger_faces.get(face_index, "")
+        native_thumb = finger_owner.startswith("finger_thumb_")
+        if (CLEAN_GRIP_FINGERS and face_index in finger_faces
+                and not native_thumb):
+            skipped_finger_faces.add(face_index)
             continue
         source_points = [positions[ref[0]] for ref in triangle]
         centroid = tuple(sum(point[axis] for point in source_points) / 3.0 for axis in range(3))
@@ -689,7 +797,25 @@ def build_mesh(positions, texcoords, normals, triangles, pivots, scale, minimum_
         counts[bone] = counts.get(bone, 0) + 1
 
     if CLEAN_GRIP_FINGERS:
-        append_clean_grip_fingers(parts, counts, pivots, scale)
+        source_digit_uvs = []
+        for face_index, bone in finger_faces.items():
+            if not bone.startswith("finger_"):
+                continue
+            for ref in triangles[face_index]:
+                if ref[1] >= 0:
+                    source_digit_uvs.append(texcoords[ref[1]])
+        digit_uv = None
+        if source_digit_uvs:
+            # Median UV rejects isolated trim/gold pixels and remains stable
+            # across the three separately unwrapped Tiger source textures.
+            source_u = sorted(uv[0] for uv in source_digit_uvs)[
+                len(source_digit_uvs) // 2]
+            source_v = sorted(uv[1] for uv in source_digit_uvs)[
+                len(source_digit_uvs) // 2]
+            digit_uv = (round(source_u * 0.5, 6), round(1.0 - source_v, 6))
+        append_clean_grip_fingers(parts, counts, pivots, scale, digit_uv)
+        validate_clean_thumb_exclusivity(
+            finger_faces, skipped_finger_faces, parts, counts)
     return {
         "format_version": 1,
         "source": "Tigerar1 Evangelion Unit-01 (CC BY-SA), local evaluation only",
@@ -698,6 +824,36 @@ def build_mesh(positions, texcoords, normals, triangles, pivots, scale, minimum_
         "parts": {bone: {"pivot": pivots[bone], "vertices": values}
                   for bone, values in sorted(parts.items())},
     }, counts
+
+
+def validate_clean_thumb_exclusivity(finger_faces, skipped_faces, parts, counts):
+    """Fail closed unless the source thumb is the only visible thumb mesh."""
+    for side in ("l", "r"):
+        root = f"finger_thumb_{side}"
+        native = {index for index, owner in finger_faces.items() if owner == root}
+        if not native:
+            raise RuntimeError(
+                f"no native thumb faces classified for {side}")
+        wrongly_skipped = native & skipped_faces
+        if wrongly_skipped:
+            raise RuntimeError(
+                f"native thumb faces were removed on {side}: "
+                f"{sorted(wrongly_skipped)[:8]}")
+        visible = sorted(name for name in parts if "finger_thumb" in name
+                         and name.endswith("_" + side))
+        if visible != [root]:
+            raise RuntimeError(
+                f"thumb runtime mesh must contain only the authored source on "
+                f"{side}: found {visible}")
+        if counts.get(root, 0) != len(native):
+            raise RuntimeError(
+                f"authored thumb triangle mismatch on {side}: "
+                f"source={len(native)} runtime={counts.get(root, 0)}")
+        for name in (f"finger_thumb_tip_{side}",
+                     f"finger_thumb_distal_{side}"):
+            if counts.get(name, 0) != 0 or name in parts:
+                raise RuntimeError(
+                    f"procedural thumb geometry leaked into {name}")
 
 
 def append_mesh_triangle(output, points, uv):
@@ -710,43 +866,106 @@ def append_mesh_triangle(output, points, uv):
         ])
 
 
-def append_tapered_finger_segment(output, length, radius_x, radius_z, uv,
-                                   sides=8):
-    """Append one closed angular digit phalanx along local -Y."""
-    top = []
-    bottom = []
-    for index in range(sides):
-        angle = math.tau * index / sides
-        top.append((radius_x * math.cos(angle), 0.0,
-                    radius_z * math.sin(angle)))
-        bottom.append((radius_x * 0.82 * math.cos(angle), -length,
-                       radius_z * 0.82 * math.sin(angle)))
-    for index in range(sides):
-        following = (index + 1) % sides
-        append_mesh_triangle(output,
-                             [top[index], bottom[index], bottom[following]], uv)
-        append_mesh_triangle(output,
-                             [top[index], bottom[following], top[following]], uv)
-    for index in range(1, sides - 1):
-        append_mesh_triangle(output, [top[0], top[index + 1], top[index]], uv)
-        append_mesh_triangle(output,
-                             [bottom[0], bottom[index], bottom[index + 1]], uv)
+def vector_dot(left, right):
+    return sum(left[axis] * right[axis] for axis in range(3))
 
 
-def append_clean_grip_fingers(parts, counts, pivots, scale):
+def vector_cross(left, right):
+    return (left[1] * right[2] - left[2] * right[1],
+            left[2] * right[0] - left[0] * right[2],
+            left[0] * right[1] - left[1] * right[0])
+
+
+def vector_normalize(vector):
+    magnitude = math.sqrt(vector_dot(vector, vector))
+    if magnitude <= 1.0e-9:
+        raise RuntimeError("zero-length clean finger direction")
+    return tuple(value / magnitude for value in vector)
+
+
+def append_armoured_finger_segment(output, length, start_x, start_z,
+                                    end_x, end_z, direction, uv,
+                                    extend_start=True, extend_end=True):
+    """Append a continuous bevelled phalanx, not a circular rod.
+
+    Endpoint rings are exact inputs.  Adjacent bones therefore share the same
+    boundary loop in bind pose; the two intermediate rings add a modest dorsal
+    knuckle plate without moving either joint centre.
+    """
+    direction = vector_normalize(direction)
+    reference_x = (1.0, 0.0, 0.0)
+    projection = vector_dot(reference_x, direction)
+    axis_x = vector_normalize(tuple(
+        reference_x[axis] - direction[axis] * projection for axis in range(3)))
+    axis_z = vector_normalize(vector_cross(direction, axis_x))
+
+    def bevelled_ring(fraction, radius_x, radius_z, armour_scale):
+        radius_x *= armour_scale
+        radius_z *= armour_scale
+        bevel = 0.32
+        plane = ((-1.0 + bevel, -1.0), (1.0 - bevel, -1.0),
+                 (1.0, -1.0 + bevel), (1.0, 1.0 - bevel),
+                 (1.0 - bevel, 1.0), (-1.0 + bevel, 1.0),
+                 (-1.0, 1.0 - bevel), (-1.0, -1.0 + bevel))
+        centre = tuple(direction[axis] * length * fraction for axis in range(3))
+        return [tuple(
+            centre[axis] + axis_x[axis] * px * radius_x
+            + axis_z[axis] * pz * radius_z
+            for axis in range(3)) for px, pz in plane]
+
+    # A zero-thickness shared ring is continuous only in bind pose. Once the
+    # child bends, two rigid rings hinged through the same centre open a wedge
+    # and look detached. Real EVA digits have overlapping joint armour, so each
+    # phalanx carries a short cuff across the hinge. This preserves the exact
+    # skeletal pivot while keeping the *rendered surfaces* closed at grip angles.
+    cuff = min(start_x, start_z, end_x, end_z) * 0.72
+    start_fraction = -cuff / length if extend_start else 0.0
+    end_fraction = 1.0 + cuff / length if extend_end else 1.0
+    rings = []
+    ring_profile = ((start_fraction, 0.92), (0.0, 1.0),
+                    (0.16, 1.07), (0.76, 1.02),
+                    (1.0, 1.0), (end_fraction, 0.90))
+    for fraction, armour_scale in ring_profile:
+        blend = min(1.0, max(0.0, fraction))
+        radius_x = start_x + (end_x - start_x) * blend
+        radius_z = start_z + (end_z - start_z) * blend
+        rings.append(bevelled_ring(fraction, radius_x, radius_z, armour_scale))
+    for ring_index in range(len(rings) - 1):
+        current = rings[ring_index]
+        following_ring = rings[ring_index + 1]
+        for index in range(8):
+            following = (index + 1) % 8
+            append_mesh_triangle(output,
+                                 [current[index], following_ring[index],
+                                  following_ring[following]], uv)
+            append_mesh_triangle(output,
+                                 [current[index], following_ring[following],
+                                  current[following]], uv)
+    for index in range(1, 7):
+        append_mesh_triangle(output,
+                             [rings[0][0], rings[0][index + 1], rings[0][index]], uv)
+        append_mesh_triangle(output,
+                             [rings[-1][0], rings[-1][index], rings[-1][index + 1]], uv)
+
+
+def append_clean_grip_fingers(parts, counts, pivots, scale, digit_uv=None):
     """Install source-independent articulated digits on the imported palms."""
-    # Solid purple sample from the local source atlas.  Half-width U matches
-    # build_atlas(), which places the 512px source in the left half of 1024px.
-    uv = (round(460.5 / ATLAS_WIDTH, 6), round(1.0 - 4.5 / ATLAS_HEIGHT, 6))
+    # Sample the authored source digit armour instead of a hard-coded atlas
+    # coordinate.  The three Tiger variants do not share palette placement;
+    # the old constant happened to be purple on Unit-01 but brown on Unit-00.
+    uv = digit_uv or (
+        round(460.5 / ATLAS_WIDTH, 6), round(1.0 - 4.5 / ATLAS_HEIGHT, 6))
     radii = {
-        "thumb": (0.016, 0.017),
-        "index": (0.014, 0.015),
-        "middle": (0.015, 0.016),
-        "ring": (0.014, 0.015),
-        "little": (0.012, 0.013),
+        # Dorsal-palmar thickness (X) stays slimmer than lateral width (Z),
+        # matching a plated finger rather than an octagonal dowel.
+        "thumb": (0.015, 0.021),
+        "index": (0.013, 0.020),
+        "middle": (0.014, 0.021),
+        "ring": (0.013, 0.019),
+        "little": (0.011, 0.016),
     }
     for side in ("l", "r"):
-        for digit in FINGER_ORDER:
+        for digit in CLEAN_FINGER_ORDER:
             root_name = f"finger_{digit}_{side}"
             tip_name = f"finger_{digit}_tip_{side}"
             distal_name = f"finger_{digit}_distal_{side}"
@@ -755,19 +974,52 @@ def append_clean_grip_fingers(parts, counts, pivots, scale):
             distal_output = parts.setdefault(distal_name, [])
             root_length, tip_length, distal_length = CLEAN_FINGER_LENGTHS[digit]
             radius_x, radius_z = radii[digit]
-            append_tapered_finger_segment(
-                root_output, root_length * scale, radius_x * scale,
-                radius_z * scale, uv)
-            append_tapered_finger_segment(
-                tip_output, tip_length * scale, radius_x * 0.90 * scale,
-                radius_z * 0.90 * scale, uv)
-            append_tapered_finger_segment(
-                distal_output, distal_length * scale,
-                radius_x * 0.78 * scale, radius_z * 0.78 * scale, uv)
-            # 28 triangles per octagonal, capped segment.
-            counts[root_name] = counts.get(root_name, 0) + 28
-            counts[tip_name] = counts.get(tip_name, 0) + 28
-            counts[distal_name] = counts.get(distal_name, 0) + 28
+            direction = (0.0, -1.0, 0.0)
+            ring_0 = (radius_x * 1.10 * scale, radius_z * 1.10 * scale)
+            ring_1 = (radius_x * 0.92 * scale, radius_z * 0.92 * scale)
+            ring_2 = (radius_x * 0.76 * scale, radius_z * 0.76 * scale)
+            ring_3 = (radius_x * 0.58 * scale, radius_z * 0.58 * scale)
+            append_armoured_finger_segment(
+                root_output, root_length * scale, *ring_0, *ring_1,
+                direction, uv)
+            append_armoured_finger_segment(
+                tip_output, tip_length * scale, *ring_1, *ring_2,
+                direction, uv)
+            append_armoured_finger_segment(
+                distal_output, distal_length * scale, *ring_2, *ring_3,
+                direction, uv)
+            # 92 triangles per six-ring bevelled segment.
+            counts[root_name] = counts.get(root_name, 0) + 92
+            counts[tip_name] = counts.get(tip_name, 0) + 92
+            counts[distal_name] = counts.get(distal_name, 0) + 92
+
+
+def validate_clean_finger_bind(pivots, scale, finger_frames=None):
+    """Fail generation if any phalanx is detached in the neutral bind pose."""
+    maximum_error = 1.0e-4
+    if finger_frames:
+        fingerfix.validate_axis_frames(finger_frames)
+    for side in ("l", "r"):
+        for digit in CLEAN_FINGER_ORDER:
+            root_name = f"finger_{digit}_{side}"
+            tip_name = f"finger_{digit}_tip_{side}"
+            distal_name = f"finger_{digit}_distal_{side}"
+            root = pivots[root_name]
+            tip = pivots[tip_name]
+            distal = pivots[distal_name]
+            direction = (0.0, -1.0, 0.0)
+            expected_tip = tuple(
+                root[axis] + direction[axis]
+                * CLEAN_FINGER_LENGTHS[digit][0] * scale for axis in range(3))
+            expected_distal = tuple(
+                tip[axis] + direction[axis]
+                * CLEAN_FINGER_LENGTHS[digit][1] * scale for axis in range(3))
+            tip_error = math.dist(expected_tip, tip)
+            distal_error = math.dist(expected_distal, distal)
+            if max(tip_error, distal_error) > maximum_error:
+                raise RuntimeError(
+                    f"discontinuous clean finger bind {root_name}: "
+                    f"MCP/PIP={tip_error:.6f} PIP/DIP={distal_error:.6f}")
 
 
 def build_atlas(source_texture):
@@ -845,26 +1097,28 @@ def _set_hand_curl(bones, side, curl=22, thumb=17, tip_curl=12, thumb_tip=4,
                    thumb_distal=0):
     """Close one anatomically matched hand around a weapon grip.
 
-    The geodesic hand partition keeps each continuous shaft on its distal
-    bone, so the second joint can now contribute a real hook instead of
-    exposing loose triangle fragments. Runtime close-up comparison proved
-    both imported hands close on positive local X. Mirroring the left sign
-    opened its fingers and was the source of the flat weapon/punch hand.
+    The four long digits are laid out across source Z and extend down source Y,
+    so their MCP/PIP/DIP hinge is Z, not X.  The former X channel curled every
+    digit sideways across its neighbours: the chain was mathematically
+    continuous but visually looked reversed and detached.  Z flex moves the
+    phalanges through the palm normal (X).  Its sign mirrors with the hand so
+    both fists close inward toward a centred weapon rather than in the same
+    world direction.
     """
-    direction = 1
+    flex_sign = 1  # Per-hand adapter mirrors the full anatomical frame.
     if thumb_cup is None:
         thumb_cup = cup
     for digit in FINGER_ORDER:
         angle = thumb if digit == "thumb" else curl
         lateral = thumb_cup if digit == "thumb" else cup
         bones[f"finger_{digit}_{side}"] = _rotation(
-            {"0.0": [angle * direction, lateral, 0]})
+            {"0.0": [0, lateral, angle * flex_sign]})
         tip_angle = thumb_tip if digit == "thumb" else tip_curl
         bones[f"finger_{digit}_tip_{side}"] = _rotation(
-            {"0.0": [tip_angle * direction, tip_cup, 0]})
+            {"0.0": [0, tip_cup, tip_angle * flex_sign]})
         dip_angle = thumb_distal if digit == "thumb" else distal_curl
         bones[f"finger_{digit}_distal_{side}"] = _rotation(
-            {"0.0": [dip_angle * direction, 0, 0]})
+            {"0.0": [0, 0, dip_angle * flex_sign]})
 
 
 def _set_finger_curl(bones, curl=50, thumb=30, tip_curl=34, thumb_tip=14):
@@ -902,32 +1156,29 @@ def _set_firearm_grip(bones):
                    distal_curl=42, thumb_distal=18)
     # Keep the right index on the trigger instead of folding it into the
     # middle/ring/little-finger fist.
-    bones["finger_index_r"] = _rotation({"0.0": [20, 0, 0]})
-    bones["finger_index_tip_r"] = _rotation({"0.0": [9, 0, 0]})
-    bones["finger_index_distal_r"] = _rotation({"0.0": [5, 0, 0]})
+    bones["finger_index_r"] = _rotation({"0.0": [0, 0, 20]})
+    bones["finger_index_tip_r"] = _rotation({"0.0": [0, 0, 9]})
+    bones["finger_index_distal_r"] = _rotation({"0.0": [0, 0, 5]})
 
 
 def _set_knife_grip(bones):
-    """Close a real fist around the reverse-grip hilt."""
-    # The old numerical fit minimised endpoint error against three nearly
-    # collinear targets.  It therefore looked accurate in metrics while the
-    # fingers remained long, twisted rods.  This profile keeps every joint in
-    # its anatomical closing axis and adds a real DIP hook; the knife socket
-    # below is placed inside this fist instead of forcing the fingers to chase
-    # a misplaced hilt with extreme Y/Z Euler angles.
-    _set_hand_contact_pose(bones, "r", {
-        "thumb": ((45, 20, 8), (30, 10, 5), (18, 0, 0)),
-        "index": ((75, 8, 3), (58, 2, 0), (42, 0, 0)),
-        "middle": ((80, 5, 1), (62, 0, 0), (48, 0, 0)),
-        "ring": ((82, 2, 0), (64, 0, 0), (50, 0, 0)),
-        "little": ((84, -2, -1), (66, 0, 0), (52, 0, 0)),
-    })
+    """Close a compact anatomical fist around the reverse-grip hilt."""
+    # The contact-solver profile reached stale target points with large Y/Z
+    # Euler twists. After the palm pivots were corrected those twists opened
+    # the silhouette into five claws. A reverse grip needs a compact flexion
+    # chain: MCP, PIP and DIP all close on the same anatomical axis while the
+    # thumb opposes the index/middle pair.
+    _set_hand_curl(bones, "r", curl=92, thumb=58,
+                   tip_curl=78, thumb_tip=38,
+                   distal_curl=58, thumb_distal=24)
     _set_hand_curl(bones, "l", curl=22, thumb=15,
-                   tip_curl=14, thumb_tip=6)
+                   tip_curl=14, thumb_tip=6,
+                   distal_curl=7, thumb_distal=3)
 
 
 def _set_claw_hand(bones, side):
     """Animate a partially closed biological hand through one raking strike."""
+    flex_sign = 1  # Adapter owns left/right mirror and hinge orientation.
     for digit in FINGER_ORDER:
         root_ready = 18 if digit != "thumb" else 14
         root_windup = 36 if digit != "thumb" else 25
@@ -936,18 +1187,18 @@ def _set_claw_hand(bones, side):
         tip_windup = 25 if digit != "thumb" else 11
         tip_contact = 20 if digit != "thumb" else 9
         bones[f"finger_{digit}_{side}"] = _rotation({
-            "0.0": [root_ready, 0, 0],
-            "0.14": [root_windup, 0, 0],
-            "0.34": [root_contact, 0, 0],
-            "0.54": [root_ready, 0, 0],
-            "0.68": [root_ready, 0, 0],
+            "0.0": [0, 0, root_ready * flex_sign],
+            "0.14": [0, 0, root_windup * flex_sign],
+            "0.34": [0, 0, root_contact * flex_sign],
+            "0.54": [0, 0, root_ready * flex_sign],
+            "0.68": [0, 0, root_ready * flex_sign],
         })
         bones[f"finger_{digit}_tip_{side}"] = _rotation({
-            "0.0": [tip_ready, 0, 0],
-            "0.14": [tip_windup, 0, 0],
-            "0.34": [tip_contact, 0, 0],
-            "0.54": [tip_ready, 0, 0],
-            "0.68": [tip_ready, 0, 0],
+            "0.0": [0, 0, tip_ready * flex_sign],
+            "0.14": [0, 0, tip_windup * flex_sign],
+            "0.34": [0, 0, tip_contact * flex_sign],
+            "0.54": [0, 0, tip_ready * flex_sign],
+            "0.68": [0, 0, tip_ready * flex_sign],
         })
 
 
@@ -972,6 +1223,10 @@ def repair_tiger_runtime_animations(data):
     idle["forearm_l"] = _rotation({"0.0": [4, 0, 0], "1.6": [5, 0, 0],
                                     "3.2": [4, 0, 0]})
     idle["forearm_r"] = copy.deepcopy(idle["forearm_l"])
+    # Keep the neutral hand in the measured bind chain. Runtime evidence is
+    # authoritative here: the previous generic curl made every MCP/PIP/DIP
+    # hinge fold toward the hand back even though the static endpoints were
+    # mathematically continuous. Weapon-specific grip profiles remain below.
 
     def claw_strike(side):
         """A shoulder-led human rake, not an iron-golem straight punch."""
@@ -1245,30 +1500,34 @@ def repair_tiger_runtime_animations(data):
         "0.0": [-2, 3, 0], "0.25": [-3, 0, 0],
         "0.5": [-2, -3, 0], "0.75": [-3, 0, 0],
         "1.0": [-2, 3, 0]})
+    # Compact human duck-walk. The previous 25-degree thigh separation plus
+    # 106-degree trailing knee made both shins form an X from the side. Keep
+    # both knees loaded, exchange a short 12-degree stride, and preserve a
+    # nearly level sole throughout the cycle.
     crouch_walk["bones"]["leg_l"] = _rotation({
-        "0.0": [-59.49, 0, -3], "0.25": [-53.12, 0, -3],
-        "0.5": [-34.23, 0, -3], "0.75": [-45.02, 0, -3],
-        "1.0": [-59.49, 0, -3]})
+        "0.0": [-53.82, 0, -3], "0.25": [-50.94, 0, -3],
+        "0.5": [-39.77, 0, -3], "0.75": [-45.72, 0, -3],
+        "1.0": [-53.82, 0, -3]})
     crouch_walk["bones"]["shin_l"] = _rotation({
-        "0.0": [96.12, 0, 0], "0.25": [106.19, 0, 0],
-        "0.5": [95.3, 0, 0], "0.75": [101.18, 0, 0],
-        "1.0": [96.12, 0, 0]})
+        "0.0": [97.74, 0, 0], "0.25": [106.08, 0, 0],
+        "0.5": [97.03, 0, 0], "0.75": [101.19, 0, 0],
+        "1.0": [97.74, 0, 0]})
     crouch_walk["bones"]["foot_l"] = _rotation({
-        "0.0": [-44.67, 0, 3], "0.25": [-61.08, 0, 3],
-        "0.5": [-69.15, 0, 3], "0.75": [-64.21, 0, 3],
-        "1.0": [-44.67, 0, 3]})
+        "0.0": [-51.59, 0, 3], "0.25": [-62.64, 0, 3],
+        "0.5": [-64.74, 0, 3], "0.75": [-62.97, 0, 3],
+        "1.0": [-51.59, 0, 3]})
     crouch_walk["bones"]["leg_r"] = _rotation({
-        "0.0": [-34.23, 0, 3], "0.25": [-45.02, 0, 3],
-        "0.5": [-59.49, 0, 3], "0.75": [-53.12, 0, 3],
-        "1.0": [-34.23, 0, 3]})
+        "0.0": [-39.77, 0, 3], "0.25": [-45.72, 0, 3],
+        "0.5": [-53.82, 0, 3], "0.75": [-50.94, 0, 3],
+        "1.0": [-39.77, 0, 3]})
     crouch_walk["bones"]["shin_r"] = _rotation({
-        "0.0": [95.3, 0, 0], "0.25": [101.18, 0, 0],
-        "0.5": [96.12, 0, 0], "0.75": [106.19, 0, 0],
-        "1.0": [95.3, 0, 0]})
+        "0.0": [97.03, 0, 0], "0.25": [101.19, 0, 0],
+        "0.5": [97.74, 0, 0], "0.75": [106.08, 0, 0],
+        "1.0": [97.03, 0, 0]})
     crouch_walk["bones"]["foot_r"] = _rotation({
-        "0.0": [-69.15, 0, -3], "0.25": [-64.21, 0, -3],
-        "0.5": [-44.67, 0, -3], "0.75": [-61.08, 0, -3],
-        "1.0": [-69.15, 0, -3]})
+        "0.0": [-64.74, 0, -3], "0.25": [-62.97, 0, -3],
+        "0.5": [-51.59, 0, -3], "0.75": [-62.64, 0, -3],
+        "1.0": [-64.74, 0, -3]})
     crouch_walk["bones"]["arm_l"] = _rotation({
         "0.0": [-21, 0, -7], "0.5": [-15, 0, -7], "1.0": [-21, 0, -7]})
     crouch_walk["bones"]["forearm_l"] = _rotation({
@@ -1954,6 +2213,9 @@ def repair_tiger_runtime_animations(data):
     activation = animations[prefix + "activation"]["bones"]
     activation["arm_l"] = _rotation({"0.0": [-8, 0, -5]})
     activation["arm_r"] = _rotation({"0.0": [-8, 0, 5]})
+    # Do not inject an unvalidated generic curl into locomotion/dormant clips.
+    # Their missing finger channels deliberately inherit the continuous bind
+    # pose. Explicit firearm/knife/lance contacts are authored independently.
     return data
 
 
@@ -2026,7 +2288,9 @@ def build_animations():
     animations["animation.eva_unit01.visual_prone_rifle"] = composed_pose(
         "animation.eva_unit01.prone", 0.0,
         "animation.eva_unit01.prone_aim", 0.0)
-    return data
+    # Keep the measured finger rig above, then install the reviewed canonical
+    # animation catalogue shared by EVA-00/01/02.
+    return animationfix.apply_reviewed_animation_repairs(data)
 
 
 def main():
@@ -2034,11 +2298,13 @@ def main():
         sys.exit(f"Unit-01 source not found: {SOURCE}")
     obj_text, texture = read_source()
     positions, texcoords, normals, triangles = parse_obj(obj_text)
-    finger_faces, finger_pivots = discover_finger_rig(positions, triangles)
+    finger_faces, finger_pivots, finger_frames = discover_finger_rig(positions, triangles)
     minimum_y = min(position[1] for position in positions)
     height = max(position[1] for position in positions) - minimum_y
     scale = MODEL_HEIGHT / height
-    skeleton, pivots = build_skeleton(scale, minimum_y, finger_pivots)
+    skeleton, pivots = build_skeleton(
+        scale, minimum_y, finger_pivots, finger_frames)
+    validate_clean_finger_bind(pivots, scale, finger_frames)
     mesh, counts = build_mesh(positions, texcoords, normals, triangles, pivots, scale,
                               minimum_y, finger_faces)
 
@@ -2050,11 +2316,23 @@ def main():
         directory.mkdir(parents=True, exist_ok=True)
     (geo_dir / "eva_unit01.geo.json").write_text(
         json.dumps(skeleton, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    animation_text = json.dumps(
+        build_animations(), ensure_ascii=False, indent=2) + "\n"
     (animation_dir / "eva_unit01.animation.json").write_text(
-        json.dumps(build_animations(), ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        animation_text, encoding="utf-8")
+    # The local high-detail pack and the JAR fallback must never carry two
+    # different joint catalogues.  Keep the tracked canonical resource in
+    # lockstep so a packaged client cannot silently restore the old detached
+    # shoulder/elbow poses when the external pack is absent or reordered.
+    BASE_ANIMATION.write_text(animation_text, encoding="utf-8")
     (mesh_dir / "eva_unit01.mesh.json").write_text(
         json.dumps(mesh, separators=(",", ":")), encoding="utf-8")
     build_atlas(texture).save(texture_dir / "eva_unit01.png")
+    # A direct converter run must not leave the parked airframe's painted eyes
+    # permanently bright.  Restore the cold base and powered emissive overlay
+    # immediately, rather than relying only on the desktop launcher post-pass.
+    from make_eva_power_textures import MASKS, split_texture
+    split_texture("eva_unit01", MASKS["eva_unit01"])
     pack_root = OUT.parent.parent
     (pack_root / "pack.mcmeta").write_text(json.dumps({
         "pack": {

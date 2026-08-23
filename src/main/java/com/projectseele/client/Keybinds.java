@@ -27,6 +27,13 @@ public final class Keybinds
     // requires the normal occupied LAUNCH_LOCKED state and a linked silo bed.
     public static final KeyMapping SELF_LAUNCH = new KeyMapping(
             "key.projectseele.self_launch", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_X, CATEGORY);
+    /** Toggle the synchronized Commander Ikari thinking pose while seated. */
+    public static final KeyMapping COMMANDER_POSE = new KeyMapping(
+            "key.projectseele.commander_pose", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_H, CATEGORY);
+    /** Raise the Beta Capsule and gradually transform into Ultraman. */
+    public static final KeyMapping ULTRAMAN_TRANSFORM = new KeyMapping(
+            "key.projectseele.ultraman_transform", InputConstants.Type.KEYSYM,
+            GLFW.GLFW_KEY_J, CATEGORY);
 
     private Keybinds() {}
 }

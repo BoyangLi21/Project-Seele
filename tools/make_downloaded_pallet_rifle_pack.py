@@ -182,7 +182,15 @@ def main() -> None:
     MESH.write_text(json.dumps(mesh, separators=(",", ":")), encoding="utf-8")
     TEXTURE.parent.mkdir(parents=True, exist_ok=True)
     with Image.open(BITMAP) as image:
-        image.convert("RGBA").save(TEXTURE)
+        texture = image.convert("RGBA")
+        # The installed mesh presents this side from the opposite winding to
+        # the source viewer. Flip only the NERV wordmark island; flipping the
+        # whole UV sheet would move every mechanical panel to the wrong face.
+        logo_box = (390, 88, 436, 101)
+        logo = texture.crop(logo_box).transpose(
+                Image.Transpose.FLIP_LEFT_RIGHT)
+        texture.paste(logo, logo_box[:2])
+        texture.save(TEXTURE)
     print(
         "Generated local TV Pallet Rifle: "
         f"{len(triangles)} triangles / bounds "

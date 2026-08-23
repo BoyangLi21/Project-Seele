@@ -1,7 +1,5 @@
 package com.projectseele.visual;
 
-import java.util.Locale;
-
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
@@ -14,6 +12,7 @@ import com.projectseele.world.EvaLogisticsDirector.Status;
 import com.projectseele.world.FacilityV2EvaRuntime;
 import com.projectseele.world.FacilityWorldPolicy;
 import com.projectseele.world.IntegratedNervMapBuilder;
+import com.projectseele.world.S20SurfaceTransitDirector;
 import com.projectseele.world.Tokyo3RecoveryConsole;
 import com.projectseele.world.TrainingPilotDirector;
 import net.minecraft.commands.CommandSourceStack;
@@ -25,6 +24,8 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.event.RegisterCommandsEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
+
+import java.util.Locale;
 
 /** Operator commands for canonical EVA wet-cage logistics and recovery. */
 @Mod.EventBusSubscriber(modid = ProjectSeele.MODID, bus = Mod.EventBusSubscriber.Bus.FORGE)
@@ -253,6 +254,18 @@ public final class EvaLogisticsCommands
         return count;
     }
 
+
+    private static int requireSingleVariant(String raw)
+    {
+        int variant = parseVariant(raw);
+        if (variant < 0)
+        {
+            throw new IllegalArgumentException(
+                    "Choose one EVA: unit00, unit01 or unit02.");
+        }
+        return variant;
+    }
+
     private static int enterHangar(CommandSourceStack source)
             throws CommandSyntaxException
     {
@@ -308,7 +321,7 @@ public final class EvaLogisticsCommands
         {
             IntegratedNervMapBuilder.prepareRuntime(level);
             target = Tokyo3RecoveryConsole.entryPosition(
-                    IntegratedNervMapBuilder.TOKYO3_ORIGIN);
+                    IntegratedNervMapBuilder.tokyo3Origin(level));
         }
         player.stopRiding();
         player.teleportTo(level, target.getX() + 0.5D, target.getY(),

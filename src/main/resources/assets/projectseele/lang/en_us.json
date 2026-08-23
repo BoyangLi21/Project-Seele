@@ -131,7 +131,7 @@
   "subtitles.projectseele.crystal_break": "Crystal shatters",
   "subtitles.projectseele.drill": "Drill bores down",
   "subtitles.projectseele.ramiel_hum": "Ominous humming",
-  "subtitles.projectseele.rifle_fire": "Positron rifle fires",
+  "subtitles.projectseele.rifle_fire": "Pallet rifle fires",
   "advancements.projectseele.witness_angel.title": "Angel, Attack",
   "advancements.projectseele.witness_angel.description": "Witness an Angel assault and live to hear the sirens",
   "advancements.projectseele.first_victory.title": "First Victory",
@@ -145,23 +145,37 @@
   "msg.projectseele.berserk_triggered": "UNIT-01 CONTROL LOST — BERSERK PATTERN CONFIRMED",
   "msg.projectseele.berserk_active": "Entry plug rejected: autonomous berserk active (%s s remaining)",
   "msg.projectseele.berserk_recovery": "Entry plug rejected: forced shutdown (%s s remaining)",
-  "block.projectseele.eva_armament_rack": "NERV EVA Armament Rack",
   "item.projectseele.eva_progressive_knife": "EVA Progressive Knife Assembly",
   "item.projectseele.eva_pallet_rifle": "EVA Pallet Rifle Assembly",
   "item.projectseele.eva_positron_cannon": "EVA Positron Cannon Assembly",
   "item.projectseele.eva_n2_device": "EVA N² Self-Destruction Device",
-  "msg.projectseele.armament_rack_loaded": "Armament stored: %s",
-  "msg.projectseele.armament_rack_equipped": "EVA armament transfer complete — %s",
-  "msg.projectseele.armament_rack_unloaded": "EVA armament returned; bare-hands configuration restored",
-  "msg.projectseele.armament_rack_retrieved": "Armament removed from rack: %s",
-  "msg.projectseele.armament_rack_empty": "Armament rack is empty",
-  "msg.projectseele.armament_rack_full": "Armament rack has no free cradle",
-  "msg.projectseele.armament_rack_no_eva": "No EVA detected within %s blocks",
-  "msg.projectseele.armament_rack_busy": "EVA must be powered, stationary and outside launch/berserk lock",
   "message.projectseele.field_ejection_landed": "Emergency plug landed — pilot trauma: 50% maximum health",
   "msg.projectseele.command_seat_ikari": "Commander Ikari station occupied",
   "msg.projectseele.command_seat_fuyutsuki": "Deputy Commander Fuyutsuki station occupied",
   "msg.projectseele.command_seat_operator": "NERV operator station occupied",
   "msg.projectseele.command_seat_occupied": "This command station is already occupied",
-  "block.projectseele.clear_glass": "NERV Clear Structural Glass"
+  "key.projectseele.commander_pose": "Commander Thinking Pose",
+  "msg.projectseele.commander_pose_on": "Commander thinking posture engaged",
+  "msg.projectseele.commander_pose_off": "Commander thinking posture released",
+  "key.projectseele.ultraman_transform": "Raise Beta Capsule / Transform",
+  "msg.projectseele.ultraman_on": "Beta Capsule transformation initiated",
+  "msg.projectseele.ultraman_off": "Ultraman transformation reversing",
+  "msg.projectseele.beta_capsule_required": "Hold the Beta Capsule before pressing J",
+  "item.projectseele.beta_capsule": "Beta Capsule",
+  "entity.projectseele.ultraman_avatar": "Ultraman",
+  "block.projectseele.clear_glass": "NERV Clear Structural Glass",
+  "block.projectseele.geofront_skyweave": "GeoFront Static Skyweave",
+  "block.projectseele.one_way_glass": "NERV One-Way Observation Glass",
+  "item.projectseele.terminal_dogma_access_card": "NERV Highest Clearance Card",
+  "item.projectseele.nerv_employee_card": "NERV Employee Card"
+  ,"entity.projectseele.nerv_armament_station": "NERV Armament Building"
+  ,"msg.projectseele.armament_spawn_exists": "An armament station already exists nearby"
+  ,"msg.projectseele.armament_spawned": "NERV armament station installed at %s"
+  ,"msg.projectseele.armament_command_rejected": "Armament station rejected that command in its current phase"
+  ,"msg.projectseele.armament_deploying": "Armament building deploying"
+  ,"msg.projectseele.armament_recalling": "Armament building returning underground"
+  ,"msg.projectseele.armament_missing": "No NERV armament station is within 128 blocks"
+  ,"msg.projectseele.armament_removed": "Nearest armament station removed without changing terrain"
+  ,"msg.projectseele.armament_rifle_acquired": "PALLET RIFLE TRANSFER COMPLETE"
+  ,"msg.projectseele.armament_already_installed": "This EVA already carries a Pallet Rifle"
 }

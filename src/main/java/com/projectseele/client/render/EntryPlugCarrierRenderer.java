@@ -7,6 +7,7 @@ import com.projectseele.entity.EntryPlugCarrierEntity;
 import com.projectseele.entity.EvaScale;
 import com.projectseele.world.EntryPlugKinematics;
 import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.client.renderer.culling.Frustum;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.resources.ResourceLocation;
 import software.bernie.geckolib.cache.object.BakedGeoModel;
@@ -21,10 +22,16 @@ public final class EntryPlugCarrierRenderer
             resource("geo/entry_plug_carrier.geo.json");
     private static final ResourceLocation ANIMATION =
             resource("animations/entry_plug_carrier.animation.json");
-    private static final ResourceLocation MESH =
-            resource("mesh/entry_plug.mesh.json");
-    private static final ResourceLocation LOCAL_TEXTURE =
-            resource("textures/entity/entry_plug.png");
+    private static final ResourceLocation[] MESHES = {
+            resource("mesh/entry_plug_unit00.mesh.json"),
+            resource("mesh/entry_plug_unit01.mesh.json"),
+            resource("mesh/entry_plug_unit02.mesh.json"),
+    };
+    private static final ResourceLocation[] LOCAL_TEXTURES = {
+            resource("textures/entity/entry_plug_unit00.png"),
+            resource("textures/entity/entry_plug_unit01.png"),
+            resource("textures/entity/entry_plug_unit02.png"),
+    };
     private static final ResourceLocation FALLBACK_TEXTURE =
             minecraftResource("textures/block/white_concrete.png");
     public EntryPlugCarrierRenderer(EntityRendererProvider.Context context)
@@ -32,7 +39,8 @@ public final class EntryPlugCarrierRenderer
         super(context, new LocalAddonGeoModel<>(GEOMETRY,
                 FALLBACK_TEXTURE, ANIMATION));
         this.addRenderLayer(new LocalTriangleMeshLayer<>(this,
-                entity -> MESH, entity -> LOCAL_TEXTURE));
+                EntryPlugCarrierRenderer::unitMesh,
+                EntryPlugCarrierRenderer::unitTexture));
         this.withScale(EvaScale.ENTRY_PLUG_RENDER_SCALE);
         this.shadowRadius = 1.0F;
     }
@@ -50,6 +58,23 @@ public final class EntryPlugCarrierRenderer
         }
         super.render(animatable, entityYaw, partialTick, poseStack,
                 bufferSource, packedLight);
+    }
+
+    @Override
+    public boolean shouldRender(EntryPlugCarrierEntity entity,
+                                Frustum frustum,
+                                double cameraX, double cameraY,
+                                double cameraZ)
+    {
+        /*
+         * The visible shell is ten blocks long while the PathfinderMob AABB
+         * is intentionally tiny.  Frustum testing that tiny origin box made
+         * the capsule disappear when a player stood beside its flank, tail or
+         * hatch.  There are at most three carriers, so rendering every visible
+         * shell is both deterministic and negligible.
+         */
+        return entity.isShellVisible() || super.shouldRender(entity, frustum,
+                cameraX, cameraY, cameraZ);
     }
 
     @Override
@@ -81,14 +106,25 @@ public final class EntryPlugCarrierRenderer
         float hatch = animatable.getHatchOpenAmount();
         model.getBone("plug_hatch_l").ifPresent(bone ->
         {
-            bone.setPosX(-EntryPlugKinematics.HATCH_OPEN_TRAVEL_MODEL * hatch);
-            bone.setRotZ(0.0F);
+            bone.setPosX(0.0F);
+            bone.setRotZ((float) Math.toRadians(
+                    EntryPlugKinematics.HATCH_OPEN_ANGLE_DEGREES * hatch));
         });
         model.getBone("plug_hatch_r").ifPresent(bone ->
         {
-            bone.setPosX(EntryPlugKinematics.HATCH_OPEN_TRAVEL_MODEL * hatch);
-            bone.setRotZ(0.0F);
+            bone.setPosX(0.0F);
+            bone.setRotZ((float) Math.toRadians(
+                    -EntryPlugKinematics.HATCH_OPEN_ANGLE_DEGREES * hatch));
         });
+        // The collar belongs to the wet-cage crane. It follows the capsule
+        // throughout controlled insertion/ejection, but must not be thrown
+        // across the battlefield by an emergency pyrotechnic ejection.
+        int stage = animatable.getInsertionStage();
+        boolean fieldEjected = stage
+                == EntryPlugCarrierEntity.STAGE_FIELD_EJECTING
+                || stage == EntryPlugCarrierEntity.STAGE_FIELD_LANDED;
+        model.getBone("plug_crane_collar").ifPresent(bone ->
+                bone.setHidden(fieldEjected));
     }
 
     @Override
@@ -97,7 +133,7 @@ public final class EntryPlugCarrierRenderer
                                   int packedOverlay, float red, float green,
                                   float blue, float alpha)
     {
-        if (LocalTriangleMeshLayer.hasPart(MESH, bone.getName()))
+        if (LocalTriangleMeshLayer.hasPart(MESHES[0], bone.getName()))
         {
             return;
         }
@@ -109,6 +145,18 @@ public final class EntryPlugCarrierRenderer
     public ResourceLocation getTextureLocation(EntryPlugCarrierEntity entity)
     {
         return FALLBACK_TEXTURE;
+    }
+
+    private static ResourceLocation unitTexture(EntryPlugCarrierEntity entity)
+    {
+        int variant = Math.max(0, Math.min(2, entity.getAssignedVariant()));
+        return LOCAL_TEXTURES[variant];
+    }
+
+    private static ResourceLocation unitMesh(EntryPlugCarrierEntity entity)
+    {
+        int variant = Math.max(0, Math.min(2, entity.getAssignedVariant()));
+        return MESHES[variant];
     }
 
     @SuppressWarnings("removal")

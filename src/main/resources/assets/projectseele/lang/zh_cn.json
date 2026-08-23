@@ -131,7 +131,7 @@
   "subtitles.projectseele.crystal_break": "晶体碎裂",
   "subtitles.projectseele.drill": "钻击直下",
   "subtitles.projectseele.ramiel_hum": "不祥的低鸣",
-  "subtitles.projectseele.rifle_fire": "阳电子步枪射击",
+  "subtitles.projectseele.rifle_fire": "帕雷特步枪开火",
   "advancements.projectseele.witness_angel.title": "使徒，来袭",
   "advancements.projectseele.witness_angel.description": "目击使徒袭来，并活着听完警报",
   "advancements.projectseele.first_victory.title": "初战告捷",
@@ -145,23 +145,35 @@
   "msg.projectseele.berserk_triggered": "初号机控制丧失——暴走模式确认",
   "msg.projectseele.berserk_active": "插入栓拒绝：机体正在自主暴走（剩余 %s 秒）",
   "msg.projectseele.berserk_recovery": "插入栓拒绝：机体强制停机中（剩余 %s 秒）",
-  "block.projectseele.eva_armament_rack": "NERV EVA 武器柜",
   "item.projectseele.eva_progressive_knife": "EVA 高振动粒子刀总成",
   "item.projectseele.eva_pallet_rifle": "EVA 帕雷特步枪总成",
   "item.projectseele.eva_positron_cannon": "EVA 阳电子炮总成",
   "item.projectseele.eva_n2_device": "EVA N² 自我毁灭装置",
-  "msg.projectseele.armament_rack_loaded": "武器已入柜：%s",
-  "msg.projectseele.armament_rack_equipped": "EVA 武器转运完成——%s",
-  "msg.projectseele.armament_rack_unloaded": "武器已归还，机体恢复空手配置",
-  "msg.projectseele.armament_rack_retrieved": "已从武器柜取出：%s",
-  "msg.projectseele.armament_rack_empty": "武器柜为空",
-  "msg.projectseele.armament_rack_full": "武器柜没有空余挂架",
-  "msg.projectseele.armament_rack_no_eva": "%s 格内未探测到 EVA",
-  "msg.projectseele.armament_rack_busy": "EVA 必须处于供电、静止且非发射/暴走锁定状态",
   "message.projectseele.field_ejection_landed": "野外紧急弹射完成——驾驶员损失最大生命值的 50%",
   "msg.projectseele.command_seat_ikari": "已就座：NERV 总司令席 / 碇司令",
   "msg.projectseele.command_seat_fuyutsuki": "已就座：NERV 副司令席 / 冬月",
   "msg.projectseele.command_seat_operator": "已就座：NERV 操作员席",
   "msg.projectseele.command_seat_occupied": "该指挥席已有人",
-  "block.projectseele.clear_glass": "NERV 无划痕结构玻璃"
+  "key.projectseele.commander_pose": "碇司令思考姿势",
+  "msg.projectseele.commander_pose_on": "已摆出碇司令思考姿势",
+  "msg.projectseele.commander_pose_off": "已解除碇司令思考姿势",
+  "key.projectseele.ultraman_transform": "举起变身棒 / 变身",
+  "msg.projectseele.ultraman_on": "贝塔魔棒变身程序启动",
+  "msg.projectseele.ultraman_off": "奥特曼形态开始解除",
+  "msg.projectseele.beta_capsule_required": "手持贝塔魔棒后才能按 J 变身",
+  "item.projectseele.beta_capsule": "贝塔魔棒",
+  "entity.projectseele.ultraman_avatar": "奥特曼",
+  "block.projectseele.clear_glass": "NERV 无划痕结构玻璃",
+  "item.projectseele.terminal_dogma_access_card": "NERV 最高权限卡",
+  "item.projectseele.nerv_employee_card": "NERV 员工卡"
+  ,"entity.projectseele.nerv_armament_station": "NERV 兵装大楼"
+  ,"msg.projectseele.armament_spawn_exists": "附近已经存在兵装升降站"
+  ,"msg.projectseele.armament_spawned": "NERV 兵装升降站已安装于 %s"
+  ,"msg.projectseele.armament_command_rejected": "兵装升降站当前阶段拒绝该命令"
+  ,"msg.projectseele.armament_deploying": "兵装大楼开始升起"
+  ,"msg.projectseele.armament_recalling": "兵装大楼正在返回地下"
+  ,"msg.projectseele.armament_missing": "128 格内没有 NERV 兵装升降站"
+  ,"msg.projectseele.armament_removed": "最近的兵装升降站已移除，地形未改变"
+  ,"msg.projectseele.armament_rifle_acquired": "帕雷特步枪移交完成"
+  ,"msg.projectseele.armament_already_installed": "该 EVA 已装备帕雷特步枪"
 }

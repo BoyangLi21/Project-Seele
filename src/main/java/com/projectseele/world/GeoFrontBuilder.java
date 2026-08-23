@@ -4,11 +4,10 @@ import java.util.Locale;
 
 import com.projectseele.ProjectSeele;
 import com.projectseele.config.SeeleConfig;
+import com.projectseele.registry.ModBlocks;
 import com.projectseele.registry.ModFluids;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.tags.FluidTags;
@@ -52,10 +51,6 @@ public final class GeoFrontBuilder
     private static final int PYRAMID_AUDIT_Y = 57;
     public static final int PYRAMID_APRON_MARGIN = 14;
     private static final int PYRAMID_APRON_MARKER_INSET = 4;
-    private static final ResourceLocation SKYWEAVE_ID =
-            new ResourceLocation("ars_nouveau", "sky_block");
-    private static boolean warnedMissingSkyweave;
-
     private static final int UPDATE_CLIENTS = Block.UPDATE_CLIENTS;
 
     private GeoFrontBuilder() {}
@@ -138,8 +133,8 @@ public final class GeoFrontBuilder
         boolean legacyInnerPyramidGone =
                 level.getBlockState(origin.offset(34, 2, 0)).isAir()
                         && level.getBlockState(origin.offset(0, 2, -34)).isAir();
-        boolean realSky = BuiltInRegistries.BLOCK.containsKey(SKYWEAVE_ID)
-                && expectedSky.getBlock() == BuiltInRegistries.BLOCK.get(SKYWEAVE_ID);
+        boolean realSky = expectedSky.getBlock()
+                == ModBlocks.GEOFRONT_SKYWEAVE.get();
         boolean cavernLighting = level.getBlockState(origin.offset(
                 200, 0, CAVERN_CENTRE_Z)).is(Blocks.SEA_LANTERN)
                 && level.getBlockState(origin.offset(216, 24, CAVERN_CENTRE_Z)).is(Blocks.LIGHT);
@@ -456,22 +451,12 @@ public final class GeoFrontBuilder
 
     public static boolean skyweaveAvailable()
     {
-        return BuiltInRegistries.BLOCK.containsKey(SKYWEAVE_ID);
+        return true;
     }
 
     private static BlockState skyweaveState()
     {
-        if (skyweaveAvailable())
-        {
-            return BuiltInRegistries.BLOCK.get(SKYWEAVE_ID).defaultBlockState();
-        }
-        if (!warnedMissingSkyweave)
-        {
-            warnedMissingSkyweave = true;
-            ProjectSeele.LOGGER.warn(
-                    "Ars Nouveau Skyweave is unavailable; GeoFront sphere uses blue glass fallback");
-        }
-        return Blocks.LIGHT_BLUE_STAINED_GLASS.defaultBlockState();
+        return ModBlocks.GEOFRONT_SKYWEAVE.get().defaultBlockState();
     }
 
     private static void clearLegacyArtificialSun(ServerLevel level,
@@ -537,9 +522,14 @@ public final class GeoFrontBuilder
                         + square(z / (double) radiusZ);
                 if (distance <= 1.0D)
                 {
-                    BlockState bed = Math.floorMod(x * 19 + z * 23, 13) == 0
-                            ? Blocks.CLAY.defaultBlockState()
-                            : Blocks.SAND.defaultBlockState();
+                    for (int y = -9; y <= -6; y++)
+                    {
+                        set(level, centre.offset(x, y, z),
+                                Blocks.STONE.defaultBlockState());
+                    }
+                    BlockState bed = Math.floorMod(x * 19 + z * 23, 19) == 0
+                            ? Blocks.GRAVEL.defaultBlockState()
+                            : Blocks.CLAY.defaultBlockState();
                     set(level, centre.offset(x, -5, z), bed);
                     for (int y = -4; y <= 0; y++)
                     {
@@ -552,12 +542,14 @@ public final class GeoFrontBuilder
                                 Blocks.AIR.defaultBlockState());
                     }
                 }
-                else if (distance <= 1.24D)
+                else if (distance <= 1.20D)
                 {
-                    set(level, centre.offset(x, 0, z),
-                            Math.floorMod(x + z, 5) == 0
-                                    ? Blocks.GRAVEL.defaultBlockState()
-                                    : Blocks.SAND.defaultBlockState());
+                    int pattern = Math.floorMod(x * 31 + z * 17, 11);
+                    set(level, centre.offset(x, 0, z), pattern <= 1
+                            ? Blocks.GRAVEL.defaultBlockState()
+                            : pattern == 2
+                            ? Blocks.CLAY.defaultBlockState()
+                            : Blocks.GRASS_BLOCK.defaultBlockState());
                 }
             }
         }

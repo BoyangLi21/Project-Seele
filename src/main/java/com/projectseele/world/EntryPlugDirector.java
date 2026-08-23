@@ -27,6 +27,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
@@ -35,7 +36,9 @@ import net.minecraft.world.phys.Vec3;
 public final class EntryPlugDirector
 {
     public static final int INSERTION_TICKS = 120;
-
+    /** Brief hard hold at the upper dock so the crane/yoke can settle before
+     * the capsule starts its swept insertion path. */
+    private static final int INSERTION_SETTLE_TICKS = 6;
     /** Ticks the crane takes to draw a seated capsule back out to its cage. */
     public static final int EJECTION_TICKS = 105;
     /** Pyrotechnic extraction, ballistic clearance and landing. */
@@ -44,6 +47,9 @@ public final class EntryPlugDirector
             CACHED_PLUGS = new HashMap<>();
     /** Last crane frame drawn per cage, so identical ticks cost nothing. */
     private static final Map<Integer, Long> CRANE_SIGNATURE = new HashMap<>();
+    /** Process-local pose of the transient S20 crane visual. */
+    private static final Map<ResourceKey<Level>, CranePose[]> S20_CRANE_POSES =
+            new HashMap<>();
 
     private EntryPlugDirector() {}
 
@@ -138,9 +144,12 @@ public final class EntryPlugDirector
                     return plug;
                 }
             }
-            Vec3 craneEye = plug.transformPlugMarker(
+            /* The one authoritative crane remains visibly clamped to the
+             * parked capsule. setPlugCrane owns stale-frame cleanup, so this
+             * does not recreate the retired duplicate mechanism. */
+            Vec3 craneEye = wanted.transformPoint(
                     EntryPlugKinematics.CRANE_ATTACHMENT_P);
-            updateCables(level, variant, craneEye.y, craneEye.z, false);
+            updateCables(level, variant, craneEye.y, craneEye.z, true);
         }
         return plug;
     }
@@ -262,7 +271,84 @@ public final class EntryPlugDirector
     {
         CACHED_PLUGS.clear();
         CRANE_SIGNATURE.clear();
+        S20_CRANE_POSES.clear();
+        EvaHangarBuilder.resetRuntime();
         FacilityV2EvaRuntime.resetRuntime();
+    }
+
+    /**
+     * Returns an empty capsule left behind by a synthetic training session to
+     * its wet-cage dock without replacing its persistent entity identity.
+     *
+     * <p>The caller must first prove the airframe is PARKED. A real passenger
+     * is an absolute inhibit. This narrowly repairs the restart case where the
+     * old dummy was removed but the chain EVA -> plug remained LOCKED, making
+     * every later dummy request report the otherwise-empty EVA as occupied.</p>
+     */
+    public static boolean releaseEmptyTrainingPlugAtDock(
+            ServerLevel level, int variant, EvaUnit01Entity unit)
+    {
+        EntryPlugCarrierEntity plug = canonical(level, variant);
+        if (plug == null || !plug.getPassengers().isEmpty())
+        {
+            return false;
+        }
+        int stage = plug.getInsertionStage();
+        if (stage == EntryPlugCarrierEntity.STAGE_LOCKED)
+        {
+            if (plug.getVehicle() != unit)
+            {
+                return false;
+            }
+            unit.clearEntryPlugLink(plug);
+            plug.unlockFromEva();
+            if (!plug.transitionInsertionStage(
+                    EntryPlugCarrierEntity.STAGE_LOCKED,
+                    EntryPlugCarrierEntity.STAGE_ABORT_RETURNING)
+                    || !plug.transitionInsertionStage(
+                    EntryPlugCarrierEntity.STAGE_ABORT_RETURNING,
+                    EntryPlugCarrierEntity.STAGE_ABORT_DOCKED))
+            {
+                return false;
+            }
+            stage = EntryPlugCarrierEntity.STAGE_ABORT_DOCKED;
+        }
+        if (stage == EntryPlugCarrierEntity.STAGE_OCCUPIED)
+        {
+            if (!plug.transitionInsertionStage(
+                    EntryPlugCarrierEntity.STAGE_OCCUPIED,
+                    EntryPlugCarrierEntity.STAGE_SUSPENDED))
+            {
+                return false;
+            }
+        }
+        else if (stage == EntryPlugCarrierEntity.STAGE_ABORT_DOCKED)
+        {
+            if (!plug.transitionInsertionStage(
+                    EntryPlugCarrierEntity.STAGE_ABORT_DOCKED,
+                    EntryPlugCarrierEntity.STAGE_SUSPENDED))
+            {
+                return false;
+            }
+        }
+        else if (stage != EntryPlugCarrierEntity.STAGE_SUSPENDED)
+        {
+            return false;
+        }
+        positionSuspended(plug, unit);
+        plug.setInsertionProgress(0);
+        plug.setCabinSequenceProgress(0);
+        plug.clearInsertionAbortRequest();
+        plug.openCabin();
+        remember(level, variant, plug);
+        RigidTransform dock = cageDockTransform(unit);
+        Vec3 craneEye = dock.transformPoint(
+                EntryPlugKinematics.CRANE_ATTACHMENT_P);
+        updateCables(level, variant, craneEye.y, craneEye.z, true);
+        ProjectSeele.LOGGER.info(
+                "Released empty stale training capsule at wet cage: eva={} plug={}",
+                variant, plug.getStringUUID());
+        return true;
     }
 
     /**
@@ -490,6 +576,16 @@ public final class EntryPlugDirector
             return false;
         }
         plug.clearInsertionAbortRequest();
+        // PREPARE holds the capsule at the exact cage-dock transform.  Keep
+        // that identical pose for insertion tick zero so the renderer never
+        // receives a one-frame dock->route snap before motion begins.
+        plug.setCanonicalTransform(dock);
+        Vec3 craneEye = dock.transformPoint(
+                EntryPlugKinematics.CRANE_ATTACHMENT_P);
+        // Publish the identical trolley/yoke frame on the stage edge.  The
+        // capsule was already stationary here, but retaining the previous
+        // parked hardware frame made the top mechanism visibly kick once.
+        updateCables(level, variant, craneEye.y, craneEye.z, true);
         plug.setInsertionProgress(0);
         plug.setCabinSequenceProgress(Math.max(30,
                 plug.getCabinProgress()));
@@ -515,8 +611,10 @@ public final class EntryPlugDirector
         {
             return false;
         }
-        double linear = Mth.clamp(ticks / (double) INSERTION_TICKS,
-                0.0D, 1.0D);
+        // Drive translation and orientation from one eased clock. Rotating the
+        // capsule in place for twelve ticks at the ceiling looked like a
+        // mechanical twitch even though its centre was stationary.
+        double linear = insertionProgress(ticks);
         RigidTransform pose = EntryPlugKinematics.insertionTransform(
                 unit, cageDockTransform(unit), linear);
         RigidTransform previous = plug.getCanonicalTransform();
@@ -582,6 +680,15 @@ public final class EntryPlugDirector
         return true;
     }
 
+    private static double insertionProgress(int ticks)
+    {
+        double clamped = Mth.clamp((ticks - INSERTION_SETTLE_TICKS)
+                        / (double) (INSERTION_TICKS
+                                - INSERTION_SETTLE_TICKS),
+                0.0D, 1.0D);
+        return smootherstep(clamped);
+    }
+
     /**
      * The capsule is no-physics for deterministic crane motion, therefore the
      * director must explicitly perform the collision interlock before moving
@@ -592,6 +699,19 @@ public final class EntryPlugDirector
                                                 EntryPlugCarrierEntity plug,
                                                 RigidTransform previous,
                                                 RigidTransform next)
+    {
+        Vec3 craneEye = previous.transformPoint(
+                EntryPlugKinematics.CRANE_ATTACHMENT_P);
+        return insertionSweepClear(level, unit, plug, previous, next,
+                craneEye);
+    }
+
+    private static boolean insertionSweepClear(ServerLevel level,
+                                                EvaUnit01Entity unit,
+                                                EntryPlugCarrierEntity plug,
+                                                RigidTransform previous,
+                                                RigidTransform next,
+                                                Vec3 craneEye)
     {
         /*
          * The suspended capsule legitimately overlaps its fixed dock collar.
@@ -612,7 +732,7 @@ public final class EntryPlugDirector
                     EntryPlugKinematics.BODY_OBB_CENTRE_P,
                     EntryPlugKinematics.BODY_OBB_HALF_EXTENTS).deflate(0.04D);
             if (!blockMotionClear(level, plug.getAssignedVariant(),
-                    priorBounds, currentBounds))
+                    craneEye, priorBounds, currentBounds))
             {
                 return false;
             }
@@ -629,6 +749,7 @@ public final class EntryPlugDirector
     }
 
     private static boolean blockMotionClear(ServerLevel level, int variant,
+                                            Vec3 craneEye,
                                             AABB previous,
                                             AABB current)
     {
@@ -641,11 +762,33 @@ public final class EntryPlugDirector
             // The active trolley/yoke/collar is the mechanism carrying this
             // capsule and is repositioned immediately after the accepted
             // motion step. It must not interlock against itself.
-            if (EvaHangarBuilder.isActivePlugCraneCell(variant, position))
+            boolean craneCell = FacilityV2EvaRuntime.ready(level, variant)
+                    ? FacilityV2EvaRuntime.isPlugCraneCell(
+                            level, variant, craneEye.y, craneEye.z, position)
+                    : EvaHangarBuilder.isPlugCraneCell(
+                            IntegratedNervMapBuilder.GEOFRONT_ORIGIN,
+                            variant, craneEye.y, craneEye.z, position);
+            if (craneCell
+                    || EvaHangarBuilder.isActivePlugCraneCell(
+                            variant, position))
             {
                 continue;
             }
             BlockState state = level.getBlockState(position);
+            /*
+             * A restart loses the process-local crane frame cache while the
+             * last visible yoke remains persisted in the save.  Its vertical
+             * position need not match the newly calculated cable bottom, so
+             * the exact-frame test above cannot recognise it.  Limit this
+             * fallback to the narrow, elevated centre crane lane and to the
+             * materials used exclusively by its moving yoke/ram.  This keeps
+             * real cage walls and floors fail-closed while preventing the
+             * capsule from interlocking against the machine carrying it.
+             */
+            if (isPersistedCraneHardware(level, variant, position, state))
+            {
+                continue;
+            }
             if (state.getCollisionShape(level, position).isEmpty())
             {
                 continue;
@@ -693,12 +836,21 @@ public final class EntryPlugDirector
                                                 EntryPlugCarrierEntity plug,
                                                 RigidTransform dock)
     {
+        // This is a brake-on preflight: the physical crane is still at the
+        // dock while every future capsule pose is simulated. Keep ignoring
+        // that one real mechanism instead of following a hypothetical crane
+        // along the route before PREPARE has authorised any motion.
+        Vec3 dockCraneEye = dock.transformPoint(
+                EntryPlugKinematics.CRANE_ATTACHMENT_P);
         RigidTransform previous = dock;
         for (int sample = 1; sample <= 24; sample++)
         {
+            int simulatedTick = Mth.ceil(INSERTION_TICKS
+                    * sample / 24.0D);
             RigidTransform next = EntryPlugKinematics.insertionTransform(
-                    unit, dock, sample / 24.0D);
-            if (!insertionSweepClear(level, unit, plug, previous, next))
+                    unit, dock, insertionProgress(simulatedTick));
+            if (!insertionSweepClear(level, unit, plug, previous, next,
+                    dockCraneEye))
             {
                 return false;
             }
@@ -778,6 +930,67 @@ public final class EntryPlugDirector
         {
             plug.unlockFromEva();
         }
+        plug.clearInsertionAbortRequest();
+        plug.sealCabin();
+        remember(level, variant, plug);
+        return true;
+    }
+
+    private static boolean isPersistedCraneHardware(
+            ServerLevel level, int variant, BlockPos position,
+            BlockState state)
+    {
+        BlockPos bed = hangarBed(level, variant);
+        int dx = position.getX() - bed.getX();
+        int dy = position.getY() - bed.getY();
+        int dz = position.getZ() - bed.getZ();
+        if (Math.abs(dx) > 4 || dy < 45 || dy > 74
+                || dz < 0 || dz > 32)
+        {
+            return false;
+        }
+        return state.is(Blocks.CHAIN)
+                || state.is(Blocks.PISTON)
+                || state.is(Blocks.STICKY_PISTON)
+                || state.is(Blocks.COPPER_BLOCK)
+                || state.is(Blocks.EXPOSED_COPPER)
+                || state.is(Blocks.POLISHED_BLACKSTONE)
+                || state.is(Blocks.LIGHT_GRAY_CONCRETE)
+                || state.is(Blocks.ORANGE_CONCRETE)
+                || state.is(Blocks.PURPLE_CONCRETE)
+                || state.is(Blocks.RED_CONCRETE);
+    }
+
+    /**
+     * Converts a PREPARE that failed before motion into the same sealed docked
+     * rollback state used after a swept-clearance abort.  Without this path an
+     * OCCUPIED human capsule could never enter the return state and logistics
+     * mislabeled a recoverable route interlock as a missing canonical plug.
+     */
+    public static boolean abortDockedPreparation(ServerLevel level, int variant,
+                                                 EvaUnit01Entity unit)
+    {
+        EntryPlugCarrierEntity plug = canonical(level, variant);
+        if (plug == null
+                || plug.getInsertionStage()
+                        != EntryPlugCarrierEntity.STAGE_OCCUPIED
+                || !plug.isVehicle())
+        {
+            return false;
+        }
+        RigidTransform dock = cageDockTransform(unit);
+        RigidTransform actual = plug.getCanonicalTransform();
+        if (actual.translation().distanceToSqr(dock.translation())
+                > 1.0D / (1024.0D * 1024.0D)
+                || actual.rotationErrorDegrees(dock) > 0.1D
+                || !plug.transitionInsertionStage(
+                        EntryPlugCarrierEntity.STAGE_OCCUPIED,
+                        EntryPlugCarrierEntity.STAGE_ABORT_DOCKED))
+        {
+            return false;
+        }
+        plug.setInsertionProgress(0);
+        plug.setCabinSequenceProgress(0);
         plug.clearInsertionAbortRequest();
         plug.sealCabin();
         remember(level, variant, plug);
@@ -1024,6 +1237,9 @@ public final class EntryPlugDirector
                 1.0D - linear);
         plug.setCanonicalTransform(pose);
         plug.setInsertionProgress((int) Math.round((1.0D - linear) * 100.0D));
+        plug.setCabinRecoveryProgress((int) Math.round(
+                EntryPlugCarrierEntity.CABIN_TRANSFER_PERCENT
+                        * (1.0D - linear)));
         Vec3 craneEye = pose.transformPoint(
                 EntryPlugKinematics.CRANE_ATTACHMENT_P);
         updateCables(level, variant, craneEye.y, craneEye.z, true);
@@ -1043,6 +1259,7 @@ public final class EntryPlugDirector
                 return;
             }
             plug.setInsertionProgress(0);
+            plug.setCabinRecoveryProgress(0);
             level.playSound(null, plug.blockPosition(),
                     SoundEvents.IRON_TRAPDOOR_OPEN, SoundSource.BLOCKS,
                     1.6F, 0.7F);
@@ -1230,7 +1447,8 @@ public final class EntryPlugDirector
                     level, unit.getUnitVariant());
         }
         return EvaHangarBuilder.plugRestPosition(
-                IntegratedNervMapBuilder.GEOFRONT_ORIGIN, unit.getUnitVariant());
+                IntegratedNervMapBuilder.GEOFRONT_ORIGIN,
+                unit.getUnitVariant());
     }
 
     /**
@@ -1278,6 +1496,14 @@ public final class EntryPlugDirector
         return clamped * clamped * (3.0D - 2.0D * clamped);
     }
 
+    /** Zero velocity and acceleration at both ends of the crane route. */
+    private static double smootherstep(double value)
+    {
+        double clamped = Mth.clamp(value, 0.0D, 1.0D);
+        return clamped * clamped * clamped
+                * (clamped * (clamped * 6.0D - 15.0D) + 10.0D);
+    }
+
     /** Keeps the visible suspension in step with the capsule it carries. */
     private static void updateCables(ServerLevel level, int variant, double plugY)
     {
@@ -1300,30 +1526,68 @@ public final class EntryPlugDirector
         // Skip identical frames: the parked logistics tick asks for this every
         // tick for all three cages, and repainting the crane each time is what
         // put the server seconds behind.
-        long signature = craneSignature(plugY, plugZ, travelling);
+        boolean facilityRuntime =
+                FacilityV2EvaRuntime.supportsPlugCrane(level, variant);
+        boolean s20Runtime = FacilityWorldPolicy.isS20Rebuild(
+                level.getServer());
+        // FacilityV2's block crane is driven only by the measured attachment
+        // point.  The old travelling bit belongs to the legacy visual arm and
+        // does not alter FacilityV2 geometry.  Including it in the signature
+        // erased and repainted an identical top frame exactly when insertion
+        // began, which appeared as a one-frame kick of the suspended plug.
+        boolean visualArm = !facilityRuntime && !s20Runtime && travelling
+                && SeeleConfig.PLUG_MECHANICAL_ARM.get();
+        long signature = craneSignature(plugY, plugZ, visualArm);
         if (CRANE_SIGNATURE.get(variant) != null
                 && CRANE_SIGNATURE.get(variant) == signature)
         {
+            /*
+             * S20 uses a transient visual entity rather than persistent
+             * crane blocks.  An unchanged geometry signature may skip the
+             * expensive legacy-block sweep, but it must still refresh that
+             * entity before its control timeout expires.  Otherwise the
+             * parked crane disappears after two seconds and only reappears
+             * when PREPARE changes the signature.
+             */
+            if (s20Runtime)
+            {
+                CranePose[] poses = S20_CRANE_POSES.get(level.dimension());
+                CranePose pose = poses == null ? null : poses[variant];
+                if (pose != null)
+                {
+                    int trolleyY = bed.getY()
+                            + EvaHangarBuilder.craneRailAboveBed();
+                    NervCarrierVisuals.updatePlugCrane(level, variant,
+                            bed.getX(), trolleyY, pose.z(), pose.bottomY());
+                }
+            }
             return;
         }
         CRANE_SIGNATURE.put(variant, signature);
-        if (FacilityV2EvaRuntime.ready(level, variant))
+        if (facilityRuntime)
         {
             FacilityV2EvaRuntime.setPlugCrane(level, variant,
-                    plugY, plugZ, travelling);
+                     plugY, plugZ, travelling);
+            return;
+        }
+        if (s20Runtime)
+        {
+            updateS20Crane(level, variant, bed, plugY, plugZ);
             return;
         }
         BlockPos origin = IntegratedNervMapBuilder.GEOFRONT_ORIGIN;
         EvaHangarBuilder.setPlugCrane(level, origin, variant, plugY, plugZ,
-                travelling && SeeleConfig.PLUG_MECHANICAL_ARM.get());
+                visualArm);
     }
 
     private static long craneSignature(double plugY, double plugZ,
                                        boolean travelling)
     {
-        long y = Math.round(plugY * 4.0D);
+        // Preserve sub-block motion.  Quarter-block signatures held the
+        // trolley still for several ticks near both ends of smootherstep.
+        long y = Math.round(plugY * 1000.0D);
         long z = Double.isNaN(plugZ) ? Long.MIN_VALUE / 4L
-                : Math.round(plugZ * 4.0D);
+                : Math.round(plugZ * 1000.0D);
         return (y * 1_000_003L + z) * 2L + (travelling ? 1L : 0L);
     }
 
@@ -1331,10 +1595,15 @@ public final class EntryPlugDirector
     private static void stowCrane(ServerLevel level, int variant)
     {
         BlockPos bed = hangarBed(level, variant);
-        if (FacilityV2EvaRuntime.ready(level, variant))
+        if (FacilityV2EvaRuntime.supportsPlugCrane(level, variant))
         {
             CRANE_SIGNATURE.remove(variant);
             FacilityV2EvaRuntime.stowPlugCrane(level, variant);
+            return;
+        }
+        if (FacilityWorldPolicy.isS20Rebuild(level.getServer()))
+        {
+            stowS20Crane(level, variant, bed);
             return;
         }
         BlockPos origin = IntegratedNervMapBuilder.GEOFRONT_ORIGIN;
@@ -1345,9 +1614,91 @@ public final class EntryPlugDirector
         }
     }
 
+    private static void updateS20Crane(ServerLevel level, int variant,
+                                       BlockPos bed, double plugY,
+                                       double plugZ)
+    {
+        BlockPos origin = IntegratedNervMapBuilder.GEOFRONT_ORIGIN;
+        int removed = EvaHangarBuilder.retirePersistedPlugCrane(
+                level, origin, variant);
+        if (removed > 0)
+        {
+            ProjectSeele.LOGGER.info(
+                    "NERV retired {} persisted block-crane cells for EVA-0{}",
+                    removed, variant);
+        }
+        int trolleyY = bed.getY() + EvaHangarBuilder.craneRailAboveBed();
+        double z = Double.isNaN(plugZ)
+                ? plugRestPosition(level, variant).z : plugZ;
+        z = Mth.clamp(z, bed.getZ() - 25.0D, bed.getZ() + 25.0D);
+        double bottomY = Mth.clamp(plugY,
+                bed.getY() + 1.0D, trolleyY - 2.0D);
+        CranePose pose = new CranePose(z, bottomY);
+        S20_CRANE_POSES.computeIfAbsent(level.dimension(),
+                ignored -> new CranePose[3])[variant] = pose;
+        NervCarrierVisuals.updatePlugCrane(level, variant,
+                bed.getX(), trolleyY, pose.z(), pose.bottomY());
+    }
+
+    private static void stowS20Crane(ServerLevel level, int variant,
+                                     BlockPos bed)
+    {
+        BlockPos origin = IntegratedNervMapBuilder.GEOFRONT_ORIGIN;
+        int removed = EvaHangarBuilder.retirePersistedPlugCrane(
+                level, origin, variant);
+        if (removed > 0)
+        {
+            ProjectSeele.LOGGER.info(
+                    "NERV retired {} persisted block-crane cells for EVA-0{}",
+                    removed, variant);
+        }
+        int trolleyY = bed.getY() + EvaHangarBuilder.craneRailAboveBed();
+        CranePose[] poses = S20_CRANE_POSES.computeIfAbsent(
+                level.dimension(), ignored -> new CranePose[3]);
+        CranePose previous = poses[variant];
+        if (previous == null)
+        {
+            Vec3 rest = plugRestPosition(level, variant);
+            previous = new CranePose(rest.z, rest.y);
+        }
+        CranePose stowed = new CranePose(previous.z(),
+                Math.min(trolleyY - 2, previous.bottomY() + 2));
+        poses[variant] = stowed;
+        CRANE_SIGNATURE.remove(variant);
+        NervCarrierVisuals.updatePlugCrane(level, variant,
+                bed.getX(), trolleyY, stowed.z(), stowed.bottomY());
+    }
+
+    /**
+     * Reasserts the compact ceiling frame after the capsule is seated.
+     *
+     * <p>This public, idempotent boundary is used by the logistics state
+     * machine as a save-upgrade repair: older worlds may already be in
+     * PLUG_LOCKING with a full-height crane persisted in the transfer lane,
+     * so the one-shot call at the end of insertion was never observed by the
+     * new runtime.</p>
+     */
+    public static void ensureCraneStowed(ServerLevel level, int variant)
+    {
+        stowCrane(level, variant);
+    }
+
+    /** Keeps the recovered occupied capsule clamped while the cage refills. */
+    public static void maintainCraneAtCurrentPlug(
+            ServerLevel level, int variant, EntryPlugCarrierEntity plug)
+    {
+        if (plug == null || !plug.isAlive())
+        {
+            return;
+        }
+        Vec3 craneEye = plug.getCanonicalTransform().transformPoint(
+                EntryPlugKinematics.CRANE_ATTACHMENT_P);
+        updateCables(level, variant, craneEye.y, craneEye.z, true);
+    }
+
     private static BlockPos hangarBed(ServerLevel level, int variant)
     {
-        if (FacilityV2EvaRuntime.ready(level, variant))
+        if (FacilityV2EvaRuntime.supportsPlugCrane(level, variant))
         {
             return FacilityV2EvaRuntime.hangarBed(level, variant);
         }
@@ -1422,4 +1773,6 @@ public final class EntryPlugDirector
             data.put(variant, entry.withEntryPlug(null));
         }
     }
+
+    private record CranePose(double z, double bottomY) {}
 }

@@ -77,7 +77,7 @@ public final class S20PersonnelRouteDirector
                 new BlockPos(49, -448, 274),
                 new BlockPos(60, -442, 273),
                 new BlockPos(77, -442, 273),
-                new BlockPos(108, -442, 240),
+                new BlockPos(93, -442, 240),
                 new BlockPos(8, -398, 173),
                 new BlockPos(50, -398, 173)})
         {
@@ -97,7 +97,7 @@ public final class S20PersonnelRouteDirector
         ProjectSeele.LOGGER.info(
                 "S20 personnel circulation compiled: "
                         + "commandToB40=24 b40Rise=6 "
-                        + "upperConcourse=18 cageBranch=47 "
+                        + "upperConcourse=18 cageBranch=62 "
                                 + "deprecatedObservationStair=removed "
                         + "interCageGaps=4+4 diagonalStairs=0 "
                         + "floatingEndpoints=0");
@@ -243,9 +243,9 @@ public final class S20PersonnelRouteDirector
     /** Connects the y=-442 public concourse to the compact-cage lift route. */
     private static void buildCompactCageBranch(ServerLevel level)
     {
-        for (int z = 224; z <= 270; z++)
+        for (int z = 209; z <= 270; z++)
         {
-            for (int x = 105; x <= 111; x++)
+            for (int x = 90; x <= 96; x++)
             {
                 level.setBlock(new BlockPos(x, -443, z), FLOOR, UPDATE);
                 for (int y = -442; y <= -439; y++)
@@ -253,10 +253,10 @@ public final class S20PersonnelRouteDirector
                     level.setBlock(new BlockPos(x, y, z), AIR, UPDATE);
                 }
                 level.setBlock(new BlockPos(x, -438, z),
-                        x == 108 && Math.floorMod(z - 224, 6) == 3
+                        x == 93 && Math.floorMod(z - 209, 6) == 3
                                 ? LIGHT : WALL, UPDATE);
             }
-            for (int x : new int[] {104, 112})
+            for (int x : new int[] {89, 97})
             {
                 level.setBlock(new BlockPos(x, -443, z), SUPPORT, UPDATE);
                 for (int y = -442; y <= -439; y++)
