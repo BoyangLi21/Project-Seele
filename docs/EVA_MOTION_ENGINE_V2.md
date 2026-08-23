@@ -109,6 +109,12 @@ top three punches and top three knife actions plus neutral, with the real
 knife mesh and a 0/7 hash-bound exact audit. Ranking is a shortlist, not
 automatic artistic approval.
 
+`compose_eva_combat_combo.py` chains each three-action shortlist with the same
+velocity-preserving inertialization, continuous root placement and offline
+two-foot lock. `EVA_COMBAT_COMBO_EXACT.blend` contains a 67-frame punch combo
+and a 100-frame real-knife combo; its database and exact-mesh audits are both
+green (0/3). These remain Blender review assets rather than live attack input.
+
 The jump path is likewise phase-aware rather than a looping Minecraft jump:
 `extract_eva_jump_controller.py` splits the audited 120 Hz capture into a
 0.30 s takeoff, 0.60 s ballistic segment (apex at 0.5) and 0.37 s landing.
