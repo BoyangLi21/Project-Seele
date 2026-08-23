@@ -20,6 +20,8 @@ POSES = {
     "lance_ready_review": ("lance_ready",),
     "lance_thrust_review": ("lance_thrust",),
     "prone_lance_review": ("prone", "prone_lance_ready"),
+    "prone_lance_thrust_review": ("prone", "prone_lance_thrust"),
+    "crouch_lance_thrust_review": ("crouch", "crouch_lance_thrust"),
 }
 
 

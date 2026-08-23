@@ -139,7 +139,11 @@ was already in contact (right/left 0.02/0.05 Blender units); the lance support
 hand was 0.19--0.80 away. `solve_eva_weapon_hand_contacts.py` uses the exact
 closest surface delta and two-bone shoulder/elbow IK to reduce Longinus to
 0.04--0.06 while preserving its 1.00 forward-axis cosine. The solved weapon
-lab passes body and weapon audits (0/7); it is not yet promoted to live input.
+lab passes body and weapon audits. `export_eva_weapon_contact_patch.py`
+compresses the curves to a maximum 0.35-degree quaternion error and installs
+them as hash-chained R07 replacements after R04. EVA-00/01/02 now share the
+same semantic animation hash; rebuilding the actual runtime resource and its
+weapon/body labs passes 0/8 weapon and 0/9 exact-mesh failures.
 
 ## Non-goals
 

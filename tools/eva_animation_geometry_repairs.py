@@ -18,6 +18,7 @@ from typing import Any
 PATCH_FILE = Path(__file__).with_name("eva_animation_reviewed_overrides.json")
 R03_PATCH_FILE = Path(__file__).with_name("eva_animation_r03_replacements.json")
 R04_PATCH_FILE = Path(__file__).with_name("eva_animation_r04_replacements.json")
+R07_PATCH_FILE = Path(__file__).with_name("eva_animation_r07_weapon_contacts.json")
 
 ARM_CHAIN = ("arm_r", "forearm_r", "hand_r",
              "arm_l", "forearm_l", "hand_l")
@@ -434,8 +435,19 @@ def apply_reviewed_animation_repairs(data: dict[str, Any], *, strict_source: boo
     if actual != r04_target:
         raise RuntimeError(
             f"R04 animation target SHA mismatch: expected {r04_target}, got {actual}")
-    # R04 is the reviewed authority for the complete three-unit catalogue.
-    # Do not layer the old local R05/R06 Euler guesses on top: doing so
-    # reintroduced the broken Longinus elbows and iron-golem melee poses that
-    # R04 was built to replace.
+    # R07 is generated from the hash-bound exact Blender weapon-contact lab.
+    # It changes only the Longinus support-arm curves and their visual samples;
+    # every other R04 animation remains byte-for-byte semantic authority.
+    r07 = json.loads(R07_PATCH_FILE.read_text(encoding="utf-8"))
+    expected_r07_source = r07["source_animation_semantic_sha256"]
+    if actual != expected_r07_source:
+        raise RuntimeError(
+            f"R07 animation source SHA mismatch: expected {expected_r07_source}, got {actual}")
+    for name, replacement in r07["replace_animations"].items():
+        animations[name] = copy.deepcopy(replacement)
+    r07_target = r07["target_animation_semantic_sha256"]
+    actual = semantic_sha256(animations)
+    if actual != r07_target:
+        raise RuntimeError(
+            f"R07 animation target SHA mismatch: expected {r07_target}, got {actual}")
     return data
