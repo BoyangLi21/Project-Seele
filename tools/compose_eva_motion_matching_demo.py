@@ -30,29 +30,77 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args(sys.argv[sys.argv.index("--") + 1 :])
 
 
-def smoothstep(value: float) -> float:
-    value = max(0.0, min(1.0, value))
-    return value * value * (3.0 - 2.0 * value)
+def angular_velocity(previous: Quaternion, current: Quaternion,
+                     fps: float) -> Vector:
+    if previous.dot(current) < 0.0:
+        current = Quaternion((-current.w, -current.x,
+                              -current.y, -current.z))
+    delta = previous.conjugated() @ current
+    delta.normalize()
+    return delta.to_exponential_map() * fps
 
 
-def blend_frame(previous: dict, target: dict, amount: float) -> dict:
+def begin_inertialization(source_previous: dict, source: dict,
+                          target: dict, target_next: dict,
+                          fps: float) -> dict:
+    offsets = []
+    velocities = []
+    for sp_values, source_values, target_values, tn_values in zip(
+            source_previous["rotation_wxyz"], source["rotation_wxyz"],
+            target["rotation_wxyz"], target_next["rotation_wxyz"]):
+        sp = Quaternion(tuple(sp_values))
+        src = Quaternion(tuple(source_values))
+        dst = Quaternion(tuple(target_values))
+        dst_next = Quaternion(tuple(tn_values))
+        offset = dst.conjugated() @ src
+        if offset.w < 0.0:
+            offset = Quaternion((-offset.w, -offset.x,
+                                 -offset.y, -offset.z))
+        offsets.append(offset.to_exponential_map())
+        velocities.append(
+            angular_velocity(sp, src, fps)
+            - angular_velocity(dst, dst_next, fps)
+        )
+    source_velocity = (float(source["root_m"][1])
+                       - float(source_previous["root_m"][1])) * fps
+    target_velocity = (float(target_next["root_m"][1])
+                       - float(target["root_m"][1])) * fps
+    return {
+        "rotation_offset": offsets,
+        "rotation_velocity": velocities,
+        "root_offset": (float(source["root_m"][1])
+                        - float(target["root_m"][1])),
+        "root_velocity": source_velocity - target_velocity,
+        "source_contact": list(source["foot_contact"]),
+    }
+
+
+def apply_inertialization(target: dict, state: dict, frame_index: int,
+                          frame_count: int, fps: float) -> dict:
     output = copy.deepcopy(target)
+    if frame_count <= 1:
+        return output
+    u = frame_index / (frame_count - 1)
+    h00 = 2.0 * u * u * u - 3.0 * u * u + 1.0
+    h10 = u * u * u - 2.0 * u * u + u
+    duration = (frame_count - 1) / fps
     rotations = []
-    for first_values, second_values in zip(
-            previous["rotation_wxyz"], target["rotation_wxyz"]):
-        first = Quaternion(tuple(first_values))
-        second = Quaternion(tuple(second_values))
-        if first.dot(second) < 0.0:
-            second = Quaternion((-second.w, -second.x,
-                                 -second.y, -second.z))
-        rotations.append(rounded_quaternion(first.slerp(second, amount)))
+    for target_values, offset, velocity in zip(
+            target["rotation_wxyz"], state["rotation_offset"],
+            state["rotation_velocity"]):
+        residual = offset * h00 + velocity * (h10 * duration)
+        result = Quaternion(tuple(target_values)) @ Quaternion(residual)
+        result.normalize()
+        rotations.append(rounded_quaternion(result))
     output["rotation_wxyz"] = rotations
     output["root_m"][1] = round(
-        float(previous["root_m"][1]) * (1.0 - amount)
-        + float(target["root_m"][1]) * amount, 7
+        float(target["root_m"][1])
+        + state["root_offset"] * h00
+        + state["root_velocity"] * h10 * duration,
+        7,
     )
-    if amount < 0.5:
-        output["foot_contact"] = list(previous["foot_contact"])
+    if u < 0.5:
+        output["foot_contact"] = list(state["source_contact"])
     return output
 
 
@@ -74,6 +122,7 @@ def main() -> None:
         source_frames = clip["frames"]
         start = int(decision["to_frame"])
         changed = previous_clip is not None and previous_clip != clip_name
+        inertial_state = None
         if changed:
             transitions.append({
                 "output_frame": len(frames),
@@ -87,9 +136,22 @@ def main() -> None:
             else:
                 source_index = min(len(source_frames) - 1, source_index)
             target = copy.deepcopy(source_frames[source_index])
-            if changed and frames and local_index < args.blend_frames:
-                amount = smoothstep((local_index + 1) / args.blend_frames)
-                target = blend_frame(frames[-1], target, amount)
+            if changed and frames and local_index == 0:
+                next_index = source_index + 1
+                if clip.get("loop"):
+                    next_index %= max(1, len(source_frames) - 1)
+                else:
+                    next_index = min(len(source_frames) - 1, next_index)
+                inertial_state = begin_inertialization(
+                    frames[-2] if len(frames) >= 2 else frames[-1],
+                    frames[-1], target, source_frames[next_index], fps,
+                )
+            if (inertial_state is not None
+                    and local_index < args.blend_frames):
+                target = apply_inertialization(
+                    target, inertial_state, local_index,
+                    args.blend_frames, fps,
+                )
             speed = float(decision["desired_speed_mps"])
             stopping = bool(decision["stopping"])
             if stopping:
@@ -125,7 +187,8 @@ def main() -> None:
     output["motion_matching_demo"] = {
         "simulation": str(args.simulation.resolve()),
         "transition_count": len(transitions),
-        "blend_frames": args.blend_frames,
+        "inertialization_frames": args.blend_frames,
+        "inertialization": "cubic quaternion exponential-map offset decay",
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(

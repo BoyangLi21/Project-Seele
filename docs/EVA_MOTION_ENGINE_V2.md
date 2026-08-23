@@ -95,8 +95,9 @@ costs. It remains an offline artifact until the 3D transition sequence itself
 passes visual direction review.
 
 `compose_eva_motion_matching_demo.py` now materialises that decision stream as
-one 240-frame clip, applies short quaternion transition blends, integrates a
-continuous curved root path, then re-runs shared-pelvis contact locking. The
+one 240-frame clip, applies velocity-preserving cubic quaternion exponential-
+map inertialization, integrates a continuous curved root path, then re-runs
+shared-pelvis contact locking. The
 resulting `EVA_MOTION_MATCHING_DEMO_EXACT.blend` passes both its database audit
 and the 18,132-vertex exact-mesh audit (0/2 failures). It is the first review
 surface for the new controller; Minecraft is still not used for authoring.
