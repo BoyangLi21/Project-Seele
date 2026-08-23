@@ -130,6 +130,7 @@ def animate_exact(motion: dict, bone_order: list[str],
                   parts: dict[str, bpy.types.Object],
                   joints: dict[str, bpy.types.Object],
                   contacts: dict[str, tuple[bpy.types.Object, bpy.types.Object]],
+                  hand_contacts: dict[str, tuple[bpy.types.Object, bpy.types.Object]],
                   gap_frames: int,
                   attachment_names: set[str] | None = None,
                   ) -> dict[str, tuple[int, int]]:
@@ -147,6 +148,7 @@ def animate_exact(motion: dict, bone_order: list[str],
         bpy.context.scene.timeline_markers.new(clip_name.upper(), frame=start)
         last_matrices = None
         last_contacts = None
+        last_hand_contacts = None
         for local_index, frame_data in enumerate(clip["frames"]):
             frame = start + local_index
             matrices = deformation_matrices(
@@ -179,8 +181,24 @@ def animate_exact(motion: dict, bone_order: list[str],
                                            group=clip_name)
                     marker.keyframe_insert("hide_render", frame=frame,
                                            group=clip_name)
+            for side, planted in zip(
+                    ("l", "r"), frame_data.get("hand_contact", (False, False))):
+                point = matrices[f"hand_{side}"] @ target_to_blender(
+                    pivots[f"hand_{side}"]
+                )
+                green, red = hand_contacts[side]
+                for marker, hidden in ((green, not planted), (red, planted)):
+                    marker.location = point
+                    marker.hide_viewport = marker.hide_render = bool(hidden)
+                    marker.keyframe_insert("location", frame=frame,
+                                           group=clip_name)
+                    marker.keyframe_insert("hide_viewport", frame=frame,
+                                           group=clip_name)
+                    marker.keyframe_insert("hide_render", frame=frame,
+                                           group=clip_name)
             last_matrices = matrices
             last_contacts = frame_data["foot_contact"]
+            last_hand_contacts = frame_data.get("hand_contact", (False, False))
         end = start + len(clip["frames"]) - 1
         hold = end + gap_frames
         if last_matrices is not None:
@@ -211,11 +229,26 @@ def animate_exact(motion: dict, bone_order: list[str],
                                            group=clip_name)
                     marker.keyframe_insert("hide_render", frame=hold,
                                            group=clip_name)
+            for side, planted in zip(("l", "r"), last_hand_contacts):
+                point = last_matrices[f"hand_{side}"] @ target_to_blender(
+                    pivots[f"hand_{side}"]
+                )
+                green, red = hand_contacts[side]
+                for marker, hidden in ((green, not planted), (red, planted)):
+                    marker.location = point
+                    marker.hide_viewport = marker.hide_render = bool(hidden)
+                    marker.keyframe_insert("location", frame=hold,
+                                           group=clip_name)
+                    marker.keyframe_insert("hide_viewport", frame=hold,
+                                           group=clip_name)
+                    marker.keyframe_insert("hide_render", frame=hold,
+                                           group=clip_name)
         ranges[clip_name] = (start, end)
         frame_cursor = hold + 1
 
     animated = [*parts.values(), *joints.values(),
-                *(marker for pair in contacts.values() for marker in pair)]
+                *(marker for pair in contacts.values() for marker in pair),
+                *(marker for pair in hand_contacts.values() for marker in pair)]
     for obj in animated:
         if obj.animation_data is None or obj.animation_data.action is None:
             continue
@@ -288,10 +321,22 @@ def main() -> None:
         )
         for side in ("l", "r")
     }
+    hand_contacts = {
+        side: (
+            make_contact_marker(f"HAND_CONTACT_{side.upper()}_PLANTED",
+                                (0.05, 0.85, 1.0, 1.0), master,
+                                contact_collection),
+            make_contact_marker(f"HAND_CONTACT_{side.upper()}_AIR",
+                                (1.0, 0.05, 0.75, 1.0), master,
+                                contact_collection),
+        )
+        for side in ("l", "r")
+    }
     motion = json.loads(args.motion_db.read_text(encoding="utf-8"))
     ranges = animate_exact(
         motion, [bone["name"] for bone in bones], pivots, parents,
-        parts, joints, contacts, args.gap_frames, attachment_names
+        parts, joints, contacts, hand_contacts, args.gap_frames,
+        attachment_names
     )
     if args.source_human is not None and args.source_human.is_file():
         add_source_human(args.source_human, ranges, source_collection)

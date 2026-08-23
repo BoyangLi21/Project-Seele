@@ -56,6 +56,21 @@ def runtime_quaternion(wxyz: list[float]) -> Quaternion:
     return result
 
 
+def analytic_hand(rotations: dict[str, Quaternion], pivots,
+                  side: str) -> Vector:
+    shoulder = pivots[f"arm_{side}"]
+    elbow_rest = pivots[f"forearm_{side}"]
+    wrist_rest = pivots[f"hand_{side}"]
+    arm = rotations[f"arm_{side}"]
+    forearm = rotations[f"forearm_{side}"]
+    elbow = shoulder + arm @ (elbow_rest - shoulder)
+    wrist = elbow + (arm @ forearm) @ (wrist_rest - elbow_rest)
+    upper_pivot = pivots["torso_upper"]
+    wrist = upper_pivot + rotations["torso_upper"] @ (wrist - upper_pivot)
+    lower_pivot = pivots["torso_lower"]
+    return lower_pivot + rotations["torso_lower"] @ (wrist - lower_pivot)
+
+
 def sample_frame(frame, db_bones, bone_order, pivots, parents) -> dict:
     matrices = deformation_matrices(frame, db_bones, bone_order, pivots, parents)
     joints = {name: point(matrices, pivots, name) for name in (
@@ -121,8 +136,13 @@ def main() -> None:
         maximum_contact_drift_frame = {"l": None, "r": None}
         maximum_contact_speed = {"l": 0.0, "r": 0.0}
         maximum_contact_speed_frame = {"l": None, "r": None}
+        maximum_hand_contact_speed = {"l": 0.0, "r": 0.0}
+        maximum_hand_contact_speed_frame = {"l": None, "r": None}
+        maximum_analytic_hand_error = {"l": 0.0, "r": 0.0}
         previous_world_feet: dict[str, Vector] = {}
+        previous_world_hands: dict[str, Vector] = {}
         previous_contacts = [False, False]
+        previous_hand_contacts = [False, False]
         travel = clip.get("root_travel_m", [0.0, 0.0, 0.0])
         for index, (frame, sample) in enumerate(zip(frames, samples)):
             phase = index / max(1, len(frames) - 1)
@@ -133,6 +153,11 @@ def main() -> None:
                 name: runtime_quaternion(frame["rotation_wxyz"][bone_index])
                 for bone_index, name in enumerate(db_bones)
             }
+            yaw = float(frame.get("root_yaw_radians", 0.0))
+            yaw_rotation = Quaternion((math.cos(yaw * 0.5), 0.0,
+                                       math.sin(yaw * 0.5), 0.0))
+            root_m = Vector(tuple(float(value) for value in frame["root_m"]))
+            root_target = Vector((-root_m.x, root_m.y, root_m.z)) * 112.0
             for joint_name in extrema:
                 value = sample[joint_name]
                 extrema[joint_name][0] = min(extrema[joint_name][0], value)
@@ -167,6 +192,27 @@ def main() -> None:
                         maximum_contact_speed_frame[side] = index
                 previous_world_feet[side] = world_foot
             previous_contacts = list(frame["foot_contact"])
+            hand_contacts = list(frame.get("hand_contact", (False, False)))
+            for side_index, side in enumerate(("l", "r")):
+                world_hand = sample["joints"][f"hand_{side}"] + virtual_root
+                expected_hand = (target_to_blender(
+                    yaw_rotation @ analytic_hand(runtime_rotations, pivots, side)
+                    + root_target
+                ) + virtual_root)
+                maximum_analytic_hand_error[side] = max(
+                    maximum_analytic_hand_error[side],
+                    (expected_hand - world_hand).length,
+                )
+                if (hand_contacts[side_index]
+                        and previous_hand_contacts[side_index]
+                        and index > 0):
+                    speed = ((world_hand - previous_world_hands[side]).length
+                             / 112.0 * fps)
+                    if speed > maximum_hand_contact_speed[side]:
+                        maximum_hand_contact_speed[side] = speed
+                        maximum_hand_contact_speed_frame[side] = index
+                previous_world_hands[side] = world_hand
+            previous_hand_contacts = hand_contacts
             if index == 0:
                 continue
             yaw_delta = (float(frame.get("root_yaw_radians", 0.0))
@@ -199,6 +245,18 @@ def main() -> None:
             failures.append(
                 f"root yaw spike {maximum_root_yaw_speed:.3f}deg/s"
             )
+        for side in ("l", "r"):
+            if maximum_analytic_hand_error[side] > 0.05:
+                failures.append(
+                    f"analytic {side} hand mismatch "
+                    f"{maximum_analytic_hand_error[side]:.3f} model units"
+                )
+            if maximum_hand_contact_speed[side] > 0.35:
+                failures.append(
+                    f"planted {side} hand speed "
+                    f"{maximum_hand_contact_speed[side]:.3f}m/s at frame "
+                    f"{maximum_hand_contact_speed_frame[side]}"
+                )
             if maximum_contact_speed[side] > 0.35:
                 failures.append(
                     f"planted {side} foot speed "
@@ -262,6 +320,9 @@ def main() -> None:
             "maximum_planted_ankle_drift_frame": maximum_contact_drift_frame,
             "maximum_planted_foot_speed_mps": maximum_contact_speed,
             "maximum_planted_foot_speed_frame": maximum_contact_speed_frame,
+            "maximum_planted_hand_speed_mps": maximum_hand_contact_speed,
+            "maximum_planted_hand_speed_frame": maximum_hand_contact_speed_frame,
+            "maximum_analytic_hand_error_model_units": maximum_analytic_hand_error,
             "loop_seam": seam,
             "failures": failures,
         }

@@ -136,6 +136,10 @@ def main() -> None:
     failures = []
     clips = {}
     for name, (start, end) in ranges.items():
+        role = motion["clips"][name].get("role", "unknown")
+        low_profile = role in {
+            "candidate_prone", "candidate_posture_transition", "crouch"
+        }
         length = max(1, end - start)
         frames = sorted({start, end, start + length // 4,
                          start + length // 2, start + length * 3 // 4})
@@ -150,10 +154,12 @@ def main() -> None:
             if not all(math.isfinite(number) for number in finite):
                 clip_failures.append(
                     f"frame {value['frame']}: non-finite 3D state")
-            if not name.startswith("slide") and height < baseline_height * 0.42:
+            if (not name.startswith("slide") and not low_profile
+                    and height < baseline_height * 0.42):
                 clip_failures.append(
                     f"frame {value['frame']}: collapsed height {height:.3f}")
-            if not name.startswith("slide") and max(width, depth) > height * 1.8:
+            if (not name.startswith("slide") and not low_profile
+                    and max(width, depth) > height * 1.8):
                 clip_failures.append(
                     f"frame {value['frame']}: horizontal explosion "
                     f"span=({width:.3f},{depth:.3f},{height:.3f})")

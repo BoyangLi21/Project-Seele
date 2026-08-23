@@ -173,6 +173,27 @@
       "analysis": "artifacts/mocap/cmu_16_57_trajectory.json",
       "kind": "trajectory",
       "clips": {"cmu_run_stop": "motion_01"}
+    },
+    {
+      "source": "external-assets/incoming/mocap/cmu/subject111/bvh/111_03.bvh",
+      "neutral_source": "external-assets/incoming/mocap/cmu/subject111/bvh/111_01.bvh",
+      "analysis": "artifacts/mocap/cmu_111_03_crawl.json",
+      "kind": "prone",
+      "clips": {"cmu_crawl": "crawl_01"}
+    },
+    {
+      "source": "external-assets/incoming/mocap/cmu/subject111/bvh/111_06.bvh",
+      "neutral_source": "external-assets/incoming/mocap/cmu/subject111/bvh/111_01.bvh",
+      "analysis": "artifacts/mocap/cmu_111_06_getup.json",
+      "kind": "posture_transition",
+      "clips": {"cmu_getup": "getup_01"}
+    },
+    {
+      "source": "external-assets/incoming/mocap/cmu/subject111/bvh/111_12.bvh",
+      "neutral_source": "external-assets/incoming/mocap/cmu/subject111/bvh/111_01.bvh",
+      "analysis": "artifacts/mocap/cmu_111_12_laydown.json",
+      "kind": "posture_transition",
+      "clips": {"cmu_laydown": "laydown_01"}
     }
   ]
 }

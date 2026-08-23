@@ -137,7 +137,7 @@ def capture_scale_and_floor(armature: bpy.types.Object) -> tuple[float, float]:
 
 
 def reference_contract(path: Path) -> tuple[
-    dict[str, Matrix], dict[str, tuple[Vector, float, Vector]]
+    dict[str, Matrix], dict[str, tuple[Vector, float, Vector]], float
 ]:
     armature = import_bvh(path)
     scene = bpy.context.scene
@@ -157,7 +157,8 @@ def reference_contract(path: Path) -> tuple[
             armature, "root", f"{side}femur",
             f"{side}tibia", f"{side}foot"
         )
-    return rotations, goals
+    source_to_meters, _floor = capture_scale_and_floor(armature)
+    return rotations, goals, source_to_meters
 
 
 def find_definition(analysis: dict, kind: str, segment_id: str) -> dict:
@@ -178,6 +179,10 @@ def limb_scales(kind: str) -> tuple[Vector, Vector]:
         return Vector((0.90, 1.0, 0.94)), Vector((0.11, 0.98, 0.78))
     if kind == "trajectory":
         return Vector((0.84, 0.98, 0.90)), Vector((0.11, 0.98, 0.78))
+    if kind == "prone":
+        return Vector((1.0, 1.0, 1.0)), Vector((0.34, 1.0, 0.94))
+    if kind == "posture_transition":
+        return Vector((0.96, 1.0, 0.98)), Vector((0.24, 1.0, 0.88))
     return Vector((0.96, 1.0, 0.98)), Vector((0.14, 0.94, 0.68))
 
 
@@ -306,6 +311,8 @@ def close_loop(frames: list[dict]) -> None:
                 float(frame["root_yaw_radians"]) - yaw_delta * amount, 7
             )
     frames[-1]["foot_contact"] = list(frames[0]["foot_contact"])
+    if "hand_contact" in frames[0]:
+        frames[-1]["hand_contact"] = list(frames[0]["hand_contact"])
 
 
 def lock_contact_feet(
@@ -504,6 +511,199 @@ def fit_loop_root_travel(
     return authored if 0.35 <= magnitude <= 4.5 else fallback
 
 
+def target_hand_position(rotations: dict[str, Quaternion],
+                         pivots: dict[str, Vector], side: str) -> Vector:
+    shoulder = pivots[f"arm_{side}"]
+    elbow_rest = pivots[f"forearm_{side}"]
+    wrist_rest = pivots[f"hand_{side}"]
+    arm = rotations[f"arm_{side}"]
+    forearm = rotations[f"forearm_{side}"]
+    elbow = shoulder + arm @ (elbow_rest - shoulder)
+    wrist = elbow + (arm @ forearm) @ (wrist_rest - elbow_rest)
+    upper_pivot = pivots["torso_upper"]
+    wrist = upper_pivot + rotations["torso_upper"] @ (wrist - upper_pivot)
+    lower_pivot = pivots["torso_lower"]
+    return lower_pivot + rotations["torso_lower"] @ (wrist - lower_pivot)
+
+
+def lock_contact_hands(frames: list[dict], bone_order: list[str],
+                       pivots: dict[str, Vector], root_travel: Vector,
+                       move_root: bool = True) -> None:
+    """Lock supporting hands without moving the already foot-locked pelvis."""
+    if len(frames) < 2 or not any("hand_contact" in frame for frame in frames):
+        return
+    indices = {name: index for index, name in enumerate(bone_order)}
+    rotations = [{
+        name: authored_to_runtime_quaternion(Quaternion(tuple(
+            frame["rotation_wxyz"][index]
+        )))
+        for name, index in indices.items()
+    } for frame in frames]
+    root_rotations = [Quaternion((
+        math.cos(float(frame.get("root_yaw_radians", 0.0)) * 0.5), 0.0,
+        math.sin(float(frame.get("root_yaw_radians", 0.0)) * 0.5), 0.0,
+    )) for frame in frames]
+    roots = []
+    virtual_roots = []
+    for frame_index, frame in enumerate(frames):
+        root = authored_to_runtime_vector(Vector(tuple(
+            float(value) for value in frame["root_m"]
+        ))) * MODEL_UNITS_PER_SOURCE_METRE
+        phase = frame_index / max(1, len(frames) - 1)
+        virtual = authored_to_runtime_vector(root_travel) \
+            * (MODEL_UNITS_PER_SOURCE_METRE * phase)
+        root += virtual
+        virtual_roots.append(virtual)
+        roots.append(root)
+
+    targets: list[list[Vector | None]] = [[None, None] for _ in frames]
+    for side_index, side in enumerate(("l", "r")):
+        opened = None
+        runs = []
+        for frame_index, frame in enumerate(frames):
+            active = bool(frame.get("hand_contact", (False, False))[side_index])
+            if active and opened is None:
+                opened = frame_index
+            elif not active and opened is not None:
+                runs.append((opened, frame_index - 1))
+                opened = None
+        if opened is not None:
+            runs.append((opened, len(frames) - 1))
+        for first, last in runs:
+            positions = [
+                root_rotations[index] @ target_hand_position(
+                    rotations[index], pivots, side
+                ) + roots[index]
+                for index in range(first, last + 1)
+            ]
+            lock = sum(positions, Vector((0.0, 0.0, 0.0))) / len(positions)
+            lock.y = sorted(point.y for point in positions)[len(positions) // 2]
+            for index in range(first, last + 1):
+                targets[index][side_index] = lock.copy()
+
+    def write_root(frame_index: int) -> None:
+        local_runtime = (roots[frame_index] - virtual_roots[frame_index]) \
+            / MODEL_UNITS_PER_SOURCE_METRE
+        authored = authored_to_runtime_vector(local_runtime)
+        frames[frame_index]["root_m"] = [
+            round(float(value), 7) for value in authored
+        ]
+
+    for _iteration in range(8 if move_root else 1):
+      for frame_index, frame_targets in enumerate(targets):
+        active_targets = [target for target in frame_targets
+                          if target is not None]
+        if move_root and active_targets:
+            errors = []
+            for side_index, side in enumerate(("l", "r")):
+                target = frame_targets[side_index]
+                if target is None:
+                    continue
+                actual = (root_rotations[frame_index] @ target_hand_position(
+                    rotations[frame_index], pivots, side
+                ) + roots[frame_index])
+                errors.append(target - actual)
+            roots[frame_index] += (
+                sum(errors, Vector((0.0, 0.0, 0.0))) / len(errors)
+            ) * 0.90
+            write_root(frame_index)
+        for side_index, side in enumerate(("l", "r")):
+            target = frame_targets[side_index]
+            if target is None:
+                continue
+            pose = rotations[frame_index]
+            body_target = root_rotations[frame_index].conjugated() @ (
+                target - roots[frame_index]
+            )
+            lower_pivot = pivots["torso_lower"]
+            body_target = lower_pivot + pose["torso_lower"].conjugated() @ (
+                body_target - lower_pivot
+            )
+            upper_pivot = pivots["torso_upper"]
+            local_target = upper_pivot + pose["torso_upper"].conjugated() @ (
+                body_target - upper_pivot
+            )
+            shoulder = pivots[f"arm_{side}"]
+            elbow = pivots[f"forearm_{side}"]
+            wrist = pivots[f"hand_{side}"]
+            vector = local_target - shoulder
+            total = (elbow - shoulder).length + (wrist - elbow).length
+            direction = vector.normalized()
+            reach = clamp(vector.length / total, 0.08, 0.9995)
+            current_elbow = shoulder + pose[f"arm_{side}"] @ (elbow - shoulder)
+            pole = current_elbow - shoulder
+            pole -= direction * pole.dot(direction)
+            if pole.length < 1.0e-6:
+                pole = Vector((0.0, 0.0, -1.0))
+            pole.normalize()
+            arm, forearm = solve_target_limb(
+                shoulder, elbow, wrist, direction, reach, pole
+            )
+            pose[f"arm_{side}"] = arm
+            pose[f"forearm_{side}"] = forearm
+            for bone_name in (f"arm_{side}", f"forearm_{side}"):
+                frames[frame_index]["rotation_wxyz"][indices[bone_name]] = \
+                    rounded_quaternion(runtime_to_authored_quaternion(
+                        pose[bone_name]
+                    ))
+    for bone_index in range(len(bone_order)):
+        previous = None
+        for frame in frames:
+            quat = Quaternion(tuple(frame["rotation_wxyz"][bone_index]))
+            if previous is not None and previous.dot(quat) < 0.0:
+                quat = Quaternion((-quat.w, -quat.x, -quat.y, -quat.z))
+                frame["rotation_wxyz"][bone_index] = rounded_quaternion(quat)
+            previous = quat
+
+
+def prune_unstable_hand_contacts(frames: list[dict], bone_order: list[str],
+                                 pivots: dict[str, Vector],
+                                 root_travel: Vector,
+                                 maximum_speed: float = 0.35) -> int:
+    """Remove automatic contact labels contradicted by target hand velocity."""
+    indices = {name: index for index, name in enumerate(bone_order)}
+    positions = {"l": [], "r": []}
+    for frame_index, frame in enumerate(frames):
+        rotations = {
+            name: authored_to_runtime_quaternion(Quaternion(tuple(
+                frame["rotation_wxyz"][index]
+            )))
+            for name, index in indices.items()
+        }
+        yaw = float(frame.get("root_yaw_radians", 0.0))
+        yaw_rotation = Quaternion((math.cos(yaw * 0.5), 0.0,
+                                   math.sin(yaw * 0.5), 0.0))
+        root = authored_to_runtime_vector(Vector(tuple(
+            float(value) for value in frame["root_m"]
+        ))) * MODEL_UNITS_PER_SOURCE_METRE
+        phase = frame_index / max(1, len(frames) - 1)
+        root += authored_to_runtime_vector(root_travel) \
+            * (MODEL_UNITS_PER_SOURCE_METRE * phase)
+        for side in ("l", "r"):
+            positions[side].append(
+                yaw_rotation @ target_hand_position(rotations, pivots, side)
+                + root
+            )
+    removed = 0
+    for side_index, side in enumerate(("l", "r")):
+        for frame_index in range(1, len(frames)):
+            previous = frames[frame_index - 1].get(
+                "hand_contact", (False, False)
+            )[side_index]
+            current = frames[frame_index].get(
+                "hand_contact", (False, False)
+            )[side_index]
+            if not previous or not current:
+                continue
+            speed = ((positions[side][frame_index]
+                      - positions[side][frame_index - 1]).length
+                     / MODEL_UNITS_PER_SOURCE_METRE * SAMPLE_RATE)
+            if speed > maximum_speed:
+                frames[frame_index]["hand_contact"][side_index] = False
+                removed += 1
+    return removed
+
+
 def sample_segment(
     armature: bpy.types.Object,
     definition: dict,
@@ -533,8 +733,10 @@ def sample_segment(
         for index, name in enumerate(bone_order)
     }
     contact_samples = []
+    hand_contact_samples = []
     yaw_samples = []
     previous_toes: list[Vector] | None = None
+    previous_hands: list[Vector] | None = None
     for seconds in times:
         source_frame = min(end, start + seconds * source_fps)
         whole = math.floor(source_frame)
@@ -557,6 +759,22 @@ def sample_segment(
             height <= floor + 0.08 / source_to_meters and speed <= 0.50
             for height, speed in zip(heights, speeds)
         ])
+        hands = [
+            target_vector(pose_point(armature, f"{side}hand"))
+            * source_to_meters
+            for side in ("l", "r")
+        ]
+        hand_speeds = ([0.0, 0.0] if previous_hands is None else [
+            (point - old).length * SAMPLE_RATE
+            for point, old in zip(hands, previous_hands)
+        ])
+        hand_contact_samples.append([
+            (kind in {"prone", "posture_transition"}
+             and point.y <= floor * source_to_meters + 0.13
+             and speed <= 0.50)
+            for point, speed in zip(hands, hand_speeds)
+        ])
+        previous_hands = [point.copy() for point in hands]
         yaw = source_root_yaw(armature)
         if yaw_samples:
             while yaw - yaw_samples[-1] > math.pi:
@@ -576,6 +794,16 @@ def sample_segment(
                 for side in (0, 1)
             ])
         contact_samples = filtered
+        filtered_hands = []
+        for index in range(len(hand_contact_samples)):
+            left = max(0, index - 1)
+            right = min(len(hand_contact_samples), index + 2)
+            filtered_hands.append([
+                sum(hand_contact_samples[item][side]
+                    for item in range(left, right)) * 2 >= right - left
+                for side in (0, 1)
+            ])
+        hand_contact_samples = filtered_hands
     previous: dict[str, Quaternion] = {}
     frames = []
     for sample_index, seconds in enumerate(times):
@@ -588,6 +816,7 @@ def sample_segment(
             pose_point(armature, f"{side}toes").z,
         ) for side in ("l", "r")]
         contacts = list(contact_samples[sample_index])
+        hand_contacts = list(hand_contact_samples[sample_index])
 
         authored_rotations = dict(fallback_authored)
         runtime_rotations = {
@@ -731,6 +960,7 @@ def sample_segment(
             ),
             "rotation_wxyz": ordered,
             "foot_contact": contacts,
+            "hand_contact": hand_contacts,
             "foot_height_m": [
                 round((height - floor) * source_to_meters, 6)
                 for height in feet
@@ -749,12 +979,24 @@ def sample_segment(
             frames, bone_order, target_pivots, source_root_travel
         )
     lock_contact_feet(frames, bone_order, target_pivots, root_travel)
+    lock_contact_hands(frames, bone_order, target_pivots, root_travel,
+                       move_root=True)
+    lock_contact_feet(frames, bone_order, target_pivots, root_travel)
+    lock_contact_hands(frames, bone_order, target_pivots, root_travel,
+                       move_root=False)
+    if prune_unstable_hand_contacts(
+            frames, bone_order, target_pivots, root_travel) > 0:
+        lock_contact_hands(frames, bone_order, target_pivots, root_travel,
+                           move_root=False)
     output = {
         "duration_seconds": round(duration, 6),
         "loop": loop,
         "role": ("candidate_locomotion" if loop
                  else "candidate_airborne" if kind == "jump"
                  else "candidate_trajectory" if kind == "trajectory"
+                 else "candidate_prone" if kind == "prone"
+                 else "candidate_posture_transition"
+                 if kind == "posture_transition"
                  else "candidate_combat"),
         "source_frame_range": [int(start), int(end)],
         "frames": frames,
@@ -812,9 +1054,11 @@ def main() -> None:
         cache_key = str(neutral_path)
         if cache_key not in reference_cache:
             reference_cache[cache_key] = reference_contract(neutral_path)
-        reference_rotations, reference_limb_goals = reference_cache[cache_key]
+        (reference_rotations, reference_limb_goals,
+         reference_source_to_meters) = reference_cache[cache_key]
         armature = import_bvh(source)
-        source_to_meters, floor = capture_scale_and_floor(armature)
+        _capture_scale, floor = capture_scale_and_floor(armature)
+        source_to_meters = reference_source_to_meters
         kind = capture["kind"]
         fallback_clip = (
             "knife_idle" if kind == "sword"

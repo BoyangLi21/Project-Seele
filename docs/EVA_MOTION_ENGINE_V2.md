@@ -41,10 +41,11 @@ body steps.
   18,132 body vertices is transformed by the same recursively accumulated
   Gecko matrices used at runtime. Sword candidates include the actual
   progressive-knife attachment, not a screenshot or proxy stick figure.
-- The exact candidate lab currently contains 35 clips: three cyclic gaits,
+- The exact candidate set currently contains 38 clips: three cyclic gaits,
   one full jump, four punches, eleven sword attacks, fifteen start/stop/veer/
-  90-degree trajectory captures and the neutral reference. It passes 0/35
-  skeleton and exact-mesh failures. The promoted runtime core (including the
+  90-degree trajectory captures, crawl/lay-down/get-up, and the neutral
+  reference. The skeleton database passes 0/38; the hash-bound full exact lab
+  plus the dedicated low-posture review are the mesh authorities. The promoted runtime core (including the
   three phase-aware jump clips) passes 0/11 skeleton and exact-mesh failures.
 - The important coordinate contract is explicit: IK is solved in Gecko's
   reflected runtime space, then converted back into authored Bedrock
@@ -120,6 +121,14 @@ The jump path is likewise phase-aware rather than a looping Minecraft jump:
 0.30 s takeoff, 0.60 s ballistic segment (apex at 0.5) and 0.37 s landing.
 V2 samples rising and falling halves independently from airborne state, while
 still remaining behind the `seele_motion_lab` rollout guard.
+
+Low posture now has a separate four-contact review. CMU crawl, lay-down and
+floor-recovery are retargeted against a standing neutral from the same subject.
+Velocity/height labels drive feet and supporting hands; shared-root leg IK and
+shoulder/elbow IK then lock those contacts. Crawl hand speed fell from roughly
+4.5 m/s to 0.00/0.31 m/s, with lay-down and get-up also below 0.35 m/s.
+`EVA_POSTURE_REVIEW_EXACT.blend` displays cyan/magenta hand-contact markers and
+passes its database and exact-mesh audits (0/4).
 
 ## Non-goals
 
