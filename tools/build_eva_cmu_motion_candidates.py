@@ -115,13 +115,33 @@ def source_body_right(armature: bpy.types.Object) -> Vector:
     return lateral
 
 
-def source_body_forward(right: Vector, sign: float = 1.0) -> Vector:
-    """Return the horizontal body forward perpendicular to the hip line.
+def source_body_forward(right: Vector) -> Vector:
+    """Return Blender Z-up anatomical forward: ``up cross right``."""
+    return Vector((-right.y, right.x, 0.0))
 
-    A hip line alone has a 180-degree ambiguity. ``sign`` is selected once per
-    clip from its declared forward root travel, then retained for every frame.
-    """
-    return Vector((-right.y * sign, right.x * sign, 0.0))
+
+def validate_source_body_basis(armature: bpy.types.Object, right: Vector,
+                               forward: Vector) -> None:
+    up = Vector((0.0, 0.0, 1.0))
+    handedness = right.cross(forward).dot(up)
+    if handedness < 0.999:
+        raise RuntimeError(
+            f"CMU body basis is not right-handed: {handedness:.6f}"
+        )
+    toe_forward = (
+        pose_point(armature, "ltoes") - pose_point(armature, "lfoot")
+        + pose_point(armature, "rtoes") - pose_point(armature, "rfoot")
+    ) * 0.5
+    toe_forward.z = 0.0
+    if toe_forward.length < 1.0e-8:
+        raise RuntimeError("CMU toe direction is degenerate")
+    toe_forward.normalize()
+    agreement = forward.dot(toe_forward)
+    if agreement < 0.50:
+        raise RuntimeError(
+            "CMU hip-derived forward disagrees with toe direction: "
+            f"dot={agreement:.6f}"
+        )
 
 
 def source_to_runtime_root(delta: Vector, initial_right: Vector,
@@ -137,9 +157,9 @@ def source_to_runtime_root(delta: Vector, initial_right: Vector,
 
 
 def source_root_yaw(armature: bpy.types.Object, initial_right: Vector,
-                    initial_forward: Vector, forward_sign: float) -> float:
+                    initial_forward: Vector) -> float:
     right = source_body_right(armature)
-    forward = source_body_forward(right, forward_sign)
+    forward = source_body_forward(right)
     # A positive runtime Y rotation turns local -Z toward local -X.  Resolve
     # the source heading in the initial right/forward basis using that same
     # convention instead of negating an importer-space Euler angle.
@@ -762,17 +782,8 @@ def sample_segment(
     start_root = pose_point(armature, "root")
     initial_right = source_body_right(armature)
     initial_forward = source_body_forward(initial_right)
-    scene.frame_set(int(end))
-    bpy.context.view_layer.update()
-    source_total = pose_point(armature, "root") - start_root
-    source_total.z = 0.0
-    forward_sign = 1.0
-    if (source_total.length > 1.0e-6
-            and initial_forward.dot(source_total) < 0.0):
-        forward_sign = -1.0
-        initial_forward.negate()
-    scene.frame_set(int(start))
-    bpy.context.view_layer.update()
+    if kind in {"locomotion", "trajectory"}:
+        validate_source_body_basis(armature, initial_right, initial_forward)
     arm_scale, leg_scale = limb_scales(kind)
     fallback_authored = {
         name: Quaternion(tuple(fallback_rotations[index]))
@@ -821,9 +832,7 @@ def sample_segment(
             for point, speed in zip(hands, hand_speeds)
         ])
         previous_hands = [point.copy() for point in hands]
-        yaw = source_root_yaw(
-            armature, initial_right, initial_forward, forward_sign
-        )
+        yaw = source_root_yaw(armature, initial_right, initial_forward)
         if yaw_samples:
             while yaw - yaw_samples[-1] > math.pi:
                 yaw -= math.tau
@@ -1049,6 +1058,11 @@ def sample_segment(
                  else "candidate_combat"),
         "source_frame_range": [int(start), int(end)],
         "frames": frames,
+        "source_initial_basis_blender": {
+            "right": [round(float(value), 7) for value in initial_right],
+            "forward": [round(float(value), 7) for value in initial_forward],
+            "up": [0.0, 0.0, 1.0],
+        },
     }
     if loop:
         output["closed_endpoint"] = True
