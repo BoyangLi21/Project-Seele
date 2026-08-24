@@ -104,14 +104,47 @@ def pose_point(armature: bpy.types.Object, name: str) -> Vector:
     return armature.matrix_world @ armature.pose.bones[name].matrix.translation
 
 
-def source_root_yaw(armature: bpy.types.Object) -> float:
+def source_body_right(armature: bpy.types.Object) -> Vector:
     left = pose_point(armature, "lfemur")
     right = pose_point(armature, "rfemur")
     lateral = right - left
     lateral.z = 0.0
+    if lateral.length < 1.0e-8:
+        raise RuntimeError("CMU hip line is degenerate")
     lateral.normalize()
-    forward = Vector((-lateral.y, lateral.x, 0.0))
-    return math.atan2(forward.x, -forward.y)
+    return lateral
+
+
+def source_body_forward(right: Vector, sign: float = 1.0) -> Vector:
+    """Return the horizontal body forward perpendicular to the hip line.
+
+    A hip line alone has a 180-degree ambiguity. ``sign`` is selected once per
+    clip from its declared forward root travel, then retained for every frame.
+    """
+    return Vector((-right.y * sign, right.x * sign, 0.0))
+
+
+def source_to_runtime_root(delta: Vector, initial_right: Vector,
+                           initial_forward: Vector) -> Vector:
+    """Express a Blender-space source displacement in EVA local coordinates.
+
+    EVA runtime coordinates are X=right, Y=up, Z=back, so positive source
+    forward maps to runtime -Z.  This basis projection prevents importer-axis
+    conventions from silently turning a forward capture into a backwards EVA.
+    """
+    return Vector((delta.dot(initial_right), delta.z,
+                   -delta.dot(initial_forward)))
+
+
+def source_root_yaw(armature: bpy.types.Object, initial_right: Vector,
+                    initial_forward: Vector, forward_sign: float) -> float:
+    right = source_body_right(armature)
+    forward = source_body_forward(right, forward_sign)
+    # A positive runtime Y rotation turns local -Z toward local -X.  Resolve
+    # the source heading in the initial right/forward basis using that same
+    # convention instead of negating an importer-space Euler angle.
+    return math.atan2(-forward.dot(initial_right),
+                      forward.dot(initial_forward))
 
 
 def capture_scale_and_floor(armature: bpy.types.Object) -> tuple[float, float]:
@@ -727,6 +760,19 @@ def sample_segment(
     scene.frame_set(int(start))
     bpy.context.view_layer.update()
     start_root = pose_point(armature, "root")
+    initial_right = source_body_right(armature)
+    initial_forward = source_body_forward(initial_right)
+    scene.frame_set(int(end))
+    bpy.context.view_layer.update()
+    source_total = pose_point(armature, "root") - start_root
+    source_total.z = 0.0
+    forward_sign = 1.0
+    if (source_total.length > 1.0e-6
+            and initial_forward.dot(source_total) < 0.0):
+        forward_sign = -1.0
+        initial_forward.negate()
+    scene.frame_set(int(start))
+    bpy.context.view_layer.update()
     arm_scale, leg_scale = limb_scales(kind)
     fallback_authored = {
         name: Quaternion(tuple(fallback_rotations[index]))
@@ -775,7 +821,9 @@ def sample_segment(
             for point, speed in zip(hands, hand_speeds)
         ])
         previous_hands = [point.copy() for point in hands]
-        yaw = source_root_yaw(armature)
+        yaw = source_root_yaw(
+            armature, initial_right, initial_forward, forward_sign
+        )
         if yaw_samples:
             while yaw - yaw_samples[-1] > math.pi:
                 yaw -= math.tau
@@ -930,7 +978,9 @@ def sample_segment(
             ordered.append(rounded_quaternion(quat))
 
         source_root = pose_point(armature, "root") - start_root
-        root = target_vector(source_root) * source_to_meters
+        root = source_to_runtime_root(
+            source_root, initial_right, initial_forward
+        ) * source_to_meters
         if loop:
             root.x = 0.0
             root.z = 0.0
@@ -955,9 +1005,7 @@ def sample_segment(
             root.y = max(root.y, *correction.values()) + 0.018
         frames.append({
             "root_m": [round(float(value), 7) for value in root],
-            "root_yaw_radians": round(
-                float(-(yaw_samples[sample_index] - yaw_samples[0])), 7
-            ),
+            "root_yaw_radians": round(float(yaw_samples[sample_index]), 7),
             "rotation_wxyz": ordered,
             "foot_contact": contacts,
             "hand_contact": hand_contacts,
@@ -971,8 +1019,9 @@ def sample_segment(
     if loop:
         scene.frame_set(int(end))
         bpy.context.view_layer.update()
-        source_root_travel = target_vector(
-            pose_point(armature, "root") - start_root
+        source_root_travel = source_to_runtime_root(
+            pose_point(armature, "root") - start_root,
+            initial_right, initial_forward,
         ) * source_to_meters
         close_loop(frames)
         root_travel = fit_loop_root_travel(

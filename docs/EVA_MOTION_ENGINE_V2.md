@@ -51,6 +51,13 @@ body steps.
   reflected runtime space, then converted back into authored Bedrock
   rotations. Solving against raw JSON pivots was the root cause of previously
   mirrored/folded limbs and elevated planted feet.
+- Locomotion direction is now a hard semantic gate, not an inferred camera
+  label. Source displacement is projected into the capture's initial
+  hip-right/body-forward basis, where positive forward maps to EVA local -Z.
+  Both the quaternion database and the exact Blender mesh require positive
+  median `dot(facing, horizontal_velocity)` and reject excessive negative
+  samples. Cyclic `root_travel_m` is materialised in Blender so the review
+  scene shows the actual stride instead of contact-lock micro-motion alone.
 - Minecraft is an integration target only. Motion is authored, edited and
   rejected in Blender first; no game launch is part of the animation-quality
   loop.

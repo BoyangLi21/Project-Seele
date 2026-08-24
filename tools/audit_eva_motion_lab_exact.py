@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import json
 import math
+import statistics
 import sys
 from pathlib import Path
 
@@ -103,6 +104,50 @@ def ranges_from_db(motion: dict, gap: int) -> dict[str, tuple[int, int]]:
     return ranges
 
 
+def directional_alignment(scene: bpy.types.Scene, start: int, end: int,
+                          role: str) -> dict | None:
+    if role not in {
+            "candidate_locomotion", "candidate_trajectory",
+            "locomotion", "trajectory", "gait"}:
+        return None
+    alignments = []
+    previous = None
+    for frame in range(start, end + 1):
+        scene.frame_set(frame)
+        bpy.context.view_layer.update()
+        root = joint("root").copy()
+        if previous is not None:
+            velocity = root - previous
+            velocity.z = 0.0
+            # One Blender unit in this lab is about 0.1786 m at display scale;
+            # ignore sub-0.1 m/s pelvis/contact-lock corrections and audit the
+            # actual locomotion trajectory instead of root micro-jitter.
+            if velocity.length > 0.02:
+                velocity.normalize()
+                torso = bpy.data.objects["JOINT::torso_lower"]
+                facing = (torso.matrix_world.to_quaternion()
+                          @ Vector((0.0, 1.0, 0.0)))
+                facing.z = 0.0
+                if facing.length > 1.0e-8:
+                    facing.normalize()
+                    alignments.append(velocity.dot(facing))
+        previous = root.copy()
+    if not alignments:
+        return {
+            "sample_count": 0,
+            "median_facing_velocity_dot": None,
+            "minimum_facing_velocity_dot": None,
+            "negative_fraction": None,
+        }
+    return {
+        "sample_count": len(alignments),
+        "median_facing_velocity_dot": statistics.median(alignments),
+        "minimum_facing_velocity_dot": min(alignments),
+        "negative_fraction": (sum(value < 0.0 for value in alignments)
+                              / len(alignments)),
+    }
+
+
 def main() -> None:
     args = parse_args()
     motion = json.loads(args.motion_db.read_text(encoding="utf-8"))
@@ -146,6 +191,18 @@ def main() -> None:
                          start + length // 2, start + length * 3 // 4})
         samples = [sample(scene, parts, frame) for frame in frames]
         clip_failures = []
+        direction = directional_alignment(scene, start, end, role)
+        if direction is not None and direction["sample_count"] >= 3:
+            if direction["median_facing_velocity_dot"] < 0.35:
+                clip_failures.append(
+                    "backwards exact mesh: median facing/velocity dot "
+                    f"{direction['median_facing_velocity_dot']:.3f} < 0.350"
+                )
+            if direction["negative_fraction"] > 0.20:
+                clip_failures.append(
+                    "backwards exact mesh: negative facing/velocity samples "
+                    f"{direction['negative_fraction']:.1%} > 20.0%"
+                )
         for value in samples:
             width, depth, height = value["span"]
             finite = (width, depth, height, value["left_knee_degrees"],
@@ -180,6 +237,7 @@ def main() -> None:
         clips[name] = {
             "frame_range": [start, end],
             "samples": samples,
+            "directional_alignment": direction,
             "failures": unique,
         }
         failures.extend(f"{name}: {failure}" for failure in unique)

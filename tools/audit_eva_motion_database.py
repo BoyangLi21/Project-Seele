@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import json
 import math
+import statistics
 import sys
 from pathlib import Path
 
@@ -54,6 +55,63 @@ def runtime_quaternion(wxyz: list[float]) -> Quaternion:
     result = Euler((-euler.x, -euler.y, euler.z), "XYZ").to_quaternion()
     result.normalize()
     return result
+
+
+def directional_alignment(clip: dict, fps: float) -> dict | None:
+    """Measure horizontal velocity against the EVA's local -Z facing axis."""
+    role = str(clip.get("role", ""))
+    if role not in {
+            "candidate_locomotion", "candidate_trajectory",
+            "locomotion", "trajectory", "gait"}:
+        return None
+    frames = clip["frames"]
+    if len(frames) < 2:
+        return None
+    travel = Vector(tuple(float(value) for value in
+                          clip.get("root_travel_m", (0.0, 0.0, 0.0))))
+    points = []
+    for index, frame in enumerate(frames):
+        phase = index / max(1, len(frames) - 1)
+        root = Vector(tuple(float(value) for value in frame["root_m"]))
+        points.append(root + travel * phase)
+    alignments = []
+    speeds = []
+    for index in range(1, len(frames)):
+        velocity = points[index] - points[index - 1]
+        velocity.y = 0.0
+        speed = velocity.length * fps
+        if speed < 0.10:
+            continue
+        velocity.normalize()
+        previous_yaw = float(frames[index - 1].get(
+            "root_yaw_radians", 0.0))
+        current_yaw = float(frames[index].get("root_yaw_radians", 0.0))
+        yaw_delta = current_yaw - previous_yaw
+        while yaw_delta > math.pi:
+            yaw_delta -= math.tau
+        while yaw_delta < -math.pi:
+            yaw_delta += math.tau
+        yaw = previous_yaw + yaw_delta * 0.5
+        # Runtime is right-handed Y-up; canonical model forward is local -Z.
+        facing = Vector((-math.sin(yaw), 0.0, -math.cos(yaw)))
+        alignments.append(velocity.dot(facing))
+        speeds.append(speed)
+    if not alignments:
+        return {
+            "sample_count": 0,
+            "median_facing_velocity_dot": None,
+            "minimum_facing_velocity_dot": None,
+            "negative_fraction": None,
+            "maximum_speed_mps": 0.0,
+        }
+    return {
+        "sample_count": len(alignments),
+        "median_facing_velocity_dot": statistics.median(alignments),
+        "minimum_facing_velocity_dot": min(alignments),
+        "negative_fraction": (sum(value < 0.0 for value in alignments)
+                              / len(alignments)),
+        "maximum_speed_mps": max(speeds),
+    }
 
 
 def analytic_hand(rotations: dict[str, Quaternion], pivots,
@@ -122,6 +180,18 @@ def main() -> None:
             for frame in frames
         ]
         failures = []
+        direction = directional_alignment(clip, fps)
+        if direction is not None and direction["sample_count"] >= 3:
+            if direction["median_facing_velocity_dot"] < 0.35:
+                failures.append(
+                    "backwards locomotion: median facing/velocity dot "
+                    f"{direction['median_facing_velocity_dot']:.3f} < 0.350"
+                )
+            if direction["negative_fraction"] > 0.20:
+                failures.append(
+                    "backwards locomotion: negative facing/velocity samples "
+                    f"{direction['negative_fraction']:.1%} > 20.0%"
+                )
         extrema = {
             "left_elbow": [float("inf"), float("-inf")],
             "right_elbow": [float("inf"), float("-inf")],
@@ -330,6 +400,7 @@ def main() -> None:
             "maximum_planted_hand_speed_mps": maximum_hand_contact_speed,
             "maximum_planted_hand_speed_frame": maximum_hand_contact_speed_frame,
             "maximum_analytic_hand_error_model_units": maximum_analytic_hand_error,
+            "directional_alignment": direction,
             "loop_seam": seam,
             "failures": failures,
         }

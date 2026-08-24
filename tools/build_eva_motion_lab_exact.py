@@ -147,6 +147,8 @@ def animate_exact(motion: dict, bone_order: list[str],
     for clip_name in sequence:
         clip = motion["clips"][clip_name]
         start = frame_cursor
+        root_travel = Vector(tuple(float(value) for value in
+                                   clip.get("root_travel_m", (0.0, 0.0, 0.0))))
         def show_attachment(name: str) -> bool:
             if name == "knife":
                 return (clip_name.startswith("cmu_sword_")
@@ -163,8 +165,17 @@ def animate_exact(motion: dict, bone_order: list[str],
         last_hand_contacts = None
         for local_index, frame_data in enumerate(clip["frames"]):
             frame = start + local_index
+            display_frame = frame_data
+            if root_travel.length_squared > 1.0e-12:
+                phase = local_index / max(1, len(clip["frames"]) - 1)
+                display_frame = dict(frame_data)
+                display_frame["root_m"] = [
+                    float(frame_data["root_m"][axis])
+                    + float(root_travel[axis]) * phase
+                    for axis in range(3)
+                ]
             matrices = deformation_matrices(
-                frame_data, db_bones, bone_order, pivots, parents
+                display_frame, db_bones, bone_order, pivots, parents
             )
             for bone_name, obj in parts.items():
                 key_transform(obj, matrices[bone_name], frame, clip_name)
