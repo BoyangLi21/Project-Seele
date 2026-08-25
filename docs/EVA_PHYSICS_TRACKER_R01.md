@@ -72,6 +72,10 @@ Newton/MuJoCo 烟测、ONNX 和确定性验证。
 - 未训练 GRU ONNX 形状：G1 `354 -> 29`，EVA `1707 -> 92`，hidden 512。
 - EVA 网络约 696 万参数；PyTorch/ONNX 最大误差约 `6e-8`。
 - 本机 ONNX Runtime CPU 单角色 P95 约 0.46 ms（仅网络前向，不含物理）。
+- ProtoMotions/Newton 已完成 2 轮端到端 recurrent PPO 烟测：hidden 会进入经验
+  回放、按 done 单行清零，并按环境组成连续 8 步 truncated BPTT；最后一步损失
+  可反传到第一步，checkpoint 保存成功。该随机策略又已导出显式 hidden ONNX，
+  数值误差约 `3.6e-7`、CPU P95 约 0.23 ms。
 - 共享内存 SPSC 固定包：command 256 B、state 512 B；state 包包含 root、
   41 关节、接触掩码和 8 个接触力值，不走 Minecraft 大 NBT payload。
 
