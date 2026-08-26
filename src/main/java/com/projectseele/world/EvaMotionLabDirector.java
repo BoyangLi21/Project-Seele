@@ -244,6 +244,13 @@ public final class EvaMotionLabDirector
         {
             return false;
         }
+        // Manual piloting and the autonomous lane must never own the same
+        // chassis. A previously selected RUN demo otherwise keeps translating
+        // the EVA and overwriting gait data after the player boards it.
+        DEMO_MODES[variant] = DemoMode.STOP;
+        DEMO_TICKS[variant] = 0;
+        eva.setMotionLabPhysicsPreview(0);
+        eva.setMotionLabDemoGait(false);
         if (player.isPassenger())
         {
             player.stopRiding();
