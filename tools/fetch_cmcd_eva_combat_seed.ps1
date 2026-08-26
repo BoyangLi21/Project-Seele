@@ -18,7 +18,11 @@ $files = @(
     @{ File = "Take_2015-11-25_03.05.43_PM_kick.bvh"; Role = "jumping_kick"; Use = "Israfel trajectory/reference screening" },
     @{ File = "Take_2016-01-05_03.43.20_PM.bvh"; Role = "forward_roll_walkover"; Use = "pounce miss/recovery screening" },
     @{ File = "Take_2015-11-25_03.02.43_PM_getsShot.bvh"; Role = "hit_tumble_fall"; Use = "target reaction/recovery screening" },
-    @{ File = "Take2018-01-16_KingKong2.bvh"; Role = "ape_defend_fight"; Use = "berserk negative/reference screening only" }
+    @{ File = "Take2018-01-16_KingKong2.bvh"; Role = "ape_defend_fight"; Use = "berserk negative/reference screening only" },
+    @{ File = "Take2017-01-11_02.36.38PM.bvh"; Role = "martial_kicking_sequence"; Use = "low-line kick/reap source screening" },
+    @{ File = "Take_2019-01-08_karate.bvh"; Role = "karate_sequence"; Use = "low-line kick/reap source screening" },
+    @{ File = "Take_2019-01-09_N_Nussknacker1.bvh"; Role = "aggressive_kick_sequence_1"; Use = "low-line kick/reap source screening" },
+    @{ File = "Take_2019-01-09_N_Nussknacker3.bvh"; Role = "aggressive_kick_sequence_3"; Use = "low-line kick/reap source screening" }
 )
 
 $entries = @()

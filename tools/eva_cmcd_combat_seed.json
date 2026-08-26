@@ -60,6 +60,34 @@
       "description": "crouching, ape walk, defend and fight",
       "subject": "CMCD King Kong",
       "trial": "2018-01-16-KingKong2"
+    },
+    {
+      "file": "../external-assets/incoming/mocap/cmcd-eva-combat-seed-r01/Take2017-01-11_02.36.38PM.bvh",
+      "role": "kick_sequence_reference",
+      "description": "martial arts kicking and fighting sequence",
+      "subject": "CMCD Paul",
+      "trial": "2017-01-11-martial-kicking"
+    },
+    {
+      "file": "../external-assets/incoming/mocap/cmcd-eva-combat-seed-r01/Take_2019-01-08_karate.bvh",
+      "role": "kick_sequence_reference",
+      "description": "karate sequence",
+      "subject": "CMCD Peter Lustig",
+      "trial": "2019-01-08-karate"
+    },
+    {
+      "file": "../external-assets/incoming/mocap/cmcd-eva-combat-seed-r01/Take_2019-01-09_N_Nussknacker1.bvh",
+      "role": "kick_sequence_reference",
+      "description": "aggressive attacking and kicking sequence 1",
+      "subject": "CMCD Nussknacker",
+      "trial": "2019-01-09-kick-1"
+    },
+    {
+      "file": "../external-assets/incoming/mocap/cmcd-eva-combat-seed-r01/Take_2019-01-09_N_Nussknacker3.bvh",
+      "role": "kick_sequence_reference",
+      "description": "aggressive attacking and kicking sequence 3",
+      "subject": "CMCD Nussknacker",
+      "trial": "2019-01-09-kick-3"
     }
   ]
 }

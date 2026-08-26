@@ -132,6 +132,8 @@ def main() -> None:
                         default="none")
     parser.add_argument("--contact-blend-frames", type=int, default=4)
     parser.add_argument("--initial-multistart", type=int, default=6)
+    parser.add_argument("--head-weight-scale", type=float, default=1.0)
+    parser.add_argument("--wrist-weight-scale", type=float, default=1.0)
     args = parser.parse_args()
 
     model = mujoco.MjModel.from_xml_path(str(args.model.resolve()))
@@ -231,6 +233,10 @@ def main() -> None:
 
     target_ids = []
     for source_name, object_type, target_name, weight in TARGETS:
+        if source_name == "head":
+            weight *= args.head_weight_scale
+        if source_name in {"wrist_l", "wrist_r"}:
+            weight *= args.wrist_weight_scale
         if source_name not in source_index:
             raise RuntimeError(f"missing source landmark {source_name}")
         if object_type == "body":
@@ -957,6 +963,8 @@ def main() -> None:
         "force_contact": args.force_contact,
         "contact_blend_frames": args.contact_blend_frames,
         "initial_multistart": args.initial_multistart,
+        "head_weight_scale": args.head_weight_scale,
+        "wrist_weight_scale": args.wrist_weight_scale,
         "per_landmark": per_landmark,
         "frame_reports": frame_reports,
         "root_runtime_authority": (

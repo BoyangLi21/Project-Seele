@@ -138,6 +138,12 @@ but fails the new individual grounding gate and is therefore not accepted:
   errors worse. Those variants are rejected; the next solve must optimize the
   contact trajectory jointly rather than trade one frame's feet against one
   frame's torso.
+- CMCD Nussknacker3 frames 350–385 gives a credible right low-line kick source
+  and clears grounding, root, tangent and support drift/speed gates after
+  segmentation. It remains blocked because the current independent IK leaves
+  aggregate effector P95 at `0.02301 H` (principally head/wrist). Raising those
+  weights simply moved the error into elbow articulation, so the threshold was
+  not relaxed.
 
 ## Next physical gate
 

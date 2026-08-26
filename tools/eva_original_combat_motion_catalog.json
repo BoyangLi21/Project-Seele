@@ -74,7 +74,12 @@
     },
     "cmu": {
       "license": "CMU database reuse terms",
-      "paired_grapple": ["18_03-06", "19_03-06"],
+      "paired_grapple": [
+        "18_03-06", "19_03-06",
+        "20_10", "21_10",
+        "22_01/02/05/10/11/12/17",
+        "23_01/02/05/10/11/12/17"
+      ],
       "pounce_reference": ["49_04", "49_05", "127_23", "127_24"],
       "aerial_kick_reference": ["90_05", "90_06", "90_07"],
       "ward_and_entry": ["144_07", "144_08", "144_15-17", "144_22-29"],
@@ -84,6 +89,10 @@
       "license": "CC BY 4.0",
       "official_license_url": "https://mocap.web.th-koeln.de/about.php",
       "aerial_kick_reference": ["Take_2015-11-25_03.05.43_PM_kick.bvh"],
+      "low_line_kick_reference": [
+        "Take_2019-01-09_N_Nussknacker3.bvh frames 340-390",
+        "Take_2019-01-09_N_Nussknacker1.bvh frames 660-750"
+      ],
       "paired_hand_contact_reference": [
         "Take2018-01-17_12.21.11SAM.bvh",
         "Take2018-01-17_12.21.11AM.bvh"

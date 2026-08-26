@@ -29,6 +29,11 @@ def main() -> None:
         fragment = node.get("source_fragment")
         if fragment is not None and fragment not in fragments:
             failures.append(f"{node_id}:unknown_fragment:{fragment}")
+        if (fragment is not None and fragment in fragments
+                and fragments[fragment].get("source") is None):
+            warnings.append(
+                f"{node_id}:fragment_source_pending:{fragment}"
+            )
         if fragment is None:
             warnings.append(f"{node_id}:project_authored_source_pending")
         for phase_name in ("redirectible_phase", "commit_phase",

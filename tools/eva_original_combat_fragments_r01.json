@@ -82,13 +82,14 @@
       "role": "free_combat_push_kick"
     },
     {
-      "id": "roundhouse_low_left_reference",
+      "id": "roundhouse_left_high_reference",
       "source": "ACCAD/Male2_G8_RoundhouseLeft.bvh",
       "source_fps": 30,
       "frames": [1, 55],
       "event_frame": 21,
       "license": "CC BY 3.0",
-      "role": "contextual_low_line_kick"
+      "role": "contextual_high_roundhouse_reference",
+      "status": "not_valid_for_low_reap_swing_height_0_714H"
     },
     {
       "id": "pounce_launch_reference_a",
@@ -124,10 +125,63 @@
       "status": "relative_pair_attach_gate_passed_individual_grounding_blocked_post_contact_motion_must_be_physical"
     },
     {
+      "id": "arm_wrench_pivot_pair_a",
+      "source": ["CMU/20_10.bvh", "CMU/21_10.bvh"],
+      "source_fps": 120,
+      "frames": [67, 145],
+      "contact_segments": [[67, 145]],
+      "license": "CMU database reuse terms",
+      "role": "paired_arm_wrench_and_pivot_reference",
+      "status": "source_contact_window_requires_grounded_pair_retarget"
+    },
+    {
+      "id": "two_hand_shoulder_control_pair_a",
+      "source": ["CMU/22_05.bvh", "CMU/23_05.bvh"],
+      "source_fps": 120,
+      "frames": [59, 245],
+      "license": "CMU database reuse terms",
+      "role": "paired_two_hand_clamp_and_shove_setup",
+      "status": "requires_two_contact_overlap_segmentation"
+    },
+    {
+      "id": "stumble_body_collision_pair_a",
+      "source": ["CMU/22_12.bvh", "CMU/23_12.bvh"],
+      "source_fps": 120,
+      "frames": [3, 167],
+      "license": "CMU database reuse terms",
+      "role": "paired_shoulder_ram_collision_response_reference",
+      "status": "collision_timing_reference_not_damage_ground_truth"
+    },
+    {
+      "id": "mutual_grip_resistance_pair_a",
+      "source": ["CMU/22_17.bvh", "CMU/23_17.bvh"],
+      "source_fps": 120,
+      "frames": [197, 283],
+      "license": "CMU database reuse terms",
+      "role": "paired_mutual_grip_and_break_reference",
+      "status": "source_contact_window_requires_grounded_pair_retarget"
+    },
+    {
       "id": "two_hand_shove_project_capture",
       "source": null,
       "role": "free_combat_two_hand_shove",
       "status": "project_mocap_or_physical_authoring_required"
+    },
+    {
+      "id": "low_reap_project_capture",
+      "source": null,
+      "role": "free_combat_low_reap",
+      "status": "project_mocap_or_new_open_source_required"
+    },
+    {
+      "id": "low_line_kick_right_cmcd_nuss3",
+      "source": "CMCD/Take_2019-01-09_N_Nussknacker3.bvh",
+      "source_fps": 60,
+      "frames": [340, 390],
+      "event_frame": 363,
+      "license": "CC BY 4.0",
+      "role": "free_combat_low_line_kick_right",
+      "status": "source_shortlist_physical_retarget_pending"
     }
   ]
 }

@@ -54,6 +54,9 @@ they are not.
   roundhouse/spinning kicks, leaps, crawls, punches and extended sequences.
 - CMU official reuse terms, selected 120 Hz BVH conversions:
   - paired pull/resist: subjects 18 and 19, trials 03-06;
+  - paired interaction supplement: `20/21_10` two-person whip;
+    `22/23_01,02,05,10,11,12,17` pull-up, two-shoulder contact, shelter,
+    stumble collision and arm wrestle;
   - run/leap and dive/roll: 49_04-05 and 127_23-24;
   - jump kicks: 90_05-07;
   - martial/front kicks: 135_04/07 and 144_05/06/09/10;

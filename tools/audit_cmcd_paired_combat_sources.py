@@ -53,6 +53,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output-json", required=True, type=Path)
     parser.add_argument("--output-md", required=True, type=Path)
     parser.add_argument("--pair-name", required=True)
+    parser.add_argument("--source-name", default="Cologne Motion Capture Database")
+    parser.add_argument("--source-url", default="https://mocap.web.th-koeln.de/index.php")
+    parser.add_argument("--license", default="CC BY 4.0")
     parser.add_argument("--sample-fps", type=float, default=60.0)
     parser.add_argument("--contact-threshold-H", type=float, default=0.10)
     parser.add_argument("--best-blend", type=Path)
@@ -182,9 +185,9 @@ def main() -> None:
         "schema": 1,
         "pair_name": args.pair_name,
         "actor_files": [str(args.actor_a.resolve()), str(args.actor_b.resolve())],
-        "source": "Cologne Motion Capture Database",
-        "source_url": "https://mocap.web.th-koeln.de/index.php",
-        "license": "CC BY 4.0",
+        "source": args.source_name,
+        "source_url": args.source_url,
+        "license": args.license,
         "native_fps": native_fps,
         "sample_fps": args.sample_fps,
         "frames": [float(frames[0]), float(frames[-1])],

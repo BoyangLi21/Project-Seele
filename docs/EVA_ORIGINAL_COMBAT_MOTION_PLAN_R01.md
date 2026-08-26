@@ -43,8 +43,9 @@ Free combat is assembled from short, contact-labelled motion fragments. It is
 not a list of long clips bound one-to-one to keys.
 
 The current machine-readable prototype is
-`tools/eva_combat_action_graph_r01.json`; its structural validator passes twelve
-nodes and eighteen conditional edges with no missing hit/miss resolver. It is a
+`tools/eva_combat_action_graph_r01.json`; its structural validator passes
+thirteen nodes and twenty-one conditional edges with no missing hit/miss
+resolver. It is a
 controller contract, not evidence that the motions are already finished.
 
 | Family | Purpose | Required contacts | Miss / interruption result |
@@ -156,8 +157,9 @@ physical tracking; dataset labels do not make any capture an EVA action.
 Finishers live outside the free-combat search domain. Each uses a paired or
 multi-actor interaction rig, target-specific anchors and a failure/abort path.
 
-Nine detailed interaction graphs are stored in
-`tools/eva_contextual_finisher_graphs_r01.json`.
+Nine detailed interaction graphs with 41 contact-labelled stages are stored in
+`tools/eva_contextual_finisher_graphs_r01.json`. Their structural validator
+passes; all nine still correctly report their target rigs as pending.
 
 | Encounter | Recognisable high-level beats | Runtime gate | Production method |
 |---|---|---|---|
@@ -175,6 +177,9 @@ Nine detailed interaction graphs are stored in
 | Mass Production Evas | Unit-02 running executions, heavy swings/blowback, grapples, knife/weapon improvisation | EoE scenario, battery pressure and multiple targets | contact-driven kill graph with target handoff, not one long montage clip |
 
 The target is recognition through action logic, not frame-perfect reproduction.
+
+The executable first-wave order, exact source windows and current pass/block
+state are maintained in `docs/EVA_COMBAT_FIRST_12_BUILD_QUEUE_R01.md`.
 
 ## 6. Source data selected for external screening
 
@@ -215,6 +220,29 @@ Research-only or non-distributable datasets stay outside the production corpus.
 CMU/ACCAD sources provide biomechanics; project-specific contact design remains
 our work.
 
+### Expanded CMU paired-contact shortlist
+
+The official CMU human-interaction catalogue exposed several better transition
+sources than generic fight clips. They were downloaded with the same licence
+evidence and hash manifest and screened in shared source space:
+
+- `20_10/21_10`: 360-degree two-person whip, right hand/wrist contact for about
+  `0.67 s`; arm-wrench and pivot/throw reference;
+- `22_05/23_05`: left/right hands placed on opposite shoulders; first
+  two-hand clamp and shove-setup reference;
+- `22_12/23_12`: one actor stumbles into the other; shoulder/body collision,
+  miss-brace and stagger reference rather than damage ground truth;
+- `22_17/23_17`: rush-up arm wrestle with about `0.73 s` mutual hand contact;
+  grip-strength and break reference;
+- `22_01/23_01` and `22_02/23_02`: one-/two-hand pull-up interactions for
+  grounded-target recovery and lift constraints;
+- `22_10/23_10` and `22_11/23_11`: shelter/support interactions retained for
+  protective cover and Sahaquiel load-sharing reference.
+
+Exact windows and measured contact envelopes are in
+`tools/eva_paired_interaction_source_catalog_r01.json`. None authorizes playing
+the cooperative post-contact motion after a real target resists.
+
 ### Cologne Motion Capture Database CC BY 4.0 supplement
 
 The [official CMCD licence page](https://mocap.web.th-koeln.de/about.php)
@@ -238,6 +266,11 @@ Shared-space review narrows the paired material further:
 - the forward roll, hit/tumble/fall and `KingKong2` sequences remain segmented
   references. `KingKong2` is explicitly a negative example: ape imitation is
   not automatically berserk EVA motion.
+- `Take_2019-01-09_N_Nussknacker3` frames 340–390 is the first right low-line
+  kick shortlist: its event is at frame 363, swing height is about `0.229 H`,
+  the opposite foot is planted and its local support travel is about `0.073 H`.
+  It is not yet a reap because there is no target-leg contact. ACCAD G8 was
+  removed from that role after measurement showed a `0.714 H` high roundhouse.
 
 ## 7. Interaction implementation
 

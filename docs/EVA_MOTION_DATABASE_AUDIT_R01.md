@@ -595,7 +595,7 @@ action-window segmentation and offline vertical free-root grounding:
   remaining pull capture is not played after attachment; resistance and
   release belong to a compliant physical grip.
 
-The machine-readable combat graph now contains 12 action nodes and 18
+The machine-readable combat graph now contains 13 action nodes and 21
 conditional edges. Nine Angel-specific interaction graphs specify contact
 anchors, entry conditions and abort paths for Sachiel, Israfel, Sahaquiel,
 Shamshel, Gaghiel, Bardiel, Zeruel, Arael and Leliel. They are design contracts,
@@ -618,6 +618,19 @@ private candidates and records hashes plus the official CC BY 4.0 evidence.
 - the 2019 paired clip contains a brief kick-to-hand proximity event only;
 - roll, hit/fall and ape-fight material remains reference or negative-example
   data, not production motion.
+- CMCD Nussknacker3 frames 340–390 is the first low-line right-kick shortlist.
+  ACCAD G8 is explicitly not a low-reap source: its measured swing height is
+  about `0.714 H`, so retaining it under that label would corrupt semantics.
 
 This preserves a clean licence path without lowering the semantic or contact
 gate merely because a dataset is legally usable.
+
+### Expanded CMU paired interactions
+
+CMU subjects 20–23 add higher-value shared-contact semantics: two-person whip,
+two-hand shoulder control, stumble/body collision, arm wrestling, assisted
+get-up and shelter/support. The downloader now records 54 total CMU clips.
+Shared-space audits confirm sustained contacts rather than trusting catalogue
+labels. The preferred new windows are listed in
+`tools/eva_paired_interaction_source_catalog_r01.json`; all remain source
+references until grounded paired retarget and physical-constraint tests pass.
