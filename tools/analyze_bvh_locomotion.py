@@ -24,6 +24,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--source", required=True, type=Path)
     parser.add_argument("--output-json", required=True, type=Path)
     parser.add_argument("--output-blend", type=Path)
+    parser.add_argument("--profile", choices=("cmu", "100style"),
+                        default="cmu")
     parser.add_argument("--minimum-cycle-seconds", type=float, default=0.42)
     parser.add_argument("--maximum-cycle-seconds", type=float, default=1.8)
     return parser.parse_args(sys.argv[sys.argv.index("--") + 1 :])
@@ -44,9 +46,15 @@ def world_point(armature: bpy.types.Object, bone_name: str) -> Vector:
     return armature.matrix_world @ armature.pose.bones[bone_name].matrix.translation
 
 
-def actor_height(armature: bpy.types.Object) -> float:
-    points = [world_point(armature, name) for name in (
-        "head", "lfoot", "ltoes", "rfoot", "rtoes"
+def actor_height(armature: bpy.types.Object,
+                 names: dict[str, str] | None = None) -> float:
+    if names is None:
+        names = {
+            "head": "head", "left_foot": "lfoot", "left_toe": "ltoes",
+            "right_foot": "rfoot", "right_toe": "rtoes",
+        }
+    points = [world_point(armature, names[key]) for key in (
+        "head", "left_foot", "left_toe", "right_foot", "right_toe"
     )]
     return max(point.z for point in points) - min(point.z for point in points)
 
@@ -63,6 +71,15 @@ def smooth_boolean(values: list[bool], radius: int) -> list[bool]:
 
 def main() -> None:
     args = parse_args()
+    names = ({
+        "root": "Hips", "head": "Head",
+        "left_foot": "LeftAnkle", "left_toe": "LeftToe",
+        "right_foot": "RightAnkle", "right_toe": "RightToe",
+    } if args.profile == "100style" else {
+        "root": "root", "head": "head",
+        "left_foot": "lfoot", "left_toe": "ltoes",
+        "right_foot": "rfoot", "right_toe": "rtoes",
+    })
     if not args.source.is_file():
         raise SystemExit(f"missing BVH: {args.source}")
     bpy.ops.object.select_all(action="SELECT")
@@ -88,17 +105,17 @@ def main() -> None:
 
     scene.frame_set(start)
     bpy.context.view_layer.update()
-    height = actor_height(armature)
+    height = actor_height(armature, names)
     source_to_meters = 1.75 / max(height, 1.0e-6)
     samples: list[dict] = []
     for frame in range(start, end + 1):
         scene.frame_set(frame)
         bpy.context.view_layer.update()
-        root = world_point(armature, "root")
-        left_foot = world_point(armature, "lfoot")
-        left_toe = world_point(armature, "ltoes")
-        right_foot = world_point(armature, "rfoot")
-        right_toe = world_point(armature, "rtoes")
+        root = world_point(armature, names["root"])
+        left_foot = world_point(armature, names["left_foot"])
+        left_toe = world_point(armature, names["left_toe"])
+        right_foot = world_point(armature, names["right_foot"])
+        right_toe = world_point(armature, names["right_toe"])
         samples.append({
             "frame": frame,
             "root": root,
@@ -179,6 +196,7 @@ def main() -> None:
     report = {
         "schema": 1,
         "source": str(args.source.resolve()),
+        "profile": args.profile,
         "fps": fps,
         "frame_range": [start, end],
         "actor_height_source_units": height,

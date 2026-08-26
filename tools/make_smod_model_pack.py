@@ -40,6 +40,7 @@ BONE_MAP = {
 # poses nondeterministically, so omit only this explicitly namespaced optional
 # rig while keeping every other unknown canonical bone fail-closed.
 OPTIONAL_TIGER_BONE_PREFIXES = ("finger_",)
+OPTIONAL_TIGER_BONES = {"aim_pitch"}
 
 
 def read_suffix(archive, suffix):
@@ -192,7 +193,7 @@ def remap_animation(animation):
     optional = {
         name for name in source_bones
         if name.startswith(OPTIONAL_TIGER_BONE_PREFIXES)
-    }
+    } | (set(source_bones) & OPTIONAL_TIGER_BONES)
     unknown = set(source_bones) - set(BONE_MAP) - optional
     if unknown:
         raise RuntimeError(

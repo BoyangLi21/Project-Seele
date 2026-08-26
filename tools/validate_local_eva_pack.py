@@ -24,25 +24,25 @@ CANONICAL_EVA_ANIMATION = (
     REPO / "src/main/resources/assets/projectseele/animations/eva_unit01.animation.json"
 )
 
+LONG_EVA_DIGITS = ("index", "middle", "ring", "little")
 STANDARD_EVA_FINGER_ROOTS = {
     f"finger_{digit}_{side}"
     for digit in ("thumb", "index", "middle", "ring", "little")
     for side in ("l", "r")
 }
-GENERATED_EVA_DIGITS = ("thumb", "index", "middle", "ring", "little")
 STANDARD_EVA_FINGER_TIPS = {
     f"finger_{digit}_tip_{side}"
-    for digit in GENERATED_EVA_DIGITS
+    for digit in ("thumb", *LONG_EVA_DIGITS)
     for side in ("l", "r")
 }
 STANDARD_EVA_FINGER_DISTALS = {
     f"finger_{digit}_distal_{side}"
-    for digit in GENERATED_EVA_DIGITS
+    for digit in LONG_EVA_DIGITS
     for side in ("l", "r")
 }
 STANDARD_EVA_FINGER_AXES = {
     f"finger_{digit}_axis_{side}"
-    for digit in ("thumb", "index", "middle", "ring", "little")
+    for digit in LONG_EVA_DIGITS
     for side in ("l", "r")
 }
 STANDARD_EVA_FINGER_BONES = (
@@ -50,19 +50,16 @@ STANDARD_EVA_FINGER_BONES = (
     | STANDARD_EVA_FINGER_TIPS
     | STANDARD_EVA_FINGER_DISTALS
 )
-# The Tiger body supplies the thumb root while the clean rig supplies its two
-# articulated descendants.  All five digits therefore have a root, tip and
-# distal part.  Per EVA this is 30 visible finger mesh parts and 47 total mesh
-# parts; keeping this exact set in sync with the Java fail-closed contract is
-# what prevents a newly generated EVA from being rejected as invisible.
-THUMB_DISTAL_CONTROL_BONES = {
-    f"finger_thumb_distal_{side}" for side in ("l", "r")
+# The high-detail Tiger hand already contains the complete authored thumb.
+# Its tiny thumb-root part closes that shell; adding generated tip/distal mesh
+# would visibly lengthen the digit.  Keep those names as animation controls,
+# but require no second thumb geometry from the private pack.
+THUMB_CONTROL_ONLY_BONES = {
+    f"finger_thumb_tip_{side}"
+    for side in ("l", "r")
 }
-# The imported palm retains the thumb mound and the clean replacement uses
-# two visible phalanges.  The distal thumb names remain in the Gecko skeleton
-# and animation contract for compatibility, but deliberately carry no mesh.
 STANDARD_EVA_FINGER_MESH_PARTS = (
-    STANDARD_EVA_FINGER_BONES - THUMB_DISTAL_CONTROL_BONES
+    STANDARD_EVA_FINGER_BONES - THUMB_CONTROL_ONLY_BONES
 )
 STANDARD_EVA_MESH_PARTS = {
     "torso_upper", "torso_lower", "head",
@@ -79,8 +76,9 @@ STANDARD_EVA_BONE_PARENTS = {
     **STANDARD_EVA_FOOT_PARENTS,
     **{name: "hand_" + name[-1] for name in STANDARD_EVA_FINGER_AXES},
     **{f"finger_{digit}_{side}": f"finger_{digit}_axis_{side}"
-       for digit in ("thumb", "index", "middle", "ring", "little")
+       for digit in LONG_EVA_DIGITS
        for side in ("l", "r")},
+    **{f"finger_thumb_{side}": f"hand_{side}" for side in ("l", "r")},
     **{name: name.replace("_tip_", "_") for name in STANDARD_EVA_FINGER_TIPS},
     **{name: name.replace("_distal_", "_tip_")
        for name in STANDARD_EVA_FINGER_DISTALS},
@@ -96,7 +94,7 @@ STANDARD_EVA_ATTACHMENT_CUBES = {
     "plug_hatch_r": 1,
 }
 NO_LEGACY_BODY_CUBES = (
-    STANDARD_EVA_MESH_PARTS | THUMB_DISTAL_CONTROL_BONES | {"horn", "cannon"}
+    STANDARD_EVA_MESH_PARTS | THUMB_CONTROL_ONLY_BONES | {"horn", "cannon"}
 )
 MASS_MESH_PARTS = {
     "torso_upper", "torso_lower", "head",
@@ -133,7 +131,7 @@ ASSETS = {
     "unit01": {
         "stem": "eva_unit01",
         "minimum_triangles": 4_000,
-        "expected_triangles": 6_402,
+        "expected_triangles": 6_044,
         "minimum_parts": len(STANDARD_EVA_MESH_PARTS),
         "expected_parts": len(STANDARD_EVA_MESH_PARTS),
         "required_parts": STANDARD_EVA_MESH_PARTS,
@@ -166,7 +164,7 @@ ASSETS = {
     "unit00": {
         "stem": "eva_unit00",
         "minimum_triangles": 3_000,
-        "expected_triangles": 5_866,
+        "expected_triangles": 5_510,
         "minimum_parts": len(STANDARD_EVA_MESH_PARTS),
         "expected_parts": len(STANDARD_EVA_MESH_PARTS),
         "required_parts": STANDARD_EVA_MESH_PARTS,
@@ -199,7 +197,7 @@ ASSETS = {
     "unit02": {
         "stem": "eva_unit02",
         "minimum_triangles": 3_500,
-        "expected_triangles": 6_126,
+        "expected_triangles": 5_770,
         "minimum_parts": len(STANDARD_EVA_MESH_PARTS),
         "expected_parts": len(STANDARD_EVA_MESH_PARTS),
         "required_parts": STANDARD_EVA_MESH_PARTS,
@@ -325,7 +323,8 @@ def validate_runtime_fingerprint_contract() -> str:
     actual = {
         name: (int(triangles.replace("_", "")), int(parts))
         for name, triangles, parts in re.findall(
-            r'"([a-z0-9_]+)"\s*,\s*new MeshContract\(([\d_]+),\s*(\d+)\)', source)
+            r'"([a-z0-9_]+)"\s*,\s*new MeshContract\('
+            r'([\d_]+),\s*(\d+)(?:,\s*(?:true|false))?\)', source)
     }
     expected = {
         spec["stem"]: (spec["expected_triangles"], spec["expected_parts"])

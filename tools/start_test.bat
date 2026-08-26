@@ -3,9 +3,11 @@ setlocal EnableExtensions EnableDelayedExpansion
 title Project SEELE - local test client
 set "SEELE_MANUAL_PLAY=0"
 set "SEELE_MOTION_LAB=0"
+set "SEELE_LIVE_POLICY=0"
 if /i "%~1"=="play" set "SEELE_MANUAL_PLAY=1"
 if /i "%~1"=="motion" set "SEELE_MANUAL_PLAY=1"
 if /i "%~1"=="motion" set "SEELE_MOTION_LAB=1"
+if /i "%~1"=="motion" if /i "%~2"=="live" set "SEELE_LIVE_POLICY=1"
 rem Project SEELE - one-click test client.
 rem Uses the standalone JDK 17 if JAVA_HOME is not already set to one.
 if not exist "%JAVA_HOME%\bin\java.exe" set "JAVA_HOME=C:\Users\liboy\jdks\jdk-17.0.19+10"
@@ -493,6 +495,12 @@ echo   2. /seele motionlab enter unit00^|unit01^|unit02 links directly to a test
 echo   3. /seele motionlab weapon unit01 fists^|knife^|rifle^|lance changes the loadout.
 echo   4. /seele motionlab camera opens the elevated external observation view.
 echo   5. /seele motionlab reset rebuilds the three test EVAs and returns the arena to noon.
+echo   6. G1 live calibration is quarantined; start_test.bat motion does not launch it.
+echo   7. start_test.bat motion live is an explicit engineering-only transport test.
+echo   8. physics/recovery remain offline comparison modes; they are not the live controller.
+echo   9. Rejected grounded previews are quarantined until external 3D review passes.
+echo  10. /seele motionlab camera follows from the external review platform.
+echo  11. /seele motionlab demo unit01 stop exits every test mode.
 echo.
 goto SEELE_INSTRUCTIONS_DONE
 :SEELE_MANUAL_INSTRUCTIONS
@@ -506,6 +514,14 @@ echo   5. The S20 physical personnel lift is at x=108 z=192 with real landing an
 echo   6. Do not run /seele facility_v2 bootstrap, setup, rebuild or rescue commands in S20.
 echo.
 :SEELE_INSTRUCTIONS_DONE
+if "!SEELE_LIVE_POLICY!"=="1" (
+    "%SEELE_POWERSHELL%" -NoProfile -ExecutionPolicy Bypass -File "tools\start_eva_live_physics.ps1" -Mode Start
+    if errorlevel 1 (
+        echo Live trained-policy sidecar failed to start.
+        pause
+        exit /b 1
+    )
+)
 echo Starting Project SEELE test client (first launch takes a minute)...
 echo High-performance GPU requested for %JAVA_HOME%\bin\java.exe.
 if /i "%~1"=="visual" (
@@ -665,5 +681,8 @@ if /i "%~1"=="visual" (
     echo ------------------------------------------------------------
     echo.
     call gradlew.bat runClient -PstrictHighDetail=true -PquickPlayWorld=!SEELE_VISUAL_WORLD!
+    set "SEELE_CLIENT_RESULT=!ERRORLEVEL!"
+    if "!SEELE_LIVE_POLICY!"=="1" "%SEELE_POWERSHELL%" -NoProfile -ExecutionPolicy Bypass -File "tools\start_eva_live_physics.ps1" -Mode Stop
+    if not "!SEELE_CLIENT_RESULT!"=="0" exit /b !SEELE_CLIENT_RESULT!
 )
 pause

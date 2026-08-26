@@ -170,7 +170,6 @@ public final class ClientForgeEvents
             }
             return;
         }
-
         // Boarding transition: pilot HUD lifetime is independent from the
         // capsule sequence, which may already be 70% complete at EVA transfer.
         boolean piloting = eva != null;
@@ -281,8 +280,12 @@ public final class ClientForgeEvents
                 player.setXRot(pitch);
                 player.xRotO = pitch;
             }
-            boolean rawSprint = rawKey(minecraft,
-                    GLFW.GLFW_KEY_LEFT_CONTROL, GLFW.GLFW_KEY_RIGHT_CONTROL);
+            // Respect the player's configured sprint binding. The raw Ctrl
+            // fallback remains for installs where vanilla consumes the key
+            // while the player is mounted in the entry plug.
+            boolean rawSprint = minecraft.options.keySprint.isDown()
+                    || rawKey(minecraft, GLFW.GLFW_KEY_LEFT_CONTROL,
+                            GLFW.GLFW_KEY_RIGHT_CONTROL);
             boolean rawJump = minecraft.options.keyJump.isDown();
             if (rawCrouch != crouchHeld)
             {
@@ -293,6 +296,15 @@ public final class ClientForgeEvents
             if (rawSprint != sprintHeld)
             {
                 sprintHeld = rawSprint;
+                send(rawSprint ? ServerboundEvaControlPacket.ACTION_SPRINT_START
+                        : ServerboundEvaControlPacket.ACTION_SPRINT_STOP);
+            }
+            else if (rawSprint != eva.isPilotSprinting()
+                    && player.tickCount % 5 == 0)
+            {
+                // A press that began during A10/launch lock was formerly
+                // consumed once and then forgotten. Reconcile the held input
+                // after authority unlock so run cannot silently remain walk.
                 send(rawSprint ? ServerboundEvaControlPacket.ACTION_SPRINT_START
                         : ServerboundEvaControlPacket.ACTION_SPRINT_STOP);
             }

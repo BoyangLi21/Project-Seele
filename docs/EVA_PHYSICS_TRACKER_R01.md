@@ -104,3 +104,68 @@ Newton/MuJoCo 烟测、ONNX 和确定性验证。
    P95 <= 1.5 s，支撑足平均/ P95 累计滑移分别 <= 0.005H / 0.01H。
 3. Isaac Lab 结果导出 ONNX，在 MuJoCo 中通过相同测试及确定性重放。
 4. P1 通过后，才把同一观测、动作、奖励和课程迁到 41-DOF EVA 骨架。
+
+## 2026-08-26 阶段收尾与 Minecraft 预览
+
+G1 是 P1 的标定机器人，不是最终 EVA。使用它是为了先验证强化学习、
+权威 free root、接触、脚滑、恢复、ONNX 与 MuJoCo 链路；P1 未通过前，
+不得把 G1 外形或权重称为 EVA 成品。
+
+本轮新增验证：
+
+- frozen teacher + recurrent residual 在 600 帧 MuJoCo 闭环中，root、关节、
+  33 个刚体、接触力和 29 维动作与官方 teacher 逐值相同；
+- residual 显式读取 heading-frame root velocity，恢复 episode 不再因普通跌倒
+  立即终止；训练与验收均使用 2.5 s 的单次 `delta-v=0.5 m/s` 冲量；
+- 从 G1 研究动作包提取 3 条 push-recovery 与 2 条 PushStand，经接触 IK 后
+  marker P95 约 3.8--12 mm、无关节硬越界；
+- 严格左右镜像 capture future 的往返关节误差为 0、轴基 determinant 为 +1；
+- R63-E10 首次让负向冲量在 0.98 s 内形成合格恢复窗口，速度误差约
+  0.053 m/s、支撑滑速约 0.009 m/s；正向未通过，因此不能升级为 P1 成功；
+- R79-E20 的无扰动停止为 2/2，P95 约 0.34 s；启动、contact F1、整体足滑
+  仍未同时达标。
+
+为了让用户在 Minecraft 中看到当前姿态结果，Motion Lab 新增了一个隔离的
+离线预览适配器：
+
+- 资源：`assets/projectseele/motion/eva_physics_preview_v1.json`；
+- `/seele motionlab demo unit01 physics`：回放当前 MuJoCo walk 状态；
+- `/seele motionlab demo unit01 recovery`：回放当前单方向恢复候选；
+- `/seele motionlab demo unit01 stop`：退出预览；
+- 启动：`tools\start_test.bat motion`。
+
+命令会显示 `OFFLINE MUJOCO REPLAY (NON-AUTHORITATIVE)`。该预览使用真实
+MuJoCo 状态矩阵驱动实验场 EVA 骨骼，但它是记录回放，不是实时 sidecar，
+不驱动战斗、碰撞或正式存档。普通 EVA 与 R02 动作链保持不变。
+
+## 2026-08-26 实时校准控制器接入
+
+离线预览不能作为强化学习接入验收：它仍然是逐帧播放记录。为避免再次混淆，
+新增的 `live` 路径不读取 `.npz` 或动作 JSON：
+
+- `tools/run_eva_live_physics_sidecar.py` 加载 R63 `epoch_10.ckpt`；
+- 每个控制步先执行真实策略推理，再由 MuJoCo 积分，随后才发布当前状态；
+- 共享文件保留 256 B 命令包与 512 B 权威状态包，并增加一个仅供当前 G1→EVA
+  模型映射检查使用的 512 B 骨骼页；
+- Java 使用序列锁读取实时根、接触和 15 个局部刚体四元数，并在渲染帧间插值；
+- `/seele motionlab demo unit01 live` 是唯一实时入口；`physics/recovery`
+  仍明确保留为离线负面对照；
+- `/seele motionlab demo unit01 livepush` 对当前 MuJoCo 根施加真实横向
+  `delta-v=-0.5 m/s`，不是切换受击动画。
+
+本机烟测的 3 秒有效窗口产生 73 个状态，单独运行约 24 Hz；与 Minecraft
+并行时约 19--20 Hz。它证明检查点已在线运行并被 Java 消费，但尚未达到产品
+要求的 50 Hz 策略与 250 Hz 物理预算。当前使用的是 29-DOF G1 校准权重，
+并通过 15 个身体刚体临时映射到 EVA；它不是尚未训练完成的 41-DOF EVA
+策略，也没有接管正式存档的碰撞、伤害或玩家输入。
+
+训练是必要的，因为 clip 只能给出固定时间上的姿势，不能根据当前速度、地形、
+接触冲量、落脚失败、被阻挡或玩家中途改向重新分配关节力矩。生产目标是让
+同一个低层策略在真实物理状态上连续输出控制量；动画数据仅可作为训练参考，
+不能再成为运行时权威。
+
+人工检查否决了把该 G1 校准器直接映射为 EVA 的视觉结果：关节比例与 bind
+轴不匹配造成软腿和无意义摆动；仅移动渲染根而未镜像实体根又导致靠近时被
+Minecraft AABB 错误剔除。该入口现已从普通 `motion` 启动流程隔离，只有显式
+`tools/start_test.bat motion live` 才会启动，用途仅限检查通信和在线时间戳。
+不得继续把这条 G1→EVA 临时映射用于动作质量迭代，也不得计入 EVA 进度。

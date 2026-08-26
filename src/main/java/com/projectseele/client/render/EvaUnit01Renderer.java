@@ -321,48 +321,44 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
                 // every primary pass. Adding to its previous value made each
                 // frame (and each render layer) accumulate another camera
                 // angle, producing the view-dependent "windmill" rotation.
-                float pitch = animatable.getWeapon() == EvaUnit01Entity.WEAPON_CANNON
-                        || animatable.getWeapon() == EvaUnit01Entity.WEAPON_RIFLE
-                        ? (float) Math.toRadians(animatable.getCannonAimPitch()) : 0.0F;
+                float pitch = animatable.getWeapon()
+                        == EvaUnit01Entity.WEAPON_CANNON
+                        || animatable.getWeapon()
+                        == EvaUnit01Entity.WEAPON_RIFLE
+                        ? (float)Math.toRadians(
+                                animatable.getCannonAimPitch()) : 0.0F;
                 // Minecraft's positive XRot looks down; the imported Bedrock
-                // aim parent uses the opposite positive-X convention. The hit
-                // ray keeps the Minecraft sign, while the visible rig must use
-                // its negation or mouse-up visibly points the barrel down.
+                // aim parent uses the opposite positive-X convention.
                 model.getBone("aim_pitch").get().setRotX(-pitch);
             }
-            else if (animatable.getWeapon() == EvaUnit01Entity.WEAPON_CANNON)
-            {
-                // Public fallback rigs pre-date the semantic aim parent. Do
-                // not mutate their animated arm bones here: an additive
-                // fallback cannot be idempotent across Gecko render layers.
-                // Their authored aim pose remains stable until regenerated
-                // with the current semantic-parent converter.
-            }
 
-            boolean motionV2 = EvaMotionEngineV2.apply(
-                    animatable, model, partialTick);
-            EvaProceduralAnimator.apply(animatable, model, partialTick);
-
-            // The imported locomotion clips carry a permanent mirrored roll
-            // on both hips and feet. At EVA scale that reads as a pronounced
-            // toe-out stance rather than natural weight transfer. Keep knees
-            // and toes on the sagittal plane; the forward swing and knee bend
-            // remain authored by the clip.
-            if (!motionV2 && animatable.isVisuallyMovingForRender()
-                    && !animatable.isPilotCrouching()
-                    && !animatable.isPilotProne()
-                    && !animatable.hasActiveCarrierMotion())
+            // ACCAD R32 is the current heading-normalized locomotion candidate and
+            // now owns the live Gecko skeleton directly.  The former motion-
+            // lab-only V2 layer sampled an unrelated proxy database after
+            // Gecko evaluation, so leaving it here would replace the exact
+            // curves the user approved whenever the dedicated lab was used.
+            // Do not add render-frame rotations on top of Gecko bones here.
+            // EvaProceduralAnimator used `current + delta`; GeoBone values are
+            // retained across render passes, so a tiny collision speed or a
+            // sustained walk accumulated into endless pelvis-centred flips.
+            // The R32 clips already contain weight transfer and own
+            // the complete locomotion skeleton without this legacy layer.
+            // The sole exceptions are explicitly tagged, disposable motion-
+            // lab previews: quarantined MuJoCo experiments and the audited
+            // grounded mocap adapter. Neither replaces campaign locomotion.
+            EvaMotionEngineV2.apply(animatable, model, partialTick);
+            if (animatable.getPilotEntity() != null)
             {
-                for (String boneName : new String[] {
-                        "leg_l", "leg_r", "foot_l", "foot_r"
-                })
+                model.getBone("head").ifPresent(head ->
                 {
-                    model.getBone(boneName).ifPresent(bone ->
-                    {
-                        bone.setRotY(0.0F);
-                        bone.setRotZ(0.0F);
-                    });
-                }
+                    // These are absolute post-Gecko values. Never add to the
+                    // retained GeoBone state or view movement accumulates into
+                    // the former windmill/flip failure.
+                    head.setRotY((float)Math.toRadians(
+                            -animatable.pilotHeadYawForRender(partialTick)));
+                    head.setRotX((float)Math.toRadians(
+                            -animatable.pilotHeadPitchForRender(partialTick)));
+                });
             }
         }
         // Weapon visibility applies on top in every view.
@@ -566,4 +562,5 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
             walkBone(child, action);
         }
     }
+
 }

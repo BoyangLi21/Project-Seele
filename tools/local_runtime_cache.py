@@ -22,6 +22,8 @@ GENERATOR_GLOBS = (
     "tools/make_original_*.py",
     "tools/make_ultraman_*.py",
     "tools/eva_finger_axis_repair.py",
+    "tools/eva_locomotion_*.json",
+    "tools/export_accepted_locomotion_to_gecko.py",
     "tools/validate_local_eva_pack.py",
 )
 SOURCE_ROOTS = (

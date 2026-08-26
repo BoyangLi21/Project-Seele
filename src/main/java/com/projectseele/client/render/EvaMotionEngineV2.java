@@ -29,7 +29,7 @@ import software.bernie.geckolib.cache.object.GeoBone;
  * Render-rate EVA pose synthesis independent from the 20 Hz entity clock.
  *
  * <p>The simulation still owns collision, damage and network authority. This
- * engine owns only the visual skeleton: it samples CC0 motion capture,
+ * engine owns only the visual skeleton: it samples licensed motion capture,
  * synchronizes gait by travelled distance, blends adjacent gaits in quaternion
  * space and inertializes pose changes every rendered frame. During the first
  * rollout it is deliberately enabled only on entities tagged by the isolated
@@ -39,7 +39,10 @@ public final class EvaMotionEngineV2
 {
     private static final ResourceLocation DATABASE = new ResourceLocation(
             ProjectSeele.MODID, "motion/eva_humanoid_v2.json");
-    private static final String LAB_TAG = "seele_motion_lab";
+    private static final ResourceLocation PHYSICS_DATABASE = new ResourceLocation(
+            ProjectSeele.MODID, "motion/eva_physics_preview_v1.json");
+    private static final ResourceLocation GROUNDED_DATABASE = new ResourceLocation(
+            ProjectSeele.MODID, "motion/eva_grounded_preview_v1.json");
     private static final double WALK_STRIDE_BLOCKS = 25.8334D;
     private static final double RUN_STRIDE_BLOCKS = 31.3944D;
     private static final double CROUCH_STRIDE_BLOCKS = 9.2990D;
@@ -54,29 +57,45 @@ public final class EvaMotionEngineV2
             "leg_r", "shin_r", "foot_r");
     private static final Map<Integer, RuntimeState> STATES = new HashMap<>();
     private static volatile MotionDatabase database = MotionDatabase.empty();
+    private static volatile MotionDatabase physicsDatabase =
+            MotionDatabase.empty();
+    private static volatile MotionDatabase groundedDatabase =
+            MotionDatabase.empty();
 
     private EvaMotionEngineV2() {}
 
     public static void reload(ResourceManager resourceManager)
     {
         STATES.clear();
-        try (Reader reader = resourceManager.getResource(DATABASE)
+        database = load(resourceManager, DATABASE, "EVA Motion Engine V2");
+        physicsDatabase = load(resourceManager, PHYSICS_DATABASE,
+                "EVA physics preview");
+        groundedDatabase = load(resourceManager, GROUNDED_DATABASE,
+                "EVA grounded mocap preview");
+    }
+
+    private static MotionDatabase load(ResourceManager resourceManager,
+                                       ResourceLocation location,
+                                       String label)
+    {
+        try (Reader reader = resourceManager.getResource(location)
                 .orElseThrow(() -> new IllegalStateException(
-                        "missing EVA motion database " + DATABASE))
+                        "missing EVA motion database " + location))
                 .openAsReader())
         {
-            database = MotionDatabase.parse(new Gson().fromJson(
+            MotionDatabase loaded = MotionDatabase.parse(new Gson().fromJson(
                     reader, JsonObject.class));
             ProjectSeele.LOGGER.info(
-                    "EVA Motion Engine V2 loaded: clips={} bones={} frames={}",
-                    database.clips.size(), database.bones.length,
-                    database.totalFrames);
+                    "{} loaded: clips={} bones={} frames={}", label,
+                    loaded.clips.size(), loaded.bones.length,
+                    loaded.totalFrames);
+            return loaded;
         }
         catch (Exception exception)
         {
-            database = MotionDatabase.empty();
             ProjectSeele.LOGGER.error(
-                    "EVA Motion Engine V2 database rejected", exception);
+                    label + " database rejected", exception);
+            return MotionDatabase.empty();
         }
     }
 
@@ -84,10 +103,20 @@ public final class EvaMotionEngineV2
     public static boolean apply(EvaUnit01Entity entity, BakedGeoModel model,
                                 float partialTick)
     {
-        MotionDatabase db = database;
-        if (db.bones.length == 0 || !entity.getTags().contains(LAB_TAG)
+        int previewMode = entity.getMotionLabPhysicsPreview();
+        if (previewMode == 3)
+        {
+            return applyLivePhysics(model);
+        }
+        boolean replayPreview = previewMode == 1 || previewMode == 2;
+        boolean groundedPreview = previewMode == 4 || previewMode == 5;
+        boolean labPreview = replayPreview || groundedPreview;
+        MotionDatabase db = groundedPreview
+                ? groundedDatabase : replayPreview ? physicsDatabase : database;
+        if (!labPreview || db.bones.length == 0
                 || entity.isNervLogisticsLocked() || entity.isCrucified()
-                || !entity.isPoweredOn() || entity.isPilotProne()
+                || (!labPreview && !entity.isPoweredOn())
+                || entity.isPilotProne()
                 || entity.isPilotCrouching()
                 || entity.getVisualPose() == EvaUnit01Entity.VISUAL_CROUCH
                 || entity.getVisualPose() == EvaUnit01Entity.VISUAL_CROUCH_WALK
@@ -101,8 +130,12 @@ public final class EvaMotionEngineV2
             STATES.clear();
         }
 
-        RuntimeState runtime = STATES.computeIfAbsent(entity.getId(),
-                ignored -> new RuntimeState(db.bones.length));
+        RuntimeState runtime = STATES.get(entity.getId());
+        if (runtime == null || runtime.rotations.length != db.bones.length)
+        {
+            runtime = new RuntimeState(db.bones.length);
+            STATES.put(entity.getId(), runtime);
+        }
         long now = System.nanoTime();
         double dt;
         if (runtime.lastNanos == 0L)
@@ -162,9 +195,28 @@ public final class EvaMotionEngineV2
             }
         }
 
-        MotionClip takeoffClip = db.clip("jump_takeoff_v2");
+        MotionClip takeoffClip = labPreview
+                ? null : db.clip("jump_takeoff_v2");
         Selection selection;
-        if (runtime.landingActive)
+        if (groundedPreview)
+        {
+            String clipName = previewMode == 5
+                    ? "grounded_run" : "grounded_walk";
+            MotionClip clip = db.clip(clipName);
+            double speed = Math.max(0.01D,
+                    entity.visualHorizontalSpeedForRender());
+            selection = Selection.locomotion(clip, null, 0.0F, speed,
+                    clip.strideBlocks(1.0D), clipName);
+            runtime.landingActive = false;
+        }
+        else if (replayPreview)
+        {
+            String clip = previewMode == 2
+                    ? "physics_recovery" : "physics_walk";
+            selection = Selection.single(db.clip(clip), clip);
+            runtime.landingActive = false;
+        }
+        else if (runtime.landingActive)
         {
             selection = Selection.single(db.clip("jump_landing_v2"),
                     "landing_v2");
@@ -190,10 +242,37 @@ public final class EvaMotionEngineV2
             {
                 runtime.phase = 0.0D;
             }
+            runtime.distanceInitialized = false;
         }
         runtime.lastLocomotion = selection.locomotion();
 
-        if ("airborne_v2".equals(selection.key()))
+        if (replayPreview)
+        {
+            runtime.actionTime += dt;
+            runtime.phase = wrap01(runtime.actionTime
+                    / selection.primary().durationSeconds);
+        }
+        else if (groundedPreview)
+        {
+            double renderX = Mth.lerp((double)partialTick,
+                    entity.xOld, entity.getX());
+            double renderZ = Mth.lerp((double)partialTick,
+                    entity.zOld, entity.getZ());
+            if (runtime.distanceInitialized)
+            {
+                double step = Math.hypot(renderX - runtime.lastRenderX,
+                        renderZ - runtime.lastRenderZ);
+                if (Double.isFinite(step) && step < 12.0D)
+                {
+                    runtime.phase = wrap01(runtime.phase + step
+                            / Math.max(1.0D, selection.strideBlocks()));
+                }
+            }
+            runtime.lastRenderX = renderX;
+            runtime.lastRenderZ = renderZ;
+            runtime.distanceInitialized = true;
+        }
+        else if ("airborne_v2".equals(selection.key()))
         {
             if (runtime.apexReached)
             {
@@ -260,17 +339,37 @@ public final class EvaMotionEngineV2
             runtime.rightFoot.release();
         }
 
-        float rootY = target.rootMeters.y * MODEL_UNITS_PER_SOURCE_METRE;
-        model.getBone("root").ifPresent(root -> root.setPosY(
-                root.getInitialSnapshot().getOffsetY() + rootY));
+        Vector3f rootOffset = new Vector3f(target.rootMeters)
+                .mul(MODEL_UNITS_PER_SOURCE_METRE);
+        model.getBone("root").ifPresent(root ->
+        {
+            if (groundedPreview)
+            {
+                root.setPosX(root.getInitialSnapshot().getOffsetX()
+                        - rootOffset.x);
+                root.setPosZ(root.getInitialSnapshot().getOffsetZ()
+                        + rootOffset.z);
+            }
+            root.setPosY(root.getInitialSnapshot().getOffsetY()
+                    + rootOffset.y);
+        });
 
         boolean meleeActive = entity.getCockpitAttackAnim(partialTick) > 0.0F
                 || entity.getCockpitSmashAnim(partialTick) > 0.0F;
         boolean fullBody = entity.getWeapon() == EvaUnit01Entity.WEAPON_FISTS
                 && !meleeActive;
-        float inertialAlpha = (float)(1.0D - Math.exp(
-                -Math.log(2.0D) * dt / (selection.locomotion()
-                        ? 0.050D : 0.075D)));
+        float inertialAlpha;
+        if (replayPreview)
+        {
+            inertialAlpha = 1.0F;
+        }
+        else
+        {
+            double halfLife = groundedPreview ? 0.035D
+                    : selection.locomotion() ? 0.050D : 0.075D;
+            inertialAlpha = (float)(1.0D - Math.exp(
+                    -Math.log(2.0D) * dt / halfLife));
+        }
 
         for (int index = 0; index < db.bones.length; index++)
         {
@@ -305,6 +404,41 @@ public final class EvaMotionEngineV2
                 // Bedrock rotations as (-X, -Y, +Z). This runtime path must
                 // perform the same basis change or an offline-correct pose is
                 // mirrored into a folded limb configuration in game.
+                bone.setRotX(-euler.x);
+                bone.setRotY(-euler.y);
+                bone.setRotZ(euler.z);
+            });
+        }
+        return true;
+    }
+
+    private static boolean applyLivePhysics(BakedGeoModel model)
+    {
+        EvaLivePhysicsBridge.Snapshot snapshot =
+                EvaLivePhysicsBridge.sample();
+        if (snapshot == null)
+        {
+            return false;
+        }
+        Vector3f rootMeters = snapshot.rootMeters();
+        model.getBone("root").ifPresent(root ->
+        {
+            root.setPosX(root.getInitialSnapshot().getOffsetX()
+                    + rootMeters.x * MODEL_UNITS_PER_SOURCE_METRE);
+            root.setPosY(root.getInitialSnapshot().getOffsetY()
+                    + rootMeters.y * MODEL_UNITS_PER_SOURCE_METRE);
+            root.setPosZ(root.getInitialSnapshot().getOffsetZ()
+                    + rootMeters.z * MODEL_UNITS_PER_SOURCE_METRE);
+        });
+        Quaternionf[] rotations = snapshot.rotations();
+        for (int index = 0; index < EvaLivePhysicsBridge.BONES.length;
+                index++)
+        {
+            String name = EvaLivePhysicsBridge.BONES[index];
+            Quaternionf rotation = rotations[index];
+            model.getBone(name).ifPresent(bone ->
+            {
+                Vector3f euler = rotation.getEulerAnglesXYZ(new Vector3f());
                 bone.setRotX(-euler.x);
                 bone.setRotY(-euler.y);
                 bone.setRotZ(euler.z);
@@ -674,6 +808,9 @@ public final class EvaMotionEngineV2
         private boolean apexReached;
         private double airborneAge;
         private double fallAge;
+        private boolean distanceInitialized;
+        private double lastRenderX;
+        private double lastRenderZ;
         private final FootLock leftFoot = new FootLock();
         private final FootLock rightFoot = new FootLock();
 

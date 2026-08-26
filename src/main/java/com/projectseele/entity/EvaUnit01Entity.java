@@ -186,6 +186,16 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     private static final int JUMP_COOLDOWN_TICKS = 10;
     private static final int JUMP_BUFFER_TICKS = 20;
     private static final int JUMP_COYOTE_TICKS = 5;
+    private static final int PASSIVE_FALL_CONFIRM_TICKS = 6;
+    private static final int PASSIVE_FALL_SPEED_CONFIRM_TICKS = 10;
+    private static final double PASSIVE_FALL_MIN_SPEED = -1.50D;
+    private static final double PASSIVE_FALL_MIN_DROP =
+            EvaScale.fromLegacy(1.60D);
+    private static final float PILOT_HEAD_YAW_LIMIT = 62.0F;
+    private static final float PILOT_BODY_IDLE_DEAD_ZONE = 24.0F;
+    private static final float PILOT_BODY_MOVING_DEAD_ZONE = 6.0F;
+    private static final float PILOT_BODY_IDLE_TURN_PER_TICK = 2.5F;
+    private static final float PILOT_BODY_MOVING_TURN_PER_TICK = 6.0F;
     private static final int LAUNCH_ASCENT_TICKS = 34;
     private static final int LAUNCH_CLEAR_TICKS = 18;
     private static final double LAUNCH_TARGET_ABOVE_BED =
@@ -277,17 +287,17 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     // Full-cycle travel measured from the real animated foot contacts after
     // the 2.5x model scale. Gecko's default 1x playback made the limbs cycle
     // several times faster than the chassis actually crossed the ground.
-    private static final double WALK_STRIDE_BLOCKS = 25.8334D;
-    private static final double RUN_STRIDE_BLOCKS = 31.3944D;
+    private static final double WALK_STRIDE_BLOCKS = 22.5901D;
+    private static final double RUN_STRIDE_BLOCKS = 40.4589D;
     private static final double CROUCH_STRIDE_BLOCKS = 9.2990D;
     private static final double CRAWL_STRIDE_BLOCKS = 5.0046D;
-    private static final double WALK_CYCLE_SECONDS = 1.0D;
-    private static final double RUN_CYCLE_SECONDS = 0.62D;
-    // The mathematically exact contact stride reads like slow motion on a
-    // thirty-block EVA. Preserve the foot-authored cycle while giving the
-    // sprint a deliberate giant-humanoid cadence rather than a walking beat.
-    private static final double WALK_CADENCE_GAIN = 1.45D;
-    private static final double RUN_CADENCE_GAIN = 2.35D;
+    private static final double WALK_CYCLE_SECONDS = 1.01667D;
+    private static final double RUN_CYCLE_SECONDS = 0.80000D;
+    // Strides and periods are measured from the ACCAD R32 actions.
+    // Cadence gains keep a sixty-block EVA responsive at gameplay
+    // speed without changing the human joint curves or their phase.
+    private static final double WALK_CADENCE_GAIN = 1.75D;
+    private static final double RUN_CADENCE_GAIN = 3.50D;
     private static final double CROUCH_CYCLE_SECONDS = 1.0D;
     private static final double CRAWL_CYCLE_SECONDS = 1.4D;
 
@@ -372,16 +382,27 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             SynchedEntityData.defineId(EvaUnit01Entity.class, EntityDataSerializers.BOOLEAN);
     private static final EntityDataAccessor<Integer> DATA_BERSERK_TICKS =
             SynchedEntityData.defineId(EvaUnit01Entity.class, EntityDataSerializers.INT);
+    private static final EntityDataAccessor<Integer> DATA_MOTION_LAB_PHYSICS_PREVIEW =
+            SynchedEntityData.defineId(EvaUnit01Entity.class, EntityDataSerializers.INT);
+    private static final EntityDataAccessor<Boolean> DATA_MOTION_LAB_ACTIVE =
+            SynchedEntityData.defineId(EvaUnit01Entity.class,
+                    EntityDataSerializers.BOOLEAN);
+    private static final EntityDataAccessor<Boolean> DATA_MOTION_LAB_RUNNING =
+            SynchedEntityData.defineId(EvaUnit01Entity.class,
+                    EntityDataSerializers.BOOLEAN);
 
     private static final RawAnimation ANIM_IDLE = RawAnimation.begin().thenLoop("animation.eva_unit01.idle");
     private static final RawAnimation ANIM_DORMANT = RawAnimation.begin().thenLoop("animation.eva_unit01.dormant");
     private static final RawAnimation ANIM_WALK = RawAnimation.begin().thenLoop("animation.eva_unit01.walk");
+    private static final RawAnimation ANIM_JOG = RawAnimation.begin().thenLoop("animation.eva_unit01.jog");
     private static final RawAnimation ANIM_RUN = RawAnimation.begin().thenLoop("animation.eva_unit01.run");
     private static final RawAnimation ANIM_CROUCH = RawAnimation.begin().thenLoop("animation.eva_unit01.crouch");
     private static final RawAnimation ANIM_CROUCH_WALK = RawAnimation.begin().thenLoop("animation.eva_unit01.crouch_walk");
     private static final RawAnimation ANIM_TAKEOFF = RawAnimation.begin().thenPlay("animation.eva_unit01.takeoff");
     private static final RawAnimation ANIM_JUMP = RawAnimation.begin().thenLoop("animation.eva_unit01.jump");
-    private static final RawAnimation ANIM_FALL = RawAnimation.begin().thenLoop("animation.eva_unit01.fall");
+    // One shared airborne instance prevents an animation restart at the
+    // velocity apex. The compatibility `fall` JSON remains for visual tools.
+    private static final RawAnimation ANIM_FALL = ANIM_JUMP;
     private static final RawAnimation ANIM_PRONE = RawAnimation.begin().thenLoop("animation.eva_unit01.prone");
     private static final RawAnimation ANIM_CRUCIFIED = RawAnimation.begin().thenLoop("animation.eva_unit01.crucified");
     private static final RawAnimation ANIM_CRAWL = RawAnimation.begin().thenLoop("animation.eva_unit01.crawl");
@@ -466,6 +487,11 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     private boolean crouchingDimensions;
     private boolean proneDimensions;
     private boolean wasAirborne;
+    private int serverAirborneTicks;
+    private boolean explicitJumpInProgress;
+    private boolean explicitJumpObservedAirborne;
+    private int explicitJumpAuthorizationTicks;
+    private boolean pilotMovementRequested;
     private int clientMeleeSequence;
     private int clientMeleeStartTick = -1000;
     private boolean clientMeleeLeft;
@@ -473,13 +499,21 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     private int clientSmashStartTick = -1000;
     private int clientJumpSequence;
     private boolean clientJumpImpulsePending;
+    private boolean clientExplicitJumpInProgress;
+    private boolean clientExplicitJumpObservedAirborne;
+    private int clientExplicitJumpAuthorizationTicks;
+    private double clientAirborneStartY;
     /** Client-only filtered locomotion signals; never used for hit detection. */
     private double clientVisualHorizontalSpeed;
     private double clientVisualVerticalSpeed;
     private boolean clientVisualMoving;
     private boolean clientVisualAirborne;
+    private boolean clientVisualAscending;
     private int clientVisualGroundTicks;
     private int clientVisualAirTicks;
+    private boolean clientVisualRunning;
+    private int clientVisualRunReleaseTicks;
+    private int clientBaseAnimationSelection = Integer.MIN_VALUE;
     @Nullable
     private BlockPos launchBedPos;
     private int launchCarrierY = NO_LAUNCH_CARRIER;
@@ -563,6 +597,9 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         this.entityData.define(DATA_PILOT_SYNCHRONIZATION, 40.0F);
         this.entityData.define(DATA_BERSERK, false);
         this.entityData.define(DATA_BERSERK_TICKS, 0);
+        this.entityData.define(DATA_MOTION_LAB_PHYSICS_PREVIEW, 0);
+        this.entityData.define(DATA_MOTION_LAB_ACTIVE, false);
+        this.entityData.define(DATA_MOTION_LAB_RUNNING, false);
     }
 
     @Override
@@ -816,7 +853,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
      */
     public boolean isPoweredOn()
     {
-        return this.isBerserk()
+        return this.isBerserk() || this.entityData.get(DATA_MOTION_LAB_ACTIVE)
                 || (this.isEntryPlugInserted()
                     && this.getPilotEntity() != null
                     && (this.isUmbilicalConnected()
@@ -935,6 +972,33 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         return this.entityData.get(DATA_CANNON_AIM_PITCH);
     }
 
+    /** Render-space neck yaw: the pilot looks first while the chassis follows. */
+    public float pilotHeadYawForRender(float partialTick)
+    {
+        LivingEntity pilot = this.getPilotEntity();
+        if (pilot == null || this.isPilotControlLocked())
+        {
+            return 0.0F;
+        }
+        float pilotYaw = Mth.rotLerp(partialTick, pilot.yRotO,
+                pilot.getYRot());
+        float bodyYaw = Mth.rotLerp(partialTick, this.yRotO,
+                this.getYRot());
+        return Mth.clamp(Mth.wrapDegrees(pilotYaw - bodyYaw),
+                -PILOT_HEAD_YAW_LIMIT, PILOT_HEAD_YAW_LIMIT);
+    }
+
+    public float pilotHeadPitchForRender(float partialTick)
+    {
+        LivingEntity pilot = this.getPilotEntity();
+        if (pilot == null || this.isPilotControlLocked())
+        {
+            return 0.0F;
+        }
+        return Mth.clamp(Mth.lerp(partialTick, pilot.xRotO,
+                pilot.getXRot()), -38.0F, 42.0F);
+    }
+
     /** Contact weapons alone are allowed to neutralize an Angel A.T. Field. */
     public boolean isMeleeWeapon()
     {
@@ -950,6 +1014,18 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     public boolean isPilotSprinting()
     {
         return this.entityData.get(DATA_SPRINTING);
+    }
+
+    private boolean hasVisualRunIntent()
+    {
+        return this.isBerserk() || this.isPilotSprinting()
+                || this.entityData.get(DATA_MOTION_LAB_RUNNING);
+    }
+
+    private boolean isVisualRunRequested()
+    {
+        return this.level().isClientSide
+                ? this.clientVisualRunning : this.hasVisualRunIntent();
     }
 
     public boolean isPilotProne()
@@ -1005,6 +1081,9 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         this.entityData.set(DATA_ACTIVATION_TICKS, 0);
         this.entityData.set(DATA_PILOT_SYNCHRONIZATION,
                 EvaPilotData.maxSynchronization());
+        this.entityData.set(DATA_MOTION_LAB_PHYSICS_PREVIEW, 0);
+        this.entityData.set(DATA_MOTION_LAB_ACTIVE, true);
+        this.entityData.set(DATA_MOTION_LAB_RUNNING, false);
         this.setNervLogisticsLocked(false);
         this.selectWeapon(WEAPON_FISTS);
         this.setHealth(this.getMaxHealth());
@@ -1024,6 +1103,32 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         return true;
     }
 
+    /**
+     * Disposable lab-only preview: 0=off, 1=physics replay, 2=recovery,
+     * 3=live policy, 4=grounded walk, 5=grounded run. The integer is
+     * synchronized so the renderer never relies on scoreboard tags.
+     */
+    public void setMotionLabPhysicsPreview(int mode)
+    {
+        if (this.level().isClientSide
+                || !this.getTags().contains("seele_motion_lab"))
+        {
+            return;
+        }
+        this.entityData.set(DATA_MOTION_LAB_ACTIVE, true);
+        this.entityData.set(DATA_MOTION_LAB_PHYSICS_PREVIEW,
+                Mth.clamp(mode, 0, 5));
+        if (mode > 0)
+        {
+            this.entityData.set(DATA_MOTION_LAB_RUNNING, false);
+        }
+    }
+
+    public int getMotionLabPhysicsPreview()
+    {
+        return this.entityData.get(DATA_MOTION_LAB_PHYSICS_PREVIEW);
+    }
+
     /** Server-only gait flag for the disposable autonomous motion demo. */
     public void setMotionLabDemoGait(boolean sprinting)
     {
@@ -1032,9 +1137,33 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         {
             return;
         }
-        this.entityData.set(DATA_SPRINTING, sprinting);
+        this.entityData.set(DATA_MOTION_LAB_ACTIVE, true);
+        // Autonomous lab motion is not pilot input. Sharing DATA_SPRINTING
+        // made no-passenger cleanup fight the director every server tick.
+        this.entityData.set(DATA_MOTION_LAB_RUNNING, sprinting);
+        this.entityData.set(DATA_SPRINTING, false);
         this.entityData.set(DATA_CROUCHING, false);
         this.entityData.set(DATA_PRONE, false);
+    }
+
+    /** Runs the accepted takeoff/airborne/landing chain for the lab dummy. */
+    public void triggerMotionLabDemoJump(double verticalVelocity)
+    {
+        if (this.level().isClientSide
+                || !this.getTags().contains("seele_motion_lab")
+                || !this.onGround())
+        {
+            return;
+        }
+        this.entityData.set(DATA_MOTION_LAB_ACTIVE, true);
+        this.triggerAnim("strike", "takeoff");
+        this.entityData.set(DATA_JUMP_SEQUENCE,
+                this.entityData.get(DATA_JUMP_SEQUENCE) + 1);
+        this.explicitJumpInProgress = true;
+        this.explicitJumpObservedAirborne = false;
+        this.explicitJumpAuthorizationTicks = JUMP_BUFFER_TICKS;
+        this.setDeltaMovement(0.0D, verticalVelocity, 0.0D);
+        this.hasImpulse = true;
     }
 
     /**
@@ -1886,7 +2015,8 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     /** Left-click from the plug: alternating swings in front of the Unit. */
     public void meleeAttack(ServerPlayer pilot)
     {
-        if (this.isPilotControlLocked() || this.meleeCooldown > 0 || !this.isMeleeWeapon())
+        if (this.isPilotControlLocked() || this.meleeCooldown > 0
+                || !this.isMeleeWeapon())
         {
             return;
         }
@@ -1929,7 +2059,8 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     /** Crouch + attack: a slow two-handed slam that flattens the area ahead. */
     public void smashAttack(ServerPlayer pilot)
     {
-        if (this.isPilotControlLocked() || this.smashCooldown > 0 || !this.isMeleeWeapon())
+        if (this.isPilotControlLocked() || this.smashCooldown > 0
+                || !this.isMeleeWeapon())
         {
             return;
         }
@@ -2194,6 +2325,9 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         // increasing sequence authorizes the same impulse on that client.
         this.entityData.set(DATA_JUMP_SEQUENCE,
                 this.entityData.get(DATA_JUMP_SEQUENCE) + 1);
+        this.explicitJumpInProgress = true;
+        this.explicitJumpObservedAirborne = false;
+        this.explicitJumpAuthorizationTicks = JUMP_BUFFER_TICKS;
         this.setDeltaMovement(motion.x, JUMP_VELOCITY, motion.z);
         if (this.getVisualPose() == VISUAL_LIVE_JUMP)
         {
@@ -2839,7 +2973,27 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     @Override
     public void aiStep()
     {
+        boolean preserveUnpilotedFacing = this.getPilotEntity() == null
+                && !this.isBerserk()
+                && !this.isNervLogisticsLocked()
+                && !this.isLaunchSequenceActive()
+                && !this.hasActiveCarrierMotion();
+        float preservedYaw = this.getYRot();
+        float preservedPitch = this.getXRot();
         super.aiStep();
+        if (preserveUnpilotedFacing)
+        {
+            // BodyRotationControl runs inside super.aiStep(). Restore the
+            // chassis frame after vanilla collision/head tracking, including
+            // interpolation history, so touching a parked or lab EVA cannot
+            // rotate it for one render frame before the server correction.
+            this.setRot(preservedYaw, preservedPitch);
+            this.yRotO = preservedYaw;
+            this.yBodyRot = preservedYaw;
+            this.yBodyRotO = preservedYaw;
+            this.yHeadRot = preservedYaw;
+            this.yHeadRotO = preservedYaw;
+        }
         if (this.level().isClientSide)
         {
             this.updateClientAnimationSignals();
@@ -2932,18 +3086,64 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         this.tickLaunchSequence();
         if (!this.onGround())
         {
-            this.wasAirborne = true;
-        }
-        else if (this.wasAirborne)
-        {
-            this.wasAirborne = false;
-            this.triggerAnim("strike", "land");
-            if (this.level() instanceof ServerLevel serverLevel)
+            this.serverAirborneTicks++;
+            if (this.explicitJumpInProgress)
             {
-                serverLevel.sendParticles(ParticleTypes.CLOUD, this.getX(), this.getY() + 0.4D, this.getZ(),
-                        22, 3.2D, 0.25D, 3.2D, 0.04D);
+                this.explicitJumpObservedAirborne = true;
+                this.wasAirborne = true;
             }
-            this.playSound(SoundEvents.IRON_GOLEM_STEP, 2.8F, 0.52F);
+            else
+            {
+                double verticalSpeed = this.getDeltaMovement().y * 20.0D;
+                boolean confirmedFall = this.serverAirborneTicks
+                        >= PASSIVE_FALL_CONFIRM_TICKS
+                        && (this.fallDistance >= PASSIVE_FALL_MIN_DROP
+                        || this.serverAirborneTicks
+                                >= PASSIVE_FALL_SPEED_CONFIRM_TICKS
+                        && verticalSpeed <= PASSIVE_FALL_MIN_SPEED);
+                if (confirmedFall)
+                {
+                    this.wasAirborne = true;
+                }
+            }
+        }
+        else
+        {
+            this.serverAirborneTicks = 0;
+            if (this.explicitJumpInProgress
+                    && !this.explicitJumpObservedAirborne)
+            {
+                if (this.explicitJumpAuthorizationTicks > 0)
+                {
+                    this.explicitJumpAuthorizationTicks--;
+                }
+                else
+                {
+                    this.explicitJumpInProgress = false;
+                }
+            }
+            if (this.wasAirborne)
+            {
+                this.wasAirborne = false;
+                this.explicitJumpInProgress = false;
+                this.explicitJumpObservedAirborne = false;
+                this.explicitJumpAuthorizationTicks = 0;
+                boolean movingThroughLanding =
+                        this.getDeltaMovement().horizontalDistanceSqr() > 0.01D
+                        || this.isPilotSprinting()
+                        || this.pilotMovementRequested;
+                if (!movingThroughLanding)
+                {
+                    this.triggerAnim("strike", "land");
+                }
+                if (this.level() instanceof ServerLevel serverLevel)
+                {
+                    serverLevel.sendParticles(ParticleTypes.CLOUD, this.getX(),
+                            this.getY() + 0.4D, this.getZ(), 22, 3.2D, 0.25D,
+                            3.2D, 0.04D);
+                }
+                this.playSound(SoundEvents.IRON_GOLEM_STEP, 2.8F, 0.52F);
+            }
         }
         int cooldown = this.getCannonCooldown();
         if (cooldown > 0)
@@ -3000,8 +3200,10 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             this.entityData.set(DATA_AT_ON, false);
             this.playSound(ModSounds.CRYSTAL_BREAK.get(), 2.0F, 1.2F);
         }
-        if (this.getControllingPassenger() == null)
+        if (this.getControllingPassenger() == null
+                && !this.getTags().contains("seele_motion_lab"))
         {
+            this.pilotMovementRequested = false;
             this.clearJumpRequestState();
             this.clearPilotMotion();
         }
@@ -4455,12 +4657,26 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             this.setDeltaMovement(Vec3.ZERO);
             return;
         }
+        float previousBodyYaw = this.getYRot();
         super.tickRidden(player, input);
-        // Yaw steers the chassis; camera pitch remains pilot-only input. Cannon
-        // elevation is synchronized separately and applied to the one world
-        // skeleton, so the entire EVA never pitches with the camera.
-        this.setRot(player.getYRot(), 0.0F);
-        this.yRotO = this.yBodyRot = this.yHeadRot = this.getYRot();
+        boolean moving = Math.abs(input.x) + Math.abs(input.z) > 0.01D;
+        float deadZone = moving ? PILOT_BODY_MOVING_DEAD_ZONE
+                : PILOT_BODY_IDLE_DEAD_ZONE;
+        float maxTurn = moving ? PILOT_BODY_MOVING_TURN_PER_TICK
+                : PILOT_BODY_IDLE_TURN_PER_TICK;
+        float delta = Mth.wrapDegrees(player.getYRot() - previousBodyYaw);
+        float remaining = Math.max(0.0F, Math.abs(delta) - deadZone);
+        float turn = Math.copySign(Math.min(remaining, maxTurn), delta);
+        float bodyYaw = previousBodyYaw + turn;
+        // Preserve the previous tick for render interpolation. Assigning both
+        // values to the camera yaw made the sixty-block chassis teleport under
+        // the pilot whenever the mouse moved.
+        this.setRot(bodyYaw, 0.0F);
+        this.yRotO = previousBodyYaw;
+        this.yBodyRotO = previousBodyYaw;
+        this.yHeadRotO = previousBodyYaw;
+        this.yBodyRot = bodyYaw;
+        this.yHeadRot = bodyYaw;
         // The player renderer is cancelled client-side while mounted. Do not
         // leave the pilot invisibility flag set after an older cockpit pass.
         if (player.isInvisible())
@@ -4517,6 +4733,16 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         this.groundedGraceTicks = 0;
         this.lastJumpRequestId = Integer.MIN_VALUE;
         this.clientJumpImpulsePending = false;
+        this.explicitJumpInProgress = false;
+        this.explicitJumpObservedAirborne = false;
+        this.explicitJumpAuthorizationTicks = 0;
+        this.serverAirborneTicks = 0;
+        this.clientExplicitJumpInProgress = false;
+        this.clientExplicitJumpObservedAirborne = false;
+        this.clientExplicitJumpAuthorizationTicks = 0;
+        this.clientVisualAirborne = false;
+        this.clientVisualAscending = false;
+        this.clientVisualAirTicks = 0;
     }
 
     private void updatePoseDimensions()
@@ -4540,7 +4766,12 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     @Override
     public boolean isPushable()
     {
-        return !this.isCrucified() && (this.isBerserk() || !this.isPilotControlLocked()) && super.isPushable();
+        // A sixty-block airframe is not a vanilla shoulder-to-shoulder mob.
+        // Allowing ordinary entity push made an on-foot player impart a tiny
+        // displacement; PathfinderMob then turned the complete render body to
+        // face that collision vector. EVA movement remains authoritative via
+        // pilot input, berserk AI, carrier rails and launch machinery.
+        return false;
     }
 
     @Override
@@ -4577,10 +4808,15 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     {
         if (this.getActivationTicks() > 20 || this.isLaunchSequenceActive())
         {
+            this.pilotMovementRequested = false;
             return Vec3.ZERO;
         }
-        double strafe = this.isPilotProne() ? 0.28D : this.isPilotCrouching() ? 0.45D : 0.7D;
-        return new Vec3(player.xxa * strafe, 0.0D, player.zza >= 0.0F ? player.zza : player.zza * 0.6D);
+        this.pilotMovementRequested = Math.abs(player.xxa) > 0.01F
+                || Math.abs(player.zza) > 0.01F;
+        double strafe = this.isPilotProne() ? 0.28D
+                : this.isPilotCrouching() ? 0.45D : 0.7D;
+        return new Vec3(player.xxa * strafe, 0.0D,
+                player.zza >= 0.0F ? player.zza : player.zza * 0.6D);
     }
 
     @Override
@@ -4659,6 +4895,12 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             {
                 this.clientJumpSequence = sequence;
                 this.clientJumpImpulsePending = this.isControlledByLocalInstance();
+                this.clientExplicitJumpInProgress = true;
+                this.clientExplicitJumpObservedAirborne = false;
+                this.clientExplicitJumpAuthorizationTicks =
+                        JUMP_BUFFER_TICKS;
+                this.clientVisualAirborne = true;
+                this.clientVisualAscending = true;
                 if (this.getVisualPose() == VISUAL_LIVE_JUMP)
                 {
                     ProjectSeele.LOGGER.info("Visual live jump client sequence received sequence={}",
@@ -4793,8 +5035,14 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             this.clientVisualVerticalSpeed *= 0.55D;
             this.clientVisualMoving = false;
             this.clientVisualAirborne = false;
+            this.clientVisualAscending = false;
+            this.clientVisualRunning = false;
+            this.clientVisualRunReleaseTicks = 0;
             this.clientVisualGroundTicks = 2;
             this.clientVisualAirTicks = 0;
+            this.clientExplicitJumpInProgress = false;
+            this.clientExplicitJumpObservedAirborne = false;
+            this.clientExplicitJumpAuthorizationTicks = 0;
             return;
         }
         double dx = this.getX() - this.xo;
@@ -4817,6 +5065,34 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         this.clientVisualVerticalSpeed = Mth.lerp(0.38D,
                 this.clientVisualVerticalSpeed, vertical);
 
+        /*
+         * Run/walk is a gait, not a one-packet animation trigger.  Keep the
+         * chosen run gait authoritative across brief input/data latency and
+         * while the chassis still carries run-speed momentum.  The old direct
+         * boolean branch could alternate RUN/WALK on consecutive client ticks;
+         * GeckoLib then restarted the 0.8 s loop before the second footfall.
+         */
+        if (this.hasVisualRunIntent())
+        {
+            this.clientVisualRunning = true;
+            this.clientVisualRunReleaseTicks = 6;
+        }
+        else if (this.clientVisualRunning)
+        {
+            if (this.clientVisualHorizontalSpeed >= 10.25D)
+            {
+                this.clientVisualRunReleaseTicks = 6;
+            }
+            else if (this.clientVisualRunReleaseTicks > 0)
+            {
+                this.clientVisualRunReleaseTicks--;
+            }
+            else
+            {
+                this.clientVisualRunning = false;
+            }
+        }
+
         // Hysteresis prevents stair edges and one late position packet from
         // toggling idle/walk every other client tick.
         if (this.clientVisualMoving)
@@ -4835,18 +5111,71 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         {
             this.clientVisualGroundTicks++;
             this.clientVisualAirTicks = 0;
-            if (this.clientVisualGroundTicks >= 2)
+            if (this.clientExplicitJumpInProgress
+                    && this.clientExplicitJumpObservedAirborne
+                    && this.clientVisualGroundTicks
+                            >= (this.clientVisualMoving ? 1 : 2))
+            {
+                this.clientExplicitJumpInProgress = false;
+                this.clientExplicitJumpObservedAirborne = false;
+                this.clientExplicitJumpAuthorizationTicks = 0;
+                this.clientVisualAirborne = false;
+                this.clientVisualAscending = false;
+            }
+            else if (this.clientExplicitJumpInProgress)
+            {
+                this.clientVisualAirborne = true;
+                if (!this.clientExplicitJumpObservedAirborne
+                        && this.clientExplicitJumpAuthorizationTicks > 0)
+                {
+                    this.clientExplicitJumpAuthorizationTicks--;
+                }
+                if (!this.clientExplicitJumpObservedAirborne
+                        && this.clientExplicitJumpAuthorizationTicks <= 0)
+                {
+                    this.clientExplicitJumpInProgress = false;
+                    this.clientVisualAirborne = false;
+                    this.clientVisualAscending = false;
+                }
+            }
+            else
             {
                 this.clientVisualAirborne = false;
+                this.clientVisualAscending = false;
             }
         }
         else
         {
+            if (this.clientVisualAirTicks == 0)
+            {
+                this.clientAirborneStartY = this.getY();
+            }
             this.clientVisualAirTicks++;
             this.clientVisualGroundTicks = 0;
-            if (this.clientVisualAirTicks >= 2)
+            if (this.clientExplicitJumpInProgress)
             {
+                this.clientExplicitJumpObservedAirborne = true;
                 this.clientVisualAirborne = true;
+                if (this.clientVisualAscending
+                        && this.clientVisualVerticalSpeed < -0.15D)
+                {
+                    // A jump has one apex. Interpolation may wobble around
+                    // zero, but FALL must never flip back into JUMP.
+                    this.clientVisualAscending = false;
+                }
+            }
+            else
+            {
+                double drop = this.clientAirborneStartY - this.getY();
+                boolean confirmedFall = this.clientVisualAirTicks
+                        >= PASSIVE_FALL_CONFIRM_TICKS
+                        && (drop >= PASSIVE_FALL_MIN_DROP
+                        || this.clientVisualAirTicks
+                                >= PASSIVE_FALL_SPEED_CONFIRM_TICKS
+                        && this.clientVisualVerticalSpeed
+                                <= PASSIVE_FALL_MIN_SPEED);
+                this.clientVisualAirborne = confirmedFall;
+                this.clientVisualAscending = false;
             }
         }
     }
@@ -4884,7 +5213,8 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     private boolean visuallyAirborne()
     {
         return this.level().isClientSide
-                ? this.clientVisualAirborne : !this.onGround();
+                ? this.clientVisualAirborne
+                : this.explicitJumpInProgress || this.wasAirborne;
     }
 
     private double visualVerticalSpeed()
@@ -4899,7 +5229,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     private double locomotionAnimationSpeed()
     {
         if (this.getVisualPose() != VISUAL_NORMAL || this.getActivationTicks() > 0
-                || this.isCrucified() || !this.onGround())
+                || this.isCrucified() || this.visuallyAirborne())
         {
             return 1.0D;
         }
@@ -4920,7 +5250,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         {
             speed = blocksPerSecond * CROUCH_CYCLE_SECONDS / CROUCH_STRIDE_BLOCKS;
         }
-        else if (this.isBerserk() || this.isPilotSprinting())
+        else if (this.isVisualRunRequested())
         {
             speed = blocksPerSecond * RUN_CYCLE_SECONDS / RUN_STRIDE_BLOCKS
                     * RUN_CADENCE_GAIN;
@@ -4930,7 +5260,34 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             speed = blocksPerSecond * WALK_CYCLE_SECONDS / WALK_STRIDE_BLOCKS
                     * WALK_CADENCE_GAIN;
         }
-        return Mth.clamp(speed, 0.18D, 1.6D);
+        return Mth.clamp(speed, 0.45D, 1.35D);
+    }
+
+    private RawAnimation groundedLocomotionAnimation()
+    {
+        if (this.isVisualRunRequested())
+        {
+            return ANIM_RUN;
+        }
+        return ANIM_WALK;
+    }
+
+    private PlayState continueBaseAnimation(
+            AnimationState<EvaUnit01Entity> state, RawAnimation animation,
+            int selection)
+    {
+        if (this.level().isClientSide
+                && selection != this.clientBaseAnimationSelection)
+        {
+            this.clientBaseAnimationSelection = selection;
+            ProjectSeele.LOGGER.info(
+                    "EVA base animation selection: eva={} selection={} sprint={} moving={} airborne={} speed={} pose={}",
+                    this.getId(), selection, this.isVisualRunRequested(),
+                    this.clientVisualMoving, this.clientVisualAirborne,
+                    this.clientVisualHorizontalSpeed, this.getVisualPose());
+        }
+        return state.isCurrentAnimation(animation)
+                ? PlayState.CONTINUE : state.setAndContinue(animation);
     }
 
     @Override
@@ -4995,11 +5352,11 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             }
             if (!this.isPoweredOn())
             {
-                return state.setAndContinue(ANIM_DORMANT);
+                return this.continueBaseAnimation(state, ANIM_DORMANT, 1);
             }
             if (this.getActivationTicks() > 0)
             {
-                return state.setAndContinue(ANIM_ACTIVATION);
+                return this.continueBaseAnimation(state, ANIM_ACTIVATION, 2);
             }
             // Stance changes resize the hitbox and can leave the Unit one
             // frame off the ground. Keep the requested pose authoritative so
@@ -5016,14 +5373,21 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             }
             if (this.visuallyAirborne())
             {
-                return state.setAndContinue(this.visualVerticalSpeed() > 0.35D
-                        ? ANIM_JUMP : ANIM_FALL);
+                boolean ascending = this.level().isClientSide
+                        ? this.clientVisualAscending
+                        : this.visualVerticalSpeed() > 0.35D;
+                return this.continueBaseAnimation(state,
+                        ascending ? ANIM_JUMP : ANIM_FALL,
+                        ascending ? 3 : 4);
             }
             if (this.visuallyMoving(state))
             {
-                return state.setAndContinue(this.isPilotSprinting() ? ANIM_RUN : ANIM_WALK);
+                boolean running = this.isVisualRunRequested();
+                return this.continueBaseAnimation(state,
+                        running ? ANIM_RUN : ANIM_WALK,
+                        running ? 5 : 6);
             }
-            return state.setAndContinue(ANIM_IDLE);
+            return this.continueBaseAnimation(state, ANIM_IDLE, 7);
         }).setAnimationSpeedHandler(entity -> entity.locomotionAnimationSpeed()));
         controllers.add(new AnimationController<>(this, "arms", 3, state ->
         {
@@ -5074,6 +5438,13 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         {
             if (this.isCrucified() || this.isNervLogisticsLocked()
                     || !this.isPoweredOn())
+            {
+                state.getController().stop();
+                return PlayState.STOP;
+            }
+            if (ANIM_LAND.equals(
+                    state.getController().getTriggeredAnimation())
+                    && this.isVisuallyMovingForRender())
             {
                 state.getController().stop();
                 return PlayState.STOP;

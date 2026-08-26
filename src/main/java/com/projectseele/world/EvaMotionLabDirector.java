@@ -30,6 +30,7 @@ public final class EvaMotionLabDirector
             DemoMode.STOP, DemoMode.STOP, DemoMode.STOP
     };
     private static final int[] DEMO_DIRECTIONS = {1, 1, 1};
+    private static final int[] DEMO_TICKS = {0, 0, 0};
     private static final AABB ARENA = new AABB(
             -190, FLOOR_Y - 12, -190, 191, 100, 191);
 
@@ -67,6 +68,7 @@ public final class EvaMotionLabDirector
             {
                 DEMO_MODES[index] = DemoMode.STOP;
                 DEMO_DIRECTIONS[index] = 1;
+                DEMO_TICKS[index] = 0;
             }
         }
         ensureUnits(level, force);
@@ -92,12 +94,56 @@ public final class EvaMotionLabDirector
                 continue;
             }
             DemoMode mode = DEMO_MODES[variant];
+            int motionPreview = switch (mode)
+            {
+                case PHYSICS_WALK -> 1;
+                case PHYSICS_RECOVERY -> 2;
+                case PHYSICS_LIVE -> 3;
+                case GROUNDED_WALK -> 4;
+                case GROUNDED_RUN -> 5;
+                default -> 0;
+            };
+            eva.setMotionLabPhysicsPreview(motionPreview);
+            if (motionPreview > 0)
+            {
+                eva.setMotionLabDemoGait(false);
+                int frame = Math.floorMod(DEMO_TICKS[variant]++, 160);
+                double speed = switch (mode)
+                {
+                    case PHYSICS_WALK -> frame >= 20 && frame < 100
+                            ? 0.525D : 0.0D;
+                    // Exact 60-block-scale travel rates measured from the
+                    // exported full-body cycles. They keep planted feet
+                    // stationary instead of previewing the clip in place.
+                    case GROUNDED_WALK -> 1.33D;
+                    case GROUNDED_RUN -> 2.49D;
+                    default -> 0.0D;
+                };
+                int direction = DEMO_DIRECTIONS[variant];
+                if (eva.getZ() > 142.0D)
+                {
+                    direction = -1;
+                }
+                else if (eva.getZ() < -142.0D)
+                {
+                    direction = 1;
+                }
+                DEMO_DIRECTIONS[variant] = direction;
+                float yaw = direction > 0 ? 0.0F : 180.0F;
+                eva.setYRot(yaw);
+                eva.yRotO = eva.yBodyRot = eva.yHeadRot = yaw;
+                eva.move(MoverType.SELF,
+                        new net.minecraft.world.phys.Vec3(
+                                0.0D, 0.0D, speed * direction));
+                eva.setDeltaMovement(net.minecraft.world.phys.Vec3.ZERO);
+                continue;
+            }
             if (mode == DemoMode.JUMP)
             {
                 eva.setMotionLabDemoGait(false);
                 if (eva.onGround())
                 {
-                    eva.setDeltaMovement(0.0D, 1.45D, 0.0D);
+                    eva.triggerMotionLabDemoJump(1.45D);
                     DEMO_MODES[variant] = DemoMode.STOP;
                 }
                 continue;
@@ -107,7 +153,12 @@ public final class EvaMotionLabDirector
                 eva.setMotionLabDemoGait(false);
                 continue;
             }
-            double speed = mode == DemoMode.RUN ? 0.62D : 0.34D;
+            double speed = switch (mode)
+            {
+                case WALK -> 0.22D;
+                case RUN -> 0.62D;
+                default -> 0.0D;
+            };
             int direction = DEMO_DIRECTIONS[variant];
             if (eva.getZ() > 142.0D)
             {
@@ -143,6 +194,13 @@ public final class EvaMotionLabDirector
             case "walk" -> DemoMode.WALK;
             case "run", "sprint" -> DemoMode.RUN;
             case "jump" -> DemoMode.JUMP;
+            case "physics", "physics_walk", "preview" ->
+                    DemoMode.PHYSICS_WALK;
+            case "physics_recovery", "recovery" ->
+                    DemoMode.PHYSICS_RECOVERY;
+            case "live", "physics_live", "policy", "livereset",
+                    "livepush" ->
+                    DemoMode.PHYSICS_LIVE;
             default -> null;
         };
         if (mode == null)
@@ -150,6 +208,18 @@ public final class EvaMotionLabDirector
             return false;
         }
         DEMO_MODES[variant] = mode;
+        DEMO_TICKS[variant] = 0;
+        if (rawMode.equalsIgnoreCase("live")
+                || rawMode.equalsIgnoreCase("physics_live")
+                || rawMode.equalsIgnoreCase("policy")
+                || rawMode.equalsIgnoreCase("livereset"))
+        {
+            EvaLivePhysicsControl.reset(variant);
+        }
+        else if (rawMode.equalsIgnoreCase("livepush"))
+        {
+            EvaLivePhysicsControl.lateralImpulse(variant, -0.5F);
+        }
         return true;
     }
 
@@ -384,6 +454,11 @@ public final class EvaMotionLabDirector
         STOP,
         WALK,
         RUN,
-        JUMP
+        JUMP,
+        PHYSICS_WALK,
+        PHYSICS_RECOVERY,
+        PHYSICS_LIVE,
+        GROUNDED_WALK,
+        GROUNDED_RUN
     }
 }

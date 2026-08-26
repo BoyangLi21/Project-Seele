@@ -21,6 +21,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--source", required=True, type=Path)
     parser.add_argument("--output-json", required=True, type=Path)
     parser.add_argument("--output-blend", type=Path)
+    parser.add_argument("--profile", choices=("cmu", "100style"),
+                        default="cmu")
     parser.add_argument("--padding-seconds", type=float, default=0.25)
     return parser.parse_args(sys.argv[sys.argv.index("--") + 1 :])
 
@@ -38,6 +40,17 @@ def unwrap(values: list[float]) -> list[float]:
 
 def main() -> None:
     args = parse_args()
+    names = ({
+        "root": "Hips", "head": "Head",
+        "left_foot": "LeftAnkle", "left_toe": "LeftToe",
+        "right_foot": "RightAnkle", "right_toe": "RightToe",
+        "left_hip": "LeftHip", "right_hip": "RightHip",
+    } if args.profile == "100style" else {
+        "root": "root", "head": "head",
+        "left_foot": "lfoot", "left_toe": "ltoes",
+        "right_foot": "rfoot", "right_toe": "rtoes",
+        "left_hip": "lfemur", "right_hip": "rfemur",
+    })
     if not args.source.is_file():
         raise SystemExit(f"missing BVH: {args.source}")
     bpy.ops.object.select_all(action="SELECT")
@@ -61,18 +74,18 @@ def main() -> None:
     start, end = scene.frame_start, scene.frame_end
     scene.frame_set(start)
     bpy.context.view_layer.update()
-    scale = 1.75 / max(actor_height(armature), 1.0e-6)
+    scale = 1.75 / max(actor_height(armature, names), 1.0e-6)
     positions = []
     raw_yaw = []
     for frame in range(start, end + 1):
         scene.frame_set(frame)
         bpy.context.view_layer.update()
-        positions.append(world_point(armature, "root") * scale)
+        positions.append(world_point(armature, names["root"]) * scale)
         # Derive facing from the physical hip line.  The CMU root bone has a
         # format/import rest-axis rotation which can flip Euler yaw thousands
         # of degrees per second despite a smooth performer trajectory.
-        left_hip = world_point(armature, "lfemur")
-        right_hip = world_point(armature, "rfemur")
+        left_hip = world_point(armature, names["left_hip"])
+        right_hip = world_point(armature, names["right_hip"])
         lateral = right_hip - left_hip
         lateral.z = 0.0
         lateral.normalize()
@@ -123,6 +136,7 @@ def main() -> None:
     report = {
         "schema": 1,
         "source": str(args.source.resolve()),
+        "profile": args.profile,
         "fps": fps,
         "frame_range": [start, end],
         "source_to_meters": scale,

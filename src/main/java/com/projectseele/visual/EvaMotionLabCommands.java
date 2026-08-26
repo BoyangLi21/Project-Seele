@@ -152,11 +152,31 @@ public final class EvaMotionLabCommands
                 source.getLevel(), variant, mode))
         {
             source.sendFailure(Component.literal(
-                    "Usage: /seele motionlab demo unit01 walk|run|jump|stop"));
+                    "Usage: /seele motionlab demo unit01 "
+                            + "walk|run|jump|live|livepush|physics|recovery|stop"));
             return 0;
         }
-        source.sendSuccess(() -> Component.literal(
-                "Motion-lab autonomous gait: EVA-"
+        boolean physicsPreview = mode.equalsIgnoreCase("physics")
+                || mode.equalsIgnoreCase("physics_walk")
+                || mode.equalsIgnoreCase("preview")
+                || mode.equalsIgnoreCase("physics_recovery")
+                || mode.equalsIgnoreCase("recovery")
+                || mode.equalsIgnoreCase("live")
+                || mode.equalsIgnoreCase("physics_live")
+                || mode.equalsIgnoreCase("policy")
+                || mode.equalsIgnoreCase("livereset")
+                || mode.equalsIgnoreCase("livepush");
+        source.sendSuccess(() -> Component.literal(physicsPreview
+                ? ((mode.equalsIgnoreCase("live")
+                        || mode.equalsIgnoreCase("physics_live")
+                        || mode.equalsIgnoreCase("policy")
+                        || mode.equalsIgnoreCase("livereset")
+                        || mode.equalsIgnoreCase("livepush"))
+                        ? "LIVE TRAINED POLICY + MUJOCO: EVA-"
+                                + String.format("%02d", variant)
+                        : "OFFLINE MUJOCO REPLAY (NON-AUTHORITATIVE): EVA-"
+                                + String.format("%02d", variant) + " " + mode)
+                : "Motion-lab autonomous gait: EVA-"
                         + String.format("%02d", variant) + " " + mode), false);
         return 1;
     }

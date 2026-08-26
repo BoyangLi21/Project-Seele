@@ -33,6 +33,7 @@ SOURCE = Path(sys.argv[1]) if len(sys.argv) > 1 else (
 OUT = REPO / "run/resourcepacks/eva_real_model/assets/projectseele"
 BASE_GEO = REPO / "src/main/resources/assets/projectseele/geo/eva_unit01.geo.json"
 BASE_ANIMATION = REPO / "src/main/resources/assets/projectseele/animations/eva_unit01.animation.json"
+ACCEPTED_LOCOMOTION = REPO / "tools/eva_locomotion_accad_r32.json"
 BASE_TEXTURE = REPO / "src/main/resources/assets/projectseele/textures/entity/eva_unit01.png"
 MODEL_HEIGHT = 192.0
 ATLAS_WIDTH = 1024
@@ -2221,6 +2222,11 @@ def repair_tiger_runtime_animations(data):
 
 def build_animations():
     data = json.loads(BASE_ANIMATION.read_text(encoding="utf-8"))
+    # The accepted R02 catalogue adds `jog`, which is intentionally applied
+    # after the hash-bound R03/R04/R07 repair chain below.  Remove a previous
+    # generated copy before replaying that chain so repeated pack builds stay
+    # deterministic and continue to satisfy its semantic source contract.
+    data["animations"].pop("animation.eva_unit01.jog", None)
     repair_tiger_runtime_animations(data)
     animations = data["animations"]
 
@@ -2290,7 +2296,40 @@ def build_animations():
         "animation.eva_unit01.prone_aim", 0.0)
     # Keep the measured finger rig above, then install the reviewed canonical
     # animation catalogue shared by EVA-00/01/02.
-    return animationfix.apply_reviewed_animation_repairs(data)
+    data = animationfix.apply_reviewed_animation_repairs(data)
+    # Tiger's authored thumb is one visible rigid island plus an empty tip
+    # socket.  The legacy distal names have no matching runtime bone and must
+    # not survive as silently ignored animation channels.
+    for animation in data["animations"].values():
+        bones = animation.get("bones")
+        if not isinstance(bones, dict):
+            continue
+        bones.pop("finger_thumb_distal_l", None)
+        bones.pop("finger_thumb_distal_r", None)
+    if not ACCEPTED_LOCOMOTION.is_file():
+        raise RuntimeError(
+            "accepted locomotion export missing: " + str(ACCEPTED_LOCOMOTION))
+    accepted = json.loads(
+        ACCEPTED_LOCOMOTION.read_text(encoding="utf-8"))
+    if accepted.get("schema") != 1 or accepted.get("sample_rate_hz") != 60:
+        raise RuntimeError("accepted locomotion export has an unsupported schema")
+    animations = data["animations"]
+    for name, replacement in accepted["replace_animations"].items():
+        animations[name] = copy.deepcopy(replacement)
+
+    # Visual-lab contact commands must sample the same accepted catalogue as
+    # live play, not the superseded pre-R32 curves generated earlier above.
+    animations["animation.eva_unit01.visual_idle"] = static_pose(
+        animations["animation.eva_unit01.idle"], 0.0)
+    animations["animation.eva_unit01.visual_walk_contact"] = static_pose(
+        animations["animation.eva_unit01.walk"], 0.0)
+    animations["animation.eva_unit01.visual_run_contact"] = static_pose(
+        animations["animation.eva_unit01.run"], 0.0)
+    animations["animation.eva_unit01.visual_jump"] = static_pose(
+        animations["animation.eva_unit01.takeoff"], 0.67)
+    animations["animation.eva_unit01.visual_fall"] = static_pose(
+        animations["animation.eva_unit01.jump"], 1.25)
+    return data
 
 
 def main():
