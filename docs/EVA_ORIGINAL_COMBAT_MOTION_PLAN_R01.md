@@ -43,8 +43,8 @@ Free combat is assembled from short, contact-labelled motion fragments. It is
 not a list of long clips bound one-to-one to keys.
 
 The current machine-readable prototype is
-`tools/eva_combat_action_graph_r01.json`; its structural validator passes nine
-nodes and eleven conditional edges with no missing hit/miss resolver. It is a
+`tools/eva_combat_action_graph_r01.json`; its structural validator passes twelve
+nodes and eighteen conditional edges with no missing hit/miss resolver. It is a
 controller contract, not evidence that the motions are already finished.
 
 | Family | Purpose | Required contacts | Miss / interruption result |
@@ -59,6 +59,7 @@ controller contract, not evidence that the motions are already finished.
 | shoulder/body ram | high-momentum close entry | shoulder/chest target and rear-leg drive | bounce, brace or fall according to impulse |
 | forward pounce | rapid pursuit and contact acquisition | launch plant, flight, target/ground landing envelope | target catch, braced four-point landing, roll or miss recovery |
 | mounted strike | contextual close finish, not neutral attack | knees/feet/pelvis support on ground/target | target reaction changes subsequent strike path |
+| grounded stomp | contextual pressure on an already grounded target | single support, striking sole and target surface | ground recoil, balance step or target-dependent continuation |
 
 ### Input and comfort contract
 
@@ -84,8 +85,9 @@ These are graphs, not mandatory fixed sequences.
 forearm ward
   -> committed body entry
       -> push kick when target remains outside grab range
+      -> shoulder/body ram when momentum is already committed
       -> two-hand clamp when target contact is established
-          -> arm wrench / shove / wall pin according to target support
+          -> arm wrench / low reap / shove / wall pin according to target support
 ```
 
 It should look powerful and occasionally improvised. The pilot is not a boxer,
@@ -122,7 +124,7 @@ must preserve a visible plant; they are not repeated spectacle moves.
 low pursuit / pounce
   -> two-hand clamp
       -> wrench / throw / mount
-          -> maul, tear or bite contact family
+          -> maul, tear, grounded stomp or bite contact family
 ```
 
 This family uses lower COM, hand/foot support, spinal participation and sudden
@@ -142,17 +144,19 @@ The pounce is a first-class traversal/contact action:
    - four-point braced ground landing;
    - miss, roll/step recovery or destructive collision.
 
-CMU `49_04`, `49_05`, `127_23` and `127_24` are only trajectory/contact-order
-references. The final pounce needs project-authored target contacts and physical
-tracking. CMU's official database describes these as run/leap and
-run/dive/roll captures; it does not make them EVA actions.
+ACCAD `B18_WalkToLeapToWalk` frames 40–91 now provide the first accepted
+launch/flight reference. Its source landing around frames 92–93 contains a
+real lower-body discontinuity and is rejected rather than smoothed. CMU
+`49_04`, `49_05`, `127_23` and `127_24` remain trajectory/contact-order
+references. The final pounce needs project-authored target contacts and
+physical tracking; dataset labels do not make any capture an EVA action.
 
 ## 5. Contextual finishers
 
 Finishers live outside the free-combat search domain. Each uses a paired or
 multi-actor interaction rig, target-specific anchors and a failure/abort path.
 
-The first three detailed interaction graphs are stored in
+Nine detailed interaction graphs are stored in
 `tools/eva_contextual_finisher_graphs_r01.json`.
 
 | Encounter | Recognisable high-level beats | Runtime gate | Production method |
@@ -166,6 +170,7 @@ The first three detailed interaction graphs are stored in
 | Bardiel | close grapple, neck/head restraint and dummy-plug execution | story/dummy route only | paired physical grapple; deliberately uncomfortable, not player neutral combo |
 | Zeruel | desperate close entry, limb control/tear, berserk pursuit and devour outcome | berserk/story outcome and target anatomy available | physical paired sequence with target damage states |
 | Arael | retrieve, brace and full-body Lance javelin throw | Unit-00, Lance equipped, orbital target solution | long-object inertia and release trajectory; Unit-00 signature finisher |
+| Leliel | internal brace, tear a rupture, four-point emergence and weighted rise | absorbed Unit-01, destructible internal volume, berserk story trigger | volume-contact solve plus crawl/recovery; no free-combat activation |
 | Armisael | restraint/fusion crisis and Unit-00 sacrifice | explicit story choice only | authored multi-phase event, never a normal combat input |
 | Mass Production Evas | Unit-02 running executions, heavy swings/blowback, grapples, knife/weapon improvisation | EoE scenario, battery pressure and multiple targets | contact-driven kill graph with target handoff, not one long montage clip |
 
@@ -210,6 +215,30 @@ Research-only or non-distributable datasets stay outside the production corpus.
 CMU/ACCAD sources provide biomechanics; project-specific contact design remains
 our work.
 
+### Cologne Motion Capture Database CC BY 4.0 supplement
+
+The [official CMCD licence page](https://mocap.web.th-koeln.de/about.php)
+licenses its BVH/C3D motion and annotations under CC BY 4.0. A reproducible
+private seed is fetched by `tools/fetch_cmcd_eva_combat_seed.ps1`; its manifest
+records URLs, byte counts and SHA-256 hashes for eight files.
+
+The corrected original-skeleton screen reports four paired-review actors, one
+aerial-kick reference and three reference-only sequences. The jump-kick audit
+was fixed to select a strike during actual two-foot flight rather than prefer a
+planted-foot event; its aerial foot reaches about `0.726 H`.
+
+Shared-space review narrows the paired material further:
+
+- the 2018 Safari/Dschungel pair contains sustained two-hand contact around
+  source frames 1033–1144. It is useful for hand fighting, second-hand attach
+  and release, not for default striking;
+- the 2019 Eunuche/Nussknacker pair contains only a very short foot-to-hand
+  envelope around frames 823–827. It remains a kick/block timing reference,
+  not an accepted paired attack;
+- the forward roll, hit/tumble/fall and `KingKong2` sequences remain segmented
+  references. `KingKong2` is explicitly a negative example: ape imitation is
+  not automatically berserk EVA motion.
+
 ## 7. Interaction implementation
 
 Free action and cinematic interaction share one physical contract:
@@ -229,6 +258,21 @@ which preserves relationships between interaction landmarks, and with
 [MaskedMimic](https://research.nvidia.com/labs/par/maskedmimic/), which treats
 partial body/contact objectives as constraints for physical control. These are
 method references, not permission to copy their training data or models.
+
+### Physical-rig checkpoint R01
+
+The strict grounding revision invalidated the first pass, whose horizontal
+drift test had omitted absolute sole height. After re-exporting clips with an
+explicit full-source skeleton height and adding hover/penetration gates, only
+the ACCAD G18 right push kick (source frames 23–48) currently passes the whole
+kinematic gate. Left/right wards, B18 pounce launch and the shared-frame CMU
+`18_05/19_05` grab attach remain useful source/contact references but are
+blocked from promotion. The pair still stops at attachment: post-contact
+pulling is reserved for a bounded physical grip constraint.
+
+These are kinematic references, not a trained policy and not Minecraft-ready
+animations. Exact metrics, rejected variants and the R03 hand-bind correction
+are recorded in `docs/EVA_COMBAT_PHYSICAL_RETARGET_R01.md`.
 
 ## 8. Mandatory quality gates
 
@@ -284,16 +328,26 @@ ankle is simply the first one exposed by the new mesh-level test.
 
 ## 9. Production order
 
-1. Replace the single rigid ankle with ankle pitch/roll, ball/toe and a skinned
-   joint region; pass a neutral sweep and planted-foot articulation test.
+1. **Physical skeleton done, visual bind still blocked:** the 41-DOF R03
+   physical model has ankle pitch/roll, toe, clavicle, neck and wrist
+   articulation and passes axis/mirror/model checks. The Minecraft visual mesh
+   still needs the corresponding genuinely skinned bones and mesh-seam gate.
 2. Make the evaluated-mesh seam audit part of every retarget CI run.
-3. Review original skeletons for the 16 shortlists; segment exact ward, lunge,
-   kick and reach events.
-4. Retarget one left/right ward pair with locked heel/forefoot contacts.
-5. Retarget one left/right push-kick pair with explicit support and recoil.
-6. Build `ward -> entry -> kick/grab` as a branch graph and test all misses.
-7. Build the forward-pounce four-resolution vertical slice.
-8. Build CMU `18/19` paired pull/resistance as the first shared-contact test.
-9. Only then author the Sachiel finisher prototype on a dedicated target rig.
+3. Continue original-skeleton review beyond the first shortlists; preserve
+   exact provenance, event windows and explicit rejects.
+4. **First physical reference done:** the right push kick passes the strict
+   grounding gate. Rebuild both wards and pounce with a sparse whole-window
+   contact solve; add the mirrored left kick only after it independently passes.
+5. **Paired relative attach found, grounding pending:** CMU `18_05/19_05`
+   frames 165–219 preserve shared spacing and close the hand/elbow envelope,
+   but both actors must be re-solved against the ground before promotion.
+6. Build the compliant two-body grip experiment only from a newly grounded
+   terminal state; test resistance, break force, falls and deterministic replay.
+7. Build `ward -> entry -> kick/grab/ram/reap` as a continuous branch graph and
+   test all miss, block, collision and interruption outcomes.
+8. Build all four pounce resolutions from the accepted launch rather than
+   importing the corrupt source landing.
+9. Author the Sachiel finisher prototype on a dedicated target rig, then the
+   Israfel and Sahaquiel multi-actor gates.
 10. Add Unit-00 and Unit-02 style selection layers without changing mechanics.
-11. Integrate only human-approved external results into Minecraft.
+11. Integrate only human-approved, physically tracked results into Minecraft.

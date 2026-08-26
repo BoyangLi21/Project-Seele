@@ -572,3 +572,52 @@ selected `144` block/reach/lunge captures. None is an accepted EVA motion.
 
 The complete action grammar, original encounter mapping, finisher queue and
 quality contract are in `docs/EVA_ORIGINAL_COMBAT_MOTION_PLAN_R01.md`.
+
+### Original-aligned physical-rig checkpoint R01
+
+The first candidates have been solved directly onto the 41-DOF R03 ball-joint
+physical skeleton at 60 Hz. This is an offline kinematic reference stage, not
+reinforcement-learning progress and not a runtime controller.
+
+The initial audit was incomplete: it measured horizontal support drift but did
+not measure absolute sole height. A strict recheck found hovering/penetration
+and withdrew the old passes. After explicit full-source height normalization,
+action-window segmentation and offline vertical free-root grounding:
+
+- ACCAD `Male2_G18_PushKickRight` frames 23–48 is the only current full pass;
+  marker, articulation, planted-patch speed/drift, sole clearance,
+  penetration, root-step and tangent-step gates all clear;
+- left/right wards still trade foot constraints against pose/transition error;
+- ACCAD B18 frames 40–91 remains a useful launch reference, but its new
+  grounding/contact-speed gate is not yet clear; frames 92–93 remain rejected;
+- synchronized CMU `18_05/19_05` frames 165–219 still closes the shared
+  hand/elbow envelope, but both actors fail the new grounding gate. The
+  remaining pull capture is not played after attachment; resistance and
+  release belong to a compliant physical grip.
+
+The machine-readable combat graph now contains 12 action nodes and 18
+conditional edges. Nine Angel-specific interaction graphs specify contact
+anchors, entry conditions and abort paths for Sachiel, Israfel, Sahaquiel,
+Shamshel, Gaghiel, Bardiel, Zeruel, Arael and Leliel. They are design contracts,
+not copied official animation or accepted runtime content.
+
+Exact metrics and rejected variants are recorded in
+`docs/EVA_COMBAT_PHYSICAL_RETARGET_R01.md`.
+
+### CMCD CC BY 4.0 combat supplement
+
+The official Cologne Motion Capture Database was added as a second openly
+licensed combat source. `tools/fetch_cmcd_eva_combat_seed.ps1` downloads eight
+private candidates and records hashes plus the official CC BY 4.0 evidence.
+
+- one forward jumping-kick capture passes as an aerial reference after fixing
+  the source auditor to select a foot event during measured two-foot flight;
+- the 2018 paired clip contains a long two-hand contact exchange suitable for
+  hand-fighting/attach research, but its database label also includes a
+  handshake, so it is not treated as impact ground truth;
+- the 2019 paired clip contains a brief kick-to-hand proximity event only;
+- roll, hit/fall and ape-fight material remains reference or negative-example
+  data, not production motion.
+
+This preserves a clean licence path without lowering the semantic or contact
+gate merely because a dataset is legally usable.

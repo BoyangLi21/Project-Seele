@@ -1,0 +1,65 @@
+{
+  "schema": 1,
+  "source": "Cologne Motion Capture Database, TH Koeln",
+  "license": "CC BY 4.0",
+  "license_url": "https://creativecommons.org/licenses/by/4.0/",
+  "source_url": "https://mocap.web.th-koeln.de/index.php",
+  "assets": [
+    {
+      "file": "../external-assets/incoming/mocap/cmcd-eva-combat-seed-r01/Take2018-01-17_12.21.11SAM.bvh",
+      "role": "paired_fight_safari",
+      "description": "paired fighting and hand-contact actor A",
+      "subject": "CMCD Safari",
+      "trial": "2018-01-17-12.21.11-SAM"
+    },
+    {
+      "file": "../external-assets/incoming/mocap/cmcd-eva-combat-seed-r01/Take2018-01-17_12.21.11AM.bvh",
+      "role": "paired_fight_dschungel",
+      "description": "paired fighting and hand-contact actor B",
+      "subject": "CMCD Dschungel",
+      "trial": "2018-01-17-12.21.11-AM"
+    },
+    {
+      "file": "../external-assets/incoming/mocap/cmcd-eva-combat-seed-r01/Take_2019-01-09_E_Kampf.bvh",
+      "role": "paired_fight_eunuche",
+      "description": "paired fight actor A",
+      "subject": "CMCD Eunuche",
+      "trial": "2019-01-09-E-Kampf"
+    },
+    {
+      "file": "../external-assets/incoming/mocap/cmcd-eva-combat-seed-r01/Take_2019-01-09_N_Kampf.bvh",
+      "role": "paired_fight_nussknacker",
+      "description": "paired fight actor B",
+      "subject": "CMCD Nussknacker",
+      "trial": "2019-01-09-N-Kampf"
+    },
+    {
+      "file": "../external-assets/incoming/mocap/cmcd-eva-combat-seed-r01/Take_2015-11-25_03.05.43_PM_kick.bvh",
+      "role": "jump_kick_reference",
+      "description": "forward jumping kick",
+      "subject": "CMCD Herakles",
+      "trial": "2015-11-25-jumping-kick"
+    },
+    {
+      "file": "../external-assets/incoming/mocap/cmcd-eva-combat-seed-r01/Take_2016-01-05_03.43.20_PM.bvh",
+      "role": "recovery_sequence_reference",
+      "description": "forward roll and walkover",
+      "subject": "CMCD Peter",
+      "trial": "2016-01-05-forward-roll"
+    },
+    {
+      "file": "../external-assets/incoming/mocap/cmcd-eva-combat-seed-r01/Take_2015-11-25_03.02.43_PM_getsShot.bvh",
+      "role": "reaction_sequence_reference",
+      "description": "hit reaction, tumble and fall",
+      "subject": "CMCD Herakles",
+      "trial": "2015-11-25-hit-tumble-fall"
+    },
+    {
+      "file": "../external-assets/incoming/mocap/cmcd-eva-combat-seed-r01/Take2018-01-16_KingKong2.bvh",
+      "role": "berserk_sequence_negative_reference",
+      "description": "crouching, ape walk, defend and fight",
+      "subject": "CMCD King Kong",
+      "trial": "2018-01-16-KingKong2"
+    }
+  ]
+}

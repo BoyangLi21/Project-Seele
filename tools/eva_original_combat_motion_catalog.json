@@ -17,7 +17,7 @@
     {
       "id": "body_entry",
       "effectors": ["support_foot", "pelvis", "shoulder"],
-      "branches": ["push_kick", "two_hand_shove", "grab_attach", "collision_brace"]
+      "branches": ["push_kick", "low_reap", "shoulder_ram", "two_hand_shove", "grab_attach", "collision_brace"]
     },
     {
       "id": "push_kick",
@@ -38,6 +38,11 @@
       "id": "mounted_impact",
       "effectors": ["knees", "pelvis", "hand_or_forearm"],
       "branches": ["repeat_from_actual_target_pose", "restrain", "disengage"]
+    },
+    {
+      "id": "grounded_stomp",
+      "effectors": ["support_foot", "striking_sole", "grounded_target_region"],
+      "branches": ["target_recoil", "balance_step", "disengage"]
     }
   ],
   "unit_style_graphs": {
@@ -74,11 +79,29 @@
       "aerial_kick_reference": ["90_05", "90_06", "90_07"],
       "ward_and_entry": ["144_07", "144_08", "144_15-17", "144_22-29"],
       "front_kick": ["135_04", "144_06", "144_09"]
+    },
+    "cmcd": {
+      "license": "CC BY 4.0",
+      "official_license_url": "https://mocap.web.th-koeln.de/about.php",
+      "aerial_kick_reference": ["Take_2015-11-25_03.05.43_PM_kick.bvh"],
+      "paired_hand_contact_reference": [
+        "Take2018-01-17_12.21.11SAM.bvh",
+        "Take2018-01-17_12.21.11AM.bvh"
+      ],
+      "paired_kick_block_reference": [
+        "Take_2019-01-09_E_Kampf.bvh",
+        "Take_2019-01-09_N_Kampf.bvh"
+      ],
+      "recovery_and_reaction_reference": [
+        "Take_2016-01-05_03.43.20_PM.bvh",
+        "Take_2015-11-25_03.02.43_PM_getsShot.bvh"
+      ],
+      "negative_reference": ["Take2018-01-16_KingKong2.bvh"]
     }
   },
   "contextual_finishers": [
     "sachiel_control_break_kick_mount",
-    "shamshel_tentacle_control_knife_core",
+    "shamshel_tentacle_pin_knife_core",
     "ramiel_yashima_shot",
     "gaghiel_jaw_restraint",
     "israfel_synchronized_flying_kick",
@@ -86,6 +109,7 @@
     "bardiel_dummy_grapple_execution",
     "zeruel_berserk_limb_control_devour",
     "arael_longinus_javelin",
+    "leliel_internal_rupture_emergence",
     "armisael_unit00_sacrifice",
     "mass_production_unit02_execution_graph"
   ],
@@ -95,6 +119,9 @@
     "support_foot_speed_p95_H_per_s_max": 0.02,
     "contact_point_error_H_max": 0.01,
     "paired_contact_anchor_error_H_max": 0.01,
+    "stable_contact_mean_absolute_clearance_H_max": 0.002,
+    "stable_contact_absolute_clearance_p95_H_max": 0.005,
+    "maximum_ground_penetration_H_max": 0.004,
     "root_direct_write_count": 0,
     "damage_without_contact_count": 0
   }

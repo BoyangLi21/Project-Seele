@@ -157,9 +157,19 @@ because controls are delayed.
   substituted for every right-click attack.
 - Kicks include plant preparation, pelvis rotation, recoil and recovery step.
 - Continuous combinations are selected from the actual ending pose and momentum.
+- Shoulder ram, low reap and grounded stomp are conditional branches, not extra
+  keys that ignore range and support. Unit-00 biases toward brace/restraint,
+  piloted Unit-01 toward urgent body entry, Unit-02 toward precise kicks and
+  angle changes, and berserk Unit-01 toward pounce, clamp and mount.
 - A forward pounce begins with a real compression and launch, then resolves by
   target contact, braced landing, miss recovery or collision. It may not play
   to completion after the target or terrain invalidates the landing.
+- Paired mocap ends at `GRAB_ATTACH`. Any pull, resistance, throw or grip break
+  after that point is produced by a compliant physical constraint; playing the
+  rest of a cooperative capture would make the target feel weightless.
+- Angel-specific finishers must expose an abort or failure at every stage. A
+  cinematic camera can improve readability but may not teleport hands, feet,
+  target anchors or the authority root into the next beat.
 
 ### Progressive knife
 

@@ -63,12 +63,14 @@
     },
     {
       "id": "front_kick_right_a",
-      "source": "CMU/135_04.bvh",
-      "source_fps": 120,
-      "frames": [287, 455],
-      "event_frame": 371,
-      "license": "CMU database reuse terms",
-      "role": "free_combat_push_kick"
+      "source": "ACCAD/Male2_G18_PushKickRight.bvh",
+      "source_fps": 30,
+      "frames": [23, 48],
+      "event_frame": 34,
+      "license": "CC BY 3.0",
+      "role": "free_combat_push_kick",
+      "physical_candidate": "EVA_PUSH_KICK_RIGHT_PHYSICAL_BALL_IK_R17_60HZ_GROUNDED_R02",
+      "status": "strict_grounded_kinematic_gate_passed_human_review_pending"
     },
     {
       "id": "front_kick_left_a",
@@ -92,9 +94,11 @@
       "id": "pounce_launch_reference_a",
       "source": "ACCAD/Male2_B18_WalkToLeapToWalk.bvh",
       "source_fps": 30,
-      "frames": [40, 105],
+      "frames": [40, 91],
       "license": "CC BY 3.0",
-      "role": "pounce_trajectory_reference"
+      "role": "pounce_trajectory_reference",
+      "physical_candidate": "EVA_POUNCE_LAUNCH_PHYSICAL_BALL_IK_R07_60HZ_GROUNDED_R02",
+      "status": "source_launch_reference_grounding_gate_blocked_landing_discontinuity_rejected"
     },
     {
       "id": "pounce_dive_reference_a",
@@ -109,10 +113,15 @@
       "id": "grab_elbow_pull_pair_a",
       "source": ["CMU/18_05.bvh", "CMU/19_05.bvh"],
       "source_fps": 120,
-      "frames": [145, 305],
-      "contact_segments": [[205, 249], [283, 305]],
+      "frames": [165, 219],
+      "contact_segments": [[205, 219]],
       "license": "CMU database reuse terms",
-      "role": "first_paired_grab_resistance_test"
+      "role": "first_paired_grab_attach_test",
+      "physical_candidates": [
+        "EVA_GRAB_ATTACH_ACTOR_A_PHYSICAL_BALL_IK_R03_60HZ",
+        "EVA_GRAB_ATTACH_ACTOR_B_PHYSICAL_BALL_IK_R04_60HZ"
+      ],
+      "status": "relative_pair_attach_gate_passed_individual_grounding_blocked_post_contact_motion_must_be_physical"
     },
     {
       "id": "two_hand_shove_project_capture",

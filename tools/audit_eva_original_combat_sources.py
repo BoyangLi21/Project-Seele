@@ -243,6 +243,7 @@ def analyse(path: Path, asset: dict, sample_hz: float) -> dict:
             "peak_speed_H_per_s": float(velocities[channel][index]),
             "swing_height_H": swing_height,
             "opposite_foot_contact": opposite_contact,
+            "two_foot_flight": bool(flight[index]),
             "opposite_foot_window_travel_H": opposite_travel,
             "root_speed_H_per_s": float(root_velocity[index]),
             "left_knee_degrees": rows[index]["left_knee"],
@@ -279,7 +280,17 @@ def analyse(path: Path, asset: dict, sample_hz: float) -> dict:
         relevant_channels = set(channels)
     relevant_events = [event for event in events
                        if event["channel"] in relevant_channels]
-    if "kick" in role:
+    if "jump_kick" in role:
+        best_event = max(
+            relevant_events,
+            key=lambda event: (
+                bool(event["two_foot_flight"]),
+                event["swing_height_H"],
+                event["peak_speed_H_per_s"],
+            ),
+            default=max(events, key=lambda event: event["peak_speed_H_per_s"]),
+        )
+    elif "kick" in role:
         best_event = max(
             relevant_events,
             key=lambda event: (
