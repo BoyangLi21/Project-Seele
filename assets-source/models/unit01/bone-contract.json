@@ -28,7 +28,8 @@
     "camera_socket": "entity passenger socket"
   },
   "missing_for_production": [
-    "weighted skinning or overlapping joint liners",
+    "physical visual bones: neck, clavicle_l/r, wrist_l/r, ankle_l/r, toe_l/r",
+    "weighted flexible interfaces at shoulders, wrists, spine, neck, ankles and toes",
     "camera socket authored in an editable source",
     "release licence and attribution review"
   ],

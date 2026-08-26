@@ -2,7 +2,7 @@
 
 Date: 2026-08-27
 
-Status: **external 3D candidate accepted for human review; not integrated into
+Status: **R19 rejected by human visual review; never integrate into
 Minecraft**.
 
 ## 1. Why the existing attack was rejected
@@ -43,9 +43,10 @@ ordinary-attack shortlist was:
 | 3 | `Male2_E4_CrossRight` | 150.2° | 0.372 m | -48.3° / -89.4° | 8.68 m/s |
 | 4 | `Male2_E2_JabRight` | 151.7° | 0.383 m | -8.0° / -18.5° | 6.22 m/s |
 
-`E1 JabLeft` and `E4 CrossRight` form the accepted first 1–2 family: the jab
-is economical and readable; the cross carries the visible hip/chest power
-needed for an EVA rather than looking like an isolated Minecraft arm swing.
+`E1 JabLeft` and `E4 CrossRight` formed the first experimental 1–2 family.
+They remain useful biomechanics probes, but the family is rejected as an EVA
+ordinary-attack vocabulary: it reads as sport boxing rather than the original
+work's charge, ward, grapple, kick, restraint and predatory close combat.
 
 The apparently attractive continuous `Male2_Extended_2` segment was tested and
 rejected. Its first detected event was not a clean forward boxing strike after
@@ -53,7 +54,7 @@ retarget: fist direction error was about 42.6 degrees, guard distance about
 0.56 body heights, feet crossed, and both feet travelled more than one body
 height. It is not a shortcut for the combination.
 
-## 4. Accepted target construction
+## 4. Rejected target construction
 
 The candidate is built on the current private 64-bone EVA rig, never on the
 older 63-bone idle rig:
@@ -83,7 +84,7 @@ degrees for the cross. Contact elbow angles remain 156.2 and 150.2 degrees.
 The non-striking hand remains guarded; target guard-to-head distance is 0.285 H
 for the jab and 0.121 H for the cross.
 
-## 5. Contact-aware transition result
+## 5. Why the earlier contact result was insufficient
 
 Simple cross-fades and raw inertialization were rejected because they moved
 both feet across the ground. R19 uses separate pose and contact rules:
@@ -107,24 +108,48 @@ Final contact audit (`EVA_ORDINARY_ATTACK_REVIEW_ACCEPTED_R19`):
 | cross | 0.0095 H | 0.0550 H / 0.0483 H | 0.0079 H |
 | cross → neutral | ~0.0000 H | 0.0621 H / 0.0356 H | 0.0056 H |
 
-All contact gates pass. The highest non-striking-joint frame step is about
-8.43 degrees at 60 Hz. The larger peaks belong to the intentionally fast
-striking forearms, not to a knee/root discontinuity. Fist shape is constant in
-palm space, PIP range is approximately 68.9–87.7 degrees, DIP range 40–45
-degrees, and the original thumb closes across the fist.
+Those contact gates passed, but they measured foot-pivot travel and sole
+contact rather than continuity of the rendered shin/foot armour. Human review
+correctly found an apparent lower-leg separation. The new evaluated-mesh seam
+audit proves the failure:
 
-## 6. Proposed runtime semantics (not yet implemented)
+| Side | Maximum shin-to-foot seam P95 | Growth from first frame | Bone endpoint gap | Ankle rotation delta |
+|---|---:|---:|---:|---:|
+| left | 0.0547 H | 0.0501 H | about 0.00000020 H | 83.6 degrees |
+| right | 0.0630 H (reverse direction 0.0694 H) | 0.0565 H | about 0.00000019 H | 130.0 degrees |
 
-- First primary-attack input selects the left jab.
-- A second input during the post-contact branch window selects the right cross.
-- No second input follows the captured jab recovery and contact-aware return.
-- Direction changes before commitment may rebuild the target; after commitment
-  the remaining momentum must be carried rather than resetting the clip.
-- Damage must ultimately derive from fist/body contact and impulse. The current
-  immediate forward AABB is retained only until the physical combat layer is
-  ready and must not be presented as final combat.
-- Runtime animation must not overwrite locomotion root authority. Foot-contact
-  and body-state data travel with the candidate.
+The hierarchy is continuous; the contact/transition solve rotates the rigid
+foot armour far enough to expose the joint. `R19` is therefore a hard failure,
+despite its earlier foot-slide numbers. Every later motion must pass a
+symmetric evaluated-surface seam test in addition to bone, sole and contact
+tests. Locking a foot to the floor is never allowed to buy contact by tearing
+open an armour joint.
+
+A subsequent ward probe confirmed that the current single rigid ankle cannot
+trade these constraints successfully: a five-degree visual cap closes the seam
+but destroys toe/sole contact. The corrective action is a real ankle
+pitch/roll, ball/toe and skinned-joint rig upgrade, not a cover mesh or another
+IK threshold.
+
+The fist measurements remain valid only as evidence about the hand layer; they
+do not rescue the rejected body motion.
+
+## 6. Replacement combat direction
+
+- There is no default boxing jab/cross loop.
+- The base vocabulary is an open-hand/forearm ward, committed body entry,
+  push/front kick, close grab and contextual restraint or throw.
+- A fist strike may appear inside a grapple or mounted finisher, where the
+  whole body's weight and target contact explain it; it is not the global
+  neutral attack stance.
+- Unit-00, piloted Unit-01, Unit-02 and berserk Unit-01 use different selection
+  priors over the same physical action grammar.
+- Forward pounce is a traversal/contact action with a target landing envelope,
+  not a long attack clip that teleports the root.
+- Scene-specific finishers use paired contact rigs and target-specific gates.
+  They are not inserted into the free-combat search database as generic clips.
+- Damage ultimately derives from body/weapon contact and impulse. Runtime body
+  motion may not overwrite locomotion/root authority.
 
 ## 7. Review artefacts
 
@@ -135,5 +160,10 @@ degrees, and the original thumb closes across the fist.
 - `artifacts/motion_research/accad_combat/EVA_ORDINARY_ATTACK_REVIEW_ACCEPTED_R19_ACTIVITY.json`
 - `artifacts/motion_research/accad_combat/ACCAD_ORDINARY_ATTACK_SOURCE_AUDIT_R02.json`
 
-R19 is ready for human 3D/video review. It is not yet approved for Minecraft
-integration.
+Additional rejection evidence:
+
+- `artifacts/motion_research/accad_combat/EVA_ORDINARY_ATTACK_R19_ANKLE_SEAM_AUDIT.json`
+- `artifacts/motion_research/accad_combat/R19_ANKLE_SEAM_REVIEW/`
+
+R19 failed human and evaluated-mesh review and is permanently excluded from
+Minecraft integration.

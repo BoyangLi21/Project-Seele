@@ -1,0 +1,101 @@
+{
+  "schema": 1,
+  "status": "external_3d_research_not_runtime_approved",
+  "principles": {
+    "default_sport_boxing": false,
+    "root_authority": "physics",
+    "damage_authority": "contact_impulse",
+    "next_action_selection": "actual_pose_com_support_range_target_contact",
+    "official_animation_assets_used": false
+  },
+  "free_combat_families": [
+    {
+      "id": "ward_forearm_open_hand",
+      "effectors": ["palm", "forearm"],
+      "branches": ["body_entry", "disengage", "grab_attach"]
+    },
+    {
+      "id": "body_entry",
+      "effectors": ["support_foot", "pelvis", "shoulder"],
+      "branches": ["push_kick", "two_hand_shove", "grab_attach", "collision_brace"]
+    },
+    {
+      "id": "push_kick",
+      "effectors": ["support_foot", "striking_sole"],
+      "branches": ["recovery_step", "lateral_pursuit", "target_knockback"]
+    },
+    {
+      "id": "grab_attach",
+      "effectors": ["left_palm", "right_palm"],
+      "branches": ["arm_wrench", "two_hand_shove", "wall_pin", "release"]
+    },
+    {
+      "id": "forward_pounce",
+      "effectors": ["launch_foot", "hands", "shoulder", "landing_feet"],
+      "branches": ["target_clamp", "four_point_land", "roll_recovery", "collision_brace"]
+    },
+    {
+      "id": "mounted_impact",
+      "effectors": ["knees", "pelvis", "hand_or_forearm"],
+      "branches": ["repeat_from_actual_target_pose", "restrain", "disengage"]
+    }
+  ],
+  "unit_style_graphs": {
+    "unit00": ["brace", "ward", "two_hand_shove", "restrain", "disengage"],
+    "unit01_piloted": ["ward", "body_entry", "push_kick_or_grab", "contextual_finish"],
+    "unit01_berserk": ["low_pursuit", "forward_pounce", "clamp", "wrench_or_mount", "maul"],
+    "unit02": ["angle_step", "outside_ward", "front_or_low_kick", "lateral_pursuit", "knife_branch"]
+  },
+  "source_shortlist": {
+    "accad": {
+      "license": "CC BY 3.0",
+      "wards": [
+        "Male2_E11_BlockLeftHigh.bvh",
+        "Male2_E13_BlockRightHigh.bvh",
+        "Male2_E15_BlockLeftMiddle.bvh",
+        "Male2_E16_BlockRightMiddle.bvh"
+      ],
+      "entries": [
+        "Male2_E4_QuickAdvance.bvh",
+        "Male2_E7_SuperFastAdvance.bvh",
+        "Male2_E19_DodgeLeft.bvh",
+        "Male2_E20_DodgeRight.bvh"
+      ],
+      "kicks": [
+        "Male2_G2_FrontKick.bvh",
+        "Male2_G17_PushKickLeft.bvh",
+        "Male2_G18_PushKickRight.bvh"
+      ]
+    },
+    "cmu": {
+      "license": "CMU database reuse terms",
+      "paired_grapple": ["18_03-06", "19_03-06"],
+      "pounce_reference": ["49_04", "49_05", "127_23", "127_24"],
+      "aerial_kick_reference": ["90_05", "90_06", "90_07"],
+      "ward_and_entry": ["144_07", "144_08", "144_15-17", "144_22-29"],
+      "front_kick": ["135_04", "144_06", "144_09"]
+    }
+  },
+  "contextual_finishers": [
+    "sachiel_control_break_kick_mount",
+    "shamshel_tentacle_control_knife_core",
+    "ramiel_yashima_shot",
+    "gaghiel_jaw_restraint",
+    "israfel_synchronized_flying_kick",
+    "sahaquiel_three_eva_catch_knife",
+    "bardiel_dummy_grapple_execution",
+    "zeruel_berserk_limb_control_devour",
+    "arael_longinus_javelin",
+    "armisael_unit00_sacrifice",
+    "mass_production_unit02_execution_graph"
+  ],
+  "hard_gates": {
+    "mesh_seam_growth_H_max": 0.005,
+    "support_foot_accumulated_travel_H_max": 0.005,
+    "support_foot_speed_p95_H_per_s_max": 0.02,
+    "contact_point_error_H_max": 0.01,
+    "paired_contact_anchor_error_H_max": 0.01,
+    "root_direct_write_count": 0,
+    "damage_without_contact_count": 0
+  }
+}

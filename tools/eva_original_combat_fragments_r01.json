@@ -1,0 +1,124 @@
+{
+  "schema": 1,
+  "status": "source_windows_for_external_3d_review_not_runtime_assets",
+  "notes": [
+    "Windows are selected on original source skeletons.",
+    "Every fragment must be re-segmented at contact boundaries after 3D review.",
+    "No fragment bypasses the canonical ankle/ball/toe rig blocker."
+  ],
+  "fragments": [
+    {
+      "id": "ward_high_left_a",
+      "source": "ACCAD/Male2_E11_BlockLeftHigh.bvh",
+      "source_fps": 30,
+      "frames": [1, 65],
+      "event_frame": 25,
+      "license": "CC BY 3.0",
+      "role": "free_combat_ward"
+    },
+    {
+      "id": "ward_high_right_a",
+      "source": "ACCAD/Male2_E13_BlockRightHigh.bvh",
+      "source_fps": 30,
+      "frames": [1, 65],
+      "event_frame": 20,
+      "license": "CC BY 3.0",
+      "role": "free_combat_ward"
+    },
+    {
+      "id": "ward_middle_left_a",
+      "source": "ACCAD/Male2_E15_BlockLeftMiddle.bvh",
+      "source_fps": 30,
+      "frames": [1, 60],
+      "event_frame": 25,
+      "license": "CC BY 3.0",
+      "role": "free_combat_ward"
+    },
+    {
+      "id": "ward_middle_right_a",
+      "source": "ACCAD/Male2_E16_BlockRightMiddle.bvh",
+      "source_fps": 30,
+      "frames": [1, 60],
+      "event_frame": 26,
+      "license": "CC BY 3.0",
+      "role": "free_combat_ward"
+    },
+    {
+      "id": "body_entry_quick_a",
+      "source": "ACCAD/Male2_E4_QuickAdvance.bvh",
+      "source_fps": 30,
+      "frames": [1, 80],
+      "license": "CC BY 3.0",
+      "role": "free_combat_entry",
+      "status": "requires_root_event_segmentation"
+    },
+    {
+      "id": "body_entry_fast_a",
+      "source": "ACCAD/Male2_E7_SuperFastAdvance.bvh",
+      "source_fps": 30,
+      "frames": [1, 80],
+      "license": "CC BY 3.0",
+      "role": "free_combat_entry",
+      "status": "requires_root_event_segmentation"
+    },
+    {
+      "id": "front_kick_right_a",
+      "source": "CMU/135_04.bvh",
+      "source_fps": 120,
+      "frames": [287, 455],
+      "event_frame": 371,
+      "license": "CMU database reuse terms",
+      "role": "free_combat_push_kick"
+    },
+    {
+      "id": "front_kick_left_a",
+      "source": "CMU/144_09.bvh",
+      "source_fps": 120,
+      "frames": [1865, 2033],
+      "event_frame": 1949,
+      "license": "CMU database reuse terms",
+      "role": "free_combat_push_kick"
+    },
+    {
+      "id": "roundhouse_low_left_reference",
+      "source": "ACCAD/Male2_G8_RoundhouseLeft.bvh",
+      "source_fps": 30,
+      "frames": [1, 55],
+      "event_frame": 21,
+      "license": "CC BY 3.0",
+      "role": "contextual_low_line_kick"
+    },
+    {
+      "id": "pounce_launch_reference_a",
+      "source": "ACCAD/Male2_B18_WalkToLeapToWalk.bvh",
+      "source_fps": 30,
+      "frames": [40, 105],
+      "license": "CC BY 3.0",
+      "role": "pounce_trajectory_reference"
+    },
+    {
+      "id": "pounce_dive_reference_a",
+      "source": "CMU/127_23.bvh",
+      "source_fps": 120,
+      "frames": null,
+      "license": "CMU database reuse terms",
+      "role": "pounce_contact_order_reference",
+      "status": "flight_and_hand_contact_segmentation_pending"
+    },
+    {
+      "id": "grab_elbow_pull_pair_a",
+      "source": ["CMU/18_05.bvh", "CMU/19_05.bvh"],
+      "source_fps": 120,
+      "frames": [145, 305],
+      "contact_segments": [[205, 249], [283, 305]],
+      "license": "CMU database reuse terms",
+      "role": "first_paired_grab_resistance_test"
+    },
+    {
+      "id": "two_hand_shove_project_capture",
+      "source": null,
+      "role": "free_combat_two_hand_shove",
+      "status": "project_mocap_or_physical_authoring_required"
+    }
+  ]
+}

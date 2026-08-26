@@ -526,13 +526,49 @@ moving touchdown skips the full-body stationary landing clip using both actual
 velocity and current pilot movement intent. Forward locomotion can therefore
 no longer be composed with a stationary recovery pose.
 
-### Ordinary unarmed attack R19 research candidate
+### Ordinary unarmed attack R19 rejected experiment
 
-The procedural `claw_strike` body motion is rejected as the future ordinary
-attack source. ACCAD Male-2 `E1 JabLeft` and `E4 CrossRight` were retargeted on
-the current rig, resampled to 60 Hz, fitted with DFKI-referenced anatomical
-fists, and joined with contact-aware stance steps. The external R19 review
-sequence passes its support-foot, moving-foot lift, root-step, knee-plane and
-non-striking-joint continuity gates. Full evidence and exact timing are in
-`docs/EVA_ORDINARY_ATTACK_RESEARCH_R01.md`. It has not yet replaced the
-Minecraft animations; human review remains required first.
+The procedural `claw_strike` body motion remains rejected. ACCAD Male-2
+`E1 JabLeft` and `E4 CrossRight` were retargeted on the current rig, resampled
+to 60 Hz, fitted with DFKI-referenced anatomical fists, and joined with
+contact-aware stance steps. The experiment passed the old pivot/contact gates
+but failed human review for two independent reasons:
+
+1. the sport-boxing 1-2 is the wrong default vocabulary for an EVA;
+2. evaluated mesh surfaces show the shin/foot seam growing by about
+   `0.050/0.056 H`, while the underlying endpoints remain connected.
+
+The right ankle reaches roughly `130 degrees` relative to the first frame.
+R19 is permanently excluded from runtime. The seam failure is now a mandatory
+mesh-level gate for every retarget and transition. Full evidence and exact
+timing remain in `docs/EVA_ORDINARY_ATTACK_RESEARCH_R01.md`.
+
+### Original-aligned combat expansion R01
+
+Combat research no longer treats the punch catalogue as the default action
+identity. The adopted free-combat grammar starts with ward/deflection, body
+entry, push kick or two-hand control, then branches from real target contact.
+Punches remain valid as committed brawl, grapple or mounted impacts rather than
+a repeating sport-boxing neutral loop. Forward pounce is a distinct
+launch/contact/landing action, and recognisable Angel encounters use separate
+paired or multi-actor finisher graphs.
+
+The reproducible source fetcher
+`tools/fetch_eva_original_combat_seed.ps1` added 38 CMU candidates with hashes,
+official catalogue snapshots and licence evidence. The first original-skeleton
+screen produced:
+
+- 16 source shortlists;
+- four pounce trajectory/contact references;
+- three aerial-kick references;
+- eight paired pull/resistance captures awaiting shared-space review;
+- two contact-repair-required candidates and four source rejects;
+- one broad sequence retained only for segmentation/reference.
+
+Important exact candidates include CMU `18/19_03-06` for paired resistance,
+`49_04-05` and `127_23-24` for pounce ordering, `90_05-07` for aerial-kick
+reference, `135_04`, `144_06` and `144_09` for supported front kicks, plus
+selected `144` block/reach/lunge captures. None is an accepted EVA motion.
+
+The complete action grammar, original encounter mapping, finisher queue and
+quality contract are in `docs/EVA_ORIGINAL_COMBAT_MOTION_PLAN_R01.md`.

@@ -145,13 +145,21 @@ because controls are delayed.
 
 ### Empty hand
 
-- Punches begin from foot/pelvis/chest and terminate through shoulder, elbow and
-  fist. An isolated Minecraft arm swing is rejected.
-- The non-striking hand guards, counterbalances or controls the opponent.
+- The default stance and combination must not read as sport boxing. Original-
+  aligned free combat prioritises a forearm/open-hand ward, body entry, shove,
+  kick, two-hand control, restraint and target-aware grapple.
+- Punches are allowed as committed whole-body impacts inside a brawl, grapple
+  or mounted finish. A repeating jab/cross loop is rejected as the neutral EVA
+  identity.
+- The non-striking hand wards, counterbalances or controls the opponent; a
+  permanently raised boxing glove guard is not the default silhouette.
 - Elbow and knee attacks require close-range body positioning; they must not be
   substituted for every right-click attack.
 - Kicks include plant preparation, pelvis rotation, recoil and recovery step.
 - Continuous combinations are selected from the actual ending pose and momentum.
+- A forward pounce begins with a real compression and launch, then resolves by
+  target contact, braced landing, miss recovery or collision. It may not play
+  to completion after the target or terrain invalidates the landing.
 
 ### Progressive knife
 
@@ -216,6 +224,8 @@ A candidate is rejected before subjective review if any of the following occurs:
 - weapon/hand constraint error above threshold;
 - render root leaving the authoritative collision/culling root;
 - duplicated thumb or floating finger geometry.
+- evaluated shin/foot or forearm/hand armour seam growth above the declared
+  model-specific tolerance, even when bone endpoints remain connected;
 
 Subjective rejection also applies to generic robot gait, casual civilian walk,
 symmetrical puppet motion, unnecessary acrobatics, low unreadable guard, or any

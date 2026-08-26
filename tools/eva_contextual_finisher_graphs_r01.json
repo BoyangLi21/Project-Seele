@@ -1,0 +1,143 @@
+{
+  "schema": 1,
+  "status": "paired_external_3d_design_not_runtime_enabled",
+  "copyright_boundary": "new Project SEELE choreography using high-level encounter semantics; no official frame, timing, camera, model, texture or audio copy",
+  "finishers": {
+    "sachiel_control_break_kick_mount": {
+      "priority": 1,
+      "participants": ["eva_attacker", "sachiel_target"],
+      "entry_requirements": [
+        "sachiel_at_field_neutralized",
+        "target_staggered",
+        "both_target_arms_reachable",
+        "clear_mount_landing_envelope"
+      ],
+      "stages": [
+        {
+          "id": "two_arm_control",
+          "attacker_contacts": ["palm_l", "palm_r"],
+          "target_contacts": ["forearm_or_wrist_l", "forearm_or_wrist_r"],
+          "abort": "release_and_brace"
+        },
+        {
+          "id": "arm_wrench",
+          "attacker_contacts": ["both_palms", "both_feet"],
+          "target_contacts": ["both_arm_anchors"],
+          "abort": "grip_constraint_break"
+        },
+        {
+          "id": "kick_away",
+          "attacker_contacts": ["support_foot", "striking_sole"],
+          "target_contacts": ["upper_torso"],
+          "abort": "kick_recoil_or_fall"
+        },
+        {
+          "id": "pounce_mount",
+          "attacker_contacts": ["launch_foot", "palms_or_knees"],
+          "target_contacts": ["torso_mount_region"],
+          "abort": "four_point_land_or_roll"
+        },
+        {
+          "id": "core_assault",
+          "attacker_contacts": ["mounted_support", "hand_or_forearm"],
+          "target_contacts": ["core_region"],
+          "abort": "mounted_rebalance_or_target_escape"
+        }
+      ],
+      "source_basis": ["CMU_18_05+19_05 paired resistance", "Project SEELE pounce", "project-authored mounted impacts"],
+      "target_rig_pending": true
+    },
+    "israfel_synchronized_flying_kick": {
+      "priority": 2,
+      "participants": ["eva_unit01", "eva_unit02", "israfel_alpha", "israfel_beta"],
+      "entry_requirements": [
+        "both_evas_available",
+        "both_cores_exposed",
+        "synchronization_window_valid",
+        "paired_landing_envelopes_clear"
+      ],
+      "stages": [
+        {
+          "id": "synchronized_approach",
+          "attacker_contacts": ["unit01_run_contacts", "unit02_run_contacts"],
+          "target_contacts": [],
+          "abort": "split_braking_recovery"
+        },
+        {
+          "id": "paired_takeoff",
+          "attacker_contacts": ["unit01_launch_foot", "unit02_launch_foot"],
+          "target_contacts": [],
+          "abort": "independent_airborne_resolver"
+        },
+        {
+          "id": "dual_core_impact",
+          "attacker_contacts": ["unit01_striking_feet", "unit02_striking_feet"],
+          "target_contacts": ["alpha_core", "beta_core"],
+          "abort": "partial_hit_and_independent_landings"
+        },
+        {
+          "id": "paired_landing",
+          "attacker_contacts": ["unit01_ground_contacts", "unit02_ground_contacts"],
+          "target_contacts": [],
+          "abort": "fall_or_collision_recovery"
+        }
+      ],
+      "source_basis": ["CMU_90_05-07 aerial kick reference", "Project SEELE synchronized locomotion and landing"],
+      "target_rig_pending": true
+    },
+    "sahaquiel_three_eva_catch_knife": {
+      "priority": 3,
+      "participants": ["eva_unit00", "eva_unit01", "eva_unit02", "sahaquiel_target"],
+      "entry_requirements": [
+        "three_evas_available",
+        "predicted_impact_zone_reachable",
+        "catch_load_within_combined_budget",
+        "knife_finisher_available"
+      ],
+      "stages": [
+        {
+          "id": "three_route_interception",
+          "attacker_contacts": ["all_run_contacts"],
+          "target_contacts": [],
+          "abort": "missed_interception_story_failure"
+        },
+        {
+          "id": "unit01_initial_catch",
+          "attacker_contacts": ["unit01_palms", "unit01_feet"],
+          "target_contacts": ["falling_body_catch_surface"],
+          "abort": "load_collapse"
+        },
+        {
+          "id": "three_eva_load_share",
+          "attacker_contacts": ["all_palms", "all_support_feet"],
+          "target_contacts": ["three_catch_regions"],
+          "abort": "redistribute_or_collapse"
+        },
+        {
+          "id": "core_exposure",
+          "attacker_contacts": ["unit00_knife_or_hand", "unit00_support"],
+          "target_contacts": ["core_cover_region"],
+          "abort": "return_to_load_share"
+        },
+        {
+          "id": "unit02_knife_finish",
+          "attacker_contacts": ["unit02_knife", "unit02_support"],
+          "target_contacts": ["exposed_core"],
+          "abort": "knife_recoil_and_load_share"
+        }
+      ],
+      "source_basis": ["Project SEELE sprint/catch recording", "three-character physical load solve", "Progressive Knife contact library"],
+      "target_rig_pending": true
+    }
+  },
+  "backlog": [
+    "shamshel_tentacle_control_knife_core",
+    "ramiel_yashima_shot",
+    "gaghiel_jaw_restraint",
+    "bardiel_dummy_grapple_execution",
+    "zeruel_berserk_limb_control_devour",
+    "arael_longinus_javelin",
+    "armisael_unit00_sacrifice",
+    "mass_production_unit02_execution_graph"
+  ]
+}
