@@ -525,3 +525,14 @@ footfall. Jump phase is monotonic (`ascending -> descending -> grounded`), and
 moving touchdown skips the full-body stationary landing clip using both actual
 velocity and current pilot movement intent. Forward locomotion can therefore
 no longer be composed with a stationary recovery pose.
+
+### Ordinary unarmed attack R19 research candidate
+
+The procedural `claw_strike` body motion is rejected as the future ordinary
+attack source. ACCAD Male-2 `E1 JabLeft` and `E4 CrossRight` were retargeted on
+the current rig, resampled to 60 Hz, fitted with DFKI-referenced anatomical
+fists, and joined with contact-aware stance steps. The external R19 review
+sequence passes its support-foot, moving-foot lift, root-step, knee-plane and
+non-striking-joint continuity gates. Full evidence and exact timing are in
+`docs/EVA_ORDINARY_ATTACK_RESEARCH_R01.md`. It has not yet replaced the
+Minecraft animations; human review remains required first.

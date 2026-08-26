@@ -19,6 +19,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--source", required=True, type=Path)
     parser.add_argument("--output-json", required=True, type=Path)
     parser.add_argument("--output-blend", type=Path)
+    parser.add_argument("--profile", choices=("cmu", "accad"), default="cmu")
     parser.add_argument("--merge-gap-seconds", type=float, default=0.42)
     parser.add_argument("--expand-seconds", type=float, default=0.22)
     return parser.parse_args(sys.argv[sys.argv.index("--") + 1 :])
@@ -74,7 +75,7 @@ def main() -> None:
     if len(armatures) != 1:
         raise SystemExit(f"expected one armature, found {len(armatures)}")
     armature = armatures[0]
-    armature.name = "CMU_COMBAT_SOURCE"
+    armature.name = f"{args.profile.upper()}_COMBAT_SOURCE"
     armature.show_in_front = True
     armature.data.display_type = "STICK"
     scene = bpy.context.scene
@@ -83,13 +84,18 @@ def main() -> None:
     end = scene.frame_end
     previous = None
     raw_energy = []
+    raw_left_speed = []
+    raw_right_speed = []
     trajectories = []
     for frame in range(start, end + 1):
         scene.frame_set(frame)
         bpy.context.view_layer.update()
-        left = armature.pose.bones["lwrist"].matrix.translation.copy()
-        right = armature.pose.bones["rwrist"].matrix.translation.copy()
-        root = armature.pose.bones["root"].matrix.translation.copy()
+        names = ({"left": "LeftHand", "right": "RightHand", "root": "Hips"}
+                 if args.profile == "accad"
+                 else {"left": "lwrist", "right": "rwrist", "root": "root"})
+        left = armature.pose.bones[names["left"]].matrix.translation.copy()
+        right = armature.pose.bones[names["right"]].matrix.translation.copy()
+        root = armature.pose.bones[names["root"]].matrix.translation.copy()
         trajectories.append({
             "frame": frame,
             "left_wrist": [round(float(value), 6) for value in left],
@@ -98,11 +104,15 @@ def main() -> None:
         })
         if previous is None:
             raw_energy.append(0.0)
+            raw_left_speed.append(0.0)
+            raw_right_speed.append(0.0)
         else:
             left_speed = (left - previous[0]).length * fps
             right_speed = (right - previous[1]).length * fps
             root_speed = (root - previous[2]).length * fps
             raw_energy.append(max(left_speed, right_speed) + root_speed * 0.18)
+            raw_left_speed.append(left_speed)
+            raw_right_speed.append(right_speed)
         previous = (left, right, root)
     smoothed = moving_average(raw_energy, max(2, int(round(fps * 0.055))))
     median = statistics.median(smoothed)
@@ -137,6 +147,8 @@ def main() -> None:
         local = smoothed[left - start:right - start + 1]
         peak_offset = max(range(len(local)), key=local.__getitem__)
         peak_frame = left + peak_offset
+        left_peak = max(raw_left_speed[left - start:right - start + 1])
+        right_peak = max(raw_right_speed[left - start:right - start + 1])
         segments.append({
             "id": f"strike_{index:02d}",
             "start_frame": left,
@@ -144,6 +156,9 @@ def main() -> None:
             "end_frame": right,
             "duration_seconds": round((right - left) / fps, 4),
             "peak_energy": round(local[peak_offset], 6),
+            "left_wrist_peak_speed": round(left_peak, 6),
+            "right_wrist_peak_speed": round(right_peak, 6),
+            "primary_hand": "left" if left_peak > right_peak else "right",
         })
         scene.timeline_markers.new(f"STRIKE_{index:02d}_START", frame=left)
         scene.timeline_markers.new(f"STRIKE_{index:02d}_PEAK", frame=peak_frame)
