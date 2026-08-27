@@ -43,6 +43,10 @@ def main() -> None:
     parser.add_argument("--state", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--report", required=True, type=Path)
+    parser.add_argument(
+        "--uniform-depth-m", type=float, default=0.0,
+        help="Optional small negative contact depth to guarantee manifolds.",
+    )
     args = parser.parse_args()
 
     model = mujoco.MjModel.from_xml_path(str(args.model.resolve()))
@@ -93,6 +97,7 @@ def main() -> None:
     else:
         corrections = np.zeros(len(qpos), dtype=np.float64)
     corrections = np.maximum(corrections, penetration_corrections)
+    corrections += args.uniform_depth_m
     qpos[:, 2] += corrections
     desired[:, :, 2] += corrections[:, None]
 
@@ -160,6 +165,7 @@ def main() -> None:
             ),
         },
         "joint_coordinates_changed": False,
+        "uniform_depth_m": args.uniform_depth_m,
         "runtime_root_write_authorized": False,
         "status": "offline_reference_grounding_not_runtime_root_control",
     }

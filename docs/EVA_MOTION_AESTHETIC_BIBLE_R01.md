@@ -156,6 +156,9 @@ because controls are delayed.
 - Elbow and knee attacks require close-range body positioning; they must not be
   substituted for every right-click attack.
 - Kicks include plant preparation, pelvis rotation, recoil and recovery step.
+- Foot slip is measured at MuJoCo's actual contact manifold using point
+  Jacobians and tangential velocity. An ankle marker or shoe-box centre moving
+  during legitimate heel-to-toe roll is not itself a slip measurement.
 - Continuous combinations are selected from the actual ending pose and momentum.
 - Shoulder ram, low reap and grounded stomp are conditional branches, not extra
   keys that ignore range and support. Unit-00 biases toward brace/restraint,

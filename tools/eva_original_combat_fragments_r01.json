@@ -11,19 +11,23 @@
       "id": "ward_high_left_a",
       "source": "ACCAD/Male2_E11_BlockLeftHigh.bvh",
       "source_fps": 30,
-      "frames": [1, 65],
+      "frames": [10, 26],
       "event_frame": 25,
       "license": "CC BY 3.0",
-      "role": "free_combat_ward"
+      "role": "free_combat_ward",
+      "physical_candidate": "EVA_WARD_LEFT_CONTACT_WINDOW_SHORT_R12_MANIFOLD_60HZ",
+      "status": "strict_contact_manifold_kinematic_gate_passed_human_review_pending"
     },
     {
       "id": "ward_high_right_a",
       "source": "ACCAD/Male2_E13_BlockRightHigh.bvh",
       "source_fps": 30,
-      "frames": [1, 65],
+      "frames": [8, 23],
       "event_frame": 20,
       "license": "CC BY 3.0",
-      "role": "free_combat_ward"
+      "role": "free_combat_ward",
+      "physical_candidate": "EVA_WARD_RIGHT_CONTACT_WINDOW_R04_MANIFOLD_60HZ",
+      "status": "strict_contact_manifold_kinematic_gate_passed_human_review_pending"
     },
     {
       "id": "ward_middle_left_a",
@@ -69,8 +73,8 @@
       "event_frame": 34,
       "license": "CC BY 3.0",
       "role": "free_combat_push_kick",
-      "physical_candidate": "EVA_PUSH_KICK_RIGHT_PHYSICAL_BALL_IK_R17_60HZ_GROUNDED_R02",
-      "status": "strict_grounded_kinematic_gate_passed_human_review_pending"
+      "physical_candidate": "EVA_PUSH_KICK_RIGHT_CONTACT_WINDOW_R18_MANIFOLD_60HZ",
+      "status": "strict_contact_manifold_kinematic_gate_passed_human_review_pending"
     },
     {
       "id": "front_kick_left_a",
@@ -98,8 +102,8 @@
       "frames": [40, 91],
       "license": "CC BY 3.0",
       "role": "pounce_trajectory_reference",
-      "physical_candidate": "EVA_POUNCE_LAUNCH_PHYSICAL_BALL_IK_R07_60HZ_GROUNDED_R02",
-      "status": "source_launch_reference_grounding_gate_blocked_landing_discontinuity_rejected"
+      "physical_candidate": "EVA_POUNCE_LAUNCH_CONTACT_WINDOW_R13_CLEARANCE_60HZ",
+      "status": "blocked_right_contact_speed_0_02516Hps_over_0_02_landing_discontinuity_rejected"
     },
     {
       "id": "pounce_dive_reference_a",

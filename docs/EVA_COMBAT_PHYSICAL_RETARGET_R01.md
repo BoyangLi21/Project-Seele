@@ -2,8 +2,9 @@
 
 Date: 2026-08-27
 
-Status: strict grounding audit R02. One short push-kick reference currently
-passes; ward, pounce and paired-grab candidates remain blocked. Nothing in this
+Status: strict contact-manifold audit R03. Left/right wards and one short
+push-kick reference currently pass; pounce and paired-grab candidates remain
+blocked. Nothing in this
 report is a trained controller, a runtime root authority, a Minecraft animation
 approval or a claim that physical tracking has been solved.
 
@@ -86,6 +87,14 @@ is anchored at stable contacts, interpolated through flight and clamped only
 to prevent penetration. It never changes joint coordinates and explicitly
 does not authorize a runtime root write.
 
+`tools/optimize_eva_physical_contact_window.py` jointly solves an entire
+fragment's two leg chains and bounded free-root translation. It constrains
+heel/forefoot/toe positions, ground depth, non-penetration, tangent continuity
+and contact-point tangential velocity rather than repairing frames in
+isolation. Contact speed is now evaluated at MuJoCo's actual contact manifold
+with a point Jacobian and central-difference kinematic velocity; geometry-centre
+motion is no longer mislabelled as slip.
+
 ## Current gate results
 
 `H` is the approximately 3.467 m height of the normalized physical skeleton.
@@ -94,16 +103,17 @@ grounded combat fragment, but it keeps the same marker and contact gates.
 
 | Candidate | Strict R02 gate | Effector P95 | Articulation P95 | L/R max planted drift | L/R contact-speed P95 | Max tangent step |
 |---|---|---:|---:|---:|---:|---:|
-| ward left R26 grounded | blocked | 0.01695 H | 0.02963 H | 0.00628 / 0.00428 H | fails left/right speed | 0.3845 rad |
-| ward right R07 grounded | blocked | 0.02283 H | 0.02083 H | 0.00296 / 0.00954 H | fails left/right speed | 0.3471 rad |
-| **push kick right R17 grounded** | **pass** | **0.01327 H** | **0.03189 H** | **0.00239 / 0.00057 H** | **0.01897 / 0.00883 H/s** | **0.1554 rad** |
-| pounce launch R07 grounded | blocked | 0.01541 H | 0.03166 H | 0.00515 / 0.00183 H | fails left/right speed | above profile limit |
+| **ward left R12 manifold** | **pass** | **0.01742 H** | **0.02966 H** | **0.00067 / 0.00135 H** | **<0.00001 / 0.00004 H/s** | **0.2034 rad** |
+| **ward right R04 manifold** | **pass** | **0.01461 H** | **0.03890 H** | **0.00050 / 0.00095 H** | **0.00000 / 0.00007 H/s** | **0.1525 rad** |
+| **push kick right R18 manifold** | **pass** | **0.01336 H** | **0.03210 H** | **0.00223 / 0.00029 H** | **0.00983 / 0.00298 H/s** | **0.1466 rad** |
+| pounce launch R13 clearance | blocked | 0.01967 H | 0.03250 H | 0.00152 / 0.00293 H | 0.01277 / 0.02516 H/s | 0.2569 rad |
 | grab attach actor A/B R03/R04 | blocked | 0.01278 / 0.01401 H | 0.03156 / 0.04563 H | horizontal gate passed | grounding gate fails | 0.1937 / 0.2407 rad |
 
-Push-kick R17 uses ACCAD G18 source frames `23–48`, explicit full-source
+Push-kick R18 uses ACCAD G18 source frames `23–48`, explicit full-source
 height, direct 60 Hz IK and offline vertical grounding. Its stable sole
 absolute-clearance P95 is `0.00459/0.00111 H`, mean absolute clearance is
-`0.00053/0.00056 H`, and measured penetration is zero.
+`0.00053/0.00056 H` before the small contact-depth pass; final penetration
+remains below the `0.004 H` limit and stable manifold coverage is `90.2%/100%`.
 
 The paired attach still passes its provisional **relative interaction** gate,
 but fails the new individual grounding gate and is therefore not accepted:
@@ -134,16 +144,21 @@ but fails the new individual grounding gate and is therefore not accepted:
 - The full CMU `18_05/19_05` pull sequence produced a 26-degree ankle release
   jump in one 60 Hz frame. Only frames 165–219 are retained for grab attach;
   post-attach resistance is a physics task.
-- Strongly forcing both ward feet flat made upper-body pose and transition
-  errors worse. Those variants are rejected; the next solve must optimize the
-  contact trajectory jointly rather than trade one frame's feet against one
-  frame's torso.
+- Strongly forcing both ward feet flat per frame made upper-body pose and
+  transition errors worse. Those variants remain rejected. Short action-window
+  segmentation plus whole-window contact/manifold optimization is what finally
+  produced the passing left/right wards.
 - CMCD Nussknacker3 frames 350–385 gives a credible right low-line kick source
   and clears grounding, root, tangent and support drift/speed gates after
   segmentation. It remains blocked because the current independent IK leaves
   aggregate effector P95 at `0.02301 H` (principally head/wrist). Raising those
   weights simply moved the error into elbow articulation, so the threshold was
   not relaxed.
+- ACCAD B18 pounce launch now clears marker, articulation, drift, sole-height,
+  penetration, root and tangent-step gates after a bounded local transition
+  repair. Its best right-foot manifold speed remains `0.02516 H/s`, above the
+  `0.02 H/s` limit, so it remains blocked rather than receiving a pounce-only
+  exception.
 
 ## Next physical gate
 

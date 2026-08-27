@@ -37,10 +37,12 @@ Codex has since built a 41-DOF MuJoCo physical skeleton and direct 60 Hz
 tangent-space IK experiments for left/right wards, ACCAD G18 right push kick,
 ACCAD B18 pounce launch and CMU 18_05/19_05 elbow-grab attachment. A stricter
 audit then exposed that the first horizontal drift gate omitted absolute sole
-height, so those old passes were withdrawn. Only the newly segmented and
-grounded ACCAD G18 push kick (frames 23–48) currently passes all kinematic
-gates. There is no trained tracking policy, no post-contact grip simulation
-and no Minecraft integration to approve.
+height, so those old passes were withdrawn. After short-window and whole-window
+contact/manifold reconstruction, ACCAD E11 left ward, E13 right ward and G18
+push kick now pass all kinematic gates. The B18 pounce remains blocked by a
+right contact-point speed of `0.02516 H/s` versus `0.02 H/s`. There is no
+trained tracking policy, no post-contact grip simulation and no Minecraft
+integration to approve.
 
 The B18 landing after source frame 91 was rejected for a source lower-body
 discontinuity. The paired CMU capture is cut at attachment (frames 165–219);

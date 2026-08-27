@@ -75,8 +75,15 @@ def main() -> None:
     data = mujoco.MjData(model)
     state = np.load(args.state)
     qpos = np.asarray(state["qpos"], dtype=np.float64)
-    qvel = np.asarray(state["qvel"], dtype=np.float64)
     dt = float(state["timestep"][0])
+    qvel = np.zeros((len(qpos), model.nv), dtype=np.float64)
+    for frame in range(len(qpos)):
+        before = max(0, frame - 1)
+        after = min(len(qpos) - 1, frame + 1)
+        duration = max(dt, (after - before) * dt)
+        mujoco.mj_differentiatePos(
+            model, qvel[frame], duration, qpos[before], qpos[after]
+        )
     contacts = np.asarray(state["foot_contact"], dtype=np.bool_)
     contact_blend = (
         np.asarray(state["contact_blend"], dtype=np.float64)
@@ -124,10 +131,23 @@ def main() -> None:
             "per_landmark": per_landmark,
         }
 
-    foot_positions = {"l": [], "r": []}
     foot_bottoms = {"l": [], "r": []}
     patch_names = ("heel", "forefoot", "toe")
     foot_patches = {
+        side: {patch: [] for patch in patch_names}
+        for side in ("l", "r")
+    }
+    patch_geom_ids = {
+        side: {
+            patch: model.geom(
+                f"toe_{side}_collision" if patch == "toe"
+                else f"{patch}_{side}"
+            ).id
+            for patch in patch_names
+        }
+        for side in ("l", "r")
+    }
+    patch_contact_speeds = {
         side: {patch: [] for patch in patch_names}
         for side in ("l", "r")
     }
@@ -137,11 +157,39 @@ def main() -> None:
         data.qpos[:] = row
         data.qvel[:] = velocity
         mujoco.mj_forward(model, data)
+        frame_contact_speeds = {
+            side: {patch: [] for patch in patch_names}
+            for side in ("l", "r")
+        }
+        ground_id = model.geom("ground").id
+        for contact_index in range(data.ncon):
+            contact = data.contact[contact_index]
+            geom1 = int(contact.geom1)
+            geom2 = int(contact.geom2)
+            if geom1 != ground_id and geom2 != ground_id:
+                continue
+            foot_geom = geom2 if geom1 == ground_id else geom1
+            for side in ("l", "r"):
+                for patch in patch_names:
+                    if foot_geom != patch_geom_ids[side][patch]:
+                        continue
+                    jacobian = np.zeros((3, model.nv), dtype=np.float64)
+                    mujoco.mj_jac(
+                        model, data, jacobian, None,
+                        np.asarray(contact.pos, dtype=np.float64),
+                        int(model.geom_bodyid[foot_geom]),
+                    )
+                    point_velocity = jacobian @ data.qvel
+                    normal = np.asarray(contact.frame[:3], dtype=np.float64)
+                    tangential = (
+                        point_velocity
+                        - normal * np.dot(point_velocity, normal)
+                    )
+                    frame_contact_speeds[side][patch].append(
+                        float(np.linalg.norm(tangential) / height)
+                    )
         root_positions.append(data.xpos[model.body("pelvis").id].copy())
         for side in ("l", "r"):
-            ankle = data.xpos[model.body(f"foot_{side}").id]
-            toe = data.xpos[model.body(f"toe_{side}").id]
-            foot_positions[side].append((ankle + toe) * 0.5)
             foot_bottoms[side].append(min(
                 geom_bottom(model, data, f"heel_{side}"),
                 geom_bottom(model, data, f"forefoot_{side}"),
@@ -154,29 +202,25 @@ def main() -> None:
                 patch_point = data.geom_xpos[geom_id].copy()
                 patch_point[2] = geom_bottom(model, data, geom_name)
                 foot_patches[side][patch].append(patch_point)
+                speeds = frame_contact_speeds[side][patch]
+                patch_contact_speeds[side][patch].append(
+                    max(speeds) if speeds else np.nan
+                )
     root_positions = np.asarray(root_positions)
     foot_report = {}
     for side_index, side in enumerate(("l", "r")):
-        values = np.asarray(foot_positions[side])
         bottom = np.asarray(foot_bottoms[side], dtype=np.float64) / height
         stable_bottom = bottom[stable_contacts[:, side_index]]
         drift_rows = []
         patch_report = {}
         for patch in patch_names:
             patch_values = np.asarray(foot_patches[side][patch])
-            patch_clearance = (
-                patch_values[:, 2] - ground_z
-            ) / height
-            patch_active = (
-                stable_contacts[:, side_index]
-                & (np.abs(patch_clearance) <= 0.005)
+            patch_velocity = np.asarray(
+                patch_contact_speeds[side][patch], dtype=np.float64
             )
-            patch_velocity = np.zeros(len(patch_values), dtype=np.float64)
-            if len(patch_values) > 1:
-                patch_velocity[1:] = np.linalg.norm(
-                    np.diff(patch_values[:, :2], axis=0), axis=1
-                ) / dt / height
-                patch_velocity[0] = patch_velocity[1]
+            patch_active = (
+                stable_contacts[:, side_index] & np.isfinite(patch_velocity)
+            )
             patch_rows = []
             for first, last in runs(patch_active):
                 relative = (
@@ -197,8 +241,19 @@ def main() -> None:
                 drift_rows.append(row)
             patch_report[patch] = {
                 "active_fraction": float(np.mean(patch_active)),
+                "stable_manifold_fraction": (
+                    float(np.mean(np.isfinite(
+                        patch_velocity[stable_contacts[:, side_index]]
+                    ))) if np.any(stable_contacts[:, side_index]) else None
+                ),
                 "segments": patch_rows,
             }
+        stable_mask = stable_contacts[:, side_index]
+        manifold_any = np.zeros(len(bottom), dtype=np.bool_)
+        for patch in patch_names:
+            manifold_any |= np.isfinite(np.asarray(
+                patch_contact_speeds[side][patch], dtype=np.float64
+            ))
         foot_report[side] = {
             "contact_fraction": float(np.mean(contacts[:, side_index])),
             "stable_contact_fraction": float(np.mean(
@@ -228,6 +283,10 @@ def main() -> None:
                 ),
                 "maximum_hover_H": float(np.max(bottom)),
                 "maximum_penetration_H": float(max(0.0, -np.min(bottom))),
+                "stable_manifold_fraction": (
+                    float(np.mean(manifold_any[stable_mask]))
+                    if np.any(stable_mask) else None
+                ),
             },
         }
 
@@ -290,6 +349,9 @@ def main() -> None:
         if row["stable_contact_fraction"] > 0.0 and (
                 grounding["stable_samples"] == 0):
             failures.append(f"{side}_missing_stable_ground_samples")
+        if (grounding["stable_manifold_fraction"] is not None
+                and grounding["stable_manifold_fraction"] < 0.80):
+            failures.append(f"{side}_stable_contact_manifold_below_0_80")
         if (grounding["stable_mean_absolute_clearance_H"] is not None
                 and grounding["stable_mean_absolute_clearance_H"] > 0.002):
             failures.append(f"{side}_contact_mean_clearance_over_0_002H")
@@ -323,6 +385,7 @@ def main() -> None:
             "contact_mean_absolute_clearance_H": 0.002,
             "contact_absolute_clearance_p95_H": 0.005,
             "maximum_penetration_H": 0.004,
+            "stable_contact_manifold_fraction_min": 0.80,
         },
         "groups": group_report,
         "feet": foot_report,

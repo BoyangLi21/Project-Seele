@@ -157,9 +157,9 @@ physical tracking; dataset labels do not make any capture an EVA action.
 Finishers live outside the free-combat search domain. Each uses a paired or
 multi-actor interaction rig, target-specific anchors and a failure/abort path.
 
-Nine detailed interaction graphs with 41 contact-labelled stages are stored in
+Ten detailed interaction graphs with 47 contact-labelled stages are stored in
 `tools/eva_contextual_finisher_graphs_r01.json`. Their structural validator
-passes; all nine still correctly report their target rigs as pending.
+passes; all ten still correctly report their target rigs as pending.
 
 | Encounter | Recognisable high-level beats | Runtime gate | Production method |
 |---|---|---|---|
@@ -179,7 +179,10 @@ passes; all nine still correctly report their target rigs as pending.
 The target is recognition through action logic, not frame-perfect reproduction.
 
 The executable first-wave order, exact source windows and current pass/block
-state are maintained in `docs/EVA_COMBAT_FIRST_12_BUILD_QUEUE_R01.md`.
+state are maintained in `docs/EVA_COMBAT_FIRST_12_BUILD_QUEUE_R01.md`. Actions
+with no valid open paired source use the project-owned multi-view recording
+plan in `docs/EVA_PROJECT_MOCAP_CAPTURE_PLAN_R01.md` rather than invented AI
+keyframes.
 
 ## 6. Source data selected for external screening
 
@@ -295,10 +298,10 @@ method references, not permission to copy their training data or models.
 ### Physical-rig checkpoint R01
 
 The strict grounding revision invalidated the first pass, whose horizontal
-drift test had omitted absolute sole height. After re-exporting clips with an
-explicit full-source skeleton height and adding hover/penetration gates, only
-the ACCAD G18 right push kick (source frames 23–48) currently passes the whole
-kinematic gate. Left/right wards, B18 pounce launch and the shared-frame CMU
+drift test had omitted absolute sole height. After re-export, short action
+windows and sparse whole-window contact/manifold optimization, the left ward
+(frames 10–26), right ward (8–23) and ACCAD G18 right push kick (23–48) now
+pass the whole kinematic gate. B18 pounce launch and the shared-frame CMU
 `18_05/19_05` grab attach remain useful source/contact references but are
 blocked from promotion. The pair still stops at attachment: post-contact
 pulling is reserved for a bounded physical grip constraint.
@@ -368,9 +371,9 @@ ankle is simply the first one exposed by the new mesh-level test.
 2. Make the evaluated-mesh seam audit part of every retarget CI run.
 3. Continue original-skeleton review beyond the first shortlists; preserve
    exact provenance, event windows and explicit rejects.
-4. **First physical reference done:** the right push kick passes the strict
-   grounding gate. Rebuild both wards and pounce with a sparse whole-window
-   contact solve; add the mirrored left kick only after it independently passes.
+4. **First physical references done:** both wards and the right push kick pass
+   the strict contact-manifold gate. Continue the pounce whole-window solve;
+   add the left kick only after it independently passes (never by mirroring).
 5. **Paired relative attach found, grounding pending:** CMU `18_05/19_05`
    frames 165–219 preserve shared spacing and close the hand/elbow envelope,
    but both actors must be re-solved against the ground before promotion.

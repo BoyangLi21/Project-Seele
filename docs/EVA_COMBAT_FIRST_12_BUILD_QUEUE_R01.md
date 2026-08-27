@@ -9,10 +9,10 @@ status explicitly says the strict physical-rig gate passed.
 
 | # | Fragment | Exact source window | Intended use | Current status |
 |---:|---|---|---|---|
-| 1 | left forearm/open-hand ward | ACCAD `Male2_E11_BlockLeftHigh`, frames 10–40 | left deflection, entry permission | source accepted; grounded whole-window solve blocked |
-| 2 | right forearm/open-hand ward | ACCAD `Male2_E13_BlockRightHigh`, frames 5–35 | right deflection, entry permission | source accepted; grounded whole-window solve blocked |
+| 1 | left forearm/open-hand ward | ACCAD `Male2_E11_BlockLeftHigh`, frames 10–26 | left deflection, entry permission | **strict contact-manifold kinematic gate passed; human 3D review pending** |
+| 2 | right forearm/open-hand ward | ACCAD `Male2_E13_BlockRightHigh`, frames 8–23 | right deflection, entry permission | **strict contact-manifold kinematic gate passed; human 3D review pending** |
 | 3 | committed body entry | ACCAD `Male2_E4_QuickAdvance`, provisional frames 36–75 | close range behind guard, shoulder/clamp branch | exact contact segmentation pending |
-| 4 | right push kick | ACCAD `Male2_G18_PushKickRight`, frames 23–48, event 34 | create distance, expose core, stop pursuit | **strict grounded kinematic gate passed; human 3D review pending** |
+| 4 | right push kick | ACCAD `Male2_G18_PushKickRight`, frames 23–48, event 34 | create distance, expose core, stop pursuit | **strict contact-manifold kinematic gate passed; human 3D review pending** |
 | 5 | left push kick | ACCAD `Male2_G17_PushKickLeft`, provisional frames 60–105, event 73 | mirrored mechanic without synthetic mirroring | source contact repair and physical solve pending |
 | 6 | right low-line kick | CMCD `Take_2019-01-09_N_Nussknacker3`, frames 350–385, event 363 | attack support leg, prepare pounce | source accepted; physical solve misses upper-body gate |
 | 7 | elbow grab attach | CMU `18_05/19_05`, frames 165–219, contact about 205 | convert limb contact to grip constraint | relative pair envelope passed; individual grounding blocked |
@@ -24,7 +24,8 @@ status explicitly says the strict physical-rig gate passed.
 
 ACCAD G8 is deliberately absent from the low-line slot. It reaches about
 `0.714 H` and is a high roundhouse, not a reap. A true target-leg reap remains
-project-mocap or new-open-source work.
+project-mocap or new-open-source work. The missing-contact recording plan is in
+`docs/EVA_PROJECT_MOCAP_CAPTURE_PLAN_R01.md`.
 
 ## First free-combat branch set
 
@@ -63,7 +64,8 @@ Promotion requires all of the following on the 41-DOF physical skeleton:
 - explicit full-source height and coordinate provenance;
 - effector P95 `<= 0.02 H`, every ordinary effector P95 `<= 0.03 H`;
 - articulation-guide P95 `<= 0.05 H`, individual `<= 0.06 H`;
-- stable patch drift `<= 0.005 H`, speed P95 `<= 0.02 H/s`;
+- stable patch drift `<= 0.005 H`; actual MuJoCo contact-point tangential
+  speed P95 `<= 0.02 H/s` and stable manifold coverage `>= 0.80`;
 - stable sole mean absolute clearance `<= 0.002 H`, P95 `<= 0.005 H`;
 - maximum penetration `<= 0.004 H`;
 - combat root step `<= 0.025 H`, tangent step `<= 0.25 rad`;

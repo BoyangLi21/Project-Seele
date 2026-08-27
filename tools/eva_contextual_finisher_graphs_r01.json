@@ -374,12 +374,61 @@
       ],
       "source_basis": ["Project SEELE crawl and recovery", "destructible-volume contact solve", "berserk style layer"],
       "target_rig_pending": true
+    },
+    "mass_production_unit02_execution_graph": {
+      "priority": 10,
+      "participants": ["eva_unit02", "mass_production_eva_pool"],
+      "entry_requirements": [
+        "end_of_evangelion_scenario_active",
+        "at_least_one_mass_production_target_active",
+        "unit02_energy_budget_positive",
+        "target_handoff_space_available"
+      ],
+      "stages": [
+        {
+          "id": "weighted_target_entry",
+          "attacker_contacts": ["alternating_run_feet", "weapon_or_forearm_guard"],
+          "target_contacts": [],
+          "abort": "hard_stop_or_angle_change"
+        },
+        {
+          "id": "heavy_weapon_commit",
+          "attacker_contacts": ["two_hand_weapon_grip", "rear_to_front_support_transfer"],
+          "target_contacts": ["selected_target_region"],
+          "abort": "weapon_deflection_with_blowback"
+        },
+        {
+          "id": "messy_grapple_resolution",
+          "attacker_contacts": ["palm_forearm_shoulder_or_weapon", "one_or_two_feet"],
+          "target_contacts": ["limb_head_or_torso_anchor"],
+          "abort": "limb_loss_fall_or_separation"
+        },
+        {
+          "id": "efficient_disable",
+          "attacker_contacts": ["weapon_edge_or_impulse_effector", "ground_support"],
+          "target_contacts": ["neck_limb_or_core_access_region"],
+          "abort": "noncritical_hit_and_target_recovery"
+        },
+        {
+          "id": "target_handoff",
+          "attacker_contacts": ["recovery_step_or_brace"],
+          "target_contacts": [],
+          "abort": "multi_target_collision_or_surround"
+        },
+        {
+          "id": "energy_or_replica_spear_failure",
+          "attacker_contacts": ["knees_feet_or_grounded_body"],
+          "target_contacts": ["incoming_replica_spear_or_revived_target"],
+          "abort": "scenario_outcome_only"
+        }
+      ],
+      "source_basis": ["CMU paired arm-wrench and body-collision contacts", "project-owned heavy-weapon mocap required", "physics-authored blowback and multi-target handoff"],
+      "target_rig_pending": true
     }
   },
   "backlog": [
     "ramiel_yashima_shot",
     "armisael_unit00_sacrifice",
-    "mass_production_unit02_execution_graph",
     "sandalphon_magma_rescue",
     "matarael_shaft_rifle_coordination"
   ]

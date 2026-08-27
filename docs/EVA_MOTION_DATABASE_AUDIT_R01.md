@@ -554,9 +554,10 @@ launch/contact/landing action, and recognisable Angel encounters use separate
 paired or multi-actor finisher graphs.
 
 The reproducible source fetcher
-`tools/fetch_eva_original_combat_seed.ps1` added 38 CMU candidates with hashes,
-official catalogue snapshots and licence evidence. The first original-skeleton
-screen produced:
+`tools/fetch_eva_original_combat_seed.ps1` initially screened 38 CMU candidates
+and now records 54 after the paired subjects 20–23 expansion, with hashes,
+official catalogue snapshots and licence evidence. The first 38-clip
+original-skeleton screen produced:
 
 - 16 source shortlists;
 - four pounce trajectory/contact references;
@@ -582,24 +583,26 @@ reinforcement-learning progress and not a runtime controller.
 The initial audit was incomplete: it measured horizontal support drift but did
 not measure absolute sole height. A strict recheck found hovering/penetration
 and withdrew the old passes. After explicit full-source height normalization,
-action-window segmentation and offline vertical free-root grounding:
+action-window segmentation, offline vertical free-root grounding and sparse
+whole-window contact/manifold optimization:
 
-- ACCAD `Male2_G18_PushKickRight` frames 23–48 is the only current full pass;
-  marker, articulation, planted-patch speed/drift, sole clearance,
-  penetration, root-step and tangent-step gates all clear;
-- left/right wards still trade foot constraints against pose/transition error;
+- ACCAD E11 left ward frames 10–26, E13 right ward frames 8–23 and G18 right
+  push kick frames 23–48 pass marker, articulation, contact-manifold tangential
+  speed/drift, coverage, sole clearance, penetration, root and tangent gates;
 - ACCAD B18 frames 40–91 remains a useful launch reference, but its new
-  grounding/contact-speed gate is not yet clear; frames 92–93 remain rejected;
+  best right-foot contact speed is `0.02516 H/s` against a `0.02 H/s` limit;
+  frames 92–93 remain rejected;
 - synchronized CMU `18_05/19_05` frames 165–219 still closes the shared
   hand/elbow envelope, but both actors fail the new grounding gate. The
   remaining pull capture is not played after attachment; resistance and
   release belong to a compliant physical grip.
 
 The machine-readable combat graph now contains 13 action nodes and 21
-conditional edges. Nine Angel-specific interaction graphs specify contact
+conditional edges. Ten encounter-specific interaction graphs specify contact
 anchors, entry conditions and abort paths for Sachiel, Israfel, Sahaquiel,
-Shamshel, Gaghiel, Bardiel, Zeruel, Arael and Leliel. They are design contracts,
-not copied official animation or accepted runtime content.
+Shamshel, Gaghiel, Bardiel, Zeruel, Arael, Leliel and the Mass Production EVA
+scenario. They are design contracts, not copied official animation or accepted
+runtime content.
 
 Exact metrics and rejected variants are recorded in
 `docs/EVA_COMBAT_PHYSICAL_RETARGET_R01.md`.
@@ -607,7 +610,7 @@ Exact metrics and rejected variants are recorded in
 ### CMCD CC BY 4.0 combat supplement
 
 The official Cologne Motion Capture Database was added as a second openly
-licensed combat source. `tools/fetch_cmcd_eva_combat_seed.ps1` downloads eight
+licensed combat source. `tools/fetch_cmcd_eva_combat_seed.ps1` downloads twelve
 private candidates and records hashes plus the official CC BY 4.0 evidence.
 
 - one forward jumping-kick capture passes as an aerial reference after fixing
