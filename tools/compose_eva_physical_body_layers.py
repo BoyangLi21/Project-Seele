@@ -39,7 +39,15 @@ def tangent_metadata(model_path: Path):
         item.attrib["data"].split() for item in custom.findall("text")
         if item.attrib["name"] == "tangent_joint_names"
     )
-    return names
+    numeric = {
+        item.attrib["name"]: np.asarray(
+            [float(value) for value in item.attrib["data"].split()],
+            dtype=np.float64,
+        )
+        for item in custom.findall("numeric")
+    }
+    return (names, numeric["tangent_joint_lower_rad"],
+            numeric["tangent_joint_upper_rad"])
 
 
 def root_rotation(qpos: np.ndarray) -> Rotation:
@@ -54,6 +62,15 @@ def main() -> None:
     parser.add_argument("--lower", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--report", required=True, type=Path)
+    parser.add_argument(
+        "--transfer-root-rotation-fraction", type=float, default=0.0,
+        help=("Move this fraction of the upper source's root orientation "
+              "difference into lumbar/thoracic articulation."),
+    )
+    parser.add_argument(
+        "--root-orientation-authority", choices=("lower", "upper"),
+        default="lower",
+    )
     args = parser.parse_args()
 
     model = mujoco.MjModel.from_xml_path(str(args.model.resolve()))
@@ -69,8 +86,11 @@ def main() -> None:
     names = [str(value) for value in upper["tangent_names"]]
     if names != [str(value) for value in lower["tangent_names"]]:
         raise RuntimeError("tangent contracts differ")
-    if names != tangent_metadata(args.model):
+    contract_names, tangent_lower, tangent_upper = tangent_metadata(args.model)
+    if names != contract_names:
         raise RuntimeError("state tangent order differs from model")
+    if not 0.0 <= args.transfer_root_rotation_fraction <= 1.0:
+        raise RuntimeError("root rotation transfer fraction must be in [0,1]")
     landmark_names = [str(value) for value in upper["target_landmark_names"]]
     if landmark_names != [str(value) for value
                           in lower["target_landmark_names"]]:
@@ -133,8 +153,26 @@ def main() -> None:
     qpos_rows = []
     actual_rows = []
     root_rotation_delta = []
+    transferred_rotation = []
     for frame in range(len(tangent)):
+        upper_rotation = root_rotation(upper_qpos[frame])
+        lower_rotation = root_rotation(lower_qpos[frame])
+        relative_rotation = lower_rotation.inv() * upper_rotation
+        transfer = Rotation.from_rotvec(
+            relative_rotation.as_rotvec()
+            * args.transfer_root_rotation_fraction
+        )
+        transfer_euler = transfer.as_euler("xyz")
+        for axis, suffix in enumerate(("roll", "pitch", "yaw")):
+            for segment in ("lumbar", "thoracic"):
+                index = names.index(f"{segment}_{suffix}")
+                tangent[frame, index] += 0.5 * transfer_euler[axis]
+        tangent[frame] = np.clip(
+            tangent[frame], tangent_lower, tangent_upper
+        )
         data.qpos[:] = lower_qpos[frame]
+        if args.root_orientation_authority == "upper":
+            data.qpos[3:7] = upper_qpos[frame, 3:7]
         set_tangent(tangent[frame])
         mujoco.mj_forward(model, data)
         qpos_rows.append(data.qpos.copy())
@@ -146,18 +184,28 @@ def main() -> None:
 
         upper_root = upper_qpos[frame, :3]
         lower_root = lower_qpos[frame, :3]
-        upper_rotation = root_rotation(upper_qpos[frame])
-        lower_rotation = root_rotation(lower_qpos[frame])
         root_rotation_delta.append((
             lower_rotation.inv() * upper_rotation
         ).magnitude())
+        transferred_rotation.append(transfer.magnitude())
         for index, name in enumerate(landmark_names):
-            if name not in upper_landmarks:
-                continue
-            local = upper_rotation.inv().apply(
-                upper_desired[frame, index] - upper_root
-            )
-            desired[frame, index] = lower_root + lower_rotation.apply(local)
+            if name in upper_landmarks:
+                local = upper_rotation.inv().apply(
+                    upper_desired[frame, index] - upper_root
+                )
+                target_rotation = (upper_rotation
+                                   if args.root_orientation_authority == "upper"
+                                   else lower_rotation * transfer)
+                desired[frame, index] = (
+                    lower_root + target_rotation.apply(local)
+                )
+            elif args.root_orientation_authority == "upper":
+                local = lower_rotation.inv().apply(
+                    lower_desired[frame, index] - lower_root
+                )
+                desired[frame, index] = (
+                    lower_root + upper_rotation.apply(local)
+                )
 
     qpos = np.asarray(qpos_rows, dtype=np.float64)
     actual = np.asarray(actual_rows, dtype=np.float64)
@@ -200,7 +248,13 @@ def main() -> None:
         "maximum_source_root_rotation_difference_degrees": math.degrees(
             max(root_rotation_delta, default=0.0)
         ),
-        "root_authority": "audited lower-body state",
+        "root_rotation_transfer_fraction":
+            args.transfer_root_rotation_fraction,
+        "maximum_transferred_rotation_degrees": math.degrees(
+            max(transferred_rotation, default=0.0)
+        ),
+        "root_position_authority": "audited lower-body state",
+        "root_orientation_authority": args.root_orientation_authority,
         "upper_goal_authority": "upper targets transformed into lower root frame",
         "status": "project_authored_layered_kinematic_candidate",
     }

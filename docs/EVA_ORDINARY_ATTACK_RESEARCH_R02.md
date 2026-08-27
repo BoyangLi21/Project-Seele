@@ -78,3 +78,18 @@ command plays once and holds the terminal pose; execute `stop` before replaying.
 The chat acknowledgement must begin `STRICT ORDINARY ATTACK PHYSICAL REVIEW`.
 The resource is `assets/projectseele/motion/eva_ordinary_attack_review_v1.json`
 with 2 clips, 16 collapsed visual bones and 144 frames.
+
+## Body-entry follow-up
+
+ACCAD QuickAdvance upper-body mechanics layered over the stable lower body
+produced an in-place moving guard candidate at effector/articulation P95
+`0.01435/0.01417 H`, drift `0.00055/0.00185 H`, with zero strict failures.
+It is not promoted as a ram because replacing its 28° source-root lean with the
+stable root makes it read as an upright guard.
+
+A second experiment preserved the source-root lean and allowed the leg chains
+to compensate. It failed badly: right contact drift remained `0.04356 H`,
+along with manifold, clearance, speed and penetration failures. That branch is
+rejected. A real body ram must come from a dynamic physical controller or a
+new capture whose support mechanics are compatible with the EVA rig; the
+project will not fake it by writing root motion.
