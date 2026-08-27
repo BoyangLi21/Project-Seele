@@ -61,6 +61,8 @@ def main() -> None:
     centre, extent = bounds(start, end)
 
     camera = bpy.context.scene.camera
+    # The reviewed Tiger mesh faces authored +Z, which the Blender review
+    # conversion maps toward -Y. Stand on -Y for a front three-quarter view.
     camera.location = centre + Vector((1.45 * extent, -2.15 * extent,
                                        0.55 * extent))
     camera.rotation_euler = (centre - camera.location).to_track_quat(

@@ -51,12 +51,18 @@ LINKS = {
 }
 
 # MuJoCo: +X forward, +Y left, +Z up.
-# Bedrock: +X right, +Y up, +Z back.  This is a proper rotation.
-SIM_TO_BEDROCK = np.asarray([
-    [0.0, -1.0, 0.0],
+# The reviewed Tiger mesh is authored with +Z at the chest/face. Its renderer
+# reflects mesh X, so physical left maps to authored +X. This is still a
+# proper rotation (determinant +1), not a mirrored skeleton.
+SIM_TO_AUTHORED = np.asarray([
+    [0.0, 1.0, 0.0],
     [0.0, 0.0, 1.0],
-    [-1.0, 0.0, 0.0],
+    [1.0, 0.0, 0.0],
 ], dtype=np.float64)
+PHYSICAL_FORWARD_SIM = np.asarray((1.0, 0.0, 0.0), dtype=np.float64)
+PHYSICAL_LEFT_SIM = np.asarray((0.0, 1.0, 0.0), dtype=np.float64)
+VISUAL_FORWARD_AUTHORED = np.asarray((0.0, 0.0, 1.0), dtype=np.float64)
+VISUAL_LEFT_AUTHORED = np.asarray((1.0, 0.0, 0.0), dtype=np.float64)
 
 # The runtime's historical 112 model-units/metre constant was calibrated to
 # a roughly 1.714 m source human.  The canonical EVA physics proxy is 4 m, so
@@ -125,8 +131,8 @@ def make_clip(model: mujoco.MjModel, neutral: dict[str, np.ndarray],
         rotations = []
         for bone in BONES:
             delta = current[bone] @ neutral[bone].T
-            bedrock = SIM_TO_BEDROCK @ delta @ SIM_TO_BEDROCK.T
-            rotations.append(quaternion_wxyz(bedrock))
+            authored = SIM_TO_AUTHORED @ delta @ SIM_TO_AUTHORED.T
+            rotations.append(quaternion_wxyz(authored))
         if previous is not None:
             for before, after in zip(previous, rotations):
                 q0 = Rotation.from_quat(before[1:] + before[:1])
@@ -136,7 +142,7 @@ def make_clip(model: mujoco.MjModel, neutral: dict[str, np.ndarray],
                 ))
         previous = rotations
 
-        root_delta = SIM_TO_BEDROCK @ (pose[:3] - root_origin)
+        root_delta = SIM_TO_AUTHORED @ (pose[:3] - root_origin)
         root_delta *= PHYSICAL_TO_RUNTIME_METRES
         if previous_root is not None:
             root_steps.append(float(np.linalg.norm(
@@ -183,8 +189,18 @@ def make_clip(model: mujoco.MjModel, neutral: dict[str, np.ndarray],
 
 def main() -> None:
     args = parse_args()
-    if not np.isclose(np.linalg.det(SIM_TO_BEDROCK), 1.0):
-        raise RuntimeError("simulation-to-Bedrock basis is mirrored")
+    if not np.isclose(np.linalg.det(SIM_TO_AUTHORED), 1.0):
+        raise RuntimeError("simulation-to-authored basis is mirrored")
+    mapped_forward = SIM_TO_AUTHORED @ PHYSICAL_FORWARD_SIM
+    mapped_left = SIM_TO_AUTHORED @ PHYSICAL_LEFT_SIM
+    forward_alignment = float(np.dot(
+        mapped_forward, VISUAL_FORWARD_AUTHORED
+    ))
+    left_alignment = float(np.dot(mapped_left, VISUAL_LEFT_AUTHORED))
+    if forward_alignment < 0.999999 or left_alignment < 0.999999:
+        raise RuntimeError(
+            "physical axes do not match the reviewed visual rig"
+        )
     model = mujoco.MjModel.from_xml_path(str(args.model.resolve()))
     neutral_data = mujoco.MjData(model)
     neutral_data.qpos[:] = model.qpos0
@@ -208,7 +224,9 @@ def main() -> None:
 
     output = {
         "schema": 2,
-        "coordinate_system": "bedrock_x_right_y_up_z_back",
+        "coordinate_system": (
+            "gecko_authored_x_visual_left_y_up_z_front_pre_mesh_reflection"
+        ),
         "quaternion_order": "wxyz",
         "sample_rate": 60.0,
         "preview_only": True,
@@ -229,7 +247,15 @@ def main() -> None:
     audit = {
         "schema": 1,
         "output": str(args.output.resolve()),
-        "basis_determinant": float(np.linalg.det(SIM_TO_BEDROCK)),
+        "basis_determinant": float(np.linalg.det(SIM_TO_AUTHORED)),
+        "physical_forward_sim": PHYSICAL_FORWARD_SIM.tolist(),
+        "mapped_forward_authored": mapped_forward.tolist(),
+        "visual_forward_authored": VISUAL_FORWARD_AUTHORED.tolist(),
+        "forward_alignment": forward_alignment,
+        "physical_left_sim": PHYSICAL_LEFT_SIM.tolist(),
+        "mapped_left_authored": mapped_left.tolist(),
+        "visual_left_authored": VISUAL_LEFT_AUTHORED.tolist(),
+        "left_alignment": left_alignment,
         "physical_to_runtime_metres": PHYSICAL_TO_RUNTIME_METRES,
         "preview_only": True,
         "legacy_visual_chain_collapse": {
