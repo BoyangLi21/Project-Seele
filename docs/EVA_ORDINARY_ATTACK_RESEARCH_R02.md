@@ -68,7 +68,7 @@ collapse. Neck, both clavicles, both wrists and both ankles exist as explicit
 intermediate nodes; physical global deformation is converted through that
 matching hierarchy before Minecraft/Blender applies it.
 
-## Runtime rotation-encoding correction
+## Runtime bridge and front-axis corrections
 
 R06 passed the physical topology gate but its first visual export is rejected.
 The export wrote the desired runtime rotation directly into the authored
@@ -80,22 +80,44 @@ the obvious arms-through-head crossing in the review video.
 This was identified by comparing rendered bone-segment directions against the
 same-frame physical body directions, rather than by another visual offset:
 
-| Segment | Broken export dot | Corrected R08 dot |
+| Segment | Broken export dot | R08 encoding-only dot |
 |---|---:|---:|
 | upper arm to forearm | approximately `-0.94` | at least `+0.9968` |
 | forearm to wrist | approximately `-0.98` | at least `+0.9996` |
 
-R08 keeps the accepted R06 physical state sequence unchanged. It first maps
-physical deformation into runtime space and then applies the inverse Gecko
-Euler encoding when writing authored quaternions. A positive near-one segment
-direction dot is now a required export regression check; a physical audit by
-itself is not sufficient evidence for visual correctness.
+R08 is nevertheless rejected. Its comparison used the same false forward-axis
+assumption on both sides: physical `+X` was called Tiger `+Z` front, although
+the active Tiger mesh, first-person camera contract and existing rig validators
+all state that its face and horn point toward runtime `-Z`. The review tool also
+placed its alleged front camera on Blender `-Y`; after the runtime-to-Blender
+conversion this is a rear camera. R08 therefore stopped the segment reversal
+but put both complete arms behind the EVA and filmed them from the back.
+
+R09, which naively replaced the whole deformation basis, is also rejected
+because it disconnected the rigid visual hierarchy. R12 keeps the proven Tiger
+deformation bridge but applies an independent anatomical position contract:
+
+- physical forward `+X` -> Tiger runtime front `-Z`;
+- physical left `+Y` -> Tiger runtime left `-X`;
+- physical up `+Z` -> Tiger runtime up `+Y`.
+
+The upper-arm and forearm directions are constrained from actual MuJoCo joint
+positions in that true-front basis. Wrist and hand retain their original local
+articulation. R12 reaches a minimum constrained limb-direction dot of
+`0.9999999999999998`, a maximum 60 Hz rotation step of `15.38709°`, and a
+maximum authored-to-runtime round-trip error of `0.00000947°`. The renderer's
+front cameras now sit on Blender `+Y`, which is runtime Tiger `-Z` front.
+Across all 104 rendered frames, both wrist pivots remain in front of the upper
+torso: the minimum Blender-front clearances are `1.49072` (left) and `0.17972`
+(right), never negative.
+A positive segment dot is accepted only after this independent front-axis
+contract and a true-front/side visual review both pass.
 
 ## Review artefacts
 
-- `artifacts/motion_research/ordinary_attack_r03/rebuild_r01/RIGHT_BATTER_REBUILT_R08_REVIEW.blend`
+- `artifacts/motion_research/ordinary_attack_r03/rebuild_r01/RIGHT_BATTER_REBUILT_R12_REVIEW.blend`
 - `artifacts/motion_research/ordinary_attack_r03/rebuild_r01/RIGHT_BATTER_REBUILT_R06.npz`
-- `artifacts/motion_research/ordinary_attack_r03/rebuild_r01/EVA_ORDINARY_BATTER_RIGHT_MAPPING_FIXED_R08_TWO_VIEW.mp4`
+- `artifacts/motion_research/ordinary_attack_r03/rebuild_r01/EVA_ORDINARY_BATTER_RIGHT_TRUE_FRONT_R12_TWO_VIEW.mp4`
 
 The two-view files are for human screening only. They are not runtime assets.
 Promotion still requires human acceptance and a contact-driven damage test.
@@ -118,7 +140,7 @@ returns to its opening guard; execute `stop` before replaying.
 The chat acknowledgement must begin `STRICT ORDINARY ATTACK PHYSICAL REVIEW`.
 The resource is `assets/projectseele/motion/eva_ordinary_attack_review_v1.json`
 with 1 clip, 23 bridge bones and 104 frames. `batter_right` uses rebuilt R06.
-Its runtime visual encoding is the corrected R08 export described above.
+Its runtime visual encoding and true-front limb constraints use R12.
 
 ## Body-entry follow-up
 

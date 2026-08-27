@@ -44,16 +44,33 @@ VISUAL_PARENT = {
     "leg_r": "torso_lower", "shin_r": "leg_r",
     "ankle_r": "shin_r", "foot_r": "ankle_r",
 }
+ARM_DIRECTION_SEGMENTS = (
+    ("arm_l", "forearm_l", "upper_arm_l", "forearm_l"),
+    ("forearm_l", "wrist_l", "forearm_l", "wrist_link_l"),
+    ("arm_r", "forearm_r", "upper_arm_r", "forearm_r"),
+    ("forearm_r", "wrist_r", "forearm_r", "wrist_link_r"),
+)
 
-# Physical +X forward/+Y left/+Z up -> Tiger Gecko-authored +Z front/
-# +X visual-left-before-mesh-reflection/+Y up. Determinant is +1.
-SIM_TO_AUTHORED = np.asarray([
-    [0.0, 1.0, 0.0],
+# Physical +X forward/+Y left/+Z up -> Tiger runtime -Z front/-X left/+Y up.
+# Positions use that proper anatomical basis.  The legacy Tiger deformation
+# bridge uses an improper orientation basis because the source mesh has already
+# been reflected at import and again on authored X at emission.  Replacing that
+# bridge globally disconnects the rigid visual hierarchy.  Limb directions are
+# therefore constrained explicitly from physical joint positions below.
+SIM_TO_RUNTIME_POSITION = np.asarray([
+    [0.0, -1.0, 0.0],
+    [0.0, 0.0, 1.0],
+    [-1.0, 0.0, 0.0],
+], dtype=np.float64)
+SIM_TO_RUNTIME_DEFORMATION = np.asarray([
+    [0.0, -1.0, 0.0],
     [0.0, 0.0, 1.0],
     [1.0, 0.0, 0.0],
 ], dtype=np.float64)
 AUTHORED_TO_RUNTIME_POSITION = np.diag((-1.0, 1.0, 1.0))
-SIM_TO_RUNTIME = AUTHORED_TO_RUNTIME_POSITION @ SIM_TO_AUTHORED
+SIM_TO_AUTHORED_POSITION = (
+    AUTHORED_TO_RUNTIME_POSITION @ SIM_TO_RUNTIME_POSITION
+)
 ROOT_METRE_SCALE = (192.0 / 4.0) / 112.0
 
 
@@ -66,6 +83,87 @@ def body_world_matrices(model, data):
         bone: body_rotation(model, data, body)
         for bone, body in BODY_FOR_BONE.items()
     }
+
+
+def body_position(model, data, name):
+    return data.xpos[model.body(name).id].copy()
+
+
+def load_visual_runtime_pivots(path):
+    document = json.loads(path.read_text(encoding="utf-8"))
+    geometries = document.get("minecraft:geometry", [])
+    if not geometries:
+        raise RuntimeError(f"visual geometry has no minecraft:geometry: {path}")
+    pivots = {}
+    for bone in geometries[0].get("bones", []):
+        if bone["name"] not in BONES:
+            continue
+        raw = np.asarray(bone.get("pivot", (0.0, 0.0, 0.0)),
+                         dtype=np.float64)
+        pivots[bone["name"]] = np.asarray((-raw[0], raw[1], raw[2]))
+    missing = set(BONES) - set(pivots)
+    if missing:
+        raise RuntimeError(
+            "visual geometry is missing physical bridge bones: "
+            + ", ".join(sorted(missing))
+        )
+    return pivots
+
+
+def direction_frame(direction):
+    forward = np.asarray(direction, dtype=np.float64)
+    forward /= np.linalg.norm(forward)
+    up_hint = np.asarray((0.0, 1.0, 0.0))
+    right = np.cross(up_hint, forward)
+    if np.linalg.norm(right) < 1.0e-8:
+        up_hint = np.asarray((1.0, 0.0, 0.0))
+        right = np.cross(up_hint, forward)
+    right /= np.linalg.norm(right)
+    up = np.cross(forward, right)
+    up /= np.linalg.norm(up)
+    return np.column_stack((right, up, forward))
+
+
+def constrain_limb_directions(runtime_global, model, data, visual_pivots):
+    base = {bone: matrix.copy() for bone, matrix in runtime_global.items()}
+    minimum_dot = 1.0
+    for side in ("l", "r"):
+        segments = [segment for segment in ARM_DIRECTION_SEGMENTS
+                    if segment[0].endswith(f"_{side}")]
+        for bone, child, physical_start, physical_end in segments:
+            bind = visual_pivots[child] - visual_pivots[bone]
+            desired_physical = (
+                body_position(model, data, physical_end)
+                - body_position(model, data, physical_start)
+            )
+            desired = SIM_TO_RUNTIME_POSITION @ desired_physical
+            predicted = runtime_global[bone] @ bind
+            correction = (
+                direction_frame(desired) @ direction_frame(predicted).T
+            )
+            runtime_global[bone] = correction @ runtime_global[bone]
+            corrected = runtime_global[bone] @ bind
+            alignment = float(np.dot(
+                corrected / np.linalg.norm(corrected),
+                desired / np.linalg.norm(desired),
+            ))
+            minimum_dot = min(minimum_dot, alignment)
+
+        # Wrist and hand have no non-zero child-pivot segment in the Tiger
+        # geometry. Preserve their original local articulation after the two
+        # direction-constrained segments instead of inventing another target.
+        forearm = f"forearm_{side}"
+        wrist = f"wrist_{side}"
+        hand = f"hand_{side}"
+        runtime_global[wrist] = (
+            runtime_global[forearm]
+            @ base[forearm].T @ base[wrist]
+        )
+        runtime_global[hand] = (
+            runtime_global[wrist]
+            @ base[wrist].T @ base[hand]
+        )
+    return minimum_dot
 
 
 def authored_wxyz_for_runtime_matrix(matrix):
@@ -94,6 +192,7 @@ def runtime_matrix_from_authored_wxyz(value):
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--model", required=True, type=Path)
+    parser.add_argument("--geo", required=True, type=Path)
     parser.add_argument("--state", required=True, type=Path)
     parser.add_argument("--clip", required=True)
     parser.add_argument("--source-id", required=True)
@@ -104,15 +203,26 @@ def main() -> None:
     parser.add_argument("--report", required=True, type=Path)
     args = parser.parse_args()
 
-    determinant = float(np.linalg.det(SIM_TO_AUTHORED))
-    mapped_forward = SIM_TO_AUTHORED @ np.asarray((1.0, 0.0, 0.0))
-    mapped_left = SIM_TO_AUTHORED @ np.asarray((0.0, 1.0, 0.0))
-    if (abs(determinant - 1.0) > 1.0e-8
-            or not np.allclose(mapped_forward, (0.0, 0.0, 1.0))
-            or not np.allclose(mapped_left, (1.0, 0.0, 0.0))):
+    position_determinant = float(np.linalg.det(SIM_TO_RUNTIME_POSITION))
+    deformation_determinant = float(np.linalg.det(
+        SIM_TO_RUNTIME_DEFORMATION
+    ))
+    authored_position_determinant = float(np.linalg.det(
+        SIM_TO_AUTHORED_POSITION
+    ))
+    mapped_forward = SIM_TO_RUNTIME_POSITION @ np.asarray((1.0, 0.0, 0.0))
+    mapped_left = SIM_TO_RUNTIME_POSITION @ np.asarray((0.0, 1.0, 0.0))
+    mapped_up = SIM_TO_RUNTIME_POSITION @ np.asarray((0.0, 0.0, 1.0))
+    if (abs(position_determinant - 1.0) > 1.0e-8
+            or abs(deformation_determinant + 1.0) > 1.0e-8
+            or abs(authored_position_determinant + 1.0) > 1.0e-8
+            or not np.allclose(mapped_forward, (0.0, 0.0, -1.0))
+            or not np.allclose(mapped_left, (-1.0, 0.0, 0.0))
+            or not np.allclose(mapped_up, (0.0, 1.0, 0.0))):
         raise RuntimeError("EVA physical-to-Tiger visual axis contract failed")
 
     model = mujoco.MjModel.from_xml_path(str(args.model.resolve()))
+    visual_pivots = load_visual_runtime_pivots(args.geo)
     data = mujoco.MjData(model)
     data.qpos[:] = model.qpos0
     mujoco.mj_forward(model, data)
@@ -128,6 +238,7 @@ def main() -> None:
     maximum_angle_step = 0.0
     maximum_runtime_round_trip_error = 0.0
     maximum_runtime_round_trip_location = None
+    minimum_limb_direction_dot = 1.0
     previous_rotations = None
     for frame_index, pose in enumerate(qpos):
         data.qpos[:] = pose
@@ -138,8 +249,15 @@ def main() -> None:
         for bone in BONES:
             deformation = current_world[bone] @ neutral_world[bone].T
             runtime_global[bone] = (
-                SIM_TO_RUNTIME @ deformation @ SIM_TO_RUNTIME.T
+                SIM_TO_RUNTIME_DEFORMATION @ deformation
+                @ SIM_TO_RUNTIME_DEFORMATION.T
             )
+        minimum_limb_direction_dot = min(
+            minimum_limb_direction_dot,
+            constrain_limb_directions(
+                runtime_global, model, data, visual_pivots
+            ),
+        )
         rotations = []
         matrices = []
         for bone in BONES:
@@ -167,7 +285,7 @@ def main() -> None:
                      * Rotation.from_matrix(after)).magnitude()
                 ))
         previous_rotations = matrices
-        root = SIM_TO_AUTHORED @ (pose[:3] - root_origin)
+        root = SIM_TO_AUTHORED_POSITION @ (pose[:3] - root_origin)
         root *= ROOT_METRE_SCALE
         frames.append({
             "root_m": [round(float(value), 7) for value in root],
@@ -182,6 +300,11 @@ def main() -> None:
             f"error={maximum_runtime_round_trip_error} "
             f"location={maximum_runtime_round_trip_location}"
         )
+    if minimum_limb_direction_dot < 0.999:
+        raise RuntimeError(
+            "physical-to-visual limb direction alignment failed: "
+            f"minimum_dot={minimum_limb_direction_dot}"
+        )
 
     clip = {
         "duration_seconds": round((len(frames) - 1) * dt, 7),
@@ -194,7 +317,7 @@ def main() -> None:
     document = {
         "schema": 2,
         "coordinate_system": (
-            "gecko_authored_x_visual_left_y_up_z_front_pre_mesh_reflection"
+            "gecko_authored_y_up_negative_z_front_x_reflected_at_runtime"
         ),
         "quaternion_order": "wxyz",
         "sample_rate": 1.0 / dt,
@@ -221,11 +344,17 @@ def main() -> None:
         "clip": args.clip,
         "frames": len(frames),
         "duration_seconds": clip["duration_seconds"],
-        "basis_determinant": determinant,
+        "position_basis_determinant": position_determinant,
+        "deformation_basis_determinant": deformation_determinant,
+        "authored_position_basis_determinant": (
+            authored_position_determinant
+        ),
         "forward_alignment": float(np.dot(
-            mapped_forward, (0.0, 0.0, 1.0)
+            mapped_forward, (0.0, 0.0, -1.0)
         )),
-        "left_alignment": float(np.dot(mapped_left, (1.0, 0.0, 0.0))),
+        "left_alignment": float(np.dot(mapped_left, (-1.0, 0.0, 0.0))),
+        "up_alignment": float(np.dot(mapped_up, (0.0, 1.0, 0.0))),
+        "minimum_limb_direction_dot": minimum_limb_direction_dot,
         "maximum_rotation_step_degrees": float(np.degrees(
             maximum_angle_step
         )),
@@ -236,8 +365,8 @@ def main() -> None:
             maximum_runtime_round_trip_location
         ),
         "rotation_mapping": (
-            "physics_world_deformation_to_runtime_global_then_inverse_gecko_"
-            "authored_euler"
+            "legacy_tiger_deformation_basis_plus_true_front_physical_limb_"
+            "direction_constraints_then_inverse_gecko_authored_euler"
         ),
         "status": "visual_review_only_not_runtime_integrated",
     }

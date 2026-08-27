@@ -67,11 +67,14 @@ def main() -> None:
     centre, extent = bounds(start, end)
 
     camera = bpy.context.scene.camera
+    # Runtime Tiger forward is model -Z. target_to_blender maps that direction
+    # to Blender +Y, so a front inspection camera must sit on +Y.  The old
+    # negative-Y offsets were rear views carrying incorrect front labels.
     offsets = {
-        "front_three_quarter": (1.45, -2.15, 0.55),
-        "front": (0.0, -2.50, 0.45),
+        "front_three_quarter": (1.45, 2.15, 0.55),
+        "front": (0.0, 2.50, 0.45),
         "side": (2.50, 0.0, 0.45),
-        "rear_three_quarter": (1.45, 2.15, 0.55),
+        "rear_three_quarter": (1.45, -2.15, 0.55),
     }
     camera.location = centre + Vector(tuple(
         value * extent for value in offsets[args.view]
