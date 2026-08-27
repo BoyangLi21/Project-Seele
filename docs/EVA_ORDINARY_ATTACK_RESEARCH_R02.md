@@ -49,7 +49,7 @@ output to hide error.
 
 | Candidate | Contact yaw | Effector P95 | Articulation P95 | L/R drift | Strict failures |
 |---|---:|---:|---:|---:|---:|
-| right diagonal batter R17 | `-27.5°` | `0.01725 H` | `0.03755 H` | `0.00069 / 0.00179 H` | 0 |
+| right diagonal batter + recovery R29 | `-27.5°` | `0.01568 H` | `0.03253 H` | `0.00069 / 0.00103 H` | 0 |
 | left diagonal batter R24 | `+28.2°` | `0.01648 H` | `0.03062 H` | `0.00056 / 0.00148 H` | 0 |
 
 The current Tiger review exporter now computes each physical body's world
@@ -62,12 +62,26 @@ because the physical and visual bind axes differ.
 
 - `artifacts/motion_research/ordinary_attack_r02/EVA_ORDINARY_ATTACK_RIGHT_R17_TWO_VIEW.mp4`
 - `artifacts/motion_research/ordinary_attack_r02/EVA_ORDINARY_ATTACK_LEFT_R24_TWO_VIEW.mp4`
+- `artifacts/motion_research/ordinary_attack_r03/recovery/EVA_ORDINARY_BATTER_RIGHT_RECOVERY_R29_TWO_VIEW.mp4`
 - `artifacts/motion_research/ordinary_attack_r02/EVA_DIAGONAL_BATTER_RIGHT_R17_60HZ.mp4`
 - `artifacts/motion_research/ordinary_attack_r02/EVA_DIAGONAL_BATTER_LEFT_R24_60HZ.npz`
 
 The two-view files are for human screening only. They are not runtime assets.
-Promotion still requires human acceptance, an interrupt/recovery graph and a
-contact-driven damage test.
+Promotion still requires human acceptance and a contact-driven damage test.
+The right candidate now owns a verified return to its opening guard; the left
+candidate still ends at its terminal review pose.
+
+## Right-batter recovery
+
+The right action now returns through a 30-frame velocity-aware recovery into a
+0.5-second guard hold. Transition tangents are clamped to the model's declared
+joint limits, contact confidence ramps instead of snapping to stable, and only
+the recovery window is jointly contact-solved before being spliced back into
+the independently audited strike.
+
+The complete 139-frame result passes with effector/articulation P95
+`0.01568/0.03253 H`, support drift `0.00069/0.00103 H`, support speed
+`0.00819/0.01069 H/s`, and stable manifold fractions `0.984/1.000`.
 
 ## Isolated Minecraft review
 
@@ -86,7 +100,8 @@ For the left candidate, replace the final argument with `batter_left`. Each
 command plays once and holds the terminal pose; execute `stop` before replaying.
 The chat acknowledgement must begin `STRICT ORDINARY ATTACK PHYSICAL REVIEW`.
 The resource is `assets/projectseele/motion/eva_ordinary_attack_review_v1.json`
-with 2 clips, 16 collapsed visual bones and 144 frames.
+with 2 clips, 16 collapsed visual bones and 205 frames. `batter_right` now uses
+the recovered R29 candidate; its command name is unchanged.
 
 ## Body-entry follow-up
 

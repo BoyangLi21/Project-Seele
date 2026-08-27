@@ -7,6 +7,7 @@ import argparse
 import json
 import math
 from pathlib import Path
+import xml.etree.ElementTree as ET
 
 import mujoco
 import numpy as np
@@ -56,12 +57,33 @@ def hermite(first, first_velocity, last, last_velocity,
             + h01 * last + h11 * duration * last_velocity)
 
 
+def tangent_limits(model_path: Path, names: list[str]):
+    root = ET.parse(model_path).getroot()
+    custom = root.find("custom")
+    contract_names = next(
+        item.attrib["data"].split() for item in custom.findall("text")
+        if item.attrib["name"] == "tangent_joint_names"
+    )
+    if contract_names != names:
+        raise RuntimeError("model tangent contract differs from state")
+    numeric = {
+        item.attrib["name"]: np.asarray(
+            [float(value) for value in item.attrib["data"].split()],
+            dtype=np.float64,
+        )
+        for item in custom.findall("numeric")
+    }
+    return (numeric["tangent_joint_lower_rad"],
+            numeric["tangent_joint_upper_rad"])
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--model", required=True, type=Path)
     parser.add_argument("--first", required=True, type=Path)
     parser.add_argument("--second", required=True, type=Path)
     parser.add_argument("--transition-frames", type=int, default=7)
+    parser.add_argument("--contact-settle-frames", type=int, default=8)
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--report", required=True, type=Path)
     args = parser.parse_args()
@@ -80,6 +102,7 @@ def main() -> None:
     if abs(dt - float(second["timestep"][0])) > 1.0e-9:
         raise RuntimeError("sample rates differ")
     transition_frames = max(1, args.transition_frames)
+    contact_settle_frames = max(0, args.contact_settle_frames)
 
     tangent_first = np.asarray(first["tangent"], dtype=np.float64)
     tangent_second = np.asarray(second["tangent"], dtype=np.float64)
@@ -132,6 +155,12 @@ def main() -> None:
                 phase, duration)
         for phase in phases
     ])
+    tangent_lower, tangent_upper = tangent_limits(args.model, tangent_names)
+    raw_transition_tangent = transition_tangent.copy()
+    transition_tangent = np.clip(
+        transition_tangent, tangent_lower, tangent_upper
+    )
+    tangent_clamp = np.abs(transition_tangent - raw_transition_tangent)
     transition_root = np.stack([
         hermite(qpos_first[-1, :3], root_velocity_first,
                 qpos_second[0, :3], root_velocity_second,
@@ -215,13 +244,32 @@ def main() -> None:
     contacts_second = np.asarray(second["foot_contact"], dtype=np.bool_)
     common = contacts_first[-1] & contacts_second[0]
     transition_contacts = np.tile(common, (transition_frames, 1))
+    blend_first = np.asarray(first["contact_blend"], dtype=np.float64)
+    blend_second = np.asarray(second["contact_blend"], dtype=np.float64)
+    smooth_phases = phases * phases * (3.0 - 2.0 * phases)
+    transition_blend = np.stack([
+        common.astype(np.float64) * (
+            blend_first[-1] * (1.0 - phase)
+            + blend_second[0] * phase
+        )
+        for phase in smooth_phases
+    ])
+    blend_second_output = blend_second.copy()
+    settle = min(contact_settle_frames, len(blend_second_output))
+    if settle > 1:
+        for side in range(blend_second_output.shape[1]):
+            if (common[side] and blend_first[-1, side] < 0.999
+                    and blend_second[0, side] >= 0.999):
+                blend_second_output[:settle - 1, side] = np.minimum(
+                    blend_second_output[:settle - 1, side], 0.998
+                )
     contacts = np.concatenate((
         contacts_first, transition_contacts, contacts_second
     ), axis=0)
     blend = np.concatenate((
-        np.asarray(first["contact_blend"], dtype=np.float64),
-        transition_contacts.astype(np.float64),
-        np.asarray(second["contact_blend"], dtype=np.float64),
+        blend_first,
+        transition_blend,
+        blend_second_output,
     ), axis=0)
     actual = []
     for row in qpos:
@@ -273,6 +321,15 @@ def main() -> None:
             transition_steps[len(qpos_first) - 1:
                              len(qpos_first) + transition_frames]
         )),
+        "transition_limit_clamp_count": int(np.count_nonzero(
+            tangent_clamp > 1.0e-12
+        )),
+        "maximum_transition_limit_clamp_rad": float(np.max(
+            tangent_clamp
+        )),
+        "transition_contact_blend_start": transition_blend[0].tolist(),
+        "transition_contact_blend_end": transition_blend[-1].tolist(),
+        "contact_settle_frames": contact_settle_frames,
         "status": "composed_kinematic_transition_requires_contact_optimization",
     }
     args.report.parent.mkdir(parents=True, exist_ok=True)

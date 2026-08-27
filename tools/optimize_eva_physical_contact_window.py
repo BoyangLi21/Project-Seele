@@ -200,8 +200,8 @@ def main() -> None:
             )
             anchors[side][first] = {
                 "last": last,
-                "ankle": actual[names.index(f"ankle_{side}"), :2].copy(),
-                "toe": actual[names.index(f"toe_{side}"), :2].copy(),
+                "ankle": actual[names.index(f"ankle_{side}")].copy(),
+                "toe": actual[names.index(f"toe_{side}")].copy(),
                 "patches": {
                     patch: data.geom_xpos[model.geom(
                         f"toe_{side}_collision" if patch == "toe"
@@ -269,6 +269,17 @@ def main() -> None:
                     )
             desired = desired_source[frame].copy()
             desired += root_delta[None, :]
+            # A stable contact is a world-space constraint.  Hermite or
+            # retarget marker trajectories may still move beneath that flag;
+            # letting those markers remain authoritative asks the optimizer
+            # to slide and stay planted at the same time.  The segment's
+            # pre-optimization first stable pose is the independent anchor.
+            for side in ("l", "r"):
+                anchor = segment_for_frame[side].get(frame)
+                if anchor is None:
+                    continue
+                desired[names.index(f"ankle_{side}")] = anchor["ankle"]
+                desired[names.index(f"toe_{side}")] = anchor["toe"]
             add(args.pose_weight * (
                 leg_value - tangent_source[frame, leg_indices]
             ), (frame,))
@@ -288,7 +299,7 @@ def main() -> None:
                             actual[index, :2] - anchor[
                                 "ankle" if landmark.startswith("ankle")
                                 else "toe"
-                            ]
+                            ][:2]
                         ) / height, (frame,))
                     for patch in ("heel", "forefoot", "toe"):
                         geom_name = (f"toe_{side}_collision"
@@ -440,6 +451,13 @@ def main() -> None:
     desired = desired_source.copy()
     root_delta = solved[:, -root_width:] - qpos_source[:, :3]
     desired += root_delta[:, None, :]
+    for frame in range(frame_count):
+        for side in ("l", "r"):
+            anchor = segment_for_frame[side].get(frame)
+            if anchor is None:
+                continue
+            desired[frame, names.index(f"ankle_{side}")] = anchor["ankle"]
+            desired[frame, names.index(f"toe_{side}")] = anchor["toe"]
     for frame in range(frame_count):
         _, qpos_row, actual_row = apply(
             frame, solved[frame, :-root_width],
