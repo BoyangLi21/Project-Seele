@@ -108,6 +108,8 @@ def main() -> None:
     parser.add_argument("--source-name", required=True)
     parser.add_argument("--source-url", required=True)
     parser.add_argument("--license", required=True)
+    parser.add_argument("--hand-pose", choices=("neutral", "fist"),
+                        default="neutral")
     args = parser.parse_args()
 
     source = np.load(args.landmarks)
@@ -139,6 +141,29 @@ def main() -> None:
     if missing_target:
         raise RuntimeError("active Tiger rig is missing bones: "
                            + ", ".join(sorted(missing_target)))
+
+    finger_bones = []
+    if args.hand_pose == "fist":
+        finger_bones = [
+            row["name"] for row in geometry
+            if row["name"].startswith("finger_")
+            and "_axis_" not in row["name"]
+        ]
+    output_bones = list(BONES) + finger_bones
+
+    def fist_rotation(bone):
+        if "thumb" in bone:
+            angle = 38.0 if "_tip_" in bone else 58.0
+        elif "_distal_" in bone:
+            angle = 58.0
+        elif "_tip_" in bone:
+            angle = 78.0
+        else:
+            angle = 92.0
+        return authored_wxyz(
+            Rotation.from_euler("z", np.radians(angle)).as_matrix()
+        )
+    finger_pose = {bone: fist_rotation(bone) for bone in finger_bones}
 
     target_height = max(point[1] for point in pivot.values()) - min(
         point[1] for point in pivot.values())
@@ -220,13 +245,13 @@ def main() -> None:
             )
             desired_global[clavicle] = continuous_map(clavicle,
                 pivot[arm] - pivot[clavicle], TARGET_FRONT,
-                shoulder_direction, upper_direction)
+                shoulder_direction, upper_up)
             desired_global[arm] = continuous_map(arm,
                 pivot[forearm] - pivot[arm], TARGET_FRONT,
                 upper_direction, lower_direction)
             desired_global[forearm] = continuous_map(forearm,
                 pivot[wrist] - pivot[forearm], TARGET_FRONT,
-                lower_direction, hand_direction)
+                lower_direction, upper_up)
             desired_global[wrist] = desired_global[forearm]
             desired_global[hand] = desired_global[forearm]
 
@@ -311,7 +336,10 @@ def main() -> None:
         )) / MODEL_UNITS_PER_METRE
         output_frames.append({
             "root_m": [round(float(value), 7) for value in root_m],
-            "rotation_wxyz": [authored_wxyz(local[bone]) for bone in BONES],
+            "rotation_wxyz": (
+                [authored_wxyz(local[bone]) for bone in BONES]
+                + [finger_pose[bone] for bone in finger_bones]
+            ),
             "foot_contact": [bool(value) for value in contacts[frame_index]],
         })
 
@@ -333,8 +361,15 @@ def main() -> None:
                 "direct source-to-target segment orientation",
                 "target limb-length substitution",
             ],
-        }],
-        "bones": list(BONES),
+        }] + ([{
+            "name": "DFKI Hand Motion Embodiment grasp reference",
+            "url": "https://github.com/dfki-ric/hand_embodiment",
+            "license": "CC BY 4.0",
+            "modifications": [
+                "static anatomical fist fitted to existing Tiger digits"
+            ],
+        }] if args.hand_pose == "fist" else []),
+        "bones": output_bones,
         "clips": {
             args.clip: {
                 "duration_seconds": round((len(output_frames) - 1) / fps, 7),
@@ -354,7 +389,9 @@ def main() -> None:
         "target_geo": str(args.geo.resolve()),
         "frames": len(output_frames),
         "fps": fps,
-        "bones": len(BONES),
+        "bones": len(output_bones),
+        "hand_pose": args.hand_pose,
+        "finger_bones": len(finger_bones),
         "source_to_runtime_determinant": float(np.linalg.det(
             SOURCE_TO_RUNTIME)),
         "maximum_local_rotation_step_degrees": float(np.degrees(

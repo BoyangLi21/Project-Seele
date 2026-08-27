@@ -153,7 +153,8 @@ public final class EvaMotionLabCommands
         {
             source.sendFailure(Component.literal(
                     "Usage: /seele motionlab demo unit01 "
-                            + "walk|run|jump|attack_right|"
+                            + "walk|run|jump|attack_a|attack_b|attack_c|"
+                            + "attack_combo|"
                             + "live|livepush|physics|recovery|stop"));
             return 0;
         }
@@ -167,12 +168,23 @@ public final class EvaMotionLabCommands
                 || mode.equalsIgnoreCase("policy")
                 || mode.equalsIgnoreCase("livereset")
                 || mode.equalsIgnoreCase("livepush")
+                || mode.equalsIgnoreCase("attack_a")
+                || mode.equalsIgnoreCase("attack_b")
+                || mode.equalsIgnoreCase("attack_c")
+                || mode.equalsIgnoreCase("attack_jab")
+                || mode.equalsIgnoreCase("attack_cross")
+                || mode.equalsIgnoreCase("attack_hook")
+                || mode.equalsIgnoreCase("attack_combo")
+                || mode.equalsIgnoreCase("combo")
+                || mode.toLowerCase().startsWith("ordinary_attack_")
                 || mode.equalsIgnoreCase("attack_right")
                 || mode.equalsIgnoreCase("ordinary_attack_right")
                 || mode.equalsIgnoreCase("batter_right")
                 || mode.equalsIgnoreCase("ordinary_batter_right");
         source.sendSuccess(() -> Component.literal(physicsPreview
-                ? ((mode.equalsIgnoreCase("attack_right")
+                ? ((mode.toLowerCase().startsWith("attack_")
+                        || mode.toLowerCase().startsWith("ordinary_attack_")
+                        || mode.equalsIgnoreCase("combo")
                         || mode.equalsIgnoreCase("ordinary_attack_right")
                         || mode.equalsIgnoreCase("batter_right")
                         || mode.equalsIgnoreCase("ordinary_batter_right"))

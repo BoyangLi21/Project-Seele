@@ -5,6 +5,10 @@ Date: 2026-08-27
 Status: **raw ACCAD capture directly connected to the active Tiger rig in the
 isolated Motion Lab; human approval still required**.
 
+Superseded for review by `EVA_ORDINARY_ATTACK_RESEARCH_R05.md`, which keeps
+this body transfer unchanged, closes the existing Tiger fingers into fists,
+and adds two more independent raw-capture strikes.
+
 ## Source and transfer contract
 
 The source is ACCAD `Male2_E4_CrossRight`, source frames `5–45`, resampled from

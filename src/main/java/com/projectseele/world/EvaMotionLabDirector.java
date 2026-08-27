@@ -101,7 +101,10 @@ public final class EvaMotionLabDirector
                 case PHYSICS_LIVE -> 3;
                 case GROUNDED_WALK -> 4;
                 case GROUNDED_RUN -> 5;
-                case ORDINARY_ATTACK_RIGHT -> 6;
+                case ORDINARY_ATTACK_CROSS_RIGHT -> 6;
+                case ORDINARY_ATTACK_JAB_LEFT -> 7;
+                case ORDINARY_ATTACK_HOOK_RIGHT -> 8;
+                case ORDINARY_ATTACK_COMBO -> 9;
                 default -> 0;
             };
             eva.setMotionLabPhysicsPreview(motionPreview);
@@ -202,9 +205,17 @@ public final class EvaMotionLabDirector
             case "live", "physics_live", "policy", "livereset",
                     "livepush" ->
                     DemoMode.PHYSICS_LIVE;
-            case "attack_right", "ordinary_attack_right",
+            case "attack_b", "attack_cross", "attack_right",
+                    "ordinary_attack_cross_right", "ordinary_attack_right",
                     "batter_right", "ordinary_batter_right" ->
-                    DemoMode.ORDINARY_ATTACK_RIGHT;
+                    DemoMode.ORDINARY_ATTACK_CROSS_RIGHT;
+            case "attack_a", "attack_jab", "jab_left",
+                    "ordinary_attack_jab_left" ->
+                    DemoMode.ORDINARY_ATTACK_JAB_LEFT;
+            case "attack_c", "attack_hook", "hook_right",
+                    "ordinary_attack_hook_right" ->
+                    DemoMode.ORDINARY_ATTACK_HOOK_RIGHT;
+            case "attack_combo", "combo" -> DemoMode.ORDINARY_ATTACK_COMBO;
             default -> null;
         };
         if (mode == null)
@@ -471,6 +482,9 @@ public final class EvaMotionLabDirector
         PHYSICS_LIVE,
         GROUNDED_WALK,
         GROUNDED_RUN,
-        ORDINARY_ATTACK_RIGHT
+        ORDINARY_ATTACK_CROSS_RIGHT,
+        ORDINARY_ATTACK_JAB_LEFT,
+        ORDINARY_ATTACK_HOOK_RIGHT,
+        ORDINARY_ATTACK_COMBO
     }
 }

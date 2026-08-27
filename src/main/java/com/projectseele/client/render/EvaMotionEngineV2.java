@@ -118,7 +118,7 @@ public final class EvaMotionEngineV2
         }
         boolean replayPreview = previewMode == 1 || previewMode == 2;
         boolean groundedPreview = previewMode == 4 || previewMode == 5;
-        boolean ordinaryAttackReview = previewMode == 6;
+        boolean ordinaryAttackReview = previewMode >= 6 && previewMode <= 9;
         boolean labPreview = replayPreview || groundedPreview
                 || ordinaryAttackReview;
         MotionDatabase db = ordinaryAttackReview
@@ -147,6 +147,13 @@ public final class EvaMotionEngineV2
         {
             runtime = new RuntimeState(db.bones.length);
             STATES.put(entity.getId(), runtime);
+        }
+        if (runtime.previewMode != previewMode)
+        {
+            runtime.previewMode = previewMode;
+            runtime.comboTime = 0.0D;
+            runtime.actionTime = 0.0D;
+            runtime.selectionKey = "";
         }
         long now = System.nanoTime();
         double dt;
@@ -212,7 +219,32 @@ public final class EvaMotionEngineV2
         Selection selection;
         if (ordinaryAttackReview)
         {
-            String clipName = "ordinary_attack_right";
+            String clipName;
+            if (previewMode == 9)
+            {
+                MotionClip jab = db.clip("ordinary_attack_jab_left");
+                MotionClip cross = db.clip("ordinary_attack_cross_right");
+                MotionClip hook = db.clip("ordinary_attack_hook_right");
+                double total = jab.durationSeconds + cross.durationSeconds
+                        + hook.durationSeconds;
+                runtime.comboTime = total <= 0.0D
+                        ? 0.0D : (runtime.comboTime + dt) % total;
+                clipName = runtime.comboTime < jab.durationSeconds
+                        ? "ordinary_attack_jab_left"
+                        : runtime.comboTime < jab.durationSeconds
+                                + cross.durationSeconds
+                        ? "ordinary_attack_cross_right"
+                        : "ordinary_attack_hook_right";
+            }
+            else
+            {
+                runtime.comboTime = 0.0D;
+                clipName = previewMode == 7
+                        ? "ordinary_attack_jab_left"
+                        : previewMode == 8
+                                ? "ordinary_attack_hook_right"
+                                : "ordinary_attack_cross_right";
+            }
             selection = Selection.single(db.clip(clipName), clipName);
             runtime.landingActive = false;
         }
@@ -818,6 +850,8 @@ public final class EvaMotionEngineV2
         private long lastNanos;
         private double phase;
         private double actionTime;
+        private double comboTime;
+        private int previewMode = Integer.MIN_VALUE;
         private String selectionKey = "";
         private boolean lastLocomotion;
         private boolean airStateInitialized;
