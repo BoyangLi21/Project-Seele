@@ -43,6 +43,9 @@ public final class EvaMotionEngineV2
             ProjectSeele.MODID, "motion/eva_physics_preview_v1.json");
     private static final ResourceLocation GROUNDED_DATABASE = new ResourceLocation(
             ProjectSeele.MODID, "motion/eva_grounded_preview_v1.json");
+    private static final ResourceLocation ORDINARY_ATTACK_REVIEW_DATABASE =
+            new ResourceLocation(ProjectSeele.MODID,
+                    "motion/eva_ordinary_attack_review_v1.json");
     private static final double WALK_STRIDE_BLOCKS = 25.8334D;
     private static final double RUN_STRIDE_BLOCKS = 31.3944D;
     private static final double CROUCH_STRIDE_BLOCKS = 9.2990D;
@@ -61,6 +64,8 @@ public final class EvaMotionEngineV2
             MotionDatabase.empty();
     private static volatile MotionDatabase groundedDatabase =
             MotionDatabase.empty();
+    private static volatile MotionDatabase ordinaryAttackReviewDatabase =
+            MotionDatabase.empty();
 
     private EvaMotionEngineV2() {}
 
@@ -72,6 +77,9 @@ public final class EvaMotionEngineV2
                 "EVA physics preview");
         groundedDatabase = load(resourceManager, GROUNDED_DATABASE,
                 "EVA grounded mocap preview");
+        ordinaryAttackReviewDatabase = load(resourceManager,
+                ORDINARY_ATTACK_REVIEW_DATABASE,
+                "EVA ordinary attack review");
     }
 
     private static MotionDatabase load(ResourceManager resourceManager,
@@ -110,9 +118,13 @@ public final class EvaMotionEngineV2
         }
         boolean replayPreview = previewMode == 1 || previewMode == 2;
         boolean groundedPreview = previewMode == 4 || previewMode == 5;
-        boolean labPreview = replayPreview || groundedPreview;
-        MotionDatabase db = groundedPreview
-                ? groundedDatabase : replayPreview ? physicsDatabase : database;
+        boolean ordinaryAttackReview = previewMode == 6 || previewMode == 7;
+        boolean labPreview = replayPreview || groundedPreview
+                || ordinaryAttackReview;
+        MotionDatabase db = ordinaryAttackReview
+                ? ordinaryAttackReviewDatabase
+                : groundedPreview ? groundedDatabase
+                : replayPreview ? physicsDatabase : database;
         if (!labPreview || db.bones.length == 0
                 || entity.isNervLogisticsLocked() || entity.isCrucified()
                 || (!labPreview && !entity.isPoweredOn())
@@ -198,7 +210,14 @@ public final class EvaMotionEngineV2
         MotionClip takeoffClip = labPreview
                 ? null : db.clip("jump_takeoff_v2");
         Selection selection;
-        if (groundedPreview)
+        if (ordinaryAttackReview)
+        {
+            String clipName = previewMode == 6
+                    ? "ordinary_batter_right" : "ordinary_batter_left";
+            selection = Selection.single(db.clip(clipName), clipName);
+            runtime.landingActive = false;
+        }
+        else if (groundedPreview)
         {
             String clipName = previewMode == 5
                     ? "grounded_run" : "grounded_walk";
@@ -246,7 +265,7 @@ public final class EvaMotionEngineV2
         }
         runtime.lastLocomotion = selection.locomotion();
 
-        if (replayPreview)
+        if (replayPreview || ordinaryAttackReview)
         {
             runtime.actionTime += dt;
             runtime.phase = wrap01(runtime.actionTime
@@ -343,7 +362,7 @@ public final class EvaMotionEngineV2
                 .mul(MODEL_UNITS_PER_SOURCE_METRE);
         model.getBone("root").ifPresent(root ->
         {
-            if (groundedPreview)
+            if (groundedPreview || ordinaryAttackReview)
             {
                 root.setPosX(root.getInitialSnapshot().getOffsetX()
                         - rootOffset.x);
@@ -359,7 +378,7 @@ public final class EvaMotionEngineV2
         boolean fullBody = entity.getWeapon() == EvaUnit01Entity.WEAPON_FISTS
                 && !meleeActive;
         float inertialAlpha;
-        if (replayPreview)
+        if (replayPreview || ordinaryAttackReview)
         {
             inertialAlpha = 1.0F;
         }

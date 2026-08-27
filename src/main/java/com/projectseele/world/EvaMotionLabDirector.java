@@ -101,6 +101,8 @@ public final class EvaMotionLabDirector
                 case PHYSICS_LIVE -> 3;
                 case GROUNDED_WALK -> 4;
                 case GROUNDED_RUN -> 5;
+                case ORDINARY_BATTER_RIGHT -> 6;
+                case ORDINARY_BATTER_LEFT -> 7;
                 default -> 0;
             };
             eva.setMotionLabPhysicsPreview(motionPreview);
@@ -201,6 +203,10 @@ public final class EvaMotionLabDirector
             case "live", "physics_live", "policy", "livereset",
                     "livepush" ->
                     DemoMode.PHYSICS_LIVE;
+            case "batter_right", "ordinary_batter_right" ->
+                    DemoMode.ORDINARY_BATTER_RIGHT;
+            case "batter_left", "ordinary_batter_left" ->
+                    DemoMode.ORDINARY_BATTER_LEFT;
             default -> null;
         };
         if (mode == null)
@@ -466,6 +472,8 @@ public final class EvaMotionLabDirector
         PHYSICS_RECOVERY,
         PHYSICS_LIVE,
         GROUNDED_WALK,
-        GROUNDED_RUN
+        GROUNDED_RUN,
+        ORDINARY_BATTER_RIGHT,
+        ORDINARY_BATTER_LEFT
     }
 }

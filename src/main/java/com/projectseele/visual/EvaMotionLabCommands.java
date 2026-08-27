@@ -153,7 +153,8 @@ public final class EvaMotionLabCommands
         {
             source.sendFailure(Component.literal(
                     "Usage: /seele motionlab demo unit01 "
-                            + "walk|run|jump|live|livepush|physics|recovery|stop"));
+                            + "walk|run|jump|batter_right|batter_left|"
+                            + "live|livepush|physics|recovery|stop"));
             return 0;
         }
         boolean physicsPreview = mode.equalsIgnoreCase("physics")
@@ -165,9 +166,19 @@ public final class EvaMotionLabCommands
                 || mode.equalsIgnoreCase("physics_live")
                 || mode.equalsIgnoreCase("policy")
                 || mode.equalsIgnoreCase("livereset")
-                || mode.equalsIgnoreCase("livepush");
+                || mode.equalsIgnoreCase("livepush")
+                || mode.equalsIgnoreCase("batter_right")
+                || mode.equalsIgnoreCase("ordinary_batter_right")
+                || mode.equalsIgnoreCase("batter_left")
+                || mode.equalsIgnoreCase("ordinary_batter_left");
         source.sendSuccess(() -> Component.literal(physicsPreview
-                ? ((mode.equalsIgnoreCase("live")
+                ? ((mode.equalsIgnoreCase("batter_right")
+                        || mode.equalsIgnoreCase("ordinary_batter_right")
+                        || mode.equalsIgnoreCase("batter_left")
+                        || mode.equalsIgnoreCase("ordinary_batter_left"))
+                        ? "STRICT ORDINARY ATTACK PHYSICAL REVIEW: EVA-"
+                                + String.format("%02d", variant) + " " + mode
+                        : (mode.equalsIgnoreCase("live")
                         || mode.equalsIgnoreCase("physics_live")
                         || mode.equalsIgnoreCase("policy")
                         || mode.equalsIgnoreCase("livereset")

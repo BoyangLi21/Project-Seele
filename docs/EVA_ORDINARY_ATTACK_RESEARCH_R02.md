@@ -59,3 +59,22 @@ because the physical and visual bind axes differ.
 The two-view files are for human screening only. They are not runtime assets.
 Promotion still requires human acceptance, an interrupt/recovery graph and a
 contact-driven damage test.
+
+## Isolated Minecraft review
+
+The two candidates are now available only in `SEELE_EVA_MOTION_LAB`; normal
+combat input and the R28 save are unchanged. Start `tools\start_motion_lab.bat`,
+then use:
+
+```mcfunction
+/seele motionlab reset
+/seele motionlab camera
+/seele motionlab demo unit01 stop
+/seele motionlab demo unit01 batter_right
+```
+
+For the left candidate, replace the final argument with `batter_left`. Each
+command plays once and holds the terminal pose; execute `stop` before replaying.
+The chat acknowledgement must begin `STRICT ORDINARY ATTACK PHYSICAL REVIEW`.
+The resource is `assets/projectseele/motion/eva_ordinary_attack_review_v1.json`
+with 2 clips, 16 collapsed visual bones and 144 frames.
