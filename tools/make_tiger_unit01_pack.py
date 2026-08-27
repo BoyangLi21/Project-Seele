@@ -1258,6 +1258,22 @@ def _repair_native_thumb_animation_channels(data):
                     side, abs(float(legacy[2])))
 
 
+def _apply_cmu_rifle_body_layer(data):
+    """Keep exact weapon contacts while restoring a captured long-gun torso."""
+    animations = data["animations"]
+    aim = animations["animation.eva_unit01.rifle_aim"]["bones"]
+    aim["torso_upper"] = _rotation({
+        "0.0": [4.67256, 2.36232, -3.90043],
+        "0.6": [4.45, 2.36232, -3.90043],
+        "1.2": [4.67256, 2.36232, -3.90043]})
+    fire = animations["animation.eva_unit01.rifle_fire"]["bones"]
+    fire["torso_upper"] = _rotation({
+        "0.0": [4.67256, 2.36232, -3.90043],
+        "0.04": [2.6, 2.36232, -3.90043],
+        "0.11": [5.4, 2.36232, -3.90043],
+        "0.18": [4.67256, 2.36232, -3.90043]})
+
+
 def _set_hand_curl(bones, side, curl=22, thumb=17, tip_curl=12, thumb_tip=4,
                    cup=0, thumb_cup=None, tip_cup=0, distal_curl=0,
                    thumb_distal=0):
@@ -1827,6 +1843,15 @@ def repair_tiger_runtime_animations(data):
     # barrel axis differs by about two degrees.  Give it an independent
     # attachment correction instead of compromising both weapon muzzles.
     rifle_aim = copy.deepcopy(animations[prefix + "aim"])
+    # CMU 80_03 is a real 120 Hz optical capture labelled "shooting a gun".
+    # Its long-gun window keeps the trigger hand at the shoulder and places
+    # the support hand about 0.30 body heights farther downrange. Transfer the
+    # captured local chest lean/shoulder yaw while the exact Tiger arm solve
+    # below continues to own both physical weapon contacts.
+    rifle_aim["bones"]["torso_upper"] = _rotation({
+        "0.0": [4.67256, 2.36232, -3.90043],
+        "0.6": [4.45, 2.36232, -3.90043],
+        "1.2": [4.67256, 2.36232, -3.90043]})
     # The SMG is shorter than the positron cannon and needs its own shoulder
     # solution, not only a two-degree socket correction.  These values were
     # solved against explicit pistol-grip and fore-end contact markers: the
@@ -2334,12 +2359,21 @@ def repair_tiger_runtime_animations(data):
     rifle_fire = upper_body_clip(
         static_pose(animations[prefix + "rifle_aim"], 0.0))
     rifle_fire["animation_length"] = 0.18
+    rifle_fire["bones"]["torso_upper"] = _rotation({
+        "0.0": [4.67256, 2.36232, -3.90043],
+        "0.04": [2.6, 2.36232, -3.90043],
+        "0.11": [5.4, 2.36232, -3.90043],
+        "0.18": [4.67256, 2.36232, -3.90043]})
     rifle_fire["bones"]["arm_r"] = _rotation({
-        "0.0": [-62, -10, 12], "0.04": [-58.5, -10, 14],
-        "0.11": [-64, -10, 10], "0.18": [-62, -10, 12]})
+        "0.0": [-45.25275, -8.19676, 16.13605],
+        "0.04": [-42.0, -7.8, 17.5],
+        "0.11": [-47.0, -8.4, 14.8],
+        "0.18": [-45.25275, -8.19676, 16.13605]})
     rifle_fire["bones"]["arm_l"] = _rotation({
-        "0.0": [-97.41, 26.22, -1.84], "0.04": [-94, 26.2, 0],
-        "0.11": [-99, 26.4, -2.7], "0.18": [-97.41, 26.22, -1.84]})
+        "0.0": [-94.97409, 33.31161, -2.51789],
+        "0.04": [-92.0, 33.0, -1.0],
+        "0.11": [-96.5, 33.6, -3.3],
+        "0.18": [-94.97409, 33.31161, -2.51789]})
     _set_firearm_grip(rifle_fire["bones"])
     animations[prefix + "rifle_fire"] = rifle_fire
 
@@ -2497,6 +2531,15 @@ def build_animations():
         animations["animation.eva_unit01.takeoff"], 0.67)
     animations["animation.eva_unit01.visual_fall"] = static_pose(
         animations["animation.eva_unit01.jump"], 1.25)
+    _apply_cmu_rifle_body_layer(data)
+    animations["animation.eva_unit01.visual_rifle"] = static_pose(
+        animations["animation.eva_unit01.rifle_aim"], 0.0)
+    animations["animation.eva_unit01.visual_rifle_walk_contact"] = composed_pose(
+        "animation.eva_unit01.walk", 0.0,
+        "animation.eva_unit01.rifle_aim", 0.0)
+    animations["animation.eva_unit01.visual_crouch_rifle_contact"] = composed_pose(
+        "animation.eva_unit01.crouch_walk", 0.0,
+        "animation.eva_unit01.rifle_aim", 0.0)
     # Reviewed overrides and the accepted locomotion catalogue still encode
     # the former canonical-Z thumb curl.  Convert those final channels only
     # after every catalogue replacement so the tracked fallback and local

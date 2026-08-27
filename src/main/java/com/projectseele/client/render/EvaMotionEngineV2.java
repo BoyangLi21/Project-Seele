@@ -31,9 +31,9 @@ import software.bernie.geckolib.cache.object.GeoBone;
  * <p>The simulation still owns collision, damage and network authority. This
  * engine owns only the visual skeleton: it samples licensed motion capture,
  * synchronizes gait by travelled distance, blends adjacent gaits in quaternion
- * space and inertializes pose changes every rendered frame. During the first
- * rollout it is deliberately enabled only on entities tagged by the isolated
- * motion lab; the authority save cannot receive an unreviewed retarget.</p>
+ * space and inertializes pose changes every rendered frame. Ordinary fist
+ * attacks use the promoted visual database in normal play; damage, cooldown,
+ * hit zones and input validation remain server-authoritative.</p>
  */
 public final class EvaMotionEngineV2
 {
@@ -43,9 +43,9 @@ public final class EvaMotionEngineV2
             ProjectSeele.MODID, "motion/eva_physics_preview_v1.json");
     private static final ResourceLocation GROUNDED_DATABASE = new ResourceLocation(
             ProjectSeele.MODID, "motion/eva_grounded_preview_v1.json");
-    private static final ResourceLocation ORDINARY_ATTACK_REVIEW_DATABASE =
+    private static final ResourceLocation ORDINARY_ATTACK_DATABASE =
             new ResourceLocation(ProjectSeele.MODID,
-                    "motion/eva_ordinary_attack_review_v1.json");
+                    "motion/eva_ordinary_attack_v1.json");
     private static final double WALK_STRIDE_BLOCKS = 25.8334D;
     private static final double RUN_STRIDE_BLOCKS = 31.3944D;
     private static final double CROUCH_STRIDE_BLOCKS = 9.2990D;
@@ -64,7 +64,7 @@ public final class EvaMotionEngineV2
             MotionDatabase.empty();
     private static volatile MotionDatabase groundedDatabase =
             MotionDatabase.empty();
-    private static volatile MotionDatabase ordinaryAttackReviewDatabase =
+    private static volatile MotionDatabase ordinaryAttackDatabase =
             MotionDatabase.empty();
 
     private EvaMotionEngineV2() {}
@@ -77,9 +77,9 @@ public final class EvaMotionEngineV2
                 "EVA physics preview");
         groundedDatabase = load(resourceManager, GROUNDED_DATABASE,
                 "EVA grounded mocap preview");
-        ordinaryAttackReviewDatabase = load(resourceManager,
-                ORDINARY_ATTACK_REVIEW_DATABASE,
-                "EVA ordinary attack review");
+        ordinaryAttackDatabase = load(resourceManager,
+                ORDINARY_ATTACK_DATABASE,
+                "EVA ordinary attack runtime");
     }
 
     private static MotionDatabase load(ResourceManager resourceManager,
@@ -121,11 +121,15 @@ public final class EvaMotionEngineV2
         boolean ordinaryAttackReview = previewMode >= 6 && previewMode <= 9;
         boolean labPreview = replayPreview || groundedPreview
                 || ordinaryAttackReview;
-        MotionDatabase db = ordinaryAttackReview
-                ? ordinaryAttackReviewDatabase
+        boolean gameplayOrdinaryAttack = !labPreview
+                && entity.getWeapon() == EvaUnit01Entity.WEAPON_FISTS
+                && entity.getOrdinaryAttackStage() >= 0;
+        boolean motionDriven = labPreview || gameplayOrdinaryAttack;
+        MotionDatabase db = ordinaryAttackReview || gameplayOrdinaryAttack
+                ? ordinaryAttackDatabase
                 : groundedPreview ? groundedDatabase
                 : replayPreview ? physicsDatabase : database;
-        if (!labPreview || db.bones.length == 0
+        if (!motionDriven || db.bones.length == 0
                 || entity.isNervLogisticsLocked() || entity.isCrucified()
                 || (!labPreview && !entity.isPoweredOn())
                 || entity.isPilotProne()
@@ -214,7 +218,7 @@ public final class EvaMotionEngineV2
             }
         }
 
-        MotionClip takeoffClip = labPreview
+        MotionClip takeoffClip = motionDriven
                 ? null : db.clip("jump_takeoff_v2");
         Selection selection;
         if (ordinaryAttackReview)
@@ -245,6 +249,17 @@ public final class EvaMotionEngineV2
                                 ? "ordinary_attack_hook_right"
                                 : "ordinary_attack_cross_right";
             }
+            selection = Selection.single(db.clip(clipName), clipName);
+            runtime.landingActive = false;
+        }
+        else if (gameplayOrdinaryAttack)
+        {
+            String clipName = switch (entity.getOrdinaryAttackStage())
+            {
+                case 0 -> "ordinary_attack_jab_left";
+                case 1 -> "ordinary_attack_cross_right";
+                default -> "ordinary_attack_hook_right";
+            };
             selection = Selection.single(db.clip(clipName), clipName);
             runtime.landingActive = false;
         }
@@ -296,7 +311,11 @@ public final class EvaMotionEngineV2
         }
         runtime.lastLocomotion = selection.locomotion();
 
-        if (replayPreview || ordinaryAttackReview)
+        if (gameplayOrdinaryAttack)
+        {
+            runtime.phase = entity.getOrdinaryAttackProgress(partialTick);
+        }
+        else if (replayPreview || ordinaryAttackReview)
         {
             runtime.actionTime += dt;
             runtime.phase = wrap01(runtime.actionTime
@@ -406,7 +425,8 @@ public final class EvaMotionEngineV2
 
         boolean meleeActive = entity.getCockpitAttackAnim(partialTick) > 0.0F
                 || entity.getCockpitSmashAnim(partialTick) > 0.0F;
-        boolean fullBody = entity.getWeapon() == EvaUnit01Entity.WEAPON_FISTS
+        boolean fullBody = ordinaryAttackReview || gameplayOrdinaryAttack
+                || entity.getWeapon() == EvaUnit01Entity.WEAPON_FISTS
                 && !meleeActive;
         float inertialAlpha;
         if (replayPreview || ordinaryAttackReview)
@@ -415,7 +435,8 @@ public final class EvaMotionEngineV2
         }
         else
         {
-            double halfLife = groundedPreview ? 0.035D
+            double halfLife = gameplayOrdinaryAttack ? 0.025D
+                    : groundedPreview ? 0.035D
                     : selection.locomotion() ? 0.050D : 0.075D;
             inertialAlpha = (float)(1.0D - Math.exp(
                     -Math.log(2.0D) * dt / halfLife));
@@ -424,13 +445,12 @@ public final class EvaMotionEngineV2
         for (int index = 0; index < db.bones.length; index++)
         {
             String name = db.bones[index];
-            // Normal gameplay keeps Gecko's weapon-specific finger layer.
-            // The isolated ordinary-attack review owns its audited static
-            // fist explicitly so the body clip cannot silently show an open
-            // hand. The long digits use mirrored axis adapters; the retained
-            // native thumb is already given its per-side hinge in the review
-            // database.
-            if (name.startsWith("finger_") && !ordinaryAttackReview)
+            // Weapon gameplay keeps Gecko's weapon-specific finger layer.
+            // Ordinary fist mocap owns its audited static fist explicitly so
+            // the promoted body clip cannot silently show an open hand. The
+            // retained native thumb already carries its per-side opposition.
+            if (name.startsWith("finger_")
+                    && !ordinaryAttackReview && !gameplayOrdinaryAttack)
             {
                 continue;
             }

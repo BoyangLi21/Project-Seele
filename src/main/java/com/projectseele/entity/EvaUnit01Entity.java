@@ -155,6 +155,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     private static final float MELEE_KNIFE_DAMAGE = 60.0F;
     private static final float MELEE_LANCE_DAMAGE = 120.0F;
     private static final int MELEE_COOLDOWN_TICKS = 12;
+    private static final int ORDINARY_ATTACK_VISUAL_TICKS = 14;
     // Reach geometry follows the shared 60-block frame.
     private static final double MELEE_REACH = EvaScale.fromLegacy(10.0D);
     private static final double MELEE_RADIUS = EvaScale.fromLegacy(7.5D);
@@ -330,6 +331,8 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             SynchedEntityData.defineId(EvaUnit01Entity.class, EntityDataSerializers.BOOLEAN);
     private static final EntityDataAccessor<Integer> DATA_MELEE_SEQUENCE =
             SynchedEntityData.defineId(EvaUnit01Entity.class, EntityDataSerializers.INT);
+    private static final EntityDataAccessor<Integer> DATA_ORDINARY_ATTACK_STAGE =
+            SynchedEntityData.defineId(EvaUnit01Entity.class, EntityDataSerializers.INT);
     private static final EntityDataAccessor<Integer> DATA_SMASH_SEQUENCE =
             SynchedEntityData.defineId(EvaUnit01Entity.class, EntityDataSerializers.INT);
     private static final EntityDataAccessor<Integer> DATA_JUMP_SEQUENCE =
@@ -475,6 +478,8 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
 
     private boolean chargingHeld;
     private int meleeCooldown;
+    private int ordinaryAttackCycle;
+    private int ordinaryAttackVisualTicks;
     private int smashCooldown;
     private int stompCooldown;
     private int rifleCooldown;
@@ -495,6 +500,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     private int clientMeleeSequence;
     private int clientMeleeStartTick = -1000;
     private boolean clientMeleeLeft;
+    private int clientOrdinaryAttackStage = -1;
     private int clientSmashSequence;
     private int clientSmashStartTick = -1000;
     private int clientJumpSequence;
@@ -571,6 +577,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         this.entityData.define(DATA_CRUCIFIED, false);
         this.entityData.define(DATA_MELEE_LEFT, false);
         this.entityData.define(DATA_MELEE_SEQUENCE, 0);
+        this.entityData.define(DATA_ORDINARY_ATTACK_STAGE, -1);
         this.entityData.define(DATA_SMASH_SEQUENCE, 0);
         this.entityData.define(DATA_JUMP_SEQUENCE, 0);
         this.entityData.define(DATA_ACTIVATION_TICKS, 0);
@@ -1939,6 +1946,25 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         return this.clientMeleeLeft;
     }
 
+    public int getOrdinaryAttackStage()
+    {
+        return this.level().isClientSide
+                ? this.clientOrdinaryAttackStage
+                : this.entityData.get(DATA_ORDINARY_ATTACK_STAGE);
+    }
+
+    public float getOrdinaryAttackProgress(float partialTick)
+    {
+        if (this.getOrdinaryAttackStage() < 0)
+        {
+            return 0.0F;
+        }
+        float elapsed = this.tickCount - this.clientMeleeStartTick
+                + partialTick;
+        return Mth.clamp(elapsed / ORDINARY_ATTACK_VISUAL_TICKS,
+                0.0F, 1.0F);
+    }
+
     public float getCockpitSmashAnim(float partialTick)
     {
         float elapsed = this.tickCount - this.clientSmashStartTick + partialTick;
@@ -2012,7 +2038,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         this.chargingHeld = held && !this.isPilotControlLocked();
     }
 
-    /** Left-click from the plug: alternating swings in front of the Unit. */
+    /** Left-click from the plug: reviewed mocap for fists, authored weapon clips otherwise. */
     public void meleeAttack(ServerPlayer pilot)
     {
         if (this.isPilotControlLocked() || this.meleeCooldown > 0
@@ -2023,8 +2049,23 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         this.meleeCooldown = this.synchronizedCooldown(MELEE_COOLDOWN_TICKS);
         boolean lance = this.getWeapon() == WEAPON_LANCE;
         boolean knife = this.getWeapon() == WEAPON_KNIFE;
+        boolean ordinaryAttack = this.getWeapon() == WEAPON_FISTS
+                && !this.isPilotProne() && !this.isPilotCrouching();
         boolean fixedRightHandWeapon = lance || knife;
-        this.leftSwing = fixedRightHandWeapon ? false : !this.leftSwing;
+        if (ordinaryAttack)
+        {
+            int stage = this.ordinaryAttackCycle;
+            this.ordinaryAttackCycle = (stage + 1) % 3;
+            this.ordinaryAttackVisualTicks = ORDINARY_ATTACK_VISUAL_TICKS;
+            this.entityData.set(DATA_ORDINARY_ATTACK_STAGE, stage);
+            this.leftSwing = stage == 0;
+        }
+        else
+        {
+            this.ordinaryAttackVisualTicks = 0;
+            this.entityData.set(DATA_ORDINARY_ATTACK_STAGE, -1);
+            this.leftSwing = fixedRightHandWeapon ? false : !this.leftSwing;
+        }
         this.entityData.set(DATA_MELEE_LEFT, this.leftSwing);
         this.entityData.set(DATA_MELEE_SEQUENCE,
                 (this.entityData.get(DATA_MELEE_SEQUENCE) + 1) & Integer.MAX_VALUE);
@@ -2042,7 +2083,10 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
                 : lance ? "lance_thrust"
                     : knife ? "knife"
                     : (this.leftSwing ? "melee_left" : "melee");
-        this.triggerAnim("strike", animation);
+        if (!ordinaryAttack)
+        {
+            this.triggerAnim("strike", animation);
+        }
         float baseDamage = lance ? MELEE_LANCE_DAMAGE : knife ? MELEE_KNIFE_DAMAGE : MELEE_FIST_DAMAGE;
         float damage = baseDamage * this.getMeleeMultiplier();
         Vec3 forward = this.getForward().multiply(1.0D, 0.0D, 1.0D).normalize();
@@ -2064,6 +2108,8 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         {
             return;
         }
+        this.ordinaryAttackVisualTicks = 0;
+        this.entityData.set(DATA_ORDINARY_ATTACK_STAGE, -1);
         this.smashCooldown = this.synchronizedCooldown(SMASH_COOLDOWN_TICKS);
         this.entityData.set(DATA_SMASH_SEQUENCE,
                 (this.entityData.get(DATA_SMASH_SEQUENCE) + 1) & Integer.MAX_VALUE);
@@ -2105,6 +2151,8 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         {
             return;
         }
+        this.ordinaryAttackVisualTicks = 0;
+        this.entityData.set(DATA_ORDINARY_ATTACK_STAGE, -1);
         this.stompCooldown = this.synchronizedCooldown(STOMP_COOLDOWN_TICKS);
         this.triggerAnim("strike", "stomp");
 
@@ -2811,6 +2859,8 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
 
     private void berserkClaw(LivingEntity target, ServerLevel server)
     {
+        this.ordinaryAttackVisualTicks = 0;
+        this.entityData.set(DATA_ORDINARY_ATTACK_STAGE, -1);
         this.leftSwing = !this.leftSwing;
         this.entityData.set(DATA_MELEE_LEFT, this.leftSwing);
         this.entityData.set(DATA_MELEE_SEQUENCE,
@@ -3033,6 +3083,14 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         if (this.meleeCooldown > 0)
         {
             this.meleeCooldown--;
+        }
+        if (this.ordinaryAttackVisualTicks > 0)
+        {
+            this.ordinaryAttackVisualTicks--;
+            if (this.ordinaryAttackVisualTicks == 0)
+            {
+                this.entityData.set(DATA_ORDINARY_ATTACK_STAGE, -1);
+            }
         }
         if (this.smashCooldown > 0)
         {
@@ -4876,8 +4934,15 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             {
                 this.clientMeleeSequence = sequence;
                 this.clientMeleeLeft = this.entityData.get(DATA_MELEE_LEFT);
+                this.clientOrdinaryAttackStage =
+                        this.entityData.get(DATA_ORDINARY_ATTACK_STAGE);
                 this.clientMeleeStartTick = this.tickCount;
             }
+        }
+        if (DATA_ORDINARY_ATTACK_STAGE.equals(key)
+                && this.entityData.get(DATA_ORDINARY_ATTACK_STAGE) < 0)
+        {
+            this.clientOrdinaryAttackStage = -1;
         }
         if (DATA_SMASH_SEQUENCE.equals(key))
         {

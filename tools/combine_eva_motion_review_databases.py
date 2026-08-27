@@ -13,6 +13,7 @@ def main() -> None:
     parser.add_argument("--input", action="append", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--report", required=True, type=Path)
+    parser.add_argument("--runtime-visual", action="store_true")
     args = parser.parse_args()
     documents = [json.loads(path.read_text(encoding="utf-8"))
                  for path in args.input]
@@ -34,6 +35,13 @@ def main() -> None:
     output = dict(first)
     output["clips"] = clips
     output["sources"] = sources
+    if args.runtime_visual:
+        output["preview_only"] = False
+        output["authority"] = (
+            "client_visual_mocap_server_combat_remains_authoritative"
+        )
+        for clip in clips.values():
+            clip["role"] = "ordinary_attack_runtime_visual"
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(
         output, ensure_ascii=False, separators=(",", ":")
@@ -45,7 +53,11 @@ def main() -> None:
         "clips": sorted(clips),
         "bones": len(first["bones"]),
         "frames": sum(len(clip["frames"]) for clip in clips.values()),
-        "status": "combined_review_database_not_gameplay_authority",
+        "status": (
+            "runtime_visual_database_server_combat_remains_authoritative"
+            if args.runtime_visual
+            else "combined_review_database_not_gameplay_authority"
+        ),
     }
     args.report.parent.mkdir(parents=True, exist_ok=True)
     args.report.write_text(
