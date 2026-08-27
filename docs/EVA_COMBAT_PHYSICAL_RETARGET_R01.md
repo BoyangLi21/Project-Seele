@@ -109,6 +109,12 @@ grounded combat fragment, but it keeps the same marker and contact gates.
 | pounce launch R13 clearance | blocked | 0.01967 H | 0.03250 H | 0.00152 / 0.00293 H | 0.01277 / 0.02516 H/s | 0.2569 rad |
 | grab attach actor A/B R03/R04 | blocked | 0.01278 / 0.01401 H | 0.03156 / 0.04563 H | horizontal gate passed | grounding gate fails | 0.1937 / 0.2407 rad |
 
+These three numerical passes are retained only as negative research evidence.
+Human review of the high-detail Tiger mesh rejected both wards and the push
+kick; their Minecraft review resource, commands and delivered review set were
+deleted on 2026-08-27. A kinematic gate is necessary but never sufficient for
+promotion.
+
 Push-kick R18 uses ACCAD G18 source frames `23–48`, explicit full-source
 height, direct 60 Hz IK and offline vertical grounding. Its stable sole
 absolute-clearance P95 is `0.00459/0.00111 H`, mean absolute clearance is

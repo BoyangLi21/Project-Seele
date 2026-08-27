@@ -19,6 +19,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--clip", required=True)
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--fps", type=int, default=60)
+    parser.add_argument(
+        "--view",
+        choices=("front_three_quarter", "front", "side", "rear_three_quarter"),
+        default="front_three_quarter",
+    )
     return parser.parse_args(sys.argv[sys.argv.index("--") + 1:])
 
 
@@ -61,10 +66,15 @@ def main() -> None:
     centre, extent = bounds(start, end)
 
     camera = bpy.context.scene.camera
-    # The reviewed Tiger mesh faces authored +Z, which the Blender review
-    # conversion maps toward -Y. Stand on -Y for a front three-quarter view.
-    camera.location = centre + Vector((1.45 * extent, -2.15 * extent,
-                                       0.55 * extent))
+    offsets = {
+        "front_three_quarter": (1.45, -2.15, 0.55),
+        "front": (0.0, -2.50, 0.45),
+        "side": (2.50, 0.0, 0.45),
+        "rear_three_quarter": (1.45, 2.15, 0.55),
+    }
+    camera.location = centre + Vector(tuple(
+        value * extent for value in offsets[args.view]
+    ))
     camera.rotation_euler = (centre - camera.location).to_track_quat(
         "-Z", "Y").to_euler()
     camera.data.lens = 58.0
@@ -90,6 +100,7 @@ def main() -> None:
         "fps": args.fps,
         "camera_centre": tuple(round(value, 5) for value in centre),
         "camera_extent": round(extent, 5),
+        "view": args.view,
         "frame_directory": str(frame_dir.resolve()),
         "output": str(args.output.resolve()),
     })

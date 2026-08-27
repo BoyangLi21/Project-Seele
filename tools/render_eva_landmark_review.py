@@ -39,6 +39,7 @@ def main() -> None:
     parser.add_argument("--sheet", type=Path)
     parser.add_argument("--fps", type=float, default=60.0)
     parser.add_argument("--title", default="EVA motion source review")
+    parser.add_argument("--sheet-only", action="store_true")
     args = parser.parse_args()
 
     state = np.load(args.state)
@@ -61,8 +62,11 @@ def main() -> None:
         (10.0, 0.0, "back"),
         (28.0, -135.0, "three-quarter"),
     ]
+    render_indices = (np.linspace(0, len(points) - 1, 6).astype(int)
+                      if args.sheet_only else np.arange(len(points)))
     frames = []
-    for frame_index, row in enumerate(points):
+    for frame_index in render_indices:
+        row = points[frame_index]
         figure = plt.figure(figsize=(9.6, 7.2), dpi=100, facecolor="#07090d")
         for panel, (elevation, azimuth, title) in enumerate(views, 1):
             axis = figure.add_subplot(2, 2, panel, projection="3d")
@@ -98,13 +102,15 @@ def main() -> None:
         rgba = np.asarray(figure.canvas.buffer_rgba())
         frames.append(rgba[:, :, :3].copy())
         plt.close(figure)
-    args.video.parent.mkdir(parents=True, exist_ok=True)
-    imageio.mimsave(
-        args.video, frames, fps=args.fps, codec="libx264", quality=8,
-        macro_block_size=None,
-    )
+    if not args.sheet_only:
+        args.video.parent.mkdir(parents=True, exist_ok=True)
+        imageio.mimsave(
+            args.video, frames, fps=args.fps, codec="libx264", quality=8,
+            macro_block_size=None,
+        )
     if args.sheet is not None:
-        chosen = np.linspace(0, len(frames) - 1, 6).astype(int)
+        chosen = (np.arange(6) if args.sheet_only else
+                  np.linspace(0, len(frames) - 1, 6).astype(int))
         rows = [
             np.concatenate((frames[chosen[offset]], frames[chosen[offset + 1]]),
                            axis=1)
@@ -116,6 +122,7 @@ def main() -> None:
         "video": str(args.video.resolve()),
         "sheet": None if args.sheet is None else str(args.sheet.resolve()),
         "frames": len(frames), "fps": args.fps, "unit": unit,
+        "sheet_only": args.sheet_only,
     })
 
 

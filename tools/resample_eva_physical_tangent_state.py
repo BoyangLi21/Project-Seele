@@ -65,6 +65,10 @@ def main() -> None:
     parser.add_argument("--report", required=True, type=Path)
     parser.add_argument("--fps", type=float, default=60.0)
     parser.add_argument(
+        "--time-scale", type=float, default=1.0,
+        help="Output duration multiplier; values above 1 slow the motion.",
+    )
+    parser.add_argument(
         "--allow-contact-interpolation-research",
         action="store_true",
         help=("Permit a known-nonproduction interpolation across contact "
@@ -72,6 +76,8 @@ def main() -> None:
               "directly at the target rate."),
     )
     args = parser.parse_args()
+    if not math.isfinite(args.time_scale) or args.time_scale <= 0.0:
+        raise RuntimeError("--time-scale must be positive")
 
     model = mujoco.MjModel.from_xml_path(str(args.model.resolve()))
     data = mujoco.MjData(model)
@@ -91,20 +97,24 @@ def main() -> None:
             "PCHIP: solve IK directly at the target rate instead"
         )
     source_times = np.arange(len(source_qpos), dtype=np.float64) * source_dt
-    duration = source_times[-1]
+    source_duration = source_times[-1]
+    duration = source_duration * args.time_scale
     target_dt = 1.0 / args.fps
     target_times = np.arange(
         0.0, duration + target_dt * 0.25, target_dt, dtype=np.float64
     )
     target_times[-1] = min(target_times[-1], duration)
+    sample_times = np.clip(
+        target_times / args.time_scale, 0.0, source_duration
+    )
 
     tangent_resampled = PchipInterpolator(
         source_times, tangent, axis=0
-    )(target_times)
+    )(sample_times)
     tangent_resampled = np.clip(tangent_resampled, lower, upper)
     root_position = PchipInterpolator(
         source_times, source_qpos[:, :3], axis=0
-    )(target_times)
+    )(sample_times)
     source_quaternion = source_qpos[:, 3:7].copy()
     for index in range(1, len(source_quaternion)):
         if np.dot(source_quaternion[index - 1], source_quaternion[index]) < 0.0:
@@ -113,7 +123,7 @@ def main() -> None:
         source_quaternion[:, 1], source_quaternion[:, 2],
         source_quaternion[:, 3], source_quaternion[:, 0],
     )))
-    root_xyzw = Slerp(source_times, rotation)(target_times).as_quat()
+    root_xyzw = Slerp(source_times, rotation)(sample_times).as_quat()
     root_quaternion = np.column_stack((
         root_xyzw[:, 3], root_xyzw[:, 0], root_xyzw[:, 1], root_xyzw[:, 2]
     ))
@@ -188,9 +198,9 @@ def main() -> None:
         source_times,
         np.asarray(state["desired_positions"], dtype=np.float64),
         axis=0,
-    )(target_times)
+    )(sample_times)
     contact_indices = np.minimum(
-        np.floor(target_times / source_dt + 1.0e-8).astype(int),
+        np.floor(sample_times / source_dt + 1.0e-8).astype(int),
         len(source_contacts) - 1,
     )
     contacts = source_contacts[contact_indices]
@@ -199,10 +209,10 @@ def main() -> None:
         source_blend = np.asarray(state["contact_blend"], dtype=np.float64)
         contact_blend = PchipInterpolator(
             source_times, source_blend, axis=0
-        )(target_times)
+        )(sample_times)
         contact_blend = np.clip(contact_blend, 0.0, 1.0)
     source_frames = np.asarray(state["source_frames"], dtype=np.float64)
-    frame_values = np.interp(target_times, source_times, source_frames)
+    frame_values = np.interp(sample_times, source_times, source_frames)
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     output_fields = dict(
@@ -230,7 +240,10 @@ def main() -> None:
         "source_frames": len(source_qpos),
         "output_frames": len(qpos),
         "duration_seconds": duration,
-        "method": "PCHIP tangent/root translation plus quaternion Slerp",
+        "time_scale": args.time_scale,
+        "method": (
+            "time-scaled PCHIP tangent/root translation plus quaternion Slerp"
+        ),
         "contact_interpolation_research_only": bool(np.any(source_contacts)),
         "maximum_tangent_frame_step": float(np.max(
             np.abs(np.diff(tangent_resampled, axis=0)), initial=0.0

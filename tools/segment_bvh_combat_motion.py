@@ -82,6 +82,16 @@ def main() -> None:
     fps = scene.render.fps / scene.render.fps_base
     start = scene.frame_start
     end = scene.frame_end
+    available_bones = set(armature.pose.bones.keys())
+    if {"LeftHand", "RightHand", "Hips"}.issubset(available_bones):
+        names = {"left": "LeftHand", "right": "RightHand", "root": "Hips"}
+    elif {"lwrist", "rwrist", "root"}.issubset(available_bones):
+        names = {"left": "lwrist", "right": "rwrist", "root": "root"}
+    else:
+        raise RuntimeError(
+            "unsupported BVH hand/root names: "
+            + ", ".join(sorted(available_bones))
+        )
     previous = None
     raw_energy = []
     raw_left_speed = []
@@ -90,9 +100,6 @@ def main() -> None:
     for frame in range(start, end + 1):
         scene.frame_set(frame)
         bpy.context.view_layer.update()
-        names = ({"left": "LeftHand", "right": "RightHand", "root": "Hips"}
-                 if args.profile == "accad"
-                 else {"left": "lwrist", "right": "rwrist", "root": "root"})
         left = armature.pose.bones[names["left"]].matrix.translation.copy()
         right = armature.pose.bones[names["right"]].matrix.translation.copy()
         root = armature.pose.bones[names["root"]].matrix.translation.copy()

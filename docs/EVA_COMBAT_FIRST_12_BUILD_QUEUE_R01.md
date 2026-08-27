@@ -9,10 +9,10 @@ status explicitly says the strict physical-rig gate passed.
 
 | # | Fragment | Exact source window | Intended use | Current status |
 |---:|---|---|---|---|
-| 1 | left forearm/open-hand ward | ACCAD `Male2_E11_BlockLeftHigh`, frames 10–26 | left deflection, entry permission | **strict contact-manifold kinematic gate passed; human 3D review pending** |
-| 2 | right forearm/open-hand ward | ACCAD `Male2_E13_BlockRightHigh`, frames 8–23 | right deflection, entry permission | **strict contact-manifold kinematic gate passed; human 3D review pending** |
+| 1 | left forearm/open-hand ward | ACCAD `Male2_E11_BlockLeftHigh`, frames 10–26 | left deflection, entry permission | physical gate passed, but human high-detail review rejected it; runtime candidate and commands deleted 2026-08-27 |
+| 2 | right forearm/open-hand ward | ACCAD `Male2_E13_BlockRightHigh`, frames 8–23 | right deflection, entry permission | physical gate passed, but human high-detail review rejected it; runtime candidate and commands deleted 2026-08-27 |
 | 3 | committed body entry | ACCAD `Male2_E4_QuickAdvance`, frames 36–75 | close range behind guard, shoulder/clamp branch | segmented; blocked at effector P95 `0.03097 H` after manifold solve |
-| 4 | right push kick | ACCAD `Male2_G18_PushKickRight`, frames 23–48, event 34 | create distance, expose core, stop pursuit | **strict contact-manifold kinematic gate passed; human 3D review pending** |
+| 4 | right push kick | ACCAD `Male2_G18_PushKickRight`, frames 23–48, event 34 | create distance, expose core, stop pursuit | physical gate passed, but human high-detail review rejected it; runtime candidate and commands deleted 2026-08-27 |
 | 5 | left push kick | new project capture or new open source required | same mechanic, independently performed rather than mirrored | ACCAD G17 frames 60–105 rejected; CMU 144_09 is a high front kick, not an equivalent push kick |
 | 6 | right low-line kick | CMCD `Take_2019-01-09_N_Nussknacker3`, frames 350–385, event 363 | attack support leg, prepare pounce | source accepted; physical solve misses upper-body gate |
 | 7 | elbow grab attach | CMU `18_05/19_05`, frames 165–219, contact about 205 | convert limb contact to grip constraint | relative pair envelope passed; individual grounding blocked |
