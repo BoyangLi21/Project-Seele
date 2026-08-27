@@ -13,31 +13,58 @@ import numpy as np
 from mathutils import Vector
 
 
-LANDMARKS = [
-    ("pelvis", "Hips", False),
-    ("abdomen", "Spine", False),
-    ("thorax", "Spine1", False),
-    ("neck", "Neck", False),
-    ("head", "Head", False),
-    ("clavicle_l", "LeftShoulder", False),
-    ("shoulder_l", "LeftArm", False),
-    ("elbow_l", "LeftForeArm", False),
-    ("wrist_l", "LeftHand", False),
-    ("hand_l", "LeftHand", True),
-    ("clavicle_r", "RightShoulder", False),
-    ("shoulder_r", "RightArm", False),
-    ("elbow_r", "RightForeArm", False),
-    ("wrist_r", "RightHand", False),
-    ("hand_r", "RightHand", True),
-    ("hip_l", "LeftUpLeg", False),
-    ("knee_l", "LeftLeg", False),
-    ("ankle_l", "LeftFoot", False),
-    ("toe_l", "LeftToeBase", False),
-    ("hip_r", "RightUpLeg", False),
-    ("knee_r", "RightLeg", False),
-    ("ankle_r", "RightFoot", False),
-    ("toe_r", "RightToeBase", False)
-]
+LANDMARK_PROFILES = {
+    "cmu_accad": [
+        ("pelvis", "Hips", False),
+        ("abdomen", "Spine", False),
+        ("thorax", "Spine1", False),
+        ("neck", "Neck", False),
+        ("head", "Head", False),
+        ("clavicle_l", "LeftShoulder", False),
+        ("shoulder_l", "LeftArm", False),
+        ("elbow_l", "LeftForeArm", False),
+        ("wrist_l", "LeftHand", False),
+        ("hand_l", "LeftHand", True),
+        ("clavicle_r", "RightShoulder", False),
+        ("shoulder_r", "RightArm", False),
+        ("elbow_r", "RightForeArm", False),
+        ("wrist_r", "RightHand", False),
+        ("hand_r", "RightHand", True),
+        ("hip_l", "LeftUpLeg", False),
+        ("knee_l", "LeftLeg", False),
+        ("ankle_l", "LeftFoot", False),
+        ("toe_l", "LeftToeBase", False),
+        ("hip_r", "RightUpLeg", False),
+        ("knee_r", "RightLeg", False),
+        ("ankle_r", "RightFoot", False),
+        ("toe_r", "RightToeBase", False),
+    ],
+    "bandai_namco_dataset_1": [
+        ("pelvis", "Hips", False),
+        ("abdomen", "Spine", False),
+        ("thorax", "Chest", False),
+        ("neck", "Neck", False),
+        ("head", "Head", False),
+        ("clavicle_l", "Shoulder_L", False),
+        ("shoulder_l", "UpperArm_L", False),
+        ("elbow_l", "LowerArm_L", False),
+        ("wrist_l", "Hand_L", False),
+        ("hand_l", "Hand_L", True),
+        ("clavicle_r", "Shoulder_R", False),
+        ("shoulder_r", "UpperArm_R", False),
+        ("elbow_r", "LowerArm_R", False),
+        ("wrist_r", "Hand_R", False),
+        ("hand_r", "Hand_R", True),
+        ("hip_l", "UpperLeg_L", False),
+        ("knee_l", "LowerLeg_L", False),
+        ("ankle_l", "Foot_L", False),
+        ("toe_l", "Toes_L", False),
+        ("hip_r", "UpperLeg_R", False),
+        ("knee_r", "LowerLeg_R", False),
+        ("ankle_r", "Foot_R", False),
+        ("toe_r", "Toes_R", False),
+    ],
+}
 
 
 parser = argparse.ArgumentParser(description=__doc__)
@@ -63,6 +90,21 @@ bpy.ops.import_anim.bvh(
 )
 rig = bpy.context.object
 action = rig.animation_data.action
+available_bones = set(rig.pose.bones.keys())
+matches = [
+    (name, landmarks)
+    for name, landmarks in LANDMARK_PROFILES.items()
+    if all(bone_name in available_bones
+           for _, bone_name, _ in landmarks)
+]
+if len(matches) != 1:
+    raise RuntimeError(
+        "expected one supported BVH landmark profile, matched "
+        f"{[name for name, _ in matches]}; bones="
+        + ", ".join(sorted(available_bones))
+    )
+source_profile, LANDMARKS = matches[0]
+bone_for = {name: bone_name for name, bone_name, _ in LANDMARKS}
 available = [int(math.ceil(action.frame_range[0])),
              int(math.floor(action.frame_range[1]))]
 if not (available[0] <= args.start < args.end <= available[1]):
@@ -84,12 +126,12 @@ def rest_world_point(bone_name: str, tail: bool = False) -> Vector:
 
 
 rest_body_height = (
-    rest_world_point("Head", tail=True).z
+    rest_world_point(bone_for["head"], tail=True).z
     - min(
-        rest_world_point("LeftFoot").z,
-        rest_world_point("LeftToeBase").z,
-        rest_world_point("RightFoot").z,
-        rest_world_point("RightToeBase").z,
+        rest_world_point(bone_for["ankle_l"]).z,
+        rest_world_point(bone_for["toe_l"]).z,
+        rest_world_point(bone_for["ankle_r"]).z,
+        rest_world_point(bone_for["toe_r"]).z,
     )
 )
 
@@ -106,18 +148,18 @@ def world_point(bone_name: str, tail: bool = False) -> Vector:
 
 set_source_frame(frames[0])
 bpy.context.view_layer.update()
-origin = world_point("Hips")
+origin = world_point(bone_for["pelvis"])
 # BVH import has already converted the capture to Blender's gravity frame.
 # Body lean is motion, not a coordinate-system axis; deriving "up" from the
 # pelvis-to-head line tilts the floor and creates impossible one-foot heights.
 up = Vector((0.0, 0.0, 1.0))
-left = world_point("LeftUpLeg") - world_point("RightUpLeg")
+left = world_point(bone_for["hip_l"]) - world_point(bone_for["hip_r"])
 left -= up * left.dot(up)
 left.normalize()
 forward = left.cross(up).normalized()
 toe_hint = (
-    world_point("LeftToeBase") - world_point("LeftFoot")
-    + world_point("RightToeBase") - world_point("RightFoot")
+    world_point(bone_for["toe_l"]) - world_point(bone_for["ankle_l"])
+    + world_point(bone_for["toe_r"]) - world_point(bone_for["ankle_r"])
 )
 toe_hint -= up * toe_hint.dot(up)
 toe_alignment = forward.dot(toe_hint.normalized()) if toe_hint.length else 0.0
@@ -206,6 +248,7 @@ np.savez_compressed(
 metadata = {
     "schema": 1,
     "source_name": args.source_name,
+    "source_profile": source_profile,
     "source_file": str(args.source.resolve()),
     "source_url": args.source_url,
     "license": args.license,

@@ -105,7 +105,7 @@
       "license": "CC BY 3.0",
       "role": "pounce_trajectory_reference",
       "physical_candidate": "EVA_POUNCE_LAUNCH_CONTACT_WINDOW_R13_CLEARANCE_60HZ",
-      "status": "blocked_right_contact_speed_0_02516Hps_over_0_02_landing_discontinuity_rejected"
+      "status": "physical_gate_passed_after_1_25x_retime_R36_but_human_semantics_rejected_not_a_predatory_pounce_landing_discontinuity_still_rejected"
     },
     {
       "id": "pounce_dive_reference_a",

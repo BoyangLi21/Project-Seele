@@ -2,8 +2,8 @@
 
 Date: 2026-08-27
 
-Status: **two single-action physical candidates pass; no Minecraft integration
-or final human approval yet**.
+Status: **two single-action physical candidates pass and are isolated in
+Motion Lab; no gameplay promotion or final human approval yet**.
 
 ## Product-order correction
 
@@ -26,6 +26,15 @@ reserved for committed brawls, grapples and mounted/contextual impacts.
   but remains the wrong ordinary EVA vocabulary.
 - ACCAD `Extended_3` contains dynamic kick/strike sequences, but its contact
   coverage and style are not accepted.
+- CMU subject 81 high-object/heavy-object pushes were screened as possible
+  two-hand body attacks. Direct EVA retargets failed at roughly `0.11 H`
+  landmark P95 and are rejected.
+- Bandai Namco Research Motiondataset-1 `punch_normal_002` and
+  `slash_normal_002` were screened from the professional game-mocap set under
+  CC BY-NC 4.0. The lunge strike and two-hand swing both failed direct EVA
+  retarget at roughly `0.096 H` and `0.109 H` P95 respectively. Neither is a
+  runtime asset. The BVH landmark exporter now recognizes this skeleton so
+  future windows can be rejected or accepted without manual bone renaming.
 - A direct right-batter to left-batter blend fails: 7/12/18-frame bridges have
   maximum tangent steps `0.71/0.47/0.34 rad`. No generic cross-fade is used.
 
@@ -93,3 +102,12 @@ along with manifold, clearance, speed and penetration failures. That branch is
 rejected. A real body ram must come from a dynamic physical controller or a
 new capture whose support mechanics are compatible with the EVA rig; the
 project will not fake it by writing root motion.
+
+## Pounce search
+
+ACCAD B18 frames 40–91 was retimed 1.25× and contact-resolved to R36. It then
+passed the pounce numerical gate at effector/articulation P95
+`0.01968/0.03263 H`, drift `0.00212/0.00152 H`, with zero strict failures.
+High-detail review nevertheless rejected it: the source is a human upright
+leap with arms extended, not a predatory EVA forward pounce. It is not added to
+Minecraft. The already-rejected B18 landing discontinuity remains excluded.

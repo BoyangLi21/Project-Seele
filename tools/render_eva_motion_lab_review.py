@@ -24,6 +24,7 @@ def parse_args() -> argparse.Namespace:
         choices=("front_three_quarter", "front", "side", "rear_three_quarter"),
         default="front_three_quarter",
     )
+    parser.add_argument("--sheet-only", action="store_true")
     return parser.parse_args(sys.argv[sys.argv.index("--") + 1:])
 
 
@@ -92,8 +93,20 @@ def main() -> None:
     args.output.parent.mkdir(parents=True, exist_ok=True)
     frame_dir = args.output.parent / f"{args.output.stem}_frames"
     frame_dir.mkdir(parents=True, exist_ok=True)
-    scene.render.filepath = str((frame_dir / "frame_").resolve())
-    bpy.ops.render.render(animation=True)
+    if args.sheet_only:
+        review_frames = sorted(set(
+            start + round((end - start) * index / 5.0)
+            for index in range(6)
+        ))
+        for frame in review_frames:
+            scene.frame_set(frame)
+            scene.render.filepath = str(
+                (frame_dir / f"frame_{frame:04d}.png").resolve()
+            )
+            bpy.ops.render.render(write_still=True)
+    else:
+        scene.render.filepath = str((frame_dir / "frame_").resolve())
+        bpy.ops.render.render(animation=True)
     print({
         "clip": args.clip,
         "frames": [start, end],
@@ -101,6 +114,7 @@ def main() -> None:
         "camera_centre": tuple(round(value, 5) for value in centre),
         "camera_extent": round(extent, 5),
         "view": args.view,
+        "sheet_only": args.sheet_only,
         "frame_directory": str(frame_dir.resolve()),
         "output": str(args.output.resolve()),
     })

@@ -95,7 +95,7 @@ def main() -> None:
         "left_hip": "LeftUpLeg", "right_hip": "RightUpLeg",
         "left_foot": "LeftFoot", "left_toe": "LeftToeBase",
         "right_foot": "RightFoot", "right_toe": "RightToeBase",
-    } if args.profile == "accad" else {
+    } if args.profile in {"accad", "cmu"} else {
         "root": "root", "head": "head",
         "left_hip": "lfemur", "right_hip": "rfemur",
         "left_foot": "lfoot", "left_toe": "ltoes",
