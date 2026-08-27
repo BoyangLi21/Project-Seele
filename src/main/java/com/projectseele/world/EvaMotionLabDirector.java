@@ -101,9 +101,6 @@ public final class EvaMotionLabDirector
                 case PHYSICS_LIVE -> 3;
                 case GROUNDED_WALK -> 4;
                 case GROUNDED_RUN -> 5;
-                case COMBAT_WARD_LEFT -> 6;
-                case COMBAT_WARD_RIGHT -> 7;
-                case COMBAT_PUSH_KICK_RIGHT -> 8;
                 default -> 0;
             };
             eva.setMotionLabPhysicsPreview(motionPreview);
@@ -204,12 +201,6 @@ public final class EvaMotionLabDirector
             case "live", "physics_live", "policy", "livereset",
                     "livepush" ->
                     DemoMode.PHYSICS_LIVE;
-            case "ward_left", "combat_ward_left" ->
-                    DemoMode.COMBAT_WARD_LEFT;
-            case "ward_right", "combat_ward_right" ->
-                    DemoMode.COMBAT_WARD_RIGHT;
-            case "push_kick_right", "combat_push_kick_right" ->
-                    DemoMode.COMBAT_PUSH_KICK_RIGHT;
             default -> null;
         };
         if (mode == null)
@@ -475,9 +466,6 @@ public final class EvaMotionLabDirector
         PHYSICS_RECOVERY,
         PHYSICS_LIVE,
         GROUNDED_WALK,
-        GROUNDED_RUN,
-        COMBAT_WARD_LEFT,
-        COMBAT_WARD_RIGHT,
-        COMBAT_PUSH_KICK_RIGHT
+        GROUNDED_RUN
     }
 }

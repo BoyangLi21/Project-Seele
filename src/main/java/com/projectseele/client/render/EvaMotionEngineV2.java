@@ -43,9 +43,6 @@ public final class EvaMotionEngineV2
             ProjectSeele.MODID, "motion/eva_physics_preview_v1.json");
     private static final ResourceLocation GROUNDED_DATABASE = new ResourceLocation(
             ProjectSeele.MODID, "motion/eva_grounded_preview_v1.json");
-    private static final ResourceLocation COMBAT_REVIEW_DATABASE =
-            new ResourceLocation(ProjectSeele.MODID,
-                    "motion/eva_combat_review_v1.json");
     private static final double WALK_STRIDE_BLOCKS = 25.8334D;
     private static final double RUN_STRIDE_BLOCKS = 31.3944D;
     private static final double CROUCH_STRIDE_BLOCKS = 9.2990D;
@@ -64,8 +61,6 @@ public final class EvaMotionEngineV2
             MotionDatabase.empty();
     private static volatile MotionDatabase groundedDatabase =
             MotionDatabase.empty();
-    private static volatile MotionDatabase combatReviewDatabase =
-            MotionDatabase.empty();
 
     private EvaMotionEngineV2() {}
 
@@ -77,8 +72,6 @@ public final class EvaMotionEngineV2
                 "EVA physics preview");
         groundedDatabase = load(resourceManager, GROUNDED_DATABASE,
                 "EVA grounded mocap preview");
-        combatReviewDatabase = load(resourceManager, COMBAT_REVIEW_DATABASE,
-                "EVA strict combat review");
     }
 
     private static MotionDatabase load(ResourceManager resourceManager,
@@ -117,11 +110,9 @@ public final class EvaMotionEngineV2
         }
         boolean replayPreview = previewMode == 1 || previewMode == 2;
         boolean groundedPreview = previewMode == 4 || previewMode == 5;
-        boolean combatReview = previewMode >= 6 && previewMode <= 8;
-        boolean labPreview = replayPreview || groundedPreview || combatReview;
-        MotionDatabase db = combatReview ? combatReviewDatabase
-                : groundedPreview ? groundedDatabase
-                : replayPreview ? physicsDatabase : database;
+        boolean labPreview = replayPreview || groundedPreview;
+        MotionDatabase db = groundedPreview
+                ? groundedDatabase : replayPreview ? physicsDatabase : database;
         if (!labPreview || db.bones.length == 0
                 || entity.isNervLogisticsLocked() || entity.isCrucified()
                 || (!labPreview && !entity.isPoweredOn())
@@ -207,20 +198,7 @@ public final class EvaMotionEngineV2
         MotionClip takeoffClip = labPreview
                 ? null : db.clip("jump_takeoff_v2");
         Selection selection;
-        if (combatReview)
-        {
-            String clipName = switch (previewMode)
-            {
-                case 6 -> "combat_ward_left";
-                case 7 -> "combat_ward_right";
-                case 8 -> "combat_push_kick_right";
-                default -> throw new IllegalStateException(
-                        "unsupported combat review mode " + previewMode);
-            };
-            selection = Selection.single(db.clip(clipName), clipName);
-            runtime.landingActive = false;
-        }
-        else if (groundedPreview)
+        if (groundedPreview)
         {
             String clipName = previewMode == 5
                     ? "grounded_run" : "grounded_walk";
@@ -268,7 +246,7 @@ public final class EvaMotionEngineV2
         }
         runtime.lastLocomotion = selection.locomotion();
 
-        if (replayPreview || combatReview)
+        if (replayPreview)
         {
             runtime.actionTime += dt;
             runtime.phase = wrap01(runtime.actionTime
@@ -365,7 +343,7 @@ public final class EvaMotionEngineV2
                 .mul(MODEL_UNITS_PER_SOURCE_METRE);
         model.getBone("root").ifPresent(root ->
         {
-            if (groundedPreview || combatReview)
+            if (groundedPreview)
             {
                 root.setPosX(root.getInitialSnapshot().getOffsetX()
                         - rootOffset.x);
@@ -381,7 +359,7 @@ public final class EvaMotionEngineV2
         boolean fullBody = entity.getWeapon() == EvaUnit01Entity.WEAPON_FISTS
                 && !meleeActive;
         float inertialAlpha;
-        if (replayPreview || combatReview)
+        if (replayPreview)
         {
             inertialAlpha = 1.0F;
         }

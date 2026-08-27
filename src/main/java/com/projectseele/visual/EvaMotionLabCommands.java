@@ -153,8 +153,7 @@ public final class EvaMotionLabCommands
         {
             source.sendFailure(Component.literal(
                     "Usage: /seele motionlab demo unit01 "
-                            + "walk|run|jump|ward_left|ward_right|"
-                            + "push_kick_right|live|livepush|physics|recovery|stop"));
+                            + "walk|run|jump|live|livepush|physics|recovery|stop"));
             return 0;
         }
         boolean physicsPreview = mode.equalsIgnoreCase("physics")
@@ -166,23 +165,9 @@ public final class EvaMotionLabCommands
                 || mode.equalsIgnoreCase("physics_live")
                 || mode.equalsIgnoreCase("policy")
                 || mode.equalsIgnoreCase("livereset")
-                || mode.equalsIgnoreCase("livepush")
-                || mode.equalsIgnoreCase("ward_left")
-                || mode.equalsIgnoreCase("combat_ward_left")
-                || mode.equalsIgnoreCase("ward_right")
-                || mode.equalsIgnoreCase("combat_ward_right")
-                || mode.equalsIgnoreCase("push_kick_right")
-                || mode.equalsIgnoreCase("combat_push_kick_right");
+                || mode.equalsIgnoreCase("livepush");
         source.sendSuccess(() -> Component.literal(physicsPreview
-                ? ((mode.equalsIgnoreCase("ward_left")
-                        || mode.equalsIgnoreCase("combat_ward_left")
-                        || mode.equalsIgnoreCase("ward_right")
-                        || mode.equalsIgnoreCase("combat_ward_right")
-                        || mode.equalsIgnoreCase("push_kick_right")
-                        || mode.equalsIgnoreCase("combat_push_kick_right"))
-                        ? "STRICT SINGLE-EVA PHYSICAL REVIEW: EVA-"
-                                + String.format("%02d", variant) + " " + mode
-                        : (mode.equalsIgnoreCase("live")
+                ? ((mode.equalsIgnoreCase("live")
                         || mode.equalsIgnoreCase("physics_live")
                         || mode.equalsIgnoreCase("policy")
                         || mode.equalsIgnoreCase("livereset")
