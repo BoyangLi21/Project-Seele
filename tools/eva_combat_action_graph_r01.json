@@ -54,7 +54,7 @@
     },
     "push_kick_left": {
       "domain": "free_unarmed",
-      "source_fragment": "front_kick_left_a",
+      "source_fragment": "push_kick_left_project_capture",
       "effectors": ["right_support_patch", "left_sole"],
       "support": ["right"],
       "redirectible_phase": [0.0, 0.24],

@@ -42,30 +42,33 @@ stores only its own normalized landmarks/physical-rig result when permitted.
 Each take begins from relaxed locomotion or a prior accepted fragment, not a
 martial-arts display pose.
 
-1. **Low reap against a real target leg** — outside plant, shin/instep contact,
+1. **Ward-to-entry transition family** — begin from the accepted left/right
+   ward terminal poses; end separately in push-kick support, grab range and
+   shoulder-ram commitment; include brake-step and collision interruptions.
+2. **Low reap against a real target leg** — outside plant, shin/instep contact,
    target support loss, attacker pivot recovery; hit and miss takes.
-2. **Two-hand shove with resistance** — both palms established before rear-leg
+3. **Two-hand shove with resistance** — both palms established before rear-leg
    drive; light/heavy target resistance and sudden release.
-3. **Shoulder/body ram** — braced target, yielding target, complete miss and wall
+4. **Shoulder/body ram** — braced target, yielding target, complete miss and wall
    collision; measure both actors' impulse response.
-4. **Forward pounce to two-hand clamp** — launch, chest/shoulder contact, hands
+5. **Forward pounce to two-hand clamp** — launch, chest/shoulder contact, hands
    close, feet arrive later; target stays upright and target falls variants.
-5. **Pounce miss to four-point landing** — palms then feet/knees without a
+6. **Pounce miss to four-point landing** — palms then feet/knees without a
    canonical jump-landing pose.
-6. **Pounce miss to roll/step recovery** — three approach angles and an obstacle
+7. **Pounce miss to roll/step recovery** — three approach angles and an obstacle
    invalidating the original landing.
-7. **Mounted restraint to impact** — grounded target pad, stable knees/feet or
+8. **Mounted restraint to impact** — grounded target pad, stable knees/feet or
    pelvis support, short committed forearm/hand impacts rebuilt after every
    target reaction.
-8. **Grip attach, wrench and natural break** — wrist/elbow anchors, target pulls
+9. **Grip attach, wrench and natural break** — wrist/elbow anchors, target pulls
    in three directions, grip exceeds a declared force budget.
-9. **Heavy two-hand weapon swing** — anticipation, rear-to-front support,
+10. **Heavy two-hand weapon swing** — anticipation, rear-to-front support,
    impact pad, blowback, deflection and miss.
-10. **Progressive Knife thrust and slash contacts** — guard, target parry,
+11. **Progressive Knife thrust and slash contacts** — guard, target parry,
     penetration stop, deflection and recovery without wrist collapse.
-11. **Full-body javelin throw** — carry, windup, release, follow-through and
+12. **Full-body javelin throw** — carry, windup, release, follow-through and
     failed/late release; long rigid prop required.
-12. **Grounded target lift/assist and forced rise** — one-hand and two-hand
+13. **Grounded target lift/assist and forced rise** — one-hand and two-hand
     grips, target cooperation/resistance, partial rise and failed lift.
 
 ## Event labels recorded at source rate

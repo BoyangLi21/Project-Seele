@@ -159,6 +159,21 @@ but fails the new individual grounding gate and is therefore not accepted:
   repair. Its best right-foot manifold speed remains `0.02516 H/s`, above the
   `0.02 H/s` limit, so it remains blocked rather than receiving a pounce-only
   exception.
+- ACCAD E4 body-entry frames 36–75 clears articulation, tangent, root,
+  right-foot contact and most left-foot contact gates, but morphology/contact
+  reconciliation leaves effector P95 at `0.03097 H` (worst left toe about
+  `0.04374 H`). It remains blocked; raising weights did not move the solver out
+  of that incompatible basin.
+- CMU 144_17 guarded lunge frames 2170–2260 is more readable in source space,
+  but its solved effector P95 is about `0.03702 H` (left ankle about
+  `0.05028 H`) and the contact solve asks for over `0.20 m` of root correction.
+  It is also rejected as the missing ward-to-branch entry.
+- ACCAD G17 frames 60–105 fails broadly after left-push-kick retarget
+  (effector, articulation, contact and tangent continuity). CMU 144_09 frames
+  1865–2033 is a clean source-space left high front kick, but its approximately
+  `0.766 H` lift drives the EVA hip/knee chain outside the current feasible
+  region. Neither is relabelled as an accepted left push kick; that slot now
+  requires project-owned mocap or a better open source.
 
 ## Next physical gate
 

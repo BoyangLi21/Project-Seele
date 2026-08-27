@@ -34,6 +34,14 @@ def main() -> None:
             warnings.append(
                 f"{node_id}:fragment_source_pending:{fragment}"
             )
+        if fragment is not None and fragment in fragments:
+            fragment_status = str(fragments[fragment].get("status", ""))
+            if ("blocked" in fragment_status
+                    or "rejected" in fragment_status):
+                warnings.append(
+                    f"{node_id}:fragment_not_promotable:{fragment}:"
+                    f"{fragment_status}"
+                )
         if fragment is None:
             warnings.append(f"{node_id}:project_authored_source_pending")
         for phase_name in ("redirectible_phase", "commit_phase",

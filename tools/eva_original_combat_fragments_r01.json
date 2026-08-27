@@ -51,10 +51,11 @@
       "id": "body_entry_quick_a",
       "source": "ACCAD/Male2_E4_QuickAdvance.bvh",
       "source_fps": 30,
-      "frames": [1, 80],
+      "frames": [36, 75],
       "license": "CC BY 3.0",
       "role": "free_combat_entry",
-      "status": "requires_root_event_segmentation"
+      "physical_candidate": "EVA_BODY_ENTRY_QUICK_CONTACT_WINDOW_R03_MANIFOLD_60HZ",
+      "status": "segmented_but_blocked_effector_p95_0_03097H"
     },
     {
       "id": "body_entry_fast_a",
@@ -83,7 +84,8 @@
       "frames": [1865, 2033],
       "event_frame": 1949,
       "license": "CMU database reuse terms",
-      "role": "free_combat_push_kick"
+      "role": "contextual_high_front_kick_left_reference",
+      "status": "blocked_high_hip_knee_retarget_not_left_push_kick"
     },
     {
       "id": "roundhouse_left_high_reference",
@@ -176,6 +178,22 @@
       "source": null,
       "role": "free_combat_low_reap",
       "status": "project_mocap_or_new_open_source_required"
+    },
+    {
+      "id": "push_kick_left_project_capture",
+      "source": null,
+      "role": "free_combat_push_kick_left",
+      "status": "project_mocap_or_new_open_source_required"
+    },
+    {
+      "id": "push_kick_left_accad_g17_rejected",
+      "source": "ACCAD/Male2_G17_PushKickLeft.bvh",
+      "source_fps": 30,
+      "frames": [60, 105],
+      "event_frame": 73,
+      "license": "CC BY 3.0",
+      "role": "rejected_left_push_kick_reference",
+      "status": "rejected_large_effector_articulation_and_tangent_errors"
     },
     {
       "id": "low_line_kick_right_cmcd_nuss3",

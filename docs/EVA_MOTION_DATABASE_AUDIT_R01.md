@@ -637,3 +637,14 @@ Shared-space audits confirm sustained contacts rather than trusting catalogue
 labels. The preferred new windows are listed in
 `tools/eva_paired_interaction_source_catalog_r01.json`; all remain source
 references until grounded paired retarget and physical-constraint tests pass.
+
+### First combo-transition audit
+
+An independently passing left ward and right push kick still do not form a
+valid direct combo. Their endpoints require about `52.7°` yaw alignment and
+large shoulder/hip changes. Seven- and twelve-frame transitions violate the
+tangent-step gate; eighteen frames reaches the numerical limit but costs
+`300 ms` and remains a visible missing action. ACCAD E4 and CMU 144_17 entry
+alternatives both fail the physical effector gate. The graph therefore keeps
+`ward -> body entry -> branch`, and the missing entry is moved to the
+project-owned capture plan rather than hidden with inertialization.

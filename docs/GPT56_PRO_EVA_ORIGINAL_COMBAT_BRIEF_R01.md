@@ -44,6 +44,24 @@ right contact-point speed of `0.02516 H/s` versus `0.02 H/s`. There is no
 trained tracking policy, no post-contact grip simulation and no Minecraft
 integration to approve.
 
+The segmented ACCAD E4 body entry (frames 36–75) is also blocked: its current
+grounded manifold solve leaves aggregate effector P95 at `0.03097 H`, worst at
+the left toe. Treat this as a source/retarget mismatch to challenge, not a
+reason to relax the gate.
+
+There is no accepted left push kick. ACCAD G17 fails the target-rig contact and
+articulation solve; CMU 144_09 is a high left front kick (about `0.766 H`), not
+the left equivalent of the accepted G18 push kick. Search for a genuinely
+better source or recommend a project-owned capture specification.
+
+A direct left-ward to right-push-kick blend is also rejected: it requires about
+52.7 degrees of yaw alignment and unrelated shoulder/hip changes; 7- and
+12-frame blends exceed the tangent-step gate, while the 18-frame blend takes
+300 ms and still reads as a missing action. ACCAD E4 and CMU 144_17 entry/lunge
+alternatives both fail the physical effector gate. Please specifically search
+for a true ward-terminal-to-branch-ready entry source or validate the proposed
+project-owned capture route.
+
 The B18 landing after source frame 91 was rejected for a source lower-body
 discontinuity. The paired CMU capture is cut at attachment (frames 165–219);
 post-contact pulling must be physical. Independently assess whether these

@@ -183,6 +183,8 @@ state are maintained in `docs/EVA_COMBAT_FIRST_12_BUILD_QUEUE_R01.md`. Actions
 with no valid open paired source use the project-owned multi-view recording
 plan in `docs/EVA_PROJECT_MOCAP_CAPTURE_PLAN_R01.md` rather than invented AI
 keyframes.
+The first physical endpoint/transition findings are recorded separately in
+`docs/EVA_COMBAT_TRANSITION_AUDIT_R01.md`.
 
 ## 6. Source data selected for external screening
 

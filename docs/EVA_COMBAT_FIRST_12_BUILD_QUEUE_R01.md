@@ -11,9 +11,9 @@ status explicitly says the strict physical-rig gate passed.
 |---:|---|---|---|---|
 | 1 | left forearm/open-hand ward | ACCAD `Male2_E11_BlockLeftHigh`, frames 10–26 | left deflection, entry permission | **strict contact-manifold kinematic gate passed; human 3D review pending** |
 | 2 | right forearm/open-hand ward | ACCAD `Male2_E13_BlockRightHigh`, frames 8–23 | right deflection, entry permission | **strict contact-manifold kinematic gate passed; human 3D review pending** |
-| 3 | committed body entry | ACCAD `Male2_E4_QuickAdvance`, provisional frames 36–75 | close range behind guard, shoulder/clamp branch | exact contact segmentation pending |
+| 3 | committed body entry | ACCAD `Male2_E4_QuickAdvance`, frames 36–75 | close range behind guard, shoulder/clamp branch | segmented; blocked at effector P95 `0.03097 H` after manifold solve |
 | 4 | right push kick | ACCAD `Male2_G18_PushKickRight`, frames 23–48, event 34 | create distance, expose core, stop pursuit | **strict contact-manifold kinematic gate passed; human 3D review pending** |
-| 5 | left push kick | ACCAD `Male2_G17_PushKickLeft`, provisional frames 60–105, event 73 | mirrored mechanic without synthetic mirroring | source contact repair and physical solve pending |
+| 5 | left push kick | new project capture or new open source required | same mechanic, independently performed rather than mirrored | ACCAD G17 frames 60–105 rejected; CMU 144_09 is a high front kick, not an equivalent push kick |
 | 6 | right low-line kick | CMCD `Take_2019-01-09_N_Nussknacker3`, frames 350–385, event 363 | attack support leg, prepare pounce | source accepted; physical solve misses upper-body gate |
 | 7 | elbow grab attach | CMU `18_05/19_05`, frames 165–219, contact about 205 | convert limb contact to grip constraint | relative pair envelope passed; individual grounding blocked |
 | 8 | two-hand shoulder clamp | CMU `22_05/23_05`, frames 59–245 | clamp, shove setup, jaw/torso restraint basis | source shared-contact gate passed; overlap segmentation pending |
@@ -47,6 +47,10 @@ Every arrow is gated by actual support, COM velocity, range, facing, terrain and
 contact. A miss produces a brake step, pivot recovery, collision brace, roll or
 fall. No edge resets to a neutral pose and no cooperative paired capture plays
 past `GRAB_ATTACH` against a resisting live target.
+
+The first endpoint experiment proves that `ward -> push kick` cannot be made
+comfortable by a short generic blend; the exact mismatch and rejected
+7/12/18-frame transitions are in `docs/EVA_COMBAT_TRANSITION_AUDIT_R01.md`.
 
 ## Unit emphasis
 
