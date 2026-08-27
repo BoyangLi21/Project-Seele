@@ -153,7 +153,7 @@ public final class EvaMotionLabCommands
         {
             source.sendFailure(Component.literal(
                     "Usage: /seele motionlab demo unit01 "
-                            + "walk|run|jump|batter_right|"
+                            + "walk|run|jump|attack_right|"
                             + "live|livepush|physics|recovery|stop"));
             return 0;
         }
@@ -167,12 +167,16 @@ public final class EvaMotionLabCommands
                 || mode.equalsIgnoreCase("policy")
                 || mode.equalsIgnoreCase("livereset")
                 || mode.equalsIgnoreCase("livepush")
+                || mode.equalsIgnoreCase("attack_right")
+                || mode.equalsIgnoreCase("ordinary_attack_right")
                 || mode.equalsIgnoreCase("batter_right")
                 || mode.equalsIgnoreCase("ordinary_batter_right");
         source.sendSuccess(() -> Component.literal(physicsPreview
-                ? ((mode.equalsIgnoreCase("batter_right")
+                ? ((mode.equalsIgnoreCase("attack_right")
+                        || mode.equalsIgnoreCase("ordinary_attack_right")
+                        || mode.equalsIgnoreCase("batter_right")
                         || mode.equalsIgnoreCase("ordinary_batter_right"))
-                        ? "STRICT ORDINARY ATTACK PHYSICAL REVIEW: EVA-"
+                        ? "ORDINARY ATTACK MOCAP REVIEW: EVA-"
                                 + String.format("%02d", variant) + " " + mode
                         : (mode.equalsIgnoreCase("live")
                         || mode.equalsIgnoreCase("physics_live")

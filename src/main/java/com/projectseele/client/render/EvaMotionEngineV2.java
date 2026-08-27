@@ -212,7 +212,7 @@ public final class EvaMotionEngineV2
         Selection selection;
         if (ordinaryAttackReview)
         {
-            String clipName = "ordinary_batter_right";
+            String clipName = "ordinary_attack_right";
             selection = Selection.single(db.clip(clipName), clipName);
             runtime.landingActive = false;
         }

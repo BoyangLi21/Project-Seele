@@ -2,9 +2,8 @@
 
 Date: 2026-08-27
 
-Status: **one rebuilt right-side candidate passes the topology-aware physical
-gate and is isolated in Motion Lab; no gameplay promotion or final human
-approval yet**.
+Status: **R12 rejected by human visual review; retained only as front-axis
+regression evidence and removed from the Motion Lab attack slot**.
 
 ## Product-order correction
 
@@ -52,7 +51,7 @@ The corrected gate now keeps transition targets independent, checks physical
 self contacts, hand/wrist/elbow ordering, cross-arm segment clearance, leg
 ordering and knee bend-branch continuity.
 
-## Accepted physical candidate
+## Numerically accepted, visually rejected physical candidate
 
 The rebuilt right batter freezes the non-striking arm in a torso-relative
 guard, resolves the striking wrist/hand against an explicit right-side target,
@@ -122,11 +121,10 @@ contract and a true-front/side visual review both pass.
 The two-view files are for human screening only. They are not runtime assets.
 Promotion still requires human acceptance and a contact-driven damage test.
 
-## Isolated Minecraft review
+## Historical R12 review (superseded)
 
-The rebuilt right candidate is available only in `SEELE_EVA_MOTION_LAB`; normal
-combat input and the R28 save are unchanged. Start `tools\start_motion_lab.bat`,
-then use:
+R12 was previously available only in `SEELE_EVA_MOTION_LAB`; normal combat
+input and the R28 save were unchanged. Its old command sequence was:
 
 ```mcfunction
 /seele motionlab reset
@@ -135,12 +133,9 @@ then use:
 /seele motionlab demo unit01 batter_right
 ```
 
-The rejected left command has been removed. The right command plays once and
-returns to its opening guard; execute `stop` before replaying.
-The chat acknowledgement must begin `STRICT ORDINARY ATTACK PHYSICAL REVIEW`.
-The resource is `assets/projectseele/motion/eva_ordinary_attack_review_v1.json`
-with 1 clip, 23 bridge bones and 104 frames. `batter_right` uses rebuilt R06.
-Its runtime visual encoding and true-front limb constraints use R12.
+R12 is no longer present in the runtime resource. The compatibility alias now
+opens the R03 review action documented in
+`docs/EVA_ORDINARY_ATTACK_RESEARCH_R03.md`.
 
 ## Body-entry follow-up
 
