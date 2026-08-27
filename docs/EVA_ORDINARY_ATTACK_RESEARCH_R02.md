@@ -68,11 +68,34 @@ collapse. Neck, both clavicles, both wrists and both ankles exist as explicit
 intermediate nodes; physical global deformation is converted through that
 matching hierarchy before Minecraft/Blender applies it.
 
+## Runtime rotation-encoding correction
+
+R06 passed the physical topology gate but its first visual export is rejected.
+The export wrote the desired runtime rotation directly into the authored
+Bedrock quaternion. Gecko then applied its authored-Euler convention
+`(-X, -Y, +Z)` a second time. The physical pose therefore remained valid while
+the displayed upper-arm and forearm segments were nearly reversed, producing
+the obvious arms-through-head crossing in the review video.
+
+This was identified by comparing rendered bone-segment directions against the
+same-frame physical body directions, rather than by another visual offset:
+
+| Segment | Broken export dot | Corrected R08 dot |
+|---|---:|---:|
+| upper arm to forearm | approximately `-0.94` | at least `+0.9968` |
+| forearm to wrist | approximately `-0.98` | at least `+0.9996` |
+
+R08 keeps the accepted R06 physical state sequence unchanged. It first maps
+physical deformation into runtime space and then applies the inverse Gecko
+Euler encoding when writing authored quaternions. A positive near-one segment
+direction dot is now a required export regression check; a physical audit by
+itself is not sufficient evidence for visual correctness.
+
 ## Review artefacts
 
-- `artifacts/motion_research/ordinary_attack_r03/rebuild_r01/RIGHT_BATTER_REBUILT_R06_REVIEW.blend`
+- `artifacts/motion_research/ordinary_attack_r03/rebuild_r01/RIGHT_BATTER_REBUILT_R08_REVIEW.blend`
 - `artifacts/motion_research/ordinary_attack_r03/rebuild_r01/RIGHT_BATTER_REBUILT_R06.npz`
-- `artifacts/motion_research/ordinary_attack_r03/rebuild_r01/EVA_ORDINARY_BATTER_RIGHT_REBUILT_R06_TWO_VIEW.mp4`
+- `artifacts/motion_research/ordinary_attack_r03/rebuild_r01/EVA_ORDINARY_BATTER_RIGHT_MAPPING_FIXED_R08_TWO_VIEW.mp4`
 
 The two-view files are for human screening only. They are not runtime assets.
 Promotion still requires human acceptance and a contact-driven damage test.
@@ -95,6 +118,7 @@ returns to its opening guard; execute `stop` before replaying.
 The chat acknowledgement must begin `STRICT ORDINARY ATTACK PHYSICAL REVIEW`.
 The resource is `assets/projectseele/motion/eva_ordinary_attack_review_v1.json`
 with 1 clip, 23 bridge bones and 104 frames. `batter_right` uses rebuilt R06.
+Its runtime visual encoding is the corrected R08 export described above.
 
 ## Body-entry follow-up
 

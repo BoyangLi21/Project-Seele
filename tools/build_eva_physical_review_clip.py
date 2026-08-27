@@ -52,6 +52,8 @@ SIM_TO_AUTHORED = np.asarray([
     [0.0, 0.0, 1.0],
     [1.0, 0.0, 0.0],
 ], dtype=np.float64)
+AUTHORED_TO_RUNTIME_POSITION = np.diag((-1.0, 1.0, 1.0))
+SIM_TO_RUNTIME = AUTHORED_TO_RUNTIME_POSITION @ SIM_TO_AUTHORED
 ROOT_METRE_SCALE = (192.0 / 4.0) / 112.0
 
 
@@ -66,10 +68,27 @@ def body_world_matrices(model, data):
     }
 
 
-def wxyz(matrix):
-    value = Rotation.from_matrix(matrix).as_quat()
+def authored_wxyz_for_runtime_matrix(matrix):
+    # Gecko's Bedrock factory applies authored Euler rotations as
+    # (-X,-Y,+Z).  Encode the inverse operation here; writing the runtime
+    # matrix directly as an authored quaternion applies that conversion a
+    # second time and reverses upper/forearm segment directions.
+    runtime_euler = Rotation.from_matrix(matrix).as_euler("xyz")
+    authored_euler = np.asarray((
+        -runtime_euler[0], -runtime_euler[1], runtime_euler[2]
+    ))
+    value = Rotation.from_euler("xyz", authored_euler).as_quat()
     return [round(float(value[3]), 7), round(float(value[0]), 7),
             round(float(value[1]), 7), round(float(value[2]), 7)]
+
+
+def runtime_matrix_from_authored_wxyz(value):
+    authored = Rotation.from_quat((value[1], value[2], value[3], value[0]))
+    authored_euler = authored.as_euler("xyz")
+    runtime_euler = np.asarray((
+        -authored_euler[0], -authored_euler[1], authored_euler[2]
+    ))
+    return Rotation.from_euler("xyz", runtime_euler).as_matrix()
 
 
 def main() -> None:
@@ -107,26 +126,40 @@ def main() -> None:
     root_origin = qpos[0, :3].copy()
     frames = []
     maximum_angle_step = 0.0
+    maximum_runtime_round_trip_error = 0.0
+    maximum_runtime_round_trip_location = None
     previous_rotations = None
     for frame_index, pose in enumerate(qpos):
         data.qpos[:] = pose
         data.qvel[:] = 0.0
         mujoco.mj_forward(model, data)
         current_world = body_world_matrices(model, data)
-        authored_global = {}
+        runtime_global = {}
         for bone in BONES:
             deformation = current_world[bone] @ neutral_world[bone].T
-            authored_global[bone] = (
-                SIM_TO_AUTHORED @ deformation @ SIM_TO_AUTHORED.T
+            runtime_global[bone] = (
+                SIM_TO_RUNTIME @ deformation @ SIM_TO_RUNTIME.T
             )
         rotations = []
         matrices = []
         for bone in BONES:
             parent = VISUAL_PARENT[bone]
-            local = (authored_global[bone] if parent is None else
-                     authored_global[parent].T @ authored_global[bone])
+            local = (runtime_global[bone] if parent is None else
+                     runtime_global[parent].T @ runtime_global[bone])
             matrices.append(local)
-            rotations.append(wxyz(local))
+            authored = authored_wxyz_for_runtime_matrix(local)
+            rotations.append(authored)
+            decoded = runtime_matrix_from_authored_wxyz(authored)
+            round_trip_error = float((
+                Rotation.from_matrix(local).inv()
+                * Rotation.from_matrix(decoded)
+            ).magnitude())
+            if round_trip_error > maximum_runtime_round_trip_error:
+                maximum_runtime_round_trip_error = round_trip_error
+                maximum_runtime_round_trip_location = {
+                    "frame": frame_index,
+                    "bone": bone,
+                }
         if previous_rotations is not None:
             for before, after in zip(previous_rotations, matrices):
                 maximum_angle_step = max(maximum_angle_step, float(
@@ -142,6 +175,13 @@ def main() -> None:
             "foot_contact": [bool(contacts[frame_index, 0]),
                              bool(contacts[frame_index, 1])],
         })
+
+    if maximum_runtime_round_trip_error > 1.0e-5:
+        raise RuntimeError(
+            "authored-to-Gecko runtime rotation round trip failed: "
+            f"error={maximum_runtime_round_trip_error} "
+            f"location={maximum_runtime_round_trip_location}"
+        )
 
     clip = {
         "duration_seconds": round((len(frames) - 1) * dt, 7),
@@ -189,8 +229,15 @@ def main() -> None:
         "maximum_rotation_step_degrees": float(np.degrees(
             maximum_angle_step
         )),
+        "maximum_runtime_round_trip_error_degrees": float(np.degrees(
+            maximum_runtime_round_trip_error
+        )),
+        "maximum_runtime_round_trip_error_location": (
+            maximum_runtime_round_trip_location
+        ),
         "rotation_mapping": (
-            "physics_world_deformation_to_visual_global_then_parent_local"
+            "physics_world_deformation_to_runtime_global_then_inverse_gecko_"
+            "authored_euler"
         ),
         "status": "visual_review_only_not_runtime_integrated",
     }
