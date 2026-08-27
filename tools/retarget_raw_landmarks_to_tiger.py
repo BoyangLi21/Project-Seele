@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 from pathlib import Path
 
 import numpy as np
@@ -93,6 +94,24 @@ def map_frame(bind_primary, bind_secondary, desired_primary,
         bind_primary, bind_secondary).T
 
 
+def transport_primary(previous, bind_primary, desired_primary):
+    """Parallel-transport an uncaptured axial twist onto a new segment axis."""
+    current = normalize(previous @ normalize(bind_primary))
+    wanted = normalize(desired_primary)
+    dot = float(np.clip(np.dot(current, wanted), -1.0, 1.0))
+    if dot > 1.0 - 1.0e-10:
+        delta = np.identity(3)
+    elif dot < -1.0 + 1.0e-8:
+        axis = np.cross(current, TARGET_UP)
+        if np.linalg.norm(axis) < 1.0e-8:
+            axis = np.cross(current, TARGET_LEFT)
+        delta = Rotation.from_rotvec(normalize(axis) * math.pi).as_matrix()
+    else:
+        axis = normalize(np.cross(current, wanted))
+        delta = Rotation.from_rotvec(axis * math.acos(dot)).as_matrix()
+    return delta @ previous
+
+
 def authored_wxyz(runtime_matrix):
     runtime_euler = Rotation.from_matrix(runtime_matrix).as_euler("xyz")
     authored = Rotation.from_euler("xyz", (
@@ -114,6 +133,12 @@ def main() -> None:
     parser.add_argument("--license", required=True)
     parser.add_argument("--hand-pose", choices=("neutral", "fist"),
                         default="neutral")
+    parser.add_argument("--dynamic-twist-continuity", action="store_true",
+                        help=("choose the nearest axial-roll branch every "
+                              "frame for sources without captured twist"))
+    parser.add_argument("--parallel-transport-twist", action="store_true",
+                        help=("transport the prior axial roll using only "
+                              "captured segment directions"))
     args = parser.parse_args()
 
     source = np.load(args.landmarks)
@@ -188,6 +213,7 @@ def main() -> None:
     # twist without altering any source joint direction.
     previous_global = {bone: np.identity(3) for bone in BONES}
     twist_branch = {}
+    transported = set()
 
     for frame_index, row in enumerate(positions):
         mapped = {
@@ -203,6 +229,9 @@ def main() -> None:
 
         def continuous_map(bone, bind_primary, bind_secondary,
                            desired_primary, desired_secondary):
+            if args.parallel_transport_twist and bone in transported:
+                return transport_primary(
+                    previous_global[bone], bind_primary, desired_primary)
             candidates = {
                 sign: map_frame(
                     bind_primary, bind_secondary, desired_primary,
@@ -210,6 +239,23 @@ def main() -> None:
                 )
                 for sign in (1.0, -1.0)
             }
+            if args.parallel_transport_twist:
+                transported.add(bone)
+                return min(
+                    candidates.values(),
+                    key=lambda candidate: float((
+                        Rotation.from_matrix(previous_global[bone]).inv()
+                        * Rotation.from_matrix(candidate)
+                    ).magnitude()),
+                )
+            if args.dynamic_twist_continuity:
+                return min(
+                    candidates.values(),
+                    key=lambda candidate: float((
+                        Rotation.from_matrix(previous_global[bone]).inv()
+                        * Rotation.from_matrix(candidate)
+                    ).magnitude()),
+                )
             if bone not in twist_branch:
                 twist_branch[bone] = min(
                     candidates,

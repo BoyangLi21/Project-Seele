@@ -407,6 +407,16 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     // velocity apex. The compatibility `fall` JSON remains for visual tools.
     private static final RawAnimation ANIM_FALL = ANIM_JUMP;
     private static final RawAnimation ANIM_PRONE = RawAnimation.begin().thenLoop("animation.eva_unit01.prone");
+    private static final RawAnimation ANIM_STAND_TO_CROUCH = RawAnimation.begin().thenPlay("animation.eva_unit01.stand_to_crouch");
+    private static final RawAnimation ANIM_CROUCH_TO_STAND = RawAnimation.begin().thenPlay("animation.eva_unit01.crouch_to_stand");
+    private static final RawAnimation ANIM_CROUCH_TO_PRONE = RawAnimation.begin().thenPlay("animation.eva_unit01.crouch_to_prone");
+    private static final RawAnimation ANIM_PRONE_TO_CROUCH = RawAnimation.begin().thenPlay("animation.eva_unit01.prone_to_crouch");
+    private static final RawAnimation ANIM_STAND_TO_PRONE = RawAnimation.begin()
+            .thenPlay("animation.eva_unit01.stand_to_crouch")
+            .thenPlay("animation.eva_unit01.crouch_to_prone");
+    private static final RawAnimation ANIM_PRONE_TO_STAND = RawAnimation.begin()
+            .thenPlay("animation.eva_unit01.prone_to_crouch")
+            .thenPlay("animation.eva_unit01.crouch_to_stand");
     private static final RawAnimation ANIM_CRUCIFIED = RawAnimation.begin().thenLoop("animation.eva_unit01.crucified");
     private static final RawAnimation ANIM_CRAWL = RawAnimation.begin().thenLoop("animation.eva_unit01.crawl");
     private static final RawAnimation ANIM_AIM = RawAnimation.begin().thenLoop("animation.eva_unit01.aim");
@@ -473,6 +483,10 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     private static final RawAnimation ANIM_VISUAL_CROUCH_RIFLE_CONTACT = RawAnimation.begin().thenLoop("animation.eva_unit01.visual_crouch_rifle_contact");
     private static final RawAnimation ANIM_VISUAL_PRONE_RIFLE = RawAnimation.begin().thenLoop("animation.eva_unit01.visual_prone_rifle");
     private static final RawAnimation ANIM_BERSERK_ROAR = RawAnimation.begin().thenPlay("animation.eva_unit01.berserk_roar");
+    private static final RawAnimation ANIM_BERSERK_RUN = RawAnimation.begin().thenLoop("animation.eva_unit01.berserk_run");
+    private static final RawAnimation ANIM_BERSERK_CLAW_R = RawAnimation.begin().thenPlay("animation.eva_unit01.berserk_claw_r");
+    private static final RawAnimation ANIM_BERSERK_CLAW_L = RawAnimation.begin().thenPlay("animation.eva_unit01.berserk_claw_l");
+    private static final RawAnimation ANIM_BERSERK_POUNCE = RawAnimation.begin().thenPlay("animation.eva_unit01.berserk_pounce");
 
     private final AnimatableInstanceCache geoCache = GeckoLibUtil.createInstanceCache(this);
 
@@ -539,6 +553,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     private int berserkRecoveryTicks;
     private int berserkAttackCooldown;
     private int berserkTargetSearchCooldown;
+    private int berserkPounceVisualCooldown;
     @Nullable
     private UUID lockedEntryPlugUuid;
     private boolean entryPlugLinkFaultLogged;
@@ -2274,6 +2289,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             pilot.displayClientMessage(Component.translatable("msg.projectseele.cannot_stand"), true);
             return;
         }
+        boolean wasProne = this.isPilotProne();
         if (crouching)
         {
             this.entityData.set(DATA_PRONE, false);
@@ -2281,6 +2297,9 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         this.entityData.set(DATA_CROUCHING, crouching);
         this.entityData.set(DATA_SPRINTING, false);
         this.updatePoseDimensions();
+        this.triggerAnim("strike", crouching
+                ? wasProne ? "prone_to_crouch" : "stand_to_crouch"
+                : "crouch_to_stand");
     }
 
     public void toggleProne(ServerPlayer pilot)
@@ -2290,6 +2309,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             return;
         }
         boolean prone = !this.isPilotProne();
+        boolean wasCrouching = this.isPilotCrouching();
         if (!prone && !this.hasStandingRoom())
         {
             pilot.displayClientMessage(Component.translatable("msg.projectseele.cannot_stand"), true);
@@ -2299,6 +2319,9 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         this.entityData.set(DATA_CROUCHING, false);
         this.entityData.set(DATA_SPRINTING, false);
         this.updatePoseDimensions();
+        this.triggerAnim("strike", prone
+                ? wasCrouching ? "crouch_to_prone" : "stand_to_prone"
+                : "prone_to_stand");
     }
 
     public void setPilotSprinting(ServerPlayer pilot, boolean sprinting)
@@ -2747,6 +2770,10 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         {
             this.berserkAttackCooldown--;
         }
+        if (this.berserkPounceVisualCooldown > 0)
+        {
+            this.berserkPounceVisualCooldown--;
+        }
         if (--this.berserkTargetSearchCooldown <= 0
                 || !(this.getTarget() instanceof Angel) || !this.getTarget().isAlive())
         {
@@ -2760,6 +2787,12 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             this.getLookControl().setLookAt(target, 30.0F, 30.0F);
             this.getNavigation().moveTo(target, 1.45D);
             double distance = this.distanceTo(target);
+            if (distance > 14.0D && distance <= 36.0D
+                    && this.berserkPounceVisualCooldown <= 0)
+            {
+                this.triggerAnim("strike", "berserk_pounce");
+                this.berserkPounceVisualCooldown = 60;
+            }
             if (distance <= 14.0D && Math.abs(target.getY() - this.getY()) <= 16.0D
                     && this.berserkAttackCooldown <= 0)
             {
@@ -2819,6 +2852,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         this.setNoGravity(false);
         this.berserkAttackCooldown = 0;
         this.berserkTargetSearchCooldown = 0;
+        this.berserkPounceVisualCooldown = 0;
         this.triggerAnim("strike", "berserk_roar");
         this.playSound(SoundEvents.RAVAGER_ROAR, 5.0F, 0.62F);
         if (pilot != null)
@@ -2865,7 +2899,8 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         this.entityData.set(DATA_MELEE_LEFT, this.leftSwing);
         this.entityData.set(DATA_MELEE_SEQUENCE,
                 (this.entityData.get(DATA_MELEE_SEQUENCE) + 1) & Integer.MAX_VALUE);
-        this.triggerAnim("strike", this.leftSwing ? "melee_left" : "melee");
+        this.triggerAnim("strike", this.leftSwing
+                ? "berserk_claw_l" : "berserk_claw_r");
         this.swing(this.leftSwing ? InteractionHand.OFF_HAND : InteractionHand.MAIN_HAND, true);
         float multiplier = SeeleConfig.COMMON_SPEC.isLoaded()
                 ? SeeleConfig.EVA_BERSERK_DAMAGE_MULTIPLIER.get().floatValue() : 2.5F;
@@ -5375,7 +5410,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             if (this.isBerserk())
             {
                 return state.setAndContinue(this.visuallyMoving(state)
-                        ? ANIM_RUN : ANIM_IDLE);
+                        ? ANIM_BERSERK_RUN : ANIM_IDLE);
             }
             switch (this.getVisualPose())
             {
@@ -5547,6 +5582,15 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
                 .triggerableAnim("land", ANIM_LAND)
                 .triggerableAnim("stomp", ANIM_STOMP)
                 .triggerableAnim("berserk_roar", ANIM_BERSERK_ROAR)
+                .triggerableAnim("stand_to_crouch", ANIM_STAND_TO_CROUCH)
+                .triggerableAnim("crouch_to_stand", ANIM_CROUCH_TO_STAND)
+                .triggerableAnim("crouch_to_prone", ANIM_CROUCH_TO_PRONE)
+                .triggerableAnim("prone_to_crouch", ANIM_PRONE_TO_CROUCH)
+                .triggerableAnim("stand_to_prone", ANIM_STAND_TO_PRONE)
+                .triggerableAnim("prone_to_stand", ANIM_PRONE_TO_STAND)
+                .triggerableAnim("berserk_claw_r", ANIM_BERSERK_CLAW_R)
+                .triggerableAnim("berserk_claw_l", ANIM_BERSERK_CLAW_L)
+                .triggerableAnim("berserk_pounce", ANIM_BERSERK_POUNCE)
                 .receiveTriggeredAnimations());
     }
 

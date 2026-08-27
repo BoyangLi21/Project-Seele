@@ -39,7 +39,8 @@ def bounds(frame_start: int, frame_end: int) -> tuple[Vector, float]:
         scene.frame_set(frame)
         bpy.context.view_layer.update()
         for obj in scene.objects:
-            if obj.type != "MESH" or obj.name == "LAB_FLOOR":
+            if (obj.type != "MESH" or obj.name == "LAB_FLOOR"
+                    or obj.hide_render):
                 continue
             points.extend(obj.matrix_world @ Vector(corner)
                           for corner in obj.bound_box)

@@ -64,14 +64,16 @@ def main() -> None:
     failures = []
     reports = {}
     for clip_name, (start, end) in ranges.items():
-        weapon_name = ("cannon" if ("rifle" in clip_name
-                                     or "cannon" in clip_name)
+        weapon_name = ("knife" if "knife" in clip_name
+                       else "cannon" if ("rifle" in clip_name
+                                          or "cannon" in clip_name)
                        else "lance" if "lance" in clip_name else None)
         if weapon_name is None:
             continue
         part = bpy.data.objects[f"PART::{weapon_name}"]
         pivot = target_to_blender(pivots[weapon_name])
-        guide_offset = -24.0 if weapon_name == "cannon" else -58.0
+        guide_offset = (-24.0 if weapon_name == "cannon"
+                        else -58.0 if weapon_name == "lance" else 0.0)
         guide = target_to_blender(
             pivots[weapon_name] + Vector((0.0, guide_offset, 0.0))
         )
@@ -122,11 +124,12 @@ def main() -> None:
                 clip_failures.append(
                     f"frame {frame}: right surface distance {right_surface:.3f}"
                 )
-            if left_surface > 0.12:
+            if weapon_name != "knife" and left_surface > 0.12:
                 clip_failures.append(
                     f"frame {frame}: left surface distance {left_surface:.3f}"
                 )
-            if alignment < math.cos(math.radians(18.0)):
+            if (weapon_name != "knife"
+                    and alignment < math.cos(math.radians(18.0))):
                 clip_failures.append(
                     f"frame {frame}: weapon axis cosine {alignment:.4f}"
                 )

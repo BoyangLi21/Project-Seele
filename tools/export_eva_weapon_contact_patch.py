@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import copy
+import hashlib
 import json
 import math
 import sys
@@ -17,23 +18,33 @@ from eva_animation_geometry_repairs import semantic_sha256
 
 
 BASE_MAPPINGS = {
-    "animation.eva_unit01.lance_ready": "lance_ready_review",
-    "animation.eva_unit01.lance_carry": "lance_ready_review",
-    "animation.eva_unit01.lance_thrust": "lance_thrust_review",
-    "animation.eva_unit01.prone_lance_ready": "prone_lance_review",
-    "animation.eva_unit01.prone_lance_thrust": "prone_lance_thrust_review",
-    "animation.eva_unit01.crouch_lance_thrust": "crouch_lance_thrust_review",
+    "animation.eva_unit01.lance_ready": (
+        "lance_ready_review", ("clavicle_l", "arm_l", "forearm_l", "lance")),
+    "animation.eva_unit01.lance_carry": (
+        "lance_ready_review", ("clavicle_l", "arm_l", "forearm_l", "lance")),
+    "animation.eva_unit01.lance_thrust": (
+        "lance_thrust_review", ("clavicle_l", "arm_l", "forearm_l", "lance")),
+    "animation.eva_unit01.prone_lance_ready": (
+        "prone_lance_review", ("clavicle_l", "arm_l", "forearm_l", "lance")),
+    "animation.eva_unit01.prone_lance_thrust": (
+        "prone_lance_thrust_review", ("clavicle_l", "arm_l", "forearm_l", "lance")),
+    "animation.eva_unit01.crouch_lance_thrust": (
+        "crouch_lance_thrust_review", ("clavicle_l", "arm_l", "forearm_l", "lance")),
+    "animation.eva_unit01.prone_rifle_aim": (
+        "prone_rifle_review", ("arm_l", "forearm_l", "cannon")),
 }
 
 VISUAL_MAPPINGS = {
     "animation.eva_unit01.visual_lance_ready": ("lance_ready_review", 0.0),
-    "animation.eva_unit01.visual_lance_windup": ("lance_thrust_review", 0.18),
-    "animation.eva_unit01.visual_lance_contact": ("lance_thrust_review", 0.52),
-    "animation.eva_unit01.visual_lance_recovery": ("lance_thrust_review", 0.72),
+    "animation.eva_unit01.visual_lance_windup": ("lance_thrust_review", 0.30),
+    "animation.eva_unit01.visual_lance_contact": ("lance_thrust_review", 0.63),
+    "animation.eva_unit01.visual_lance_recovery": ("lance_thrust_review", 1.10),
     "animation.eva_unit01.visual_prone_lance_contact": (
-        "prone_lance_thrust_review", 0.42),
+        "prone_lance_thrust_review", 0.63),
     "animation.eva_unit01.visual_crouch_lance_contact": (
-        "crouch_lance_thrust_review", 0.42),
+        "crouch_lance_thrust_review", 0.63),
+    "animation.eva_unit01.visual_prone_rifle": (
+        "prone_rifle_review", 0.0),
 }
 
 
@@ -119,22 +130,29 @@ def main() -> None:
     target = copy.deepcopy(source)
     motion = json.loads(args.solved_motion_db.read_text(encoding="utf-8"))
     replacements = {}
-    for animation_name, clip_name in BASE_MAPPINGS.items():
+    for animation_name, (clip_name, bone_names) in BASE_MAPPINGS.items():
         replacement = copy.deepcopy(target["animations"][animation_name])
         duration = float(replacement.get("animation_length",
                                          motion["clips"][clip_name]["duration_seconds"]))
-        for bone_name in ("arm_l", "forearm_l"):
-            replacement.setdefault("bones", {}).setdefault(bone_name, {})[
-                "rotation"
-            ] = rotation_channel(
+        for bone_name in bone_names:
+            rotation = rotation_channel(
                 motion, clip_name, bone_name, duration,
                 args.maximum_error_degrees,
             )
+            if replacement.get("loop") and len(rotation) > 1:
+                keys = sorted(rotation, key=float)
+                rotation[keys[-1]] = list(rotation[keys[0]])
+            replacement.setdefault("bones", {}).setdefault(bone_name, {})[
+                "rotation"
+            ] = rotation
         target["animations"][animation_name] = replacement
         replacements[animation_name] = replacement
     for animation_name, (clip_name, seconds) in VISUAL_MAPPINGS.items():
         replacement = copy.deepcopy(target["animations"][animation_name])
-        for bone_name in ("arm_l", "forearm_l"):
+        bone_names = ("arm_l", "forearm_l", "cannon") \
+            if "rifle" in animation_name else \
+            ("clavicle_l", "arm_l", "forearm_l", "lance")
+        for bone_name in bone_names:
             replacement.setdefault("bones", {}).setdefault(bone_name, {})[
                 "rotation"
             ] = {"0.0": sampled_rotation(
@@ -147,7 +165,9 @@ def main() -> None:
         "source_animation_semantic_sha256": semantic_sha256(source["animations"]),
         "target_animation_semantic_sha256": semantic_sha256(target["animations"]),
         "maximum_quaternion_error_degrees": args.maximum_error_degrees,
-        "source_solved_motion_db": str(args.solved_motion_db.resolve()),
+        "source_solved_motion_db": args.solved_motion_db.as_posix(),
+        "source_solved_motion_db_sha256": hashlib.sha256(
+            args.solved_motion_db.read_bytes()).hexdigest(),
         "replace_animations": replacements,
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
@@ -158,11 +178,11 @@ def main() -> None:
     key_count = sum(
         len(animation.get("bones", {}).get(bone, {}).get("rotation", {}))
         for animation in replacements.values()
-        for bone in ("arm_l", "forearm_l")
+        for bone in animation.get("bones", {})
     )
     print(
-        f"EVA R07 weapon patch: animations={len(replacements)} "
-        f"left-arm-keys={key_count} output={args.output}"
+        f"EVA weapon contact patch: animations={len(replacements)} "
+        f"rotation-keys={key_count} output={args.output}"
     )
 
 

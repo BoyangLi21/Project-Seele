@@ -156,7 +156,7 @@ def animate_exact(motion: dict, bone_order: list[str],
         def show_attachment(name: str) -> bool:
             if name == "knife":
                 return (clip_name.startswith("cmu_sword_")
-                        or clip_name.startswith("knife"))
+                        or "knife" in clip_name)
             if name == "cannon":
                 return ("rifle" in clip_name or "cannon" in clip_name
                         or "aim" in clip_name)

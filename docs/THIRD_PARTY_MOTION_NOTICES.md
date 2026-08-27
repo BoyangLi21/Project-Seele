@@ -39,6 +39,15 @@ QA record.
 - ML training permission is not stated expressly and remains unverified.
 - Local use: exact-trial research candidates only; no whole-library ingestion.
 
+## Cologne Motion Capture Database (CMCD)
+
+- Creator/attribution party: Cologne Game Lab / TH Köln.
+- Official page and licence: https://mocap.web.th-koeln.de/about.php
+- Licence: Creative Commons Attribution 4.0 International.
+- Local use: exact-frame selection from `KingKong2`, coordinate normalization,
+  Tiger retargeting, target-rig constraint repair and private QA rendering.
+- Distributed derivatives must retain attribution and identify modifications.
+
 ## Quaternius Universal Animation Library 2
 
 - Creator: Quaternius.

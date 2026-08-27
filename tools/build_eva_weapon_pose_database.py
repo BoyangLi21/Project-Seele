@@ -14,6 +14,11 @@ from mathutils import Euler, Quaternion
 
 
 POSES = {
+    "knife_ready_review": ("knife_ready",),
+    "knife_strike_review": ("knife",),
+    "knife_heavy_review": ("knife_heavy",),
+    "prone_knife_review": ("prone", "prone_knife"),
+    "crouch_knife_review": ("crouch", "crouch_knife"),
     "rifle_aim_review": ("rifle_aim",),
     "rifle_fire_review": ("rifle_aim", "rifle_fire"),
     "prone_rifle_review": ("prone", "prone_rifle_aim"),
@@ -22,7 +27,32 @@ POSES = {
     "prone_lance_review": ("prone", "prone_lance_ready"),
     "prone_lance_thrust_review": ("prone", "prone_lance_thrust"),
     "crouch_lance_thrust_review": ("crouch", "crouch_lance_thrust"),
+    "crouch_review": ("crouch",),
+    "stand_to_crouch_review": ("stand_to_crouch",),
+    "crouch_to_stand_review": ("crouch_to_stand",),
+    "crouch_walk_review": ("crouch_walk",),
+    "prone_review": ("prone",),
+    "crouch_to_prone_review": ("crouch_to_prone",),
+    "prone_to_crouch_review": ("prone_to_crouch",),
+    "crawl_review": ("crawl",),
+    "berserk_roar_review": ("berserk_roar",),
+    "berserk_run_review": ("berserk_run",),
+    "berserk_claw_r_review": ("berserk_claw_r",),
+    "berserk_claw_l_review": ("berserk_claw_l",),
+    "berserk_pounce_review": ("berserk_pounce",),
 }
+
+
+def pose_role(name: str) -> str:
+    if name in {"crouch_review", "crouch_walk_review"}:
+        return "crouch"
+    if name in {"prone_review", "crawl_review"}:
+        return "candidate_prone"
+    if name in {
+            "stand_to_crouch_review", "crouch_to_stand_review",
+            "crouch_to_prone_review", "prone_to_crouch_review"}:
+        return "candidate_posture_transition"
+    return "weapon_pose_review"
 
 
 def parse_args() -> argparse.Namespace:
@@ -64,7 +94,13 @@ def main() -> None:
     base = json.loads(args.base_motion_db.read_text(encoding="utf-8"))
     animation = json.loads(args.animation.read_text(encoding="utf-8"))["animations"]
     bones = list(base["bones"])
-    for name in ("cannon", "lance"):
+    for layer_names in POSES.values():
+        for layer_name in layer_names:
+            for bone_name in animation[
+                    f"animation.eva_unit01.{layer_name}"]["bones"]:
+                if bone_name not in bones:
+                    bones.append(bone_name)
+    for name in ("knife", "cannon", "lance"):
         if name not in bones:
             bones.append(name)
     base_frame = copy.deepcopy(base["clips"]["idle"]["frames"][0])
@@ -112,7 +148,7 @@ def main() -> None:
         clips[output_name] = {
             "duration_seconds": round(duration, 6),
             "loop": bool(all(layer.get("loop", False) for layer in layers)),
-            "role": "weapon_pose_review",
+            "role": pose_role(output_name),
             "source_layers": list(layer_names),
             "frames": frames,
         }

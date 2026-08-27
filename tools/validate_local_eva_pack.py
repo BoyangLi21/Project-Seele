@@ -128,6 +128,42 @@ STANDARD_EVA_ANIMATION_BONES = {
     "animation.eva_unit01.activation": {"entry_plug", "plug_hatch_l", "plug_hatch_r"},
 }
 
+REAL_MOCAP_REQUIRED_ANIMATIONS = {
+    f"animation.eva_unit01.{suffix}"
+    for suffix in (
+        "knife", "knife_heavy", "lance_thrust",
+        "crouch", "crouch_walk", "prone", "crawl",
+        "stand_to_crouch", "crouch_to_stand",
+        "crouch_to_prone", "prone_to_crouch",
+        "berserk_roar", "berserk_run", "berserk_claw_r",
+        "berserk_claw_l", "berserk_pounce",
+    )
+}
+
+REAL_MOCAP_LOOP_ANIMATIONS = {
+    f"animation.eva_unit01.{suffix}"
+    for suffix in (
+        "knife_ready", "lance_ready", "lance_carry",
+        "prone_lance_ready", "crouch", "crouch_walk", "prone",
+        "crawl", "berserk_run",
+    )
+}
+
+REAL_MOCAP_TRANSITION_EDGES = (
+    ("stand_to_crouch", "end", "crouch", "start"),
+    ("crouch_to_stand", "start", "crouch", "start"),
+    ("crouch_to_prone", "start", "crouch", "start"),
+    ("crouch_to_prone", "end", "prone", "start"),
+    ("prone_to_crouch", "start", "prone", "start"),
+    ("prone_to_crouch", "end", "crouch", "start"),
+)
+
+ROTATION_ONLY_LIMB_BONES = {
+    f"{segment}_{side}"
+    for segment in ("arm", "forearm", "wrist", "hand")
+    for side in ("l", "r")
+}
+
 
 ASSETS = {
     "unit01": {
@@ -160,7 +196,7 @@ ASSETS = {
             "animation.eva_unit01.prone_knife",
             "animation.eva_unit01.prone_lance_thrust",
             "animation.eva_unit01.prone_smash",
-        },
+        } | REAL_MOCAP_REQUIRED_ANIMATIONS,
         "canonical_body_animations": True,
     },
     "unit00": {
@@ -193,7 +229,7 @@ ASSETS = {
             "animation.eva_unit01.prone_knife",
             "animation.eva_unit01.prone_lance_thrust",
             "animation.eva_unit01.prone_smash",
-        },
+        } | REAL_MOCAP_REQUIRED_ANIMATIONS,
         "canonical_body_animations": True,
     },
     "unit02": {
@@ -226,7 +262,7 @@ ASSETS = {
             "animation.eva_unit01.prone_knife",
             "animation.eva_unit01.prone_lance_thrust",
             "animation.eva_unit01.prone_smash",
-        },
+        } | REAL_MOCAP_REQUIRED_ANIMATIONS,
         "canonical_body_animations": True,
     },
     "mass": {
@@ -402,6 +438,97 @@ def reject_nonfinite_json(value: object, context: str) -> None:
             reject_nonfinite_json(child, f"{context}[{index}]")
     elif isinstance(value, float) and not math.isfinite(value):
         raise ValidationError(f"{context}: non-finite JSON number")
+
+
+def quaternion_multiply(left, right):
+    lw, lx, ly, lz = left
+    rw, rx, ry, rz = right
+    return (
+        lw * rw - lx * rx - ly * ry - lz * rz,
+        lw * rx + lx * rw + ly * rz - lz * ry,
+        lw * ry - lx * rz + ly * rw + lz * rx,
+        lw * rz + lx * ry - ly * rx + lz * rw,
+    )
+
+
+def authored_quaternion(degrees):
+    x, y, z = (math.radians(float(value)) * 0.5 for value in degrees)
+    qx = (math.cos(x), math.sin(x), 0.0, 0.0)
+    qy = (math.cos(y), 0.0, math.sin(y), 0.0)
+    qz = (math.cos(z), 0.0, 0.0, math.sin(z))
+    return quaternion_multiply(quaternion_multiply(qx, qy), qz)
+
+
+def rotation_edge(animation: dict, bone_name: str, edge: str):
+    channel = animation.get("bones", {}).get(bone_name, {}).get("rotation")
+    if not isinstance(channel, dict) or not channel:
+        return None
+    keys = sorted(channel, key=float)
+    return authored_quaternion(channel[keys[0 if edge == "start" else -1]])
+
+
+def quaternion_angle_degrees(left, right) -> float:
+    dot = abs(sum(a * b for a, b in zip(left, right)))
+    return math.degrees(2.0 * math.acos(max(-1.0, min(1.0, dot))))
+
+
+def validate_real_mocap_animation_contract(stem: str,
+                                            animations: dict) -> None:
+    for animation_name in REAL_MOCAP_LOOP_ANIMATIONS:
+        animation = animations[animation_name]
+        if not animation.get("loop"):
+            raise ValidationError(f"{stem}: {animation_name} must loop")
+        for bone_name in animation.get("bones", {}):
+            first = rotation_edge(animation, bone_name, "start")
+            last = rotation_edge(animation, bone_name, "end")
+            if first is None or last is None:
+                continue
+            seam = quaternion_angle_degrees(first, last)
+            if seam > 0.01:
+                raise ValidationError(
+                    f"{stem}: {animation_name}.{bone_name} loop seam "
+                    f"{seam:.4f} degrees exceeds 0.01"
+                )
+    for source_suffix, source_edge, target_suffix, target_edge \
+            in REAL_MOCAP_TRANSITION_EDGES:
+        source_name = f"animation.eva_unit01.{source_suffix}"
+        target_name = f"animation.eva_unit01.{target_suffix}"
+        source = animations[source_name]
+        target = animations[target_name]
+        shared = source.get("bones", {}).keys() & target.get("bones", {}).keys()
+        for bone_name in shared:
+            source_rotation = rotation_edge(source, bone_name, source_edge)
+            target_rotation = rotation_edge(target, bone_name, target_edge)
+            if source_rotation is None or target_rotation is None:
+                continue
+            error = quaternion_angle_degrees(source_rotation, target_rotation)
+            if error > 0.01:
+                raise ValidationError(
+                    f"{stem}: transition {source_suffix}:{source_edge} -> "
+                    f"{target_suffix}:{target_edge} differs by "
+                    f"{error:.4f} degrees on {bone_name}"
+                )
+    rotation_only_animations = REAL_MOCAP_REQUIRED_ANIMATIONS | {
+        f"animation.eva_unit01.{suffix}"
+        for suffix in (
+            "knife_ready", "crouch_knife", "prone_knife",
+            "crouch_knife_heavy", "prone_knife_heavy",
+            "lance_ready", "lance_carry", "crouch_lance_thrust",
+            "prone_lance_ready", "prone_lance_thrust",
+            "prone_rifle_aim",
+        )
+    }
+    for animation_name in rotation_only_animations:
+        bones = animations[animation_name].get("bones", {})
+        translated = sorted(
+            bone_name for bone_name in ROTATION_ONLY_LIMB_BONES
+            if "position" in bones.get(bone_name, {})
+        )
+        if translated:
+            raise ValidationError(
+                f"{stem}: {animation_name} translates limb bones "
+                f"{', '.join(translated)}"
+            )
 
 
 def validate_mesh(path: Path, spec: dict) -> tuple[int, int, dict[str, tuple[float, float, float]]]:
@@ -585,6 +712,8 @@ def validate_asset(root: Path, name: str) -> str:
                     f"{stem}: {animation_name} misses required animated bones "
                     f"{', '.join(missing_animation_bones)}"
                 )
+        if stem == "eva_unit01":
+            validate_real_mocap_animation_contract(stem, animations)
         if spec.get("canonical_body_animations") and stem != "eva_unit01":
             # The checked-in catalogue targets the small public fallback rig.
             # Tiger retargeting (including its ten digit bones) is deliberately
