@@ -69,8 +69,8 @@ STANDARD_EVA_MESH_PARTS = {
 } | STANDARD_EVA_FINGER_MESH_PARTS
 
 STANDARD_EVA_FOOT_PARENTS = {
-    "foot_l": "shin_l",
-    "foot_r": "shin_r",
+    "foot_l": "ankle_l",
+    "foot_r": "ankle_r",
 }
 STANDARD_EVA_BONE_PARENTS = {
     **STANDARD_EVA_FOOT_PARENTS,
@@ -83,8 +83,10 @@ STANDARD_EVA_BONE_PARENTS = {
     **{name: name.replace("_distal_", "_tip_")
        for name in STANDARD_EVA_FINGER_DISTALS},
     "aim_pitch": "torso_upper",
-    "arm_l": "aim_pitch",
-    "arm_r": "aim_pitch",
+    "clavicle_l": "aim_pitch",
+    "clavicle_r": "aim_pitch",
+    "arm_l": "clavicle_l",
+    "arm_r": "clavicle_r",
     "n2": "hand_r",
 }
 
@@ -292,7 +294,7 @@ ACCESSORY_ASSETS = {
         "texture_stem": "eva02_weapons",
     },
     "entry_plug": {
-        "expected_triangles": 11_810,
+        "expected_triangles": 11_858,
         "required_parts": {
             "entry_plug", "plug_hatch_l", "plug_hatch_r",
             "plug_crane_collar",
