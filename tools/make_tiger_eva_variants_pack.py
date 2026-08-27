@@ -174,6 +174,11 @@ def build_unit_skeleton(config, scale, minimum_y, finger_pivots=None, finger_fra
     for bone in bones:
         if bone["name"] in {"arm_l", "arm_r"}:
             bone["parent"] = "aim_pitch"
+    tiger.ensure_physics_bridge_bones(geometry)
+    new_pivots = {
+        bone["name"]: bone.get("pivot", [0, 0, 0])
+        for bone in bones
+    }
 
     # Match Unit-01's hand-carried N2 socket. Variant base geometries predate
     # this semantic bone, so it must be grafted after their final hand pivot

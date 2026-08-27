@@ -695,6 +695,11 @@ def build_skeleton(scale, minimum_y, finger_pivots=None, finger_frames=None):
         if bone["name"] in {"arm_l", "arm_r"}:
             bone["parent"] = "aim_pitch"
     pivots["aim_pitch"] = aim_pivot
+    ensure_physics_bridge_bones(geometry)
+    pivots = {
+        bone["name"]: bone.get("pivot", [0, 0, 0])
+        for bone in geometry["bones"]
+    }
     # N2 is a true hand-carried device, not a HUD-only weapon state.
     if not any(bone["name"] == "n2" for bone in geometry["bones"]):
         geometry["bones"].append({
@@ -727,6 +732,58 @@ def ensure_foot_bones(geometry):
     for name, parent in (("foot_l", "shin_l"), ("foot_r", "shin_r")):
         if name not in existing:
             bones.append({"name": name, "parent": parent})
+
+
+def ensure_physics_bridge_bones(geometry):
+    """Install the intermediate nodes required by the 41-DOF replay rig."""
+    bones = geometry["bones"]
+
+    def by_name(name):
+        return next((bone for bone in bones if bone["name"] == name), None)
+
+    def insert_parent(name, child_name, parent_name, pivot):
+        child = by_name(child_name)
+        if child is None:
+            raise RuntimeError(f"missing physics bridge child {child_name}")
+        bridge = by_name(name)
+        if bridge is None:
+            index = bones.index(child)
+            bridge = {
+                "name": name,
+                "parent": parent_name,
+                "pivot": copy.deepcopy(pivot),
+            }
+            bones.insert(index, bridge)
+        else:
+            bridge["parent"] = parent_name
+            bridge["pivot"] = copy.deepcopy(pivot)
+        child["parent"] = name
+
+    aim = by_name("aim_pitch")
+    head = by_name("head")
+    if aim is None or head is None:
+        raise RuntimeError("physics bridge requires aim_pitch and head")
+    insert_parent("neck", "head", "torso_upper", head.get("pivot", [0, 0, 0]))
+    for side in ("l", "r"):
+        arm = by_name(f"arm_{side}")
+        forearm = by_name(f"forearm_{side}")
+        hand = by_name(f"hand_{side}")
+        shin = by_name(f"shin_{side}")
+        foot = by_name(f"foot_{side}")
+        if None in (arm, forearm, hand, shin, foot):
+            raise RuntimeError(f"incomplete physics bridge chain {side}")
+        insert_parent(
+            f"clavicle_{side}", f"arm_{side}", "aim_pitch",
+            aim.get("pivot", [0, 0, 0]),
+        )
+        insert_parent(
+            f"wrist_{side}", f"hand_{side}", f"forearm_{side}",
+            hand.get("pivot", [0, 0, 0]),
+        )
+        insert_parent(
+            f"ankle_{side}", f"foot_{side}", f"shin_{side}",
+            foot.get("pivot", [0, 0, 0]),
+        )
 
 
 def ensure_finger_bones(geometry, finger_pivots):

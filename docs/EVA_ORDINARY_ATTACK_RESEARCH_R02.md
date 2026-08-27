@@ -2,8 +2,9 @@
 
 Date: 2026-08-27
 
-Status: **two single-action physical candidates pass and are isolated in
-Motion Lab; no gameplay promotion or final human approval yet**.
+Status: **one rebuilt right-side candidate passes the topology-aware physical
+gate and is isolated in Motion Lab; no gameplay promotion or final human
+approval yet**.
 
 ## Product-order correction
 
@@ -38,54 +39,47 @@ reserved for committed brawls, grapples and mounted/contextual impacts.
 - A direct right-batter to left-batter blend fails: 7/12/18-frame bridges have
   maximum tangent steps `0.71/0.47/0.34 rad`. No generic cross-fade is used.
 
-## Accepted physical candidates
+## False-positive audit correction
 
-Both actions use ACCAD backfist biomechanics only as an upper-body prior. The
-lower body and authority root come from an independently audited stable combat
-stance, retimed to the same duration. The lateral strike arc is then redirected
-into a forward diagonal target and solved on the 41-DOF rig. Upper and lower
-goals remain independent in the audit; targets are not replaced with measured
-output to hide error.
+R17, R24 and the later R29 recovery are rejected. The old gate did not check
+left/right hand order, cross-arm clearance, non-ground self contacts or knee
+bend branches. Worse, generated transition FK was copied into the desired
+landmarks, making the recovery self-validating. R29 reaches a minimum hand
+lateral gap of `-0.08964 H` and therefore contains a real hand-order crossing.
+R24 contains 17 palm/knuckle self contacts.
 
-| Candidate | Contact yaw | Effector P95 | Articulation P95 | L/R drift | Strict failures |
-|---|---:|---:|---:|---:|---:|
-| right diagonal batter + recovery R29 | `-27.5°` | `0.01568 H` | `0.03253 H` | `0.00069 / 0.00103 H` | 0 |
-| left diagonal batter R24 | `+28.2°` | `0.01648 H` | `0.03062 H` | `0.00056 / 0.00148 H` | 0 |
+The corrected gate now keeps transition targets independent, checks physical
+self contacts, hand/wrist/elbow ordering, cross-arm segment clearance, leg
+ordering and knee bend-branch continuity.
 
-The current Tiger review exporter now computes each physical body's world
-deformation relative to its own bind, maps that deformation to the Tiger
-authored basis, then derives visual local rotations from the visual parent
-chain. Directly copying physical local joint deltas was mathematically wrong
-because the physical and visual bind axes differ.
+## Accepted physical candidate
+
+The rebuilt right batter freezes the non-striking arm in a torso-relative
+guard, resolves the striking wrist/hand against an explicit right-side target,
+and returns over the same already-screened pose path. It creates no new
+interpolated recovery poses.
+
+| Candidate | Effector P95 | Articulation P95 | Hand gap | Arm clearance | Self contacts | Failures |
+|---|---:|---:|---:|---:|---:|---:|
+| right guarded batter R06 | `0.01581 H` | `0.02899 H` | `0.07367 H` | `0.22593 H` | `0` | `0` |
+
+The Tiger review rig now contains 23 bridge bones instead of the old 16-bone
+collapse. Neck, both clavicles, both wrists and both ankles exist as explicit
+intermediate nodes; physical global deformation is converted through that
+matching hierarchy before Minecraft/Blender applies it.
 
 ## Review artefacts
 
-- `artifacts/motion_research/ordinary_attack_r02/EVA_ORDINARY_ATTACK_RIGHT_R17_TWO_VIEW.mp4`
-- `artifacts/motion_research/ordinary_attack_r02/EVA_ORDINARY_ATTACK_LEFT_R24_TWO_VIEW.mp4`
-- `artifacts/motion_research/ordinary_attack_r03/recovery/EVA_ORDINARY_BATTER_RIGHT_RECOVERY_R29_TWO_VIEW.mp4`
-- `artifacts/motion_research/ordinary_attack_r02/EVA_DIAGONAL_BATTER_RIGHT_R17_60HZ.mp4`
-- `artifacts/motion_research/ordinary_attack_r02/EVA_DIAGONAL_BATTER_LEFT_R24_60HZ.npz`
+- `artifacts/motion_research/ordinary_attack_r03/rebuild_r01/RIGHT_BATTER_REBUILT_R06_REVIEW.blend`
+- `artifacts/motion_research/ordinary_attack_r03/rebuild_r01/RIGHT_BATTER_REBUILT_R06.npz`
+- `artifacts/motion_research/ordinary_attack_r03/rebuild_r01/EVA_ORDINARY_BATTER_RIGHT_REBUILT_R06_TWO_VIEW.mp4`
 
 The two-view files are for human screening only. They are not runtime assets.
 Promotion still requires human acceptance and a contact-driven damage test.
-The right candidate now owns a verified return to its opening guard; the left
-candidate still ends at its terminal review pose.
-
-## Right-batter recovery
-
-The right action now returns through a 30-frame velocity-aware recovery into a
-0.5-second guard hold. Transition tangents are clamped to the model's declared
-joint limits, contact confidence ramps instead of snapping to stable, and only
-the recovery window is jointly contact-solved before being spliced back into
-the independently audited strike.
-
-The complete 139-frame result passes with effector/articulation P95
-`0.01568/0.03253 H`, support drift `0.00069/0.00103 H`, support speed
-`0.00819/0.01069 H/s`, and stable manifold fractions `0.984/1.000`.
 
 ## Isolated Minecraft review
 
-The two candidates are now available only in `SEELE_EVA_MOTION_LAB`; normal
+The rebuilt right candidate is available only in `SEELE_EVA_MOTION_LAB`; normal
 combat input and the R28 save are unchanged. Start `tools\start_motion_lab.bat`,
 then use:
 
@@ -96,12 +90,11 @@ then use:
 /seele motionlab demo unit01 batter_right
 ```
 
-For the left candidate, replace the final argument with `batter_left`. Each
-command plays once and holds the terminal pose; execute `stop` before replaying.
+The rejected left command has been removed. The right command plays once and
+returns to its opening guard; execute `stop` before replaying.
 The chat acknowledgement must begin `STRICT ORDINARY ATTACK PHYSICAL REVIEW`.
 The resource is `assets/projectseele/motion/eva_ordinary_attack_review_v1.json`
-with 2 clips, 16 collapsed visual bones and 205 frames. `batter_right` now uses
-the recovered R29 candidate; its command name is unchanged.
+with 1 clip, 23 bridge bones and 104 frames. `batter_right` uses rebuilt R06.
 
 ## Body-entry follow-up
 

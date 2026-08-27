@@ -231,10 +231,25 @@ def main() -> None:
     transition_qpos = np.asarray(transition_qpos, dtype=np.float64)
     transition_actual = np.asarray(transition_actual, dtype=np.float64)
 
-    # A generated transition's FK trajectory is its explicit reference. The
-    # source clips retain their independently audited desired landmarks.
+    desired_velocity_first = (
+        desired_first[-1] - desired_first[-2]
+    ) / dt
+    desired_velocity_second = (
+        desired_second_aligned[1] - desired_second_aligned[0]
+    ) / dt
+    transition_desired = np.stack([
+        hermite(
+            desired_first[-1], desired_velocity_first,
+            desired_second_aligned[0], desired_velocity_second,
+            phase, duration,
+        )
+        for phase in phases
+    ])
+    # The target path must remain independent from the transition FK result.
+    # Using transition_actual here made any generated pose self-validating and
+    # hid folded limbs from the retarget audit.
     desired = np.concatenate((
-        desired_first, transition_actual, desired_second_aligned
+        desired_first, transition_desired, desired_second_aligned
     ), axis=0)
     tangent = np.concatenate((
         tangent_first, transition_tangent, tangent_second
@@ -330,6 +345,7 @@ def main() -> None:
         "transition_contact_blend_start": transition_blend[0].tolist(),
         "transition_contact_blend_end": transition_blend[-1].tolist(),
         "contact_settle_frames": contact_settle_frames,
+        "transition_goal_authority": "source_desired_hermite_not_measured_fk",
         "status": "composed_kinematic_transition_requires_contact_optimization",
     }
     args.report.parent.mkdir(parents=True, exist_ok=True)

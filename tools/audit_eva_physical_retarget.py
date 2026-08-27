@@ -38,6 +38,29 @@ def runs(values: np.ndarray) -> list[tuple[int, int]]:
     return result
 
 
+def point_segment_distance(point: np.ndarray, first: np.ndarray,
+                           last: np.ndarray) -> float:
+    axis = last - first
+    amount = float(np.dot(point - first, axis)) / max(
+        float(np.dot(axis, axis)), 1.0e-12
+    )
+    amount = min(1.0, max(0.0, amount))
+    return float(np.linalg.norm(point - (first + axis * amount)))
+
+
+def segment_distance(first_a: np.ndarray, last_a: np.ndarray,
+                     first_b: np.ndarray, last_b: np.ndarray) -> float:
+    # Endpoint-to-segment distances are sufficient for the short limb
+    # capsules used by the ordinary-attack topology gate and remain stable at
+    # nearly parallel configurations.
+    return min(
+        point_segment_distance(first_a, first_b, last_b),
+        point_segment_distance(last_a, first_b, last_b),
+        point_segment_distance(first_b, first_a, last_a),
+        point_segment_distance(last_b, first_a, last_a),
+    )
+
+
 def geom_lowest_point(model: mujoco.MjModel, data: mujoco.MjData,
                       geom_name: str) -> np.ndarray:
     geom_id = model.geom(geom_name).id
@@ -67,7 +90,7 @@ def main() -> None:
     parser.add_argument("--model", required=True, type=Path)
     parser.add_argument("--state", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
-    parser.add_argument("--profile", choices=("combat", "pounce"),
+    parser.add_argument("--profile", choices=("combat", "ordinary", "pounce"),
                         default="combat")
     args = parser.parse_args()
 
@@ -291,6 +314,135 @@ def main() -> None:
         }
 
     root_steps = np.linalg.norm(np.diff(root_positions, axis=0), axis=1) / height
+
+    anatomy = None
+    if args.profile == "ordinary":
+        index = {name: names.index(name) for name in names}
+        hand_gaps = []
+        wrist_gaps = []
+        elbow_gaps = []
+        knee_gaps = []
+        ankle_gaps = []
+        cross_arm_distances = []
+        knee_branch_alignment = {"l": [], "r": []}
+        initial_knee_bend = {}
+        for frame, row in enumerate(qpos):
+            data.qpos[:] = row
+            data.qvel[:] = qvel[frame]
+            mujoco.mj_forward(model, data)
+            pelvis_rotation = data.xmat[
+                model.body("pelvis").id
+            ].reshape(3, 3)
+            forward = pelvis_rotation @ np.asarray((1.0, 0.0, 0.0))
+            forward[2] = 0.0
+            forward /= max(float(np.linalg.norm(forward)), 1.0e-12)
+            left = np.asarray((-forward[1], forward[0], 0.0))
+            actual_row = actual[frame]
+
+            def lateral_gap(name_l: str, name_r: str) -> float:
+                return float(np.dot(
+                    actual_row[index[name_l]] - actual_row[index[name_r]],
+                    left,
+                ) / height)
+
+            hand_gaps.append(lateral_gap("hand_l", "hand_r"))
+            wrist_gaps.append(lateral_gap("wrist_l", "wrist_r"))
+            elbow_gaps.append(lateral_gap("elbow_l", "elbow_r"))
+            knee_gaps.append(lateral_gap("knee_l", "knee_r"))
+            ankle_gaps.append(lateral_gap("ankle_l", "ankle_r"))
+            chains = {}
+            for side in ("l", "r"):
+                chains[side] = [
+                    (actual_row[index[f"shoulder_{side}"]],
+                     actual_row[index[f"elbow_{side}"]]),
+                    (actual_row[index[f"elbow_{side}"]],
+                     actual_row[index[f"wrist_{side}"]]),
+                    (actual_row[index[f"wrist_{side}"]],
+                     actual_row[index[f"hand_{side}"]]),
+                ]
+                hip = actual_row[index[f"hip_{side}"]]
+                knee = actual_row[index[f"knee_{side}"]]
+                ankle = actual_row[index[f"ankle_{side}"]]
+                leg_axis = ankle - hip
+                bend = knee - (
+                    hip + leg_axis * float(np.dot(knee - hip, leg_axis))
+                    / max(float(np.dot(leg_axis, leg_axis)), 1.0e-12)
+                )
+                bend /= max(float(np.linalg.norm(bend)), 1.0e-12)
+                if side not in initial_knee_bend:
+                    initial_knee_bend[side] = bend.copy()
+                knee_branch_alignment[side].append(float(np.dot(
+                    bend, initial_knee_bend[side]
+                )))
+            cross_arm_distances.append(min(
+                segment_distance(*left_segment, *right_segment)
+                for left_segment in chains["l"]
+                for right_segment in chains["r"]
+            ) / height)
+
+        data.qpos[:] = model.qpos0
+        data.qvel[:] = 0.0
+        mujoco.mj_forward(model, data)
+        ground_id = model.geom("ground").id
+        baseline_pairs = {
+            tuple(sorted((
+                mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_GEOM,
+                                  int(data.contact[item].geom1)),
+                mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_GEOM,
+                                  int(data.contact[item].geom2)),
+            )))
+            for item in range(data.ncon)
+            if ground_id not in (
+                int(data.contact[item].geom1), int(data.contact[item].geom2)
+            )
+        }
+        # These capsules are separated only by the intermediate thorax body
+        # and overlap at the shoulder socket in otherwise valid bind poses;
+        # they are anatomical neighbours, not cross-body self contacts.
+        baseline_pairs.update({
+            ("abdomen_collision", "clavicle_l_collision"),
+            ("abdomen_collision", "clavicle_r_collision"),
+        })
+        unexpected_contacts = []
+        for frame, row in enumerate(qpos):
+            data.qpos[:] = row
+            data.qvel[:] = qvel[frame]
+            mujoco.mj_forward(model, data)
+            for item in range(data.ncon):
+                contact = data.contact[item]
+                geom1 = int(contact.geom1)
+                geom2 = int(contact.geom2)
+                if ground_id in (geom1, geom2):
+                    continue
+                pair = tuple(sorted((
+                    mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_GEOM,
+                                      geom1),
+                    mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_GEOM,
+                                      geom2),
+                )))
+                if pair not in baseline_pairs and contact.dist < -0.001 * height:
+                    unexpected_contacts.append({
+                        "frame": frame,
+                        "pair": pair,
+                        "penetration_H": float(-contact.dist / height),
+                    })
+        anatomy = {
+            "minimum_hand_lateral_gap_H": float(min(hand_gaps)),
+            "minimum_wrist_lateral_gap_H": float(min(wrist_gaps)),
+            "minimum_elbow_lateral_gap_H": float(min(elbow_gaps)),
+            "minimum_knee_lateral_gap_H": float(min(knee_gaps)),
+            "minimum_ankle_lateral_gap_H": float(min(ankle_gaps)),
+            "minimum_cross_arm_segment_distance_H": float(
+                min(cross_arm_distances)
+            ),
+            "minimum_knee_branch_alignment": {
+                side: float(min(values))
+                for side, values in knee_branch_alignment.items()
+            },
+            "unexpected_self_contact_count": len(unexpected_contacts),
+            "unexpected_self_contacts": unexpected_contacts[:24],
+            "baseline_ignored_contact_pairs": sorted(baseline_pairs),
+        }
     tangent_report = None
     if "tangent" in state:
         tangent = np.asarray(state["tangent"], dtype=np.float64)
@@ -367,6 +519,23 @@ def main() -> None:
         tangent_step_limit = 0.30 if args.profile == "pounce" else 0.25
         if tangent_report["maximum_frame_step"] > tangent_step_limit:
             failures.append("tangent_frame_step_over_profile_limit")
+    if anatomy is not None:
+        if anatomy["minimum_hand_lateral_gap_H"] < 0.05:
+            failures.append("hand_left_right_order_or_gap_invalid")
+        if anatomy["minimum_wrist_lateral_gap_H"] < 0.04:
+            failures.append("wrist_left_right_order_or_gap_invalid")
+        if anatomy["minimum_elbow_lateral_gap_H"] < 0.04:
+            failures.append("elbow_left_right_order_or_gap_invalid")
+        if anatomy["minimum_cross_arm_segment_distance_H"] < 0.035:
+            failures.append("cross_arm_segment_clearance_below_0_035H")
+        if anatomy["minimum_knee_lateral_gap_H"] < 0.08:
+            failures.append("knee_left_right_order_or_gap_invalid")
+        if anatomy["minimum_ankle_lateral_gap_H"] < 0.08:
+            failures.append("ankle_left_right_order_or_gap_invalid")
+        if min(anatomy["minimum_knee_branch_alignment"].values()) < 0.20:
+            failures.append("knee_bend_branch_flip")
+        if anatomy["unexpected_self_contact_count"]:
+            failures.append("unexpected_non_ground_self_contact")
 
     report = {
         "schema": 1,
@@ -391,6 +560,7 @@ def main() -> None:
         "feet": foot_report,
         "maximum_root_step_H": float(np.max(root_steps, initial=0.0)),
         "tangent": tangent_report,
+        "anatomy": anatomy,
         "failures": failures,
         "passed": not failures,
         "status": "kinematic_retarget_audit_not_physical_tracking",

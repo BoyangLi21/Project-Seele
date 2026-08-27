@@ -13,27 +13,36 @@ from scipy.spatial.transform import Rotation
 
 
 BONES = (
-    "root", "torso_lower", "torso_upper", "head",
-    "arm_l", "forearm_l", "hand_l", "arm_r", "forearm_r", "hand_r",
-    "leg_l", "shin_l", "foot_l", "leg_r", "shin_r", "foot_r",
+    "root", "torso_lower", "torso_upper", "neck", "head",
+    "clavicle_l", "arm_l", "forearm_l", "wrist_l", "hand_l",
+    "clavicle_r", "arm_r", "forearm_r", "wrist_r", "hand_r",
+    "leg_l", "shin_l", "ankle_l", "foot_l",
+    "leg_r", "shin_r", "ankle_r", "foot_r",
 )
 BODY_FOR_BONE = {
     "root": "pelvis", "torso_lower": "abdomen",
-    "torso_upper": "thorax", "head": "head",
-    "arm_l": "upper_arm_l", "forearm_l": "forearm_l",
-    "hand_l": "hand_l", "arm_r": "upper_arm_r",
-    "forearm_r": "forearm_r", "hand_r": "hand_r",
-    "leg_l": "thigh_l", "shin_l": "shin_l", "foot_l": "foot_l",
-    "leg_r": "thigh_r", "shin_r": "shin_r", "foot_r": "foot_r",
+    "torso_upper": "thorax", "neck": "neck", "head": "head",
+    "clavicle_l": "clavicle_l", "arm_l": "upper_arm_l",
+    "forearm_l": "forearm_l", "wrist_l": "wrist_link_l",
+    "hand_l": "hand_l", "clavicle_r": "clavicle_r",
+    "arm_r": "upper_arm_r", "forearm_r": "forearm_r",
+    "wrist_r": "wrist_link_r", "hand_r": "hand_r",
+    "leg_l": "thigh_l", "shin_l": "shin_l",
+    "ankle_l": "ankle_link_l", "foot_l": "foot_l",
+    "leg_r": "thigh_r", "shin_r": "shin_r",
+    "ankle_r": "ankle_link_r", "foot_r": "foot_r",
 }
 VISUAL_PARENT = {
     "root": None, "torso_lower": "root", "torso_upper": "torso_lower",
-    "head": "torso_upper", "arm_l": "torso_upper",
-    "forearm_l": "arm_l", "hand_l": "forearm_l",
-    "arm_r": "torso_upper", "forearm_r": "arm_r",
-    "hand_r": "forearm_r", "leg_l": "torso_lower",
-    "shin_l": "leg_l", "foot_l": "shin_l",
-    "leg_r": "torso_lower", "shin_r": "leg_r", "foot_r": "shin_r",
+    "neck": "torso_upper", "head": "neck",
+    "clavicle_l": "torso_upper", "arm_l": "clavicle_l",
+    "forearm_l": "arm_l", "wrist_l": "forearm_l", "hand_l": "wrist_l",
+    "clavicle_r": "torso_upper", "arm_r": "clavicle_r",
+    "forearm_r": "arm_r", "wrist_r": "forearm_r", "hand_r": "wrist_r",
+    "leg_l": "torso_lower", "shin_l": "leg_l",
+    "ankle_l": "shin_l", "foot_l": "ankle_l",
+    "leg_r": "torso_lower", "shin_r": "leg_r",
+    "ankle_r": "shin_r", "foot_r": "ankle_r",
 }
 
 # Physical +X forward/+Y left/+Z up -> Tiger Gecko-authored +Z front/
@@ -151,7 +160,11 @@ def main() -> None:
         "sample_rate": 1.0 / dt,
         "preview_only": True,
         "authority": "offline_strict_physical_replay_not_gameplay_physics",
-        "legacy_visual_chain_collapse": True,
+        "legacy_visual_chain_collapse": False,
+        "visual_bridge_bones": [
+            "neck", "clavicle_l", "clavicle_r",
+            "wrist_l", "wrist_r", "ankle_l", "ankle_r",
+        ],
         "sources": [{"name": args.source_name, "url": args.source_url,
                      "license": args.license}],
         "bones": list(BONES),

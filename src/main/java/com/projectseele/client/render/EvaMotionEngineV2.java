@@ -118,7 +118,7 @@ public final class EvaMotionEngineV2
         }
         boolean replayPreview = previewMode == 1 || previewMode == 2;
         boolean groundedPreview = previewMode == 4 || previewMode == 5;
-        boolean ordinaryAttackReview = previewMode == 6 || previewMode == 7;
+        boolean ordinaryAttackReview = previewMode == 6;
         boolean labPreview = replayPreview || groundedPreview
                 || ordinaryAttackReview;
         MotionDatabase db = ordinaryAttackReview
@@ -212,8 +212,7 @@ public final class EvaMotionEngineV2
         Selection selection;
         if (ordinaryAttackReview)
         {
-            String clipName = previewMode == 6
-                    ? "ordinary_batter_right" : "ordinary_batter_left";
+            String clipName = "ordinary_batter_right";
             selection = Selection.single(db.clip(clipName), clipName);
             runtime.landingActive = false;
         }
