@@ -173,7 +173,8 @@ def main() -> None:
              and obj.name not in {"PART::knife", "PART::cannon", "PART::lance"}]
     if len(parts) != 43:
         raise SystemExit(f"expected 43 exact mesh parts, found {len(parts)}")
-    idle = sample(scene, parts, ranges["idle"][0])
+    baseline_name = "idle" if "idle" in ranges else next(iter(ranges))
+    idle = sample(scene, parts, ranges[baseline_name][0])
     baseline_height = idle["span"][2]
     baseline_ankle = {
         "left": idle["left_ankle_z"],
@@ -247,6 +248,7 @@ def main() -> None:
         "profile": args.profile,
         "blend": bpy.data.filepath,
         "motion_db_sha256": motion_hash,
+        "baseline_clip": baseline_name,
         "baseline_height": baseline_height,
         "baseline_ankle_z": baseline_ankle,
         "clip_count": len(clips),

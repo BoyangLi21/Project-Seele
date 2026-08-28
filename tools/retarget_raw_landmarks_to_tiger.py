@@ -139,6 +139,9 @@ def main() -> None:
     parser.add_argument("--parallel-transport-twist", action="store_true",
                         help=("transport the prior axial roll using only "
                               "captured segment directions"))
+    parser.add_argument("--root-height-offset-m", type=float, default=0.0,
+                        help=("standing-reference root-height offset applied "
+                              "to every output frame"))
     args = parser.parse_args()
 
     source = np.load(args.landmarks)
@@ -389,6 +392,7 @@ def main() -> None:
         root_m = np.asarray((
             -runtime_pixels[0], runtime_pixels[1], runtime_pixels[2]
         )) / MODEL_UNITS_PER_METRE
+        root_m[1] += args.root_height_offset_m
         output_frames.append({
             "root_m": [round(float(value), 7) for value in root_m],
             "rotation_wxyz": (

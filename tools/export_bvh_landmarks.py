@@ -78,6 +78,8 @@ parser.add_argument("--source-url", required=True)
 parser.add_argument("--license", required=True)
 parser.add_argument("--output-fps", type=float)
 parser.add_argument("--body-height-source-units", type=float)
+parser.add_argument("--basis-frame", type=int,
+                    help="standing frame used to derive forward/left axes")
 args = parser.parse_args(sys.argv[sys.argv.index("--") + 1:])
 
 bpy.ops.object.select_all(action="SELECT")
@@ -146,9 +148,11 @@ def world_point(bone_name: str, tail: bool = False) -> Vector:
     return rig.matrix_world @ (bone.tail if tail else bone.head)
 
 
-set_source_frame(frames[0])
+basis_frame = args.basis_frame or frames[0]
+if not available[0] <= basis_frame <= available[1]:
+    raise SystemExit(f"basis frame {basis_frame} outside {available}")
+set_source_frame(float(basis_frame))
 bpy.context.view_layer.update()
-origin = world_point(bone_for["pelvis"])
 # BVH import has already converted the capture to Blender's gravity frame.
 # Body lean is motion, not a coordinate-system axis; deriving "up" from the
 # pelvis-to-head line tilts the floor and creates impossible one-foot heights.
@@ -163,6 +167,9 @@ toe_hint = (
 )
 toe_hint -= up * toe_hint.dot(up)
 toe_alignment = forward.dot(toe_hint.normalized()) if toe_hint.length else 0.0
+set_source_frame(frames[0])
+bpy.context.view_layer.update()
+origin = world_point(bone_for["pelvis"])
 
 
 def canonical(point_value: Vector) -> np.ndarray:
@@ -262,6 +269,7 @@ metadata = {
     "dynamic_window_median_height_source_units": dynamic_median_height,
     "coordinate_system": "+X forward, +Y left, +Z up",
     "basis": {
+        "source_frame": float(basis_frame),
         "forward_world": list(forward),
         "left_world": list(left),
         "up_world": list(up),

@@ -61,6 +61,9 @@ THUMB_CONTROL_ONLY_BONES = {
 STANDARD_EVA_FINGER_MESH_PARTS = (
     STANDARD_EVA_FINGER_BONES - THUMB_CONTROL_ONLY_BONES
 )
+STANDARD_EVA_ANIMATION_FINGER_BONES = (
+    STANDARD_EVA_FINGER_BONES - THUMB_CONTROL_ONLY_BONES
+)
 STANDARD_EVA_MESH_PARTS = {
     "torso_upper", "torso_lower", "head",
     "pylon_r", "pylon_l",
@@ -110,16 +113,16 @@ STANDARD_EVA_ANIMATION_BONES = {
     "animation.eva_unit01.prone": {"arm_l", "arm_r", "forearm_l", "forearm_r"},
     "animation.eva_unit01.aim": {
         "arm_l", "arm_r", "forearm_l", "forearm_r", "hand_l"
-    } | STANDARD_EVA_FINGER_BONES,
+    } | STANDARD_EVA_ANIMATION_FINGER_BONES,
     "animation.eva_unit01.knife_ready": {
         "arm_l", "arm_r", "forearm_l", "forearm_r", "knife"
-    } | STANDARD_EVA_FINGER_BONES,
+    } | STANDARD_EVA_ANIMATION_FINGER_BONES,
     "animation.eva_unit01.lance_ready": {
         "arm_l", "arm_r", "forearm_l", "forearm_r", "lance"
-    } | STANDARD_EVA_FINGER_BONES,
+    } | STANDARD_EVA_ANIMATION_FINGER_BONES,
     "animation.eva_unit01.lance_carry": {
         "arm_l", "arm_r", "forearm_l", "forearm_r", "lance"
-    } | STANDARD_EVA_FINGER_BONES,
+    } | STANDARD_EVA_ANIMATION_FINGER_BONES,
     "animation.eva_unit01.shield_brace": {"arm_l", "arm_r", "forearm_l", "forearm_r"},
     "animation.eva_unit01.visual_lance_windup": {"arm_l", "arm_r", "forearm_l", "forearm_r"},
     "animation.eva_unit01.visual_lance_contact": {"arm_l", "arm_r", "forearm_l", "forearm_r"},
@@ -132,9 +135,8 @@ REAL_MOCAP_REQUIRED_ANIMATIONS = {
     f"animation.eva_unit01.{suffix}"
     for suffix in (
         "knife", "knife_heavy", "lance_thrust",
-        "crouch", "crouch_walk", "prone", "crawl",
-        "stand_to_crouch", "crouch_to_stand",
-        "crouch_to_prone", "prone_to_crouch",
+        "crouch", "crouch_walk", "stand_to_crouch",
+        "crouch_to_stand",
         "berserk_roar", "berserk_run", "berserk_claw_r",
         "berserk_claw_l", "berserk_pounce",
     )
@@ -144,18 +146,13 @@ REAL_MOCAP_LOOP_ANIMATIONS = {
     f"animation.eva_unit01.{suffix}"
     for suffix in (
         "knife_ready", "lance_ready", "lance_carry",
-        "prone_lance_ready", "crouch", "crouch_walk", "prone",
-        "crawl", "berserk_run",
+        "crouch", "crouch_walk", "berserk_run",
     )
 }
 
 REAL_MOCAP_TRANSITION_EDGES = (
     ("stand_to_crouch", "end", "crouch", "start"),
     ("crouch_to_stand", "start", "crouch", "start"),
-    ("crouch_to_prone", "start", "crouch", "start"),
-    ("crouch_to_prone", "end", "prone", "start"),
-    ("prone_to_crouch", "start", "prone", "start"),
-    ("prone_to_crouch", "end", "crouch", "start"),
 )
 
 ROTATION_ONLY_LIMB_BONES = {
@@ -467,6 +464,19 @@ def rotation_edge(animation: dict, bone_name: str, edge: str):
     return authored_quaternion(channel[keys[0 if edge == "start" else -1]])
 
 
+def position_edge(animation: dict, bone_name: str, edge: str):
+    channel = animation.get("bones", {}).get(bone_name, {}).get("position")
+    if not isinstance(channel, dict) or not channel:
+        return None
+    keys = sorted(channel, key=float)
+    return tuple(float(value)
+                 for value in channel[keys[0 if edge == "start" else -1]])
+
+
+def position_distance(left, right) -> float:
+    return math.sqrt(sum((a - b) ** 2 for a, b in zip(left, right)))
+
+
 def quaternion_angle_degrees(left, right) -> float:
     dot = abs(sum(a * b for a, b in zip(left, right)))
     return math.degrees(2.0 * math.acos(max(-1.0, min(1.0, dot))))
@@ -489,6 +499,15 @@ def validate_real_mocap_animation_contract(stem: str,
                     f"{stem}: {animation_name}.{bone_name} loop seam "
                     f"{seam:.4f} degrees exceeds 0.01"
                 )
+            first_position = position_edge(animation, bone_name, "start")
+            last_position = position_edge(animation, bone_name, "end")
+            if first_position is not None and last_position is not None:
+                position_seam = position_distance(first_position, last_position)
+                if position_seam > 0.01:
+                    raise ValidationError(
+                        f"{stem}: {animation_name}.{bone_name} position loop "
+                        f"seam {position_seam:.4f} pixels exceeds 0.01"
+                    )
     for source_suffix, source_edge, target_suffix, target_edge \
             in REAL_MOCAP_TRANSITION_EDGES:
         source_name = f"animation.eva_unit01.{source_suffix}"
@@ -508,14 +527,22 @@ def validate_real_mocap_animation_contract(stem: str,
                     f"{target_suffix}:{target_edge} differs by "
                     f"{error:.4f} degrees on {bone_name}"
                 )
+            source_position = position_edge(source, bone_name, source_edge)
+            target_position = position_edge(target, bone_name, target_edge)
+            if source_position is not None and target_position is not None:
+                position_error = position_distance(
+                    source_position, target_position)
+                if position_error > 0.01:
+                    raise ValidationError(
+                        f"{stem}: transition {source_suffix}:{source_edge} -> "
+                        f"{target_suffix}:{target_edge} position differs by "
+                        f"{position_error:.4f} pixels on {bone_name}"
+                    )
     rotation_only_animations = REAL_MOCAP_REQUIRED_ANIMATIONS | {
         f"animation.eva_unit01.{suffix}"
         for suffix in (
-            "knife_ready", "crouch_knife", "prone_knife",
-            "crouch_knife_heavy", "prone_knife_heavy",
+            "knife_ready", "crouch_knife", "crouch_knife_heavy",
             "lance_ready", "lance_carry", "crouch_lance_thrust",
-            "prone_lance_ready", "prone_lance_thrust",
-            "prone_rifle_aim",
         )
     }
     for animation_name in rotation_only_animations:

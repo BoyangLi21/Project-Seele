@@ -35,8 +35,8 @@ BASE_GEO = REPO / "src/main/resources/assets/projectseele/geo/eva_unit01.geo.jso
 BASE_ANIMATION = REPO / "src/main/resources/assets/projectseele/animations/eva_unit01.animation.json"
 ACCEPTED_LOCOMOTION = REPO / "tools/eva_locomotion_accad_r32.json"
 REAL_MOCAP_PATCH = REPO / "tools/eva_real_mocap_r01.json"
-REAL_MOCAP_WEAPON_CONTACTS = (
-    REPO / "tools/eva_real_mocap_weapon_contacts_r01.json")
+ACCEPTED_REAL_MOCAP_ACTIONS = (
+    REPO / "tools/eva_real_mocap_accepted_r02.json")
 BASE_TEXTURE = REPO / "src/main/resources/assets/projectseele/textures/entity/eva_unit01.png"
 MODEL_HEIGHT = 192.0
 ATLAS_WIDTH = 1024
@@ -1277,19 +1277,8 @@ def _apply_cmu_rifle_body_layer(data):
         "0.18": [4.67256, 2.36232, -3.90043]})
 
 
-def _remove_prone_rifle_hand_offsets(data):
-    """Keep the prone rifle chain rotation-only on the Tiger hierarchy."""
-    bones = data["animations"][
-        "animation.eva_unit01.prone_rifle_aim"]["bones"]
-    for bone_name in (
-            "arm_l", "forearm_l", "wrist_l", "hand_l",
-            "arm_r", "forearm_r", "wrist_r", "hand_r"):
-        if bone_name in bones:
-            bones[bone_name].pop("position", None)
-
-
 def _apply_real_mocap_layers(data):
-    """Overlay captured body channels without discarding exact attachments."""
+    """Install only the independently accepted berserk capture layer."""
     patch = json.loads(REAL_MOCAP_PATCH.read_text(encoding="utf-8"))
     if patch.get("schema") != 1:
         raise RuntimeError("unsupported EVA real-mocap patch schema")
@@ -1298,7 +1287,15 @@ def _apply_real_mocap_layers(data):
         animations["animation.eva_unit01.melee"]["bones"])
     left_claw = copy.deepcopy(
         animations["animation.eva_unit01.melee_left"]["bones"])
+    accepted = {
+        f"animation.eva_unit01.{suffix}"
+        for suffix in (
+            "berserk_roar", "berserk_run", "berserk_claw_r",
+            "berserk_claw_l", "berserk_pounce")
+    }
     for name, replacement in patch["replace_animations"].items():
+        if name not in accepted:
+            continue
         if name not in animations:
             animations[name] = copy.deepcopy(replacement)
             continue
@@ -1327,19 +1324,21 @@ def _apply_real_mocap_layers(data):
                 bones[bone_name] = channels
 
 
-def _apply_real_mocap_weapon_contacts(data):
-    """Install exact-mesh weapon constraints after body retargeting."""
-    patch = json.loads(REAL_MOCAP_WEAPON_CONTACTS.read_text(
+def _apply_accepted_real_mocap_actions(data):
+    """Install only weapon/crouch motions that passed exact-mesh review."""
+    patch = json.loads(ACCEPTED_REAL_MOCAP_ACTIONS.read_text(
         encoding="utf-8"))
-    if patch.get("format_version") != 1:
-        raise RuntimeError("unsupported EVA real-mocap weapon patch schema")
+    if patch.get("schema") != 1:
+        raise RuntimeError("unsupported accepted EVA mocap patch schema")
     animations = data["animations"]
+    creatable = {
+        "animation.eva_unit01.stand_to_crouch",
+        "animation.eva_unit01.crouch_to_stand",
+    }
     for name, replacement in patch["replace_animations"].items():
-        if name not in animations:
-            raise RuntimeError(f"real-mocap weapon target missing: {name}")
+        if name not in animations and name not in creatable:
+            raise RuntimeError(f"accepted real-mocap target missing: {name}")
         animations[name] = copy.deepcopy(replacement)
-
-
 def _set_hand_curl(bones, side, curl=22, thumb=17, tip_curl=12, thumb_tip=4,
                    cup=0, thumb_cup=None, tip_cup=0, distal_curl=0,
                    thumb_distal=0):
@@ -2611,42 +2610,40 @@ def build_animations():
     animations["animation.eva_unit01.visual_fall"] = static_pose(
         animations["animation.eva_unit01.jump"], 1.25)
     _apply_real_mocap_layers(data)
+    # Reviewed repairs and the accepted locomotion catalogue still encode
+    # the former canonical-Z thumb curl. Convert those legacy channels before
+    # installing R02 weapon motion, whose 26 visible finger controls already
+    # contain the solved native-thumb opposition quaternion.
+    _repair_native_thumb_animation_channels(data)
+    _apply_accepted_real_mocap_actions(data)
+    animations = data["animations"]
     animations["animation.eva_unit01.visual_crouch_walk"] = static_pose(
         animations["animation.eva_unit01.crouch_walk"], 0.0)
-    animations["animation.eva_unit01.visual_crawl"] = static_pose(
-        animations["animation.eva_unit01.crawl"], 0.0)
     animations["animation.eva_unit01.visual_knife_ready"] = static_pose(
         animations["animation.eva_unit01.knife_ready"], 0.0)
     animations["animation.eva_unit01.visual_knife_windup"] = static_pose(
-        animations["animation.eva_unit01.knife"], 0.22)
+        animations["animation.eva_unit01.knife"], 0.30)
     animations["animation.eva_unit01.visual_knife_contact"] = static_pose(
-        animations["animation.eva_unit01.knife"], 0.53)
+        animations["animation.eva_unit01.knife"], 0.66)
     animations["animation.eva_unit01.visual_knife_recovery"] = static_pose(
-        animations["animation.eva_unit01.knife"], 0.90)
+        animations["animation.eva_unit01.knife"], 1.15)
     animations["animation.eva_unit01.visual_knife_heavy_contact"] = static_pose(
-        animations["animation.eva_unit01.knife_heavy"], 0.55)
+        animations["animation.eva_unit01.knife_heavy"], 0.66)
     animations["animation.eva_unit01.visual_lance_ready"] = static_pose(
         animations["animation.eva_unit01.lance_ready"], 0.0)
     animations["animation.eva_unit01.visual_lance_windup"] = static_pose(
         animations["animation.eva_unit01.lance_thrust"], 0.30)
     animations["animation.eva_unit01.visual_lance_contact"] = static_pose(
-        animations["animation.eva_unit01.lance_thrust"], 0.63)
+        animations["animation.eva_unit01.lance_thrust"], 0.66)
     animations["animation.eva_unit01.visual_lance_recovery"] = static_pose(
-        animations["animation.eva_unit01.lance_thrust"], 1.10)
+        animations["animation.eva_unit01.lance_thrust"], 1.15)
     animations["animation.eva_unit01.visual_crouch_knife_contact"] = composed_pose(
         "animation.eva_unit01.crouch", 0.0,
-        "animation.eva_unit01.crouch_knife", 0.53)
-    animations["animation.eva_unit01.visual_prone_knife_contact"] = composed_pose(
-        "animation.eva_unit01.prone", 0.0,
-        "animation.eva_unit01.prone_knife", 0.53)
+        "animation.eva_unit01.crouch_knife", 0.66)
     animations["animation.eva_unit01.visual_crouch_lance_contact"] = composed_pose(
         "animation.eva_unit01.crouch", 0.0,
-        "animation.eva_unit01.crouch_lance_thrust", 0.63)
-    animations["animation.eva_unit01.visual_prone_lance_contact"] = composed_pose(
-        "animation.eva_unit01.prone", 0.0,
-        "animation.eva_unit01.prone_lance_thrust", 0.63)
+        "animation.eva_unit01.crouch_lance_thrust", 0.66)
     _apply_cmu_rifle_body_layer(data)
-    _remove_prone_rifle_hand_offsets(data)
     animations["animation.eva_unit01.visual_rifle"] = static_pose(
         animations["animation.eva_unit01.rifle_aim"], 0.0)
     animations["animation.eva_unit01.visual_rifle_walk_contact"] = composed_pose(
@@ -2655,12 +2652,6 @@ def build_animations():
     animations["animation.eva_unit01.visual_crouch_rifle_contact"] = composed_pose(
         "animation.eva_unit01.crouch_walk", 0.0,
         "animation.eva_unit01.rifle_aim", 0.0)
-    # Reviewed overrides and the accepted locomotion catalogue still encode
-    # the former canonical-Z thumb curl.  Convert those final channels only
-    # after every catalogue replacement so the tracked fallback and local
-    # high-detail pack both drive the one-piece native thumb in opposition.
-    _repair_native_thumb_animation_channels(data)
-    _apply_real_mocap_weapon_contacts(data)
     return data
 
 

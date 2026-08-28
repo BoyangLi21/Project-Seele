@@ -35,6 +35,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--gap-frames", type=int, default=16)
     parser.add_argument("--align-forward-axis", action="store_true")
     parser.add_argument("--axis-only", action="store_true")
+    parser.add_argument("--right-surface-only", action="store_true",
+                        help="translate the weapon socket onto the right hand")
     return parser.parse_args(sys.argv[sys.argv.index("--") + 1 :])
 
 
@@ -144,6 +146,54 @@ def main() -> None:
                 f"output={args.output}"
             )
             return
+    if args.right_surface_only:
+        socket_diagnostics = []
+        for clip_name, (timeline_start, _timeline_end) in ranges.items():
+            weapon_name = weapon_for_clip(clip_name)
+            if weapon_name is None:
+                continue
+            clip = output["clips"][clip_name]
+            weapon_part = bpy.data.objects[f"PART::{weapon_name}"]
+            right_hand = bpy.data.objects["PART::hand_r"]
+            for local_index, frame in enumerate(clip["frames"]):
+                bpy.context.scene.frame_set(timeline_start + local_index)
+                bpy.context.view_layer.update()
+                delta_world = closest_delta(weapon_part, right_hand)
+                parent_rotation = bpy.data.objects[
+                    "JOINT::hand_r"].matrix_world.to_quaternion()
+                delta = (parent_rotation.conjugated() @ delta_world) / max(
+                    master_scale, 1.0e-8)
+                authored_delta = Vector((-delta.x, delta.z, -delta.y))
+                positions = frame.setdefault("bone_position_xyz", {})
+                existing = Vector(tuple(float(value) for value in
+                                        positions.get(weapon_name,
+                                                      (0.0, 0.0, 0.0))))
+                solved = existing + authored_delta
+                positions[weapon_name] = [
+                    round(float(value), 7) for value in solved]
+                socket_diagnostics.append({
+                    "clip": clip_name,
+                    "frame": local_index,
+                    "delta_model_pixels": round(delta.length, 7),
+                })
+        output["weapon_socket_solve"] = {
+            "authority": "exact_mesh_right_hand_to_weapon_surface_delta",
+            "frame_count": len(socket_diagnostics),
+            "maximum_delta_model_pixels": max(
+                (item["delta_model_pixels"]
+                 for item in socket_diagnostics), default=0.0),
+        }
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(
+            json.dumps(output, ensure_ascii=False,
+                       separators=(",", ":")) + "\n",
+            encoding="utf-8",
+        )
+        print(
+            f"EVA weapon socket solve: frames={len(socket_diagnostics)} "
+            f"output={args.output}"
+        )
+        return
     for clip_name, (timeline_start, _timeline_end) in ranges.items():
         weapon_name = weapon_for_clip(clip_name)
         if weapon_name is None:

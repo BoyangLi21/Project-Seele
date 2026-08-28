@@ -110,7 +110,7 @@ gate(
 roar = animation.get("animations", {}).get("animation.eva_unit01.berserk_roar", {})
 gate(
     "berserk.visual_contract",
-    roar.get("animation_length") == 1.6
+    abs(float(roar.get("animation_length", 0.0)) - 2.08333) < 0.00001
     and all(name in roar.get("bones", {}) for name in (
         "head", "torso_upper", "arm_l", "arm_r", "forearm_l", "forearm_r"))
     and all(token in entity for token in (

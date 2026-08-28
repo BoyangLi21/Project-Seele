@@ -19,10 +19,14 @@ UPPER = {
     "forearm_r", "wrist_r", "hand_r",
 }
 FULL = UPPER | {
-    "torso_lower", "leg_l", "shin_l", "ankle_l", "foot_l",
+    "root", "torso_lower", "leg_l", "shin_l", "ankle_l", "foot_l",
     "leg_r", "shin_r", "ankle_r", "foot_r",
 }
 POUNCE = FULL - {"foot_l", "foot_r"}
+KNIFE_UPPER = UPPER | {"knife"}
+KNIFE_FULL = FULL | {"knife"}
+LANCE_UPPER = UPPER | {"lance"}
+LANCE_FULL = FULL | {"lance"}
 
 
 @dataclass(frozen=True)
@@ -37,51 +41,32 @@ class Export:
 
 
 EXPORTS = (
-    Export("knife_strike", "knife", "knife_ready", frozenset(UPPER),
+    Export("knife_light", "knife_light", "knife_ready",
+           frozenset(KNIFE_UPPER),
            loop=True, static=True),
-    Export("knife_strike", "knife", "knife", frozenset(FULL)),
-    Export("knife_strike", "knife", "crouch_knife", frozenset(UPPER)),
-    Export("knife_strike", "knife", "prone_knife", frozenset(UPPER)),
-    Export("knife_heavy", "knife_heavy", "knife_heavy", frozenset(FULL)),
+    Export("knife_light", "knife_light", "knife", frozenset(KNIFE_FULL)),
+    Export("knife_light", "knife_light", "crouch_knife",
+           frozenset(KNIFE_UPPER)),
+    Export("knife_heavy", "knife_heavy", "knife_heavy",
+           frozenset(KNIFE_FULL)),
     Export("knife_heavy", "knife_heavy", "crouch_knife_heavy",
-           frozenset(UPPER)),
-    Export("knife_heavy", "knife_heavy", "prone_knife_heavy",
-           frozenset(UPPER)),
+           frozenset(KNIFE_UPPER)),
     Export("lance_thrust", "lance_thrust", "lance_ready",
-           frozenset(UPPER), loop=True, static=True),
+           frozenset(LANCE_UPPER), loop=True, static=True),
     Export("lance_thrust", "lance_thrust", "lance_carry",
-           frozenset(UPPER), loop=True, static=True),
-    Export("lance_thrust", "lance_thrust", "prone_lance_ready",
-           frozenset(UPPER), loop=True, static=True),
+           frozenset(LANCE_UPPER), loop=True, static=True),
     Export("lance_thrust", "lance_thrust", "lance_thrust",
-           frozenset(FULL)),
+           frozenset(LANCE_FULL)),
     Export("lance_thrust", "lance_thrust", "crouch_lance_thrust",
-           frozenset(UPPER)),
-    Export("lance_thrust", "lance_thrust", "prone_lance_thrust",
-           frozenset(UPPER)),
-    Export("crouch_idle", "crouch", "crouch", frozenset(FULL), loop=True),
+           frozenset(LANCE_UPPER)),
+    Export("crouch_idle", "crouch_idle", "crouch", frozenset(FULL),
+           loop=True),
     Export("stand_to_crouch", "stand_to_crouch", "stand_to_crouch",
            frozenset(FULL)),
     Export("stand_to_crouch", "stand_to_crouch", "crouch_to_stand",
            frozenset(FULL), reverse=True),
     Export("crouch_walk", "crouch_walk", "crouch_walk",
            frozenset(FULL), loop=True),
-    Export("prone_idle", "prone", "prone", frozenset(FULL), loop=True),
-    Export("crouch_to_prone", "crouch_to_prone", "crouch_to_prone",
-           frozenset(FULL)),
-    Export("prone_to_crouch", "prone_to_crouch", "prone_to_crouch",
-           frozenset(FULL)),
-    Export("crawl", "crawl", "crawl", frozenset(FULL), loop=True),
-    Export("berserk_roar", "berserk_roar", "berserk_roar",
-           frozenset(FULL)),
-    Export("berserk_run", "berserk_run", "berserk_run",
-           frozenset(FULL), loop=True),
-    Export("berserk_claw_r", "berserk_claw_r", "berserk_claw_r",
-           frozenset(FULL)),
-    Export("berserk_claw_l", "berserk_claw_l", "berserk_claw_l",
-           frozenset(FULL)),
-    Export("berserk_pounce", "berserk_pounce", "berserk_pounce",
-           frozenset(POUNCE)),
 )
 
 
@@ -99,6 +84,8 @@ def animation(document: dict, clip_name: str, selected: frozenset[str],
     clip = document["clips"][clip_name]
     frames = clip["frames"]
     fps = float(document.get("sample_rate", 60.0))
+    selected = frozenset(selected) | frozenset(
+        name for name in document["bones"] if name.startswith("finger_"))
     indices = [0] if static else list(range(0, len(frames), 2))
     if indices[-1] != len(frames) - 1:
         indices.append(len(frames) - 1)
@@ -136,6 +123,27 @@ def animation(document: dict, clip_name: str, selected: frozenset[str],
                 for seconds, row in zip(sample_times, degrees)
             }
         bones[bone_name] = {"rotation": rotation}
+        if bone_name == "root":
+            positions = np.asarray([
+                frames[index]["root_m"] for index in indices
+            ], dtype=np.float64)
+            if loop and not static and len(positions) > 1:
+                drift = positions[-1] - positions[0]
+                positions -= np.asarray([
+                    drift * (index / (len(positions) - 1))
+                    for index in range(len(positions))
+                ])
+            authored_positions = positions * 112.0
+            if static:
+                values = [clean(value) for value in authored_positions[0]]
+                position = {"0.0": values, "1.2": values}
+            else:
+                position = {
+                    key(seconds): [clean(value) for value in row]
+                    for seconds, row in zip(sample_times,
+                                            authored_positions)
+                }
+            bones[bone_name]["position"] = position
     duration = 1.2 if static else sample_times[-1]
     output = {
         "animation_length": clean(duration),
@@ -182,6 +190,32 @@ def match_edge(animation: dict, target: dict, edge: str,
             item: [clean(value) for value in row]
             for item, row in zip(keys, np.degrees(euler))
         })
+        position = animation["bones"][bone_name].get("position")
+        target_position = target["bones"][bone_name].get("position")
+        if not isinstance(position, dict) or not isinstance(target_position, dict):
+            continue
+        position_keys = sorted(position, key=float)
+        target_position_keys = sorted(target_position, key=float)
+        current_edge = np.asarray(
+            position[position_keys[edge_index]], dtype=np.float64)
+        desired_position = np.asarray(
+            target_position[target_position_keys[edge_index]], dtype=np.float64)
+        correction_position = desired_position - current_edge
+        first_position_time = float(position_keys[0])
+        last_position_time = float(position_keys[-1])
+        for item in position_keys:
+            seconds = float(item)
+            if edge == "start":
+                weight = max(0.0, 1.0 - (seconds - first_position_time)
+                             / fade_seconds)
+            else:
+                weight = max(0.0, 1.0 - (last_position_time - seconds)
+                             / fade_seconds)
+            value = np.asarray(position[item], dtype=np.float64)
+            position[item] = [
+                clean(component)
+                for component in value + correction_position * weight
+            ]
 
 
 def main() -> None:
@@ -205,19 +239,10 @@ def main() -> None:
             documents[item.source], item.clip, item.bones,
             item.loop, item.static, item.reverse)
     crouch = replacements["animation.eva_unit01.crouch"]
-    prone = replacements["animation.eva_unit01.prone"]
     match_edge(replacements["animation.eva_unit01.stand_to_crouch"],
                crouch, "end")
     match_edge(replacements["animation.eva_unit01.crouch_to_stand"],
                crouch, "start")
-    match_edge(replacements["animation.eva_unit01.crouch_to_prone"],
-               crouch, "start")
-    match_edge(replacements["animation.eva_unit01.crouch_to_prone"],
-               prone, "end")
-    match_edge(replacements["animation.eva_unit01.prone_to_crouch"],
-               prone, "start")
-    match_edge(replacements["animation.eva_unit01.prone_to_crouch"],
-               crouch, "end")
     payload = {
         "schema": 1,
         "authority": "real_human_mocap_body_plus_target_weapon_constraints",
