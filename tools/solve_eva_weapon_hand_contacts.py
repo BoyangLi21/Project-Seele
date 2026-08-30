@@ -37,6 +37,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--axis-only", action="store_true")
     parser.add_argument("--right-surface-only", action="store_true",
                         help="translate the weapon socket onto the right hand")
+    parser.add_argument("--refine-left-surface", action="store_true",
+                        help="second-pass left palm mesh-to-weapon refinement")
     return parser.parse_args(sys.argv[sys.argv.index("--") + 1 :])
 
 
@@ -55,11 +57,6 @@ def closest_delta(first: bpy.types.Object,
             best_distance = distance
             best_delta = nearest - point
     return best_delta
-
-
-def closest_point(point: Vector, obj: bpy.types.Object) -> Vector:
-    return min((obj.matrix_world @ vertex.co for vertex in obj.data.vertices),
-               key=lambda candidate: (candidate - point).length_squared)
 
 
 def blender_to_runtime(vector: Vector) -> Vector:
@@ -217,7 +214,17 @@ def main() -> None:
                     "JOINT::clavicle_l"].matrix_world.translation
                 clavicle_parent = bpy.data.objects[
                     "JOINT::aim_pitch"].matrix_world.to_quaternion()
-                desired_world = closest_point(clavicle_center, weapon_part)
+                # A nearest-surface target lets both hands collapse onto the
+                # rear socket.  Longinus needs a visibly separated guide hand
+                # farther down the shaft, like a real two-hand spear thrust.
+                if args.refine_left_surface:
+                    desired_world = (
+                        bpy.data.objects["JOINT::hand_l"].matrix_world.translation
+                        + delta_blender * master_scale)
+                else:
+                    guide_local = target_to_blender(
+                        pivots[weapon_name] + Vector((0.0, -34.0, 0.0)))
+                    desired_world = weapon_part.matrix_world @ guide_local
                 clavicle_rest = target_to_blender(
                     pivots["arm_l"] - pivots["clavicle_l"])
                 desired_clavicle = (clavicle_parent.conjugated()

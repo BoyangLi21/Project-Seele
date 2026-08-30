@@ -1343,6 +1343,26 @@ def _apply_accepted_real_mocap_actions(data):
         if name not in animations and name not in creatable:
             raise RuntimeError(f"accepted real-mocap target missing: {name}")
         animations[name] = copy.deepcopy(replacement)
+    # Positional mocap contains no finger capture.  A zero-channel Tiger hand
+    # leaves its long articulated plates fanned apart, which reads as detached
+    # geometry in prone/crawl views.  Install one compact, symmetric support
+    # curl without changing any captured shoulder, elbow, pelvis or leg curve.
+    for suffix in (
+            "crouch", "crouch_walk", "stand_to_crouch",
+            "crouch_to_stand", "prone", "crawl",
+            "crouch_to_prone", "prone_to_crouch",
+            "stand_to_prone", "prone_to_stand"):
+        animation = animations.get(f"animation.eva_unit01.{suffix}")
+        if animation is None:
+            continue
+        bones = animation.setdefault("bones", {})
+        for side in ("l", "r"):
+            _set_hand_curl(
+                bones, side, curl=78, thumb=48,
+                tip_curl=62, thumb_tip=28,
+                distal_curl=42, thumb_distal=0,
+            )
+            bones.pop(f"finger_thumb_distal_{side}", None)
 def _set_hand_curl(bones, side, curl=22, thumb=17, tip_curl=12, thumb_tip=4,
                    cup=0, thumb_cup=None, tip_cup=0, distal_curl=0,
                    thumb_distal=0):

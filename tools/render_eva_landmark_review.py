@@ -65,7 +65,7 @@ def main() -> None:
     render_indices = (np.linspace(0, len(points) - 1, 6).astype(int)
                       if args.sheet_only else np.arange(len(points)))
     frames = []
-    for frame_index in render_indices:
+    for sample_number, frame_index in enumerate(render_indices, 1):
         row = points[frame_index]
         figure = plt.figure(figsize=(9.6, 7.2), dpi=100, facecolor="#07090d")
         for panel, (elevation, azimuth, title) in enumerate(views, 1):
@@ -96,6 +96,16 @@ def main() -> None:
         figure.suptitle(
             f"{args.title} | source {source_frames[frame_index]:.1f}",
             color="white", fontsize=11,
+        )
+        # The red number is a chronological review index, not a joint marker
+        # or source texture.  It makes visual feedback unambiguous when a
+        # contact sheet is discussed out of band: smaller numbers are earlier.
+        figure.text(
+            0.975, 0.025, f"{sample_number:02d}",
+            color="#ff1f1f", fontsize=24, fontweight="bold",
+            horizontalalignment="right", verticalalignment="bottom",
+            bbox={"facecolor": "white", "edgecolor": "none", "alpha": 0.9,
+                  "pad": 1.5},
         )
         figure.tight_layout(pad=0.8)
         figure.canvas.draw()

@@ -57,17 +57,17 @@ EXPORTS = (
            frozenset(LANCE_UPPER), loop=True, static=True),
     Export("lance_thrust", "lance_thrust", "lance_carry",
            frozenset(LANCE_UPPER), loop=True, static=True),
-    Export("lance_thrust", "lance_thrust", "lance_thrust",
+    Export("lance_thrust_v03", "lance_thrust", "lance_thrust",
            frozenset(LANCE_FULL)),
-    Export("lance_thrust", "lance_thrust", "crouch_lance_thrust",
+    Export("lance_thrust_v03", "lance_thrust", "crouch_lance_thrust",
            frozenset(LANCE_UPPER)),
-    Export("crouch_idle", "crouch_idle", "crouch", frozenset(FULL),
+    Export("crouch_idle_v03", "crouch_idle", "crouch", frozenset(FULL),
            loop=True),
     Export("stand_to_crouch", "stand_to_crouch", "stand_to_crouch",
            frozenset(FULL)),
     Export("stand_to_crouch", "stand_to_crouch", "crouch_to_stand",
            frozenset(FULL), reverse=True),
-    Export("crouch_walk", "crouch_walk", "crouch_walk",
+    Export("crouch_walk_v03", "crouch_walk", "crouch_walk",
            frozenset(FULL), loop=True),
     Export("utd_prone_idle", "prone_idle", "prone",
            frozenset(FULL), loop=True),
@@ -186,6 +186,23 @@ def animation(document: dict, clip_name: str, selected: frozenset[str],
                                             authored_positions)
                 }
             bones[bone_name]["position"] = position
+        elif bone_name in {"knife", "cannon", "lance"}:
+            attachment_positions = [
+                frames[index].get("bone_position_xyz", {}).get(bone_name)
+                for index in indices
+            ]
+            if all(value is not None for value in attachment_positions):
+                if static:
+                    values = [clean(value)
+                              for value in attachment_positions[0]]
+                    position = {"0.0": values, "1.2": values}
+                else:
+                    position = {
+                        key(seconds): [clean(value) for value in row]
+                        for seconds, row in zip(
+                            sample_times, attachment_positions)
+                    }
+                bones[bone_name]["position"] = position
     duration = 1.2 if static else sample_times[-1]
     output = {
         "animation_length": clean(duration),
@@ -226,6 +243,106 @@ def solved_weapon_overlay(base_document: dict, solved: dict,
     output["animation_length"] = clean(times[-1])
     output["loop"] = True
     return output
+
+
+def install_solved_channels(animation: dict, solved: dict, clip_name: str,
+                            bone_names: tuple[str, ...],
+                            static: bool = False) -> dict:
+    """Replace selected Gecko channels from a final composed exact scene."""
+    output = copy.deepcopy(animation)
+    frames = solved["clips"][clip_name]["frames"]
+    fps = float(solved.get("sample_rate", 30.0))
+    bone_indices = {name: index for index, name in enumerate(solved["bones"])}
+    indices = [0] if static else list(range(len(frames)))
+    duration = 1.2 if static else (len(frames) - 1) / fps
+    times = [0.0] if static else [index / fps for index in indices]
+    for bone_name in bone_names:
+        quaternion = np.asarray([
+            frames[index]["rotation_wxyz"][bone_indices[bone_name]]
+            for index in indices
+        ], dtype=np.float64)
+        rotations = Rotation.from_quat(quaternion[:, [1, 2, 3, 0]])
+        degrees = np.degrees(continuous_euler_xyz(rotations))
+        if static:
+            value = [clean(component) for component in degrees[0]]
+            rotation = {"0": list(value), "1.2": list(value)}
+        else:
+            rotation = {
+                key(seconds): [clean(component) for component in row]
+                for seconds, row in zip(times, degrees)
+            }
+        output.setdefault("bones", {}).setdefault(bone_name, {})[
+            "rotation"] = rotation
+        positions = [
+            frames[index].get("bone_position_xyz", {}).get(bone_name)
+            for index in indices
+        ]
+        if all(value is not None for value in positions):
+            if static:
+                value = [clean(component) for component in positions[0]]
+                position = {"0": list(value), "1.2": list(value)}
+            else:
+                position = {
+                    key(seconds): [clean(component) for component in row]
+                    for seconds, row in zip(times, positions)
+                }
+            output["bones"][bone_name]["position"] = position
+    output["animation_length"] = clean(duration)
+    return output
+
+
+def first_channel_value(channel) -> list[float]:
+    if isinstance(channel, list):
+        return [clean(value) for value in channel]
+    first = min(channel, key=float)
+    return [clean(value) for value in channel[first]]
+
+
+def static_rotation(value: list[float], duration: float) -> dict:
+    cleaned = [clean(component) for component in value]
+    return {"0": list(cleaned), key(duration): list(cleaned)}
+
+
+def repair_low_stance_semantics(replacements: dict,
+                                _base_document: dict) -> dict:
+    """Keep captured weight transfer but replace rejected arm/hand semantics."""
+    arm_bones = (
+        "clavicle_l", "arm_l", "forearm_l", "wrist_l", "hand_l",
+        "clavicle_r", "arm_r", "forearm_r", "wrist_r", "hand_r",
+    )
+    guard_pose = {
+        "clavicle_l": [0.0, 0.0, 0.0],
+        "arm_l": [18.85362, -2.12002, -2.22401],
+        "forearm_l": [22.47230, -1.73582, 5.75859],
+        "wrist_l": [0.0, 0.0, 0.0],
+        "hand_l": [0.0, 0.0, 0.0],
+        "clavicle_r": [0.0, 0.0, 0.0],
+        "arm_r": [1.64755, 2.19587, -33.32164],
+        "forearm_r": [22.74297, 8.48156, -39.89046],
+        "wrist_r": [0.0, 0.0, 0.0],
+        "hand_r": [0.0, 0.0, 0.0],
+    }
+
+    crouch_targets = (
+        "animation.eva_unit01.crouch",
+        "animation.eva_unit01.crouch_walk",
+        "animation.eva_unit01.stand_to_crouch",
+        "animation.eva_unit01.crouch_to_stand",
+    )
+    for animation_name in crouch_targets:
+        animation = replacements[animation_name]
+        duration = float(animation["animation_length"])
+        bones = animation.setdefault("bones", {})
+        for bone_name, value in guard_pose.items():
+            bones.setdefault(bone_name, {})["rotation"] = static_rotation(
+                value, duration)
+
+    return {
+        "crouch_upper_body": "target_ik_forward_low_guard",
+        "low_stance_fingers": "runtime_compact_curl_in_make_tiger_unit01_pack",
+        "arm_bones": list(arm_bones),
+        "finger_bones": [],
+    }
 
 
 def match_edge(animation: dict, target: dict, edge: str,
@@ -297,6 +414,8 @@ def main() -> None:
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--base-animation", type=Path)
     parser.add_argument("--prone-rifle-solved-db", type=Path)
+    parser.add_argument("--lance-runtime-solved-db", type=Path)
+    parser.add_argument("--crouch-runtime-solved-db", type=Path)
     args = parser.parse_args()
     if bool(args.base_animation) != bool(args.prone_rifle_solved_db):
         parser.error(
@@ -316,6 +435,27 @@ def main() -> None:
         replacements[f"animation.eva_unit01.{item.target}"] = animation(
             documents[item.source], item.clip, item.bones,
             item.loop, item.static, item.reverse)
+    base_animation = (None if args.base_animation is None else json.loads(
+        args.base_animation.read_text(encoding="utf-8")))
+    low_stance_repair = (None if base_animation is None else
+                         repair_low_stance_semantics(
+                             replacements, base_animation))
+    if args.crouch_runtime_solved_db:
+        solved_crouch = json.loads(
+            args.crouch_runtime_solved_db.read_text(encoding="utf-8"))
+        leg_bones = ("leg_l", "shin_l", "leg_r", "shin_r")
+        for animation_suffix, clip_name in (
+                ("crouch", "crouch_review"),
+                ("crouch_walk", "crouch_walk_review")):
+            animation_name = f"animation.eva_unit01.{animation_suffix}"
+            replacements[animation_name] = install_solved_channels(
+                replacements[animation_name], solved_crouch,
+                clip_name, leg_bones)
+        sources["crouch_runtime_exact_solve"] = {
+            "path": str(args.crouch_runtime_solved_db.resolve()),
+            "sha256": hashlib.sha256(
+                args.crouch_runtime_solved_db.read_bytes()).hexdigest(),
+        }
     crouch = replacements["animation.eva_unit01.crouch"]
     prone = replacements["animation.eva_unit01.prone"]
     match_edge(replacements["animation.eva_unit01.stand_to_crouch"],
@@ -334,9 +474,13 @@ def main() -> None:
                prone, "end", fade_seconds=0.35)
     match_edge(replacements["animation.eva_unit01.prone_to_stand"],
                prone, "start", fade_seconds=0.35)
+    if base_animation is not None:
+        idle = base_animation["animations"]["animation.eva_unit01.idle"]
+        match_edge(replacements["animation.eva_unit01.stand_to_prone"],
+                   idle, "start", fade_seconds=0.60)
+        match_edge(replacements["animation.eva_unit01.prone_to_stand"],
+                   idle, "end", fade_seconds=0.60)
     if args.prone_rifle_solved_db:
-        base_animation = json.loads(args.base_animation.read_text(
-            encoding="utf-8"))
         solved = json.loads(args.prone_rifle_solved_db.read_text(
             encoding="utf-8"))
         replacements["animation.eva_unit01.prone_rifle_aim"] = \
@@ -345,6 +489,36 @@ def main() -> None:
             "path": str(args.prone_rifle_solved_db.resolve()),
             "sha256": hashlib.sha256(
                 args.prone_rifle_solved_db.read_bytes()).hexdigest(),
+        }
+    if args.lance_runtime_solved_db:
+        solved_lance = json.loads(args.lance_runtime_solved_db.read_text(
+            encoding="utf-8"))
+        lance_bones = (
+            "clavicle_l", "arm_l", "forearm_l", "wrist_l", "hand_l",
+            "clavicle_r", "arm_r", "forearm_r", "wrist_r", "hand_r",
+            "lance",
+        )
+        ready_name = "animation.eva_unit01.lance_ready"
+        replacements[ready_name] = install_solved_channels(
+            replacements[ready_name], solved_lance,
+            "lance_ready_review", lance_bones, static=True)
+        replacements["animation.eva_unit01.lance_carry"] = copy.deepcopy(
+            replacements[ready_name])
+        thrust_name = "animation.eva_unit01.lance_thrust"
+        solved_thrust = install_solved_channels(
+            replacements[thrust_name], solved_lance,
+            "lance_thrust_review", lance_bones)
+        replacements[thrust_name] = solved_thrust
+        crouch_thrust = replacements[
+            "animation.eva_unit01.crouch_lance_thrust"]
+        for bone_name in lance_bones:
+            if bone_name in solved_thrust.get("bones", {}):
+                crouch_thrust.setdefault("bones", {})[bone_name] = \
+                    copy.deepcopy(solved_thrust["bones"][bone_name])
+        sources["lance_runtime_exact_solve"] = {
+            "path": str(args.lance_runtime_solved_db.resolve()),
+            "sha256": hashlib.sha256(
+                args.lance_runtime_solved_db.read_bytes()).hexdigest(),
         }
     payload = {
         "schema": 1,
@@ -355,6 +529,8 @@ def main() -> None:
         "sources": sources,
         "replace_animations": replacements,
     }
+    if low_stance_repair is not None:
+        payload["low_stance_semantic_repair"] = low_stance_repair
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(
         payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

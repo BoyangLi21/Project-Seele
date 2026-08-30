@@ -65,6 +65,23 @@ QA record.
   private QA rendering. Distributed derivatives must retain attribution and
   identify these changes.
 
+## Motion-X / Motion-X++
+
+- Creators: Jing Lin, Ailing Zeng, Shunlin Lu, Yuanhao Cai, Ruimao Zhang,
+  Haoqian Wang, Lei Zhang, and the Motion-X++ authors listed by the project.
+- Official project: https://motion-x-dataset.github.io/
+- Official repository: https://github.com/IDEA-Research/Motion-X
+- Licence: Creative Commons Attribution-NonCommercial-ShareAlike 4.0 for the
+  Motion-X material, subject to the original sub-dataset licences documented
+  by the project.
+- Accepted source: `Shaolin_KungFu_Staff_Workout_Training_13_clip2.npy`,
+  SHA-256 `2b6917fcc56f7347ad045c03c347f1823d83ae4be50e50915bd8074cb6292f56`.
+- Local use: frames 0–43, SMPL-X body landmark extraction, Tiger retargeting,
+  reviewed rear-hand thrust path, exact shaft alignment, two-hand IK/contact
+  refinement and private QA rendering.
+- The resulting animation-resource derivative is non-commercial ShareAlike
+  material and is not covered by the repository's MIT code licence.
+
 ## Quaternius Universal Animation Library 2
 
 - Creator: Quaternius.

@@ -73,7 +73,7 @@ def main() -> None:
         part = bpy.data.objects[f"PART::{weapon_name}"]
         pivot = target_to_blender(pivots[weapon_name])
         guide_offset = (-24.0 if weapon_name == "cannon"
-                        else -58.0 if weapon_name == "lance" else 0.0)
+                        else -34.0 if weapon_name == "lance" else 0.0)
         guide = target_to_blender(
             pivots[weapon_name] + Vector((0.0, guide_offset, 0.0))
         )

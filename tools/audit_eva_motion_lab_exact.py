@@ -69,6 +69,11 @@ def sample(scene: bpy.types.Scene, parts: list[bpy.types.Object],
     right_shoulder, right_elbow, right_wrist = (
         joint("arm_r"), joint("forearm_r"), joint("hand_r")
     )
+    root_matrix = bpy.data.objects["JOINT::root"].matrix_world
+    root_origin = root_matrix.translation
+    root_rotation = root_matrix.to_quaternion()
+    root_forward = root_rotation @ Vector((0.0, 1.0, 0.0))
+    root_right = root_rotation @ Vector((1.0, 0.0, 0.0))
     return {
         "frame": frame,
         "bounds_min": [round(value, 6) for value in minimum],
@@ -83,6 +88,14 @@ def sample(scene: bpy.types.Scene, parts: list[bpy.types.Object],
             left_shoulder, left_elbow, left_wrist), 4),
         "right_elbow_degrees": round(angle(
             right_shoulder, right_elbow, right_wrist), 4),
+        "left_hand_forward": round(
+            (left_wrist - root_origin).dot(root_forward), 6),
+        "right_hand_forward": round(
+            (right_wrist - root_origin).dot(root_forward), 6),
+        "left_ankle_lateral": round(
+            (left_ankle - root_origin).dot(root_right), 6),
+        "right_ankle_lateral": round(
+            (right_ankle - root_origin).dot(root_right), 6),
         "left_ankle_z": round(left_ankle.z, 6),
         "right_ankle_z": round(right_ankle.z, 6),
         "left_contact": not bpy.data.objects[
@@ -227,6 +240,19 @@ def main() -> None:
                 clip_failures.append(
                     f"frame {value['frame']}: ground penetration "
                     f"{value['bounds_min'][2]:.3f}")
+            if role == "crouch":
+                if min(value["left_hand_forward"],
+                       value["right_hand_forward"]) < 0.20:
+                    clip_failures.append(
+                        f"frame {value['frame']}: crouch hand behind root "
+                        f"left={value['left_hand_forward']:.3f} "
+                        f"right={value['right_hand_forward']:.3f}")
+                if (value["left_ankle_lateral"] >= -0.20
+                        or value["right_ankle_lateral"] <= 0.20):
+                    clip_failures.append(
+                        f"frame {value['frame']}: crouch ankles crossed "
+                        f"left={value['left_ankle_lateral']:.3f} "
+                        f"right={value['right_ankle_lateral']:.3f}")
             for side in ("left", "right"):
                 if value[f"{side}_contact"] and not low_profile:
                     drift = abs(value[f"{side}_ankle_z"]
