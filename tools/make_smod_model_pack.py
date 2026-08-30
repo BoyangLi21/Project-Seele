@@ -40,7 +40,13 @@ BONE_MAP = {
 # poses nondeterministically, so omit only this explicitly namespaced optional
 # rig while keeping every other unknown canonical bone fail-closed.
 OPTIONAL_TIGER_BONE_PREFIXES = ("finger_",)
-OPTIONAL_TIGER_BONES = {"aim_pitch"}
+OPTIONAL_TIGER_BONES = {
+    "aim_pitch",
+    "ankle_l", "ankle_r",
+    "clavicle_l", "clavicle_r",
+    "neck",
+    "wrist_l", "wrist_r",
+}
 
 
 def read_suffix(archive, suffix):
