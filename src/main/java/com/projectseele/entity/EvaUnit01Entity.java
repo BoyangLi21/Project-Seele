@@ -183,8 +183,9 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     private static final float WALK_SPEED = 0.42F;
     private static final float CROUCH_SPEED = 0.18F;
     private static final float PRONE_SPEED = 0.10F;
-    private static final float SPRINT_SPEED = 0.62F;
-    private static final double JUMP_VELOCITY = 5.40D;
+    private static final float SPRINT_SPEED = 0.78F;
+    private static final double JUMP_VELOCITY = 3.49D;
+    private static final double JUMP_SUPPORT_PROBE = 0.75D;
     private static final int JUMP_COOLDOWN_TICKS = 10;
     private static final int JUMP_BUFFER_TICKS = 20;
     private static final int JUMP_COYOTE_TICKS = 5;
@@ -1951,7 +1952,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     public float getCockpitAttackAnim(float partialTick)
     {
         float elapsed = this.tickCount - this.clientMeleeStartTick + partialTick;
-        return elapsed >= 0.0F && elapsed < 28.0F ? elapsed / 28.0F : 0.0F;
+        return elapsed >= 0.0F && elapsed < 10.0F ? elapsed / 10.0F : 0.0F;
     }
 
     public boolean isCockpitSwingingLeft()
@@ -1981,7 +1982,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     public float getCockpitSmashAnim(float partialTick)
     {
         float elapsed = this.tickCount - this.clientSmashStartTick + partialTick;
-        return elapsed >= 0.0F && elapsed < 28.0F ? elapsed / 28.0F : 0.0F;
+        return elapsed >= 0.0F && elapsed < 18.0F ? elapsed / 18.0F : 0.0F;
     }
 
     // ----- pilot commands (validated by the packet handler) -----
@@ -2135,10 +2136,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
 
         boolean knife = this.getWeapon() == WEAPON_KNIFE;
         boolean lance = this.getWeapon() == WEAPON_LANCE;
-        String animation = this.getWeapon() == WEAPON_FISTS
-                && !this.isPilotProne() && !this.isPilotCrouching()
-                ? "fist_heavy"
-                : knife
+        String animation = knife
                 ? this.isPilotProne() ? "prone_knife_heavy"
                     : this.isPilotCrouching() ? "crouch_knife_heavy" : "knife_heavy"
                 : lance
@@ -2355,6 +2353,15 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     {
         if (requestId == this.lastJumpRequestId)
         {
+            // A request that arrived during a transient false ground reading
+            // used to expire after 20 ticks. Client retries kept the same ID,
+            // so the server rejected them forever until Space was released.
+            if (this.jumpBufferTicks <= 0 && !this.explicitJumpInProgress
+                    && this.jumpCooldown <= 0)
+            {
+                this.jumpBufferTicks = JUMP_BUFFER_TICKS;
+                this.tryConsumeBufferedJump(pilot);
+            }
             return;
         }
         this.lastJumpRequestId = requestId;
@@ -2366,7 +2373,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         if (this.jumpBufferTicks <= 0 || this.getControllingPassenger() != pilot
                 || this.isPilotControlLocked() || this.jumpCooldown > 0
                 || this.getCannonCharge() > 0
-                || !this.onGround() && this.groundedGraceTicks <= 0)
+                || !this.hasJumpSupport())
         {
             return false;
         }
@@ -2417,6 +2424,20 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         this.groundedGraceTicks = 0;
         this.playSound(SoundEvents.IRON_GOLEM_STEP, 2.2F, 0.65F);
         return true;
+    }
+
+    private boolean hasJumpSupport()
+    {
+        if (this.onGround() || this.groundedGraceTicks > 0)
+        {
+            return true;
+        }
+        if (Math.abs(this.getDeltaMovement().y) > 0.20D)
+        {
+            return false;
+        }
+        return !this.level().noCollision(
+                this, this.getBoundingBox().move(0.0D, -JUMP_SUPPORT_PROBE, 0.0D));
     }
 
     public void exitEva(ServerPlayer pilot)
@@ -4954,8 +4975,8 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         }
         float variantSpeed = switch (this.getUnitVariant())
         {
-            case UNIT_00 -> this.isPilotSprinting() ? 0.52F : 0.36F;
-            case UNIT_02 -> this.isPilotSprinting() ? 0.72F : 0.48F;
+            case UNIT_00 -> this.isPilotSprinting() ? 0.65F : 0.36F;
+            case UNIT_02 -> this.isPilotSprinting() ? 0.90F : 0.48F;
             default -> this.isPilotSprinting() ? SPRINT_SPEED : WALK_SPEED;
         };
         return variantSpeed * synchronizationSpeed;
@@ -5581,7 +5602,6 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
                 .triggerableAnim("knife", ANIM_KNIFE)
                 .triggerableAnim("knife_left", ANIM_KNIFE_LEFT)
                 .triggerableAnim("knife_heavy", ANIM_KNIFE_HEAVY)
-                .triggerableAnim("fist_heavy", ANIM_BERSERK_CLAW_R)
                 .triggerableAnim("lance_thrust", ANIM_LANCE_THRUST)
                 .triggerableAnim("prone_melee", ANIM_PRONE_MELEE)
                 .triggerableAnim("prone_melee_left", ANIM_PRONE_MELEE_LEFT)

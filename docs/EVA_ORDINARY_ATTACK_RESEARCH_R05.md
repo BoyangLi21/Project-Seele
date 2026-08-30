@@ -7,6 +7,10 @@ isolated Motion Lab after failing direct in-game visual review. Live standing
 fists use the Tiger-reviewed alternating strikes; damage, cooldown and hit
 zones remain server-authoritative**.
 
+The live alternating strikes, knife actions, crouch and crawl were subsequently
+restored byte-for-byte semantically from pre-mocap commit `a910890b`; this
+document now describes research history only.
+
 ## Body-motion contract
 
 The body remains a direct normalized-landmark transfer. There are no authored

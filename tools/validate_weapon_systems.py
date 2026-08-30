@@ -33,6 +33,18 @@ control_packet = read("src/main/java/com/projectseele/network/ServerboundEvaCont
 config = read("src/main/java/com/projectseele/config/SeeleConfig.java")
 visual_capture = read(
     "src/main/java/com/projectseele/client/visual/VisualCaptureManager.java")
+pre_mocap_rollback = json.loads(read(
+    "tools/eva_pre_mocap_gameplay_rollback.json"))
+
+
+def ballistic_apex(velocity: float) -> float:
+    height = 0.0
+    while velocity > 0.0:
+        height += velocity
+        velocity = (velocity - 0.08) * 0.98
+    return height
+
+
 visual_automation = read(
     "src/main/java/com/projectseele/visual/VisualLabAutomation.java")
 
@@ -110,18 +122,30 @@ require("knife.single_hand_heavy",
         and "knife ?" in entity,
         "knife RMB selects a longer stance-safe one-handed reverse-grip slash")
 require("jump.takeoff",
-        "JUMP_VELOCITY = 5.40D" in entity
+        "JUMP_VELOCITY = 3.49D" in entity
         and 'this.triggerAnim("strike", "takeoff")' in entity
         and '.triggerableAnim("takeoff", ANIM_TAKEOFF)' in entity,
-        "jump has a dedicated takeoff clip and the reviewed giant-scale impulse")
+        "jump keeps its takeoff clip with half the former ballistic apex")
 require("jump.request_deduplication",
         "public final int requestId" in control_packet
         and "buf.writeVarInt(this.requestId)" in control_packet
         and "eva.pilotJump(sender, this.requestId)" in control_packet
         and "jumpRequestId = ++jumpRequestIdCounter" in client
         and "requestId == this.lastJumpRequestId" in entity
+        and "JUMP_SUPPORT_PROBE = 0.75D" in entity
+        and "this.jumpBufferTicks <= 0 && !this.explicitJumpInProgress" in entity
         and "this.clientJumpImpulsePending = this.isControlledByLocalInstance()" in entity,
-        "each physical key press has one server request ID and only the local pilot applies its impulse")
+        "jump retries can rearm after a false ground read without double-impulsing")
+require("run.translation_speed",
+        "SPRINT_SPEED = 0.78F" in entity
+        and "this.isPilotSprinting() ? 0.65F : 0.36F" in entity
+        and "this.isPilotSprinting() ? 0.90F : 0.48F" in entity
+        and "animation.eva_unit01.run" not in
+            pre_mocap_rollback["replace_animations"],
+        "all three EVA sprint translations are faster without animation edits")
+require("jump.half_apex",
+        abs(ballistic_apex(3.49) / ballistic_apex(5.40) - 0.5) < 0.001,
+        "3.49 initial velocity produces half the former 5.40 ballistic apex")
 require("unit02.longinus",
         "return LONGINUS_MESH;" in renderer
         and "return LONGINUS_TEXTURE;" in renderer,

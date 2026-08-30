@@ -37,6 +37,8 @@ ACCEPTED_LOCOMOTION = REPO / "tools/eva_locomotion_accad_r32.json"
 REAL_MOCAP_PATCH = REPO / "tools/eva_real_mocap_r01.json"
 ACCEPTED_REAL_MOCAP_ACTIONS = (
     REPO / "tools/eva_real_mocap_accepted_r02.json")
+PRE_MOCAP_GAMEPLAY_ROLLBACK = (
+    REPO / "tools/eva_pre_mocap_gameplay_rollback.json")
 BASE_TEXTURE = REPO / "src/main/resources/assets/projectseele/textures/entity/eva_unit01.png"
 MODEL_HEIGHT = 192.0
 ATLAS_WIDTH = 1024
@@ -1450,6 +1452,23 @@ def _apply_accepted_real_mocap_actions(data):
                 distal_curl=42, thumb_distal=0,
             )
             bones.pop(f"finger_thumb_distal_{side}", None)
+
+
+def _apply_pre_mocap_gameplay_rollback(data):
+    """Restore user-requested combat and low stances to pre-mocap assets."""
+    patch = json.loads(PRE_MOCAP_GAMEPLAY_ROLLBACK.read_text(
+        encoding="utf-8"))
+    if (patch.get("schema") != 1
+            or patch.get("source_commit")
+            != "a910890b2d16741e72843cfa534a74def6113078"):
+        raise RuntimeError("unsupported pre-mocap gameplay rollback patch")
+    animations = data["animations"]
+    for name, replacement in patch["replace_animations"].items():
+        if name not in animations:
+            raise RuntimeError(f"pre-mocap rollback target missing: {name}")
+        animations[name] = copy.deepcopy(replacement)
+
+
 def _set_hand_curl(bones, side, curl=22, thumb=17, tip_curl=12, thumb_tip=4,
                    cup=0, thumb_cup=None, tip_cup=0, distal_curl=0,
                    thumb_distal=0):
@@ -2819,6 +2838,7 @@ def build_animations():
     animations["animation.eva_unit01.visual_prone_rifle"] = composed_pose(
         "animation.eva_unit01.prone", 0.0,
         "animation.eva_unit01.prone_rifle_aim", 0.0)
+    _apply_pre_mocap_gameplay_rollback(data)
     return data
 
 

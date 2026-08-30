@@ -23,6 +23,9 @@ REPO = Path(__file__).resolve().parent.parent
 CANONICAL_EVA_ANIMATION = (
     REPO / "src/main/resources/assets/projectseele/animations/eva_unit01.animation.json"
 )
+PRE_MOCAP_GAMEPLAY_ROLLBACK = (
+    REPO / "tools/eva_pre_mocap_gameplay_rollback.json"
+)
 
 LONG_EVA_DIGITS = ("index", "middle", "ring", "little")
 STANDARD_EVA_FINGER_ROOTS = {
@@ -152,16 +155,10 @@ REAL_MOCAP_LOOP_ANIMATIONS = {
     )
 }
 
-REAL_MOCAP_TRANSITION_EDGES = (
-    ("stand_to_crouch", "end", "crouch", "start"),
-    ("crouch_to_stand", "start", "crouch", "start"),
-    ("crouch_to_prone", "start", "crouch", "start"),
-    ("crouch_to_prone", "end", "prone", "start"),
-    ("prone_to_crouch", "start", "prone", "start"),
-    ("prone_to_crouch", "end", "crouch", "start"),
-    ("stand_to_prone", "end", "prone", "start"),
-    ("prone_to_stand", "start", "prone", "start"),
-)
+# Connector clips remain as quarantined research assets but are not registered
+# by the entity controller, so their old mocap edge matches are no longer a
+# runtime contract.
+REAL_MOCAP_TRANSITION_EDGES = ()
 
 ROTATION_ONLY_LIMB_BONES = {
     f"{segment}_{side}"
@@ -514,6 +511,8 @@ def maximum_rotation_key_step(animation: dict) -> tuple[float, str]:
 
 def validate_real_mocap_animation_contract(stem: str,
                                             animations: dict) -> None:
+    rollback_names = set(read_json(
+        PRE_MOCAP_GAMEPLAY_ROLLBACK)["replace_animations"])
     for animation_name in REAL_MOCAP_LOOP_ANIMATIONS:
         animation = animations[animation_name]
         if not animation.get("loop"):
@@ -524,10 +523,11 @@ def validate_real_mocap_animation_contract(stem: str,
             if first is None or last is None:
                 continue
             seam = quaternion_angle_degrees(first, last)
-            if seam > 0.01:
+            seam_limit = 0.05 if animation_name in rollback_names else 0.01
+            if seam > seam_limit:
                 raise ValidationError(
                     f"{stem}: {animation_name}.{bone_name} loop seam "
-                    f"{seam:.4f} degrees exceeds 0.01"
+                    f"{seam:.4f} degrees exceeds {seam_limit:.2f}"
                 )
             first_position = position_edge(animation, bone_name, "start")
             last_position = position_edge(animation, bone_name, "end")
@@ -588,10 +588,12 @@ def validate_real_mocap_animation_contract(stem: str,
             )
         maximum_step, location = maximum_rotation_key_step(
             animations[animation_name])
-        if maximum_step > 60.0:
+        step_limit = 120.0 if animation_name in rollback_names else 60.0
+        if maximum_step > step_limit:
             raise ValidationError(
                 f"{stem}: {animation_name} rotation key step "
-                f"{maximum_step:.4f} degrees at {location} exceeds 60.0"
+                f"{maximum_step:.4f} degrees at {location} exceeds "
+                f"{step_limit:.1f}"
             )
 
     for suffix in ("aim", "rifle_aim", "n2_ready"):
@@ -601,7 +603,6 @@ def validate_real_mocap_animation_contract(stem: str,
                 f"{stem}: {suffix} weapon overlay must not own the walking torso"
             )
 
-    knife_ready = animations["animation.eva_unit01.knife_ready"]
     for suffix in ("knife_ready", "knife", "knife_heavy"):
         animation = animations[f"animation.eva_unit01.{suffix}"]
         leaked = {"neck", "head"} & animation.get("bones", {}).keys()
@@ -617,21 +618,13 @@ def validate_real_mocap_animation_contract(stem: str,
                 f"{stem}: {suffix} lost the reviewed right knife grip"
             )
 
-    for suffix in ("knife", "knife_heavy"):
-        animation = animations[f"animation.eva_unit01.{suffix}"]
-        shared = animation.get("bones", {}).keys() & \
-            knife_ready.get("bones", {}).keys()
-        for bone_name in shared:
-            action_end = rotation_edge(animation, bone_name, "end")
-            ready_start = rotation_edge(knife_ready, bone_name, "start")
-            if action_end is None or ready_start is None:
-                continue
-            error = quaternion_angle_degrees(action_end, ready_start)
-            if error > 0.02:
-                raise ValidationError(
-                    f"{stem}: {suffix} recovery differs from knife_ready by "
-                    f"{error:.4f} degrees on {bone_name}"
-                )
+    rollback = read_json(PRE_MOCAP_GAMEPLAY_ROLLBACK)
+    for animation_name, expected in rollback["replace_animations"].items():
+        if animations.get(animation_name) != expected:
+            raise ValidationError(
+                f"{stem}: {animation_name} differs from pre-mocap rollback "
+                f"commit {rollback['source_commit'][:8]}"
+            )
 
 
 def validate_mesh(path: Path, spec: dict) -> tuple[int, int, dict[str, tuple[float, float, float]]]:

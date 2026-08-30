@@ -61,8 +61,10 @@ def main() -> None:
     for token in (
             "DATA_ORDINARY_ATTACK_STAGE",
             "MELEE_INPUT_BUFFER_TICKS = 16",
-            '"fist_heavy"'):
+            'this.triggerAnim("strike", animation)'):
         require(token in entity, f"entity wiring missing {token}")
+    require('"fist_heavy"' not in entity,
+            "post-mocap replacement heavy attack is still registered")
     require("this.ordinaryAttackCycle = (stage + 1) % 3" not in entity,
             "rejected three-stage cycle is still wired to live fists")
     require("MELEE_COOLDOWN_TICKS = 12" in entity,

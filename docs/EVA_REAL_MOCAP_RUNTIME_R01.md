@@ -20,6 +20,25 @@ alternating strikes with input buffering. Crouch and prone now switch directly
 between their persistent poses and collision dimensions without playing
 stand/crouch/prone transition animations.
 
+## Pre-mocap gameplay rollback
+
+On 2026-08-30 the user ended the real-human-motion experiment for ordinary
+attacks, knife combat, crouch and crawl. All 37 affected body, weapon overlay
+and Visual Lab animation objects now match commit
+`a910890b2d16741e72843cfa534a74def6113078`, the last catalogue before those
+captures entered live resources. The rollback is hash-bound in
+`tools/eva_pre_mocap_gameplay_rollback.json` and is applied last by every Tiger
+pack rebuild. Other animations, mesh fixes and gameplay systems are untouched.
+
+Movement tuning is independent of that rollback. Walk speed and every run
+animation curve remain unchanged. Sprint translation changed from
+Unit-00/01/02 `0.52/0.62/0.72` to `0.65/0.78/0.90`. Jump velocity changed from
+`5.40` to `3.49`; under Minecraft's discrete gravity/drag recurrence this
+reduces the calculated apex from `101.9578` to `50.9613` blocks, approximately
+one half. Duplicate held-jump retries may now rearm after an expired false
+ground read, and a `0.75`-block support probe covers transient `onGround`
+failures on the giant hitbox.
+
 The 2026-08-28 in-game review rejected the original CMU 02 weapon clips and
 the ACCAD kneel/prone/crawl chain. R02 replaced the weapon and crouch subset;
 R03 added a complete UT Dallas prone capture and re-solved rifle contact. R04
