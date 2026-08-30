@@ -54,6 +54,33 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args(sys.argv[sys.argv.index("--") + 1 :])
 
 
+def validate_body_texture_dimensions(geo_path: Path,
+                                     texture_path: Path) -> tuple[int, int]:
+    payload = json.loads(geo_path.read_text(encoding="utf-8"))
+    geometries = payload.get("minecraft:geometry", [])
+    if not geometries:
+        raise SystemExit(f"geometry payload has no minecraft:geometry: {geo_path}")
+    description = geometries[0].get("description", {})
+    expected = (
+        int(description.get("texture_width", 0)),
+        int(description.get("texture_height", 0)),
+    )
+    if expected[0] <= 0 or expected[1] <= 0:
+        raise SystemExit(
+            f"geometry has no valid texture dimensions: {geo_path}"
+        )
+    image = bpy.data.images.load(str(texture_path.resolve()),
+                                 check_existing=True)
+    actual = tuple(int(value) for value in image.size)
+    if actual != expected:
+        raise SystemExit(
+            "body texture atlas mismatch: "
+            f"geometry expects {expected[0]}x{expected[1]}, "
+            f"texture is {actual[0]}x{actual[1]} ({texture_path})"
+        )
+    return actual
+
+
 def build_parts(path: Path, master: bpy.types.Object,
                 collection: bpy.types.Collection,
                 material: bpy.types.Material) -> dict[str, bpy.types.Object]:
@@ -298,6 +325,8 @@ def main() -> None:
         if not path.is_file():
             raise SystemExit(f"missing input: {path}")
     reset_scene()
+    texture_dimensions = validate_body_texture_dimensions(args.geo,
+                                                          args.texture)
     scene = bpy.context.scene
     scene.world.color = (0.008, 0.012, 0.02)
     scene.render.engine = "BLENDER_EEVEE"
@@ -381,6 +410,7 @@ def main() -> None:
     add_readme(motion, ranges)
     scene["project_seele_exact_runtime_lab"] = True
     scene["clip_count"] = len(ranges)
+    scene["body_texture_dimensions"] = texture_dimensions
     scene["motion_db_sha256"] = hashlib.sha256(
         args.motion_db.read_bytes()
     ).hexdigest()

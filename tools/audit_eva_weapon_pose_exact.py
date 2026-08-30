@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Measure exact two-hand grip and forward-axis constraints in Blender."""
+"""Measure exact weapon grip and forward-axis constraints in Blender."""
 
 from __future__ import annotations
 
@@ -84,6 +84,8 @@ def main() -> None:
         sample_frames = sorted({start, end, start + length // 4,
                                 start + length // 2,
                                 start + length * 3 // 4})
+        if weapon_name == "lance" and "thrust" in clip_name:
+            sample_frames = list(range(start, end + 1))
         samples = []
         clip_failures = []
         for frame in sample_frames:
@@ -124,18 +126,31 @@ def main() -> None:
                 clip_failures.append(
                     f"frame {frame}: right surface distance {right_surface:.3f}"
                 )
-            if weapon_name != "knife" and left_surface > 0.12:
+            if weapon_name == "cannon" and left_surface > 0.12:
                 clip_failures.append(
                     f"frame {frame}: left surface distance {left_surface:.3f}"
                 )
-            if (weapon_name != "knife"
+            if (weapon_name == "cannon"
                     and alignment < math.cos(math.radians(18.0))):
                 clip_failures.append(
                     f"frame {frame}: weapon axis cosine {alignment:.4f}"
                 )
+        if weapon_name == "lance" and "thrust" in clip_name:
+            best = max(samples, key=lambda sample:
+                       sample["forward_axis_cosine"])
+            if best["forward_axis_cosine"] < math.cos(math.radians(18.0)):
+                clip_failures.append(
+                    "no forward thrust contact: best weapon axis cosine "
+                    f"{best['forward_axis_cosine']:.4f}"
+                )
         clip_failures = sorted(set(clip_failures))
         reports[clip_name] = {
             "weapon": weapon_name,
+            "grip_semantics": (
+                "right_hand_one_handed" if weapon_name == "lance"
+                else "two_handed" if weapon_name == "cannon"
+                else "right_hand"
+            ),
             "sample_frames": samples,
             "failures": clip_failures,
         }

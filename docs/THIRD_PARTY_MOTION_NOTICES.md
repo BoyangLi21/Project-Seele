@@ -26,6 +26,10 @@ QA record.
 - Licence text: https://creativecommons.org/licenses/by/3.0/
 - Local use: exact-package download, source inventory, evaluated-axis
   normalization, retarget experiments, contact analysis and private QA.
+- Promoted R05 Longinus source: Male2 `E4 CrossRight`, using the captured
+  foot load, hip/shoulder drive and recovery as a one-handed spear jab. The
+  target-rig derivative adds right-palm socket contact and forward-axis
+  alignment without forcing the left hand onto the shaft.
 - Distributed derivatives must give appropriate credit and identify changes.
 
 ## CMU Graphics Lab Motion Capture Database
@@ -74,13 +78,13 @@ QA record.
 - Licence: Creative Commons Attribution-NonCommercial-ShareAlike 4.0 for the
   Motion-X material, subject to the original sub-dataset licences documented
   by the project.
-- Accepted source: `Shaolin_KungFu_Staff_Workout_Training_13_clip2.npy`,
+- Rejected R04 candidate: `Shaolin_KungFu_Staff_Workout_Training_13_clip2.npy`,
   SHA-256 `2b6917fcc56f7347ad045c03c347f1823d83ae4be50e50915bd8074cb6292f56`.
-- Local use: frames 0–43, SMPL-X body landmark extraction, Tiger retargeting,
-  reviewed rear-hand thrust path, exact shaft alignment, two-hand IK/contact
-  refinement and private QA rendering.
-- The resulting animation-resource derivative is non-commercial ShareAlike
-  material and is not covered by the repository's MIT code licence.
+- Local use: frames 0–43, SMPL-X body landmark extraction, Tiger retargeting
+  and private QA rendering. R05 rejected the motion because it did not read as
+  a forward spear thrust; it is not present in the promoted runtime action.
+- Any retained research derivative remains non-commercial ShareAlike material
+  and is not covered by the repository's MIT code licence.
 
 ## Quaternius Universal Animation Library 2
 

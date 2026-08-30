@@ -1,13 +1,17 @@
-# Project SEELE — EVA real-human combat and posture runtime R04
+# Project SEELE — EVA real-human combat and posture runtime R05
 
-Status: **R04 replaces the rejected crouch and Longinus semantics, compacts
-low-stance hands, and passes final-resource exact-mesh review**.
+Status: **R04 visual acceptance is revoked. R05 fixes the exact-preview atlas
+contract and replaces only the rejected Longinus action. Low stance, prone,
+crawl and their transitions remain rejected pending a new coherent chain.**
 
 The 2026-08-28 in-game review rejected the original CMU 02 weapon clips and
 the ACCAD kneel/prone/crawl chain. R02 replaced the weapon and crouch subset;
 R03 added a complete UT Dallas prone capture and re-solved rifle contact. R04
-uses the second CMU crouch trial and a Motion-X++ staff capture, then applies
-only target-rig contact/hand constraints needed by the Tiger geometry.
+then used the second CMU crouch trial and a Motion-X++ staff capture, but its
+review video paired a 1024x512-atlas mesh with a 256x256 texture. That video
+could not validate either the model or the motion. R05 makes this mismatch a
+hard error and uses the accepted ACCAD CrossRight capture for a one-handed
+Longinus jab. No R04 low-stance visual claim survives this correction.
 
 ## Promoted capture windows
 
@@ -15,8 +19,8 @@ only target-rig contact/hand constraints needed by the Tiger geometry.
 |---|---|---:|---|
 | Progressive Knife light | ACCAD Male2 E6 HookRight | 16–56 | right-hand horizontal cut |
 | Progressive Knife heavy | ACCAD Male2 E4 CrossRight | 5–45 | committed straight thrust |
-| Longinus ready | ACCAD Male2 E4 CrossRight | 5 | stable two-hand guard plus final-resource shaft solve |
-| Longinus thrust | Motion-X++ Staff Workout 13 clip 2 | 0–43 | captured staff lunge plus reviewed rear-hand path and exact two-hand solve |
+| Longinus ready | ACCAD Male2 E4 CrossRight | 5 | one-handed diagonal guard, left hand free for balance |
+| Longinus thrust | ACCAD Male2 E4 CrossRight | 5–45 | captured hip/shoulder drive aligned to the right-hand lance socket |
 | stand to crouch | CMU 136_09 Walk Crouched | 51–230 | continuous standing-height to low stance |
 | crouch idle | CMU 136_10 Walk Crouched | 169 | settled low stance hold |
 | crouch walk | CMU 136_10 Walk Crouched | 121–241 | in-place crouch gait loop |
@@ -52,10 +56,12 @@ available only in Git history.
 4. Knife light/heavy use the already reviewed ACCAD hook/cross body captures.
    The 26 visible Tiger finger controls retain the solved native-thumb
    opposition; the empty `thumb_tip` sockets are not treated as visible mesh.
-5. Longinus thrust uses a real staff lunge instead of the rejected right-cross
-   body. A five-stage pass authors the captured rear-hand path, aligns the
-   shaft, seats the right palm, solves a separated front guide hand, and then
-   re-solves the composed Gecko resource. No child-limb translation is used.
+5. Longinus thrust is a one-handed spear jab, matching the readable semantics
+   of a trident attack. The ACCAD CrossRight capture supplies the foot load,
+   hip/shoulder turn, extension and recovery; the lance remains on the native
+   right-hand socket. An exact-mesh socket pass rotates the lance about that
+   grip onto the EVA forward axis and then restores palm/surface contact. The
+   left hand is not forced onto the shaft.
 6. Crouched knife and Longinus actions reuse only the accepted upper-body
    weapon layer over the accepted CMU low stance.
 7. Exact body grounding changes root height only. The UTD source-level pass
@@ -109,11 +115,12 @@ notices remain in `docs/THIRD_PARTY_MOTION_NOTICES.md`; R04 reviews are under
 
 ## Final local gates
 
-- final exact body audit: `14/0` (clips/failures), including both stand/crouch
-  directions and all prone transitions;
-- final Longinus ready/thrust audit: right-hand surface distance at most
-  `0.032460`, left-hand distance at most `0.094042`, forward-axis cosine at
-  least `0.999780`;
+- body low-stance audit: **not accepted**; numerical `14/0` from R04 is not a
+  visual pass and must not be quoted as one;
+- Longinus ready/thrust: exact runtime mesh and correct 1024x512 atlas reviewed
+  as a one-handed guard/jab; forward-axis cosine is at least `0.999780` and
+  right-hand surface distance is at most `0.12` Blender units. No false
+  left-hand contact gate is applied;
 - exact prone-rifle audit: right-hand surface distance at most `0.0000015`,
   left-hand distance at most `0.053818`, forward-axis cosine at least
   `0.999660`;
@@ -129,4 +136,6 @@ Review videos:
 
 - weapon/crouch: `artifacts/motion_research/eva_action_r02_direct/EVA_R02_ACCEPTED_WEAPON_CROUCH_REVIEW.mp4` (`431` frames);
 - UTD prone/crawl/rifle: `artifacts/motion_research/eva_action_r03_utd_prone/EVA_R03_UTD_PRONE_CRAWL_RIFLE_FINAL.mp4` (`236` frames, `15.73 s`).
-- R04 final exact-resource review: `artifacts/motion_research/eva_action_r04_semantic_fix/EVA_R04_FINAL_MOTION_REVIEW.mp4` (`427` frames, `14.23 s`, exact `30 fps`).
+- R04 final exact-resource review is invalid because it used the wrong body
+  texture dimensions. The corrected model-only baseline is
+  `artifacts/motion_research/eva_action_r04_semantic_fix/correct_runtime_atlas/EVA_IDLE_RUNTIME_MODEL_CORRECT.mp4`.

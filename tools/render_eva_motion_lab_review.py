@@ -28,6 +28,7 @@ def parse_args() -> argparse.Namespace:
         default="front_three_quarter",
     )
     parser.add_argument("--sheet-only", action="store_true")
+    parser.add_argument("--show-debug-markers", action="store_true")
     return parser.parse_args(sys.argv[sys.argv.index("--") + 1:])
 
 
@@ -59,6 +60,10 @@ def bounds(frame_start: int, frame_end: int) -> tuple[Vector, float]:
 
 def main() -> None:
     args = parse_args()
+    if not args.show_debug_markers:
+        contact_collection = bpy.data.collections.get("30_CONTACT_DEBUG")
+        if contact_collection is not None:
+            contact_collection.hide_render = True
     motion = json.loads(args.motion_db.read_text(encoding="utf-8"))
     clip = motion["clips"].get(args.clip)
     if clip is None:
