@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fail closed on the Phase-A EVA pose-authority observation contract."""
+"""Validate the Phase-A foundation under the current Phase-B authority."""
 
 from __future__ import annotations
 
@@ -88,6 +88,10 @@ def main() -> None:
     require(rig["canonicalBoneOrderMustMatch"]
             and all(rig["variantCanonicalBoneOrderMatches"].values()),
             "variant canonical bone subsequences must match Unit-01")
+    require(all(bone["defaultOwner"] ==
+                ("POSE_GRAPH_WEAPON_AIM" if bone["name"] == "aim_pitch"
+                 else "GECKO_COMPOSITE") for bone in bones),
+            "canonical default owners do not match Phase-B boundary")
     canonical_names = set(names)
     for variant in ("eva_unit00", "eva_unit01", "eva_unit02"):
         geometry = read_json(RUNTIME / "geo" / f"{variant}.geo.json")
@@ -118,9 +122,21 @@ def main() -> None:
     require(authority.get("rigVersion") == rig["rigVersion"],
             "authority rig version differs")
     require(authority.get("poseGraphVersion") ==
-            "eva_pose_graph_observer_r01", "unexpected pose graph version")
-    require(authority.get("mode") == "OBSERVE_ONLY_NO_BONE_WRITES",
-            "Phase-A pose graph must remain read-only")
+            "eva_pose_graph_enforced_r02", "unexpected pose graph version")
+    require(authority.get("phase") == "B"
+            and authority.get("mode") ==
+            "ENFORCE_POST_GECKO_SINGLE_COMMIT",
+            "Phase-B pose graph is not the enforcing single commit point")
+    require(authority.get("migrationBaselineCommit") ==
+            "cee87f58ab6118f49e8baf80e324e96d0f446cbb",
+            "Phase-B migration baseline differs")
+    require(authority.get("commitOrder") == [
+        "GECKO_COMPOSITE", "MOTION_ENGINE_PREVIEW",
+        "POSE_GRAPH_WEAPON_AIM", "POSE_GRAPH_PILOT_AIM"],
+        "Phase-B commit order differs")
+    require(authority.get("ownedChannels") ==
+            ["rotation", "position", "scale"],
+            "Phase-B transform-channel ownership differs")
     masks = authority.get("boneMasks", {})
     masked = [name for values in masks.values() for name in values]
     require(len(masked) == len(set(masked)) == 70,
@@ -130,6 +146,9 @@ def main() -> None:
     require(capture["motionLabPhysicsPreviewMustBe"] == 0
             and capture["visualPoseMustBe"] == 0,
             "official capture must reject preview authority")
+    require(capture["finalOwnerConflictsMustBeEmptyFor"] ==
+            ["rotation", "position", "scale"],
+            "official capture permits final owner conflicts")
     require(capture["resultVocabulary"] ==
             ["FAIL", "ELIGIBLE_FOR_HUMAN_REVIEW"],
             "automatic result vocabulary drifted")
@@ -187,20 +206,46 @@ def main() -> None:
         "EvaPoseRuntimeRecorder.java")
     renderer_source = read(
         "src/main/java/com/projectseele/client/render/EvaUnit01Renderer.java")
+    motion_source = read(
+        "src/main/java/com/projectseele/client/render/EvaMotionEngineV2.java")
     command_source = read(
         "src/main/java/com/projectseele/visual/EvaMotionLabCommands.java")
     network_source = read(
         "src/main/java/com/projectseele/network/SeeleNetwork.java")
     entity_source = read(
         "src/main/java/com/projectseele/entity/EvaUnit01Entity.java")
-    require("OBSERVE_ONLY_NO_BONE_WRITES" in graph_source,
-            "read-only pose graph marker is missing")
+    require("ENFORCE_POST_GECKO_SINGLE_COMMIT" in graph_source
+            and "public static Snapshot commit(" in graph_source
+            and "EvaMotionEngineV2.apply(" in graph_source,
+            "enforcing PoseGraph commit is missing")
+    require("POSE_GRAPH_WEAPON_AIM" in graph_source
+            and "POSE_GRAPH_PILOT_AIM" in graph_source,
+            "Phase-B aim owners are missing")
+    require("positionOwners" in graph_source
+            and "scaleOwners" in graph_source
+            and "BoneWrites" in graph_source,
+            "Phase-B channel ownership ledger is missing")
+    require("record BoneWrites" in motion_source
+            and "rotationBones" in motion_source
+            and "positionBones" in motion_source,
+            "MotionEngine does not report channel-specific writes")
     for forbidden in (".setRotX(", ".setRotY(", ".setRotZ(",
-                      ".setPosX(", ".setScaleX("):
-        require(forbidden not in graph_source,
-                "PoseGraph writes runtime bones: " + forbidden)
+                      ".setPosX(", ".setPosY(", ".setPosZ(",
+                      ".setScaleX(", ".setScaleY(", ".setScaleZ("):
+        require(forbidden not in renderer_source,
+                "renderer still writes runtime bones: " + forbidden)
+    require("EvaMotionEngineV2.apply(" not in renderer_source,
+            "renderer still invokes MotionEngine directly")
+    java_sources = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in (REPO / "src/main/java").rglob("*.java")
+    )
+    require(java_sources.count("EvaMotionEngineV2.apply(") == 1,
+            "MotionEngine has a post-Gecko caller outside EvaPoseGraph")
     for token in ("getLocalSpaceMatrix()", "getModelSpaceMatrix()",
                   "getWorldSpaceMatrix()", "boneOwnerTimeline",
+                  "boneRotationOwnerTimeline",
+                  "bonePositionOwnerTimeline", "boneScaleOwnerTimeline",
                   "FINAL_POST_CONTROLLER_GECKO_MATRICES",
                   "automaticVisualApproval", "MAX_FRAMES = 900"):
         require(token in recorder_source,
@@ -223,9 +268,9 @@ def main() -> None:
             and "getMuzzlePositionForPoseCapture" in entity_source,
             "final gameplay sockets are not exposed read-only")
 
-    print("EVA Phase-A pose authority contract passed: "
+    print("EVA Phase-B pose authority contract passed: "
           f"rig={rig['rigVersion']} bones=70 locks={len(actions['actions'])} "
-          "mode=OBSERVE_ONLY")
+          "mode=ENFORCE_POST_GECKO_SINGLE_COMMIT")
 
 
 if __name__ == "__main__":

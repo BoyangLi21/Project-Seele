@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "rigVersion": "eva_tiger_canonical_r01",
-  "poseGraphVersion": "eva_pose_graph_observer_r01",
+  "poseGraphVersion": "eva_pose_graph_enforced_r02",
   "baselineCommit": "a910890b2d16741e72843cfa534a74def6113078",
   "baselineDecision": "user_requested_pre_mocap_rollback",
   "policy": {

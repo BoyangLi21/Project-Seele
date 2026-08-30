@@ -3,6 +3,7 @@ package com.projectseele.client.render;
 import java.io.Reader;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
 
@@ -107,9 +108,9 @@ public final class EvaMotionEngineV2
         }
     }
 
-    /** Returns true when V2 replaced the authored base skeleton this frame. */
-    public static boolean apply(EvaUnit01Entity entity, BakedGeoModel model,
-                                float partialTick)
+    /** Returns the exact transform channels replaced after Gecko this frame. */
+    public static BoneWrites apply(EvaUnit01Entity entity,
+                                   BakedGeoModel model, float partialTick)
     {
         int previewMode = entity.getMotionLabPhysicsPreview();
         if (previewMode == 3)
@@ -139,7 +140,7 @@ public final class EvaMotionEngineV2
                 || entity.getVisualPose() == EvaUnit01Entity.VISUAL_CRAWL)
         {
             STATES.remove(entity.getId());
-            return false;
+            return BoneWrites.empty();
         }
         if (STATES.size() > 48)
         {
@@ -408,6 +409,8 @@ public final class EvaMotionEngineV2
             runtime.rightFoot.release();
         }
 
+        Set<String> positionBones = new LinkedHashSet<>();
+        Set<String> rotationBones = new LinkedHashSet<>();
         Vector3f rootOffset = new Vector3f(target.rootMeters)
                 .mul(MODEL_UNITS_PER_SOURCE_METRE);
         model.getBone("root").ifPresent(root ->
@@ -421,6 +424,7 @@ public final class EvaMotionEngineV2
             }
             root.setPosY(root.getInitialSnapshot().getOffsetY()
                     + rootOffset.y);
+            positionBones.add("root");
         });
 
         boolean meleeActive = entity.getCockpitAttackAnim(partialTick) > 0.0F
@@ -479,19 +483,23 @@ public final class EvaMotionEngineV2
                 bone.setRotX(-euler.x);
                 bone.setRotY(-euler.y);
                 bone.setRotZ(euler.z);
+                rotationBones.add(name);
             });
         }
-        return true;
+        return new BoneWrites(Set.copyOf(rotationBones),
+                Set.copyOf(positionBones));
     }
 
-    private static boolean applyLivePhysics(BakedGeoModel model)
+    private static BoneWrites applyLivePhysics(BakedGeoModel model)
     {
         EvaLivePhysicsBridge.Snapshot snapshot =
                 EvaLivePhysicsBridge.sample();
         if (snapshot == null)
         {
-            return false;
+            return BoneWrites.empty();
         }
+        Set<String> positionBones = new LinkedHashSet<>();
+        Set<String> rotationBones = new LinkedHashSet<>();
         Vector3f rootMeters = snapshot.rootMeters();
         model.getBone("root").ifPresent(root ->
         {
@@ -501,6 +509,7 @@ public final class EvaMotionEngineV2
                     + rootMeters.y * MODEL_UNITS_PER_SOURCE_METRE);
             root.setPosZ(root.getInitialSnapshot().getOffsetZ()
                     + rootMeters.z * MODEL_UNITS_PER_SOURCE_METRE);
+            positionBones.add("root");
         });
         Quaternionf[] rotations = snapshot.rotations();
         for (int index = 0; index < EvaLivePhysicsBridge.BONES.length;
@@ -514,9 +523,11 @@ public final class EvaMotionEngineV2
                 bone.setRotX(-euler.x);
                 bone.setRotY(-euler.y);
                 bone.setRotZ(euler.z);
+                rotationBones.add(name);
             });
         }
-        return true;
+        return new BoneWrites(Set.copyOf(rotationBones),
+                Set.copyOf(positionBones));
     }
 
     private static Selection select(EvaUnit01Entity entity,
@@ -839,6 +850,21 @@ public final class EvaMotionEngineV2
         return new Vector3f((float)(offset.dot(left) / scale),
                 (float)(offset.y / scale),
                 (float)(-offset.dot(forward) / scale));
+    }
+
+    public record BoneWrites(Set<String> rotationBones,
+                             Set<String> positionBones)
+    {
+        public static BoneWrites empty()
+        {
+            return new BoneWrites(Set.of(), Set.of());
+        }
+
+        public boolean isEmpty()
+        {
+            return this.rotationBones.isEmpty()
+                    && this.positionBones.isEmpty();
+        }
     }
 
     private record Selection(MotionClip primary, MotionClip secondary,

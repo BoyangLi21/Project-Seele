@@ -61,7 +61,7 @@ public final class EvaPoseRuntimeRecorder
             return;
         }
         smokeStarted = true;
-        start(entity.getId(), "phase_a_smoke");
+        start(entity.getId(), "phase_b_smoke");
     }
 
     public static void start(int entityId, String rawLabel)
@@ -160,9 +160,14 @@ public final class EvaPoseRuntimeRecorder
         {
             return;
         }
-        String owner = frame.pose.owners().getOrDefault(
+        String rotationOwner = frame.pose.owners().getOrDefault(
                 bone.getName(), "UNDECLARED_VARIANT_BONE");
-        frame.bones.put(bone.getName(), new BoneCapture(owner,
+        String positionOwner = frame.pose.positionOwners().getOrDefault(
+                bone.getName(), "UNDECLARED_VARIANT_BONE");
+        String scaleOwner = frame.pose.scaleOwners().getOrDefault(
+                bone.getName(), "UNDECLARED_VARIANT_BONE");
+        frame.bones.put(bone.getName(), new BoneCapture(rotationOwner,
+                positionOwner, scaleOwner,
                 bone.isHidden(), matrix(bone.getLocalSpaceMatrix()),
                 matrix(bone.getModelSpaceMatrix()),
                 matrix(bone.getWorldSpaceMatrix()),
@@ -183,10 +188,13 @@ public final class EvaPoseRuntimeRecorder
         }
         try
         {
+            frame = new FrameCapture(frame.index, frame.partialTick,
+                    EvaPoseGraph.committedSnapshot(entity, frame.pose),
+                    frame.bones);
             JsonObject json = frameJson(entity, frame);
             active.writer.write(json.toString());
             active.writer.newLine();
-            active.recordOwners(frame.pose.owners());
+            active.recordOwners(frame.pose);
             active.recordAction(frame.pose.actionToken());
             active.frameIndex++;
             if (active.frameIndex % 30 == 0)
@@ -240,7 +248,10 @@ public final class EvaPoseRuntimeRecorder
         {
             BoneCapture capture = entry.getValue();
             JsonObject bone = new JsonObject();
-            bone.addProperty("owner", capture.owner);
+            bone.addProperty("owner", capture.rotationOwner);
+            bone.addProperty("rotationOwner", capture.rotationOwner);
+            bone.addProperty("positionOwner", capture.positionOwner);
+            bone.addProperty("scaleOwner", capture.scaleOwner);
             bone.addProperty("hidden", capture.hidden);
             bone.add("localMatrix", floats(capture.localMatrix));
             bone.add("modelMatrix", floats(capture.modelMatrix));
@@ -308,16 +319,29 @@ public final class EvaPoseRuntimeRecorder
         json.addProperty("actionToken", pose.actionToken());
         json.addProperty("phaseProgress", pose.phaseProgress());
         json.addProperty("actionLockStatus", pose.actionLockStatus());
+        json.addProperty("committed", pose.committed());
+        json.addProperty("commitSerial", pose.commitSerial());
         json.addProperty("eligibleForHumanReview",
                 pose.eligibleForHumanReview());
         json.add("activeLayers", strings(pose.activeLayers()));
+        json.add("upstreamSources", strings(pose.upstreamSources()));
         JsonObject owners = new JsonObject();
         pose.owners().forEach(owners::addProperty);
         json.add("owners", owners);
+        JsonObject positionOwners = new JsonObject();
+        pose.positionOwners().forEach(positionOwners::addProperty);
+        json.add("positionOwners", positionOwners);
+        JsonObject scaleOwners = new JsonObject();
+        pose.scaleOwners().forEach(scaleOwners::addProperty);
+        json.add("scaleOwners", scaleOwners);
         JsonObject conflicts = new JsonObject();
         pose.conflicts().forEach((bone, values) ->
                 conflicts.add(bone, strings(values)));
         json.add("ownerConflicts", conflicts);
+        JsonObject upstreamOverlaps = new JsonObject();
+        pose.upstreamOverlaps().forEach((bone, values) ->
+                upstreamOverlaps.add(bone, strings(values)));
+        json.add("upstreamOverlapCandidates", upstreamOverlaps);
         return json;
     }
 
@@ -374,7 +398,7 @@ public final class EvaPoseRuntimeRecorder
                 contract.authoritySha256());
         header.addProperty("approvedActionsSha256",
                 contract.actionsSha256());
-        header.addProperty("poseGraphMode", "OBSERVE_ONLY_NO_BONE_WRITES");
+        header.addProperty("poseGraphMode", contract.mode());
         header.addProperty("automaticVisualApproval", false);
         header.add("resultVocabulary", strings(List.of(
                 "FAIL", "ELIGIBLE_FOR_HUMAN_REVIEW")));
@@ -436,6 +460,23 @@ public final class EvaPoseRuntimeRecorder
             bones.add(bone, values);
         });
         root.add("boneOwnerTimeline", bones);
+        root.add("boneRotationOwnerTimeline", bones.deepCopy());
+        JsonObject positions = new JsonObject();
+        active.positionOwnerRanges.forEach((bone, ranges) ->
+        {
+            JsonArray values = new JsonArray();
+            ranges.forEach(range -> values.add(range.toJson()));
+            positions.add(bone, values);
+        });
+        root.add("bonePositionOwnerTimeline", positions);
+        JsonObject scales = new JsonObject();
+        active.scaleOwnerRanges.forEach((bone, ranges) ->
+        {
+            JsonArray values = new JsonArray();
+            ranges.forEach(range -> values.add(range.toJson()));
+            scales.add(bone, values);
+        });
+        root.add("boneScaleOwnerTimeline", scales);
         JsonArray actions = new JsonArray();
         active.actionRanges.forEach(range -> actions.add(range.toJson()));
         root.add("actionTimeline", actions);
@@ -495,7 +536,8 @@ public final class EvaPoseRuntimeRecorder
         return array;
     }
 
-    private record BoneCapture(String owner, boolean hidden,
+    private record BoneCapture(String rotationOwner, String positionOwner,
+                               String scaleOwner, boolean hidden,
                                float[] localMatrix, float[] modelMatrix,
                                float[] worldMatrix, float[] position,
                                float[] rotation, float[] scale) {}
@@ -538,6 +580,10 @@ public final class EvaPoseRuntimeRecorder
         private int frameIndex;
         private final Map<String, List<TimelineRange>> ownerRanges =
                 new LinkedHashMap<>();
+        private final Map<String, List<TimelineRange>> positionOwnerRanges =
+                new LinkedHashMap<>();
+        private final Map<String, List<TimelineRange>> scaleOwnerRanges =
+                new LinkedHashMap<>();
         private final List<TimelineRange> actionRanges = new ArrayList<>();
 
         private Session(int entityId, String label, Path frames, Path owners,
@@ -551,10 +597,16 @@ public final class EvaPoseRuntimeRecorder
             this.frameLimit = frameLimit;
         }
 
-        private void recordOwners(Map<String, String> owners)
+        private void recordOwners(EvaPoseGraph.Snapshot pose)
         {
-            owners.forEach((bone, owner) -> append(
+            pose.owners().forEach((bone, owner) -> append(
                     this.ownerRanges.computeIfAbsent(
+                            bone, ignored -> new ArrayList<>()), owner));
+            pose.positionOwners().forEach((bone, owner) -> append(
+                    this.positionOwnerRanges.computeIfAbsent(
+                            bone, ignored -> new ArrayList<>()), owner));
+            pose.scaleOwners().forEach((bone, owner) -> append(
+                    this.scaleOwnerRanges.computeIfAbsent(
                             bone, ignored -> new ArrayList<>()), owner));
         }
 
@@ -581,6 +633,14 @@ public final class EvaPoseRuntimeRecorder
         {
             int last = Math.max(0, this.frameIndex - 1);
             this.ownerRanges.values().forEach(ranges ->
+            {
+                if (!ranges.isEmpty()) ranges.get(ranges.size() - 1).end = last;
+            });
+            this.positionOwnerRanges.values().forEach(ranges ->
+            {
+                if (!ranges.isEmpty()) ranges.get(ranges.size() - 1).end = last;
+            });
+            this.scaleOwnerRanges.values().forEach(ranges ->
             {
                 if (!ranges.isEmpty()) ranges.get(ranges.size() - 1).end = last;
             });

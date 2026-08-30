@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "rigVersion": "eva_tiger_canonical_r01",
-  "status": "CANONICAL_OBSERVATION_CONTRACT",
+  "status": "CANONICAL_POST_GECKO_AUTHORITY_CONTRACT",
   "coordinateSystem": {
     "source": "Bedrock model space, Y up, runtime reflected X",
     "rotationOrder": "XYZ degrees",
@@ -37,7 +37,7 @@
         0.0
       ],
       "category": "LOWER_BODY",
-      "defaultOwner": "BASE_LOCOMOTION"
+      "defaultOwner": "GECKO_COMPOSITE"
     },
     {
       "name": "torso_lower",
@@ -53,7 +53,7 @@
         0.0
       ],
       "category": "LOWER_BODY",
-      "defaultOwner": "BASE_LOCOMOTION"
+      "defaultOwner": "GECKO_COMPOSITE"
     },
     {
       "name": "torso_upper",
@@ -69,7 +69,7 @@
         0.0
       ],
       "category": "UPPER_BODY",
-      "defaultOwner": "BASE_LOCOMOTION"
+      "defaultOwner": "GECKO_COMPOSITE"
     },
     {
       "name": "pylon_l",
@@ -85,7 +85,7 @@
         0.0
       ],
       "category": "RIGID_ATTACHMENT",
-      "defaultOwner": "INHERITED_RIGID"
+      "defaultOwner": "GECKO_COMPOSITE"
     },
     {
       "name": "pylon_r",
@@ -101,7 +101,7 @@
         0.0
       ],
       "category": "RIGID_ATTACHMENT",
-      "defaultOwner": "INHERITED_RIGID"
+      "defaultOwner": "GECKO_COMPOSITE"
     },
     {
       "name": "aim_pitch",
@@ -117,7 +117,7 @@
         0.0
       ],
       "category": "AIM_ADAPTER",
-      "defaultOwner": "RENDERER_WEAPON_AIM"
+      "defaultOwner": "POSE_GRAPH_WEAPON_AIM"
     },
     {
       "name": "clavicle_l",
@@ -133,7 +133,7 @@
         0.0
       ],
       "category": "UPPER_BODY",
-      "defaultOwner": "BASE_LOCOMOTION"
+      "defaultOwner": "GECKO_COMPOSITE"
     },
     {
       "name": "arm_l",
@@ -149,7 +149,7 @@
         0.0
       ],
       "category": "UPPER_BODY",
-      "defaultOwner": "BASE_LOCOMOTION"
+      "defaultOwner": "GECKO_COMPOSITE"
     },
     {
       "name": "forearm_l",
@@ -165,7 +165,7 @@
         0.0
       ],
       "category": "UPPER_BODY",
-      "defaultOwner": "BASE_LOCOMOTION"
+      "defaultOwner": "GECKO_COMPOSITE"
     },
     {
       "name": "wrist_l",
@@ -181,7 +181,7 @@
         0.0
       ],
       "category": "UPPER_BODY",
-      "defaultOwner": "BASE_LOCOMOTION"
+      "defaultOwner": "GECKO_COMPOSITE"
     },
     {
       "name": "hand_l",
@@ -197,7 +197,7 @@
         0.0
       ],
       "category": "UPPER_BODY",
-      "defaultOwner": "BASE_LOCOMOTION"
+      "defaultOwner": "GECKO_COMPOSITE"
     },
     {
       "name": "clavicle_r",
@@ -213,7 +213,7 @@
         0.0
       ],
       "category": "UPPER_BODY",
-      "defaultOwner": "BASE_LOCOMOTION"
+      "defaultOwner": "GECKO_COMPOSITE"
     },
     {
       "name": "arm_r",
@@ -229,7 +229,7 @@
         0.0
       ],
       "category": "UPPER_BODY",
-      "defaultOwner": "BASE_LOCOMOTION"
+      "defaultOwner": "GECKO_COMPOSITE"
     },
     {
       "name": "forearm_r",
@@ -245,7 +245,7 @@
         0.0
       ],
       "category": "UPPER_BODY",
-      "defaultOwner": "BASE_LOCOMOTION"
+      "defaultOwner": "GECKO_COMPOSITE"
     },
     {
       "name": "wrist_r",
@@ -261,7 +261,7 @@
         0.0
       ],
       "category": "UPPER_BODY",
-      "defaultOwner": "BASE_LOCOMOTION"
+      "defaultOwner": "GECKO_COMPOSITE"
     },
     {
       "name": "hand_r",
@@ -277,7 +277,7 @@
         0.0
       ],
       "category": "UPPER_BODY",
-      "defaultOwner": "BASE_LOCOMOTION"
+      "defaultOwner": "GECKO_COMPOSITE"
     },
     {
       "name": "knife",
@@ -293,7 +293,7 @@
         0.0
       ],
       "category": "WEAPON_SOCKET",
-      "defaultOwner": "WEAPON_SOCKET"
+      "defaultOwner": "GECKO_COMPOSITE"
     },
     {
       "name": "cannon",
@@ -309,7 +309,7 @@
         0.0
       ],
       "category": "WEAPON_SOCKET",
-      "defaultOwner": "WEAPON_SOCKET"
+      "defaultOwner": "GECKO_COMPOSITE"
     },
     {
       "name": "lance",
@@ -325,7 +325,7 @@
         0.0
       ],
       "category": "WEAPON_SOCKET",
-      "defaultOwner": "WEAPON_SOCKET"
+      "defaultOwner": "GECKO_COMPOSITE"
     },
     {
       "name": "entry_plug",
@@ -341,7 +341,7 @@
         0.0
       ],
       "category": "RIGID_ATTACHMENT",
-      "defaultOwner": "INHERITED_RIGID"
+      "defaultOwner": "GECKO_COMPOSITE"
     },
     {
       "name": "plug_hatch_l",
@@ -357,7 +357,7 @@
         0.0
       ],
       "category": "RIGID_ATTACHMENT",
-      "defaultOwner": "INHERITED_RIGID"
+      "defaultOwner": "GECKO_COMPOSITE"
     },
     {
       "name": "plug_hatch_r",
@@ -373,7 +373,7 @@
         0.0
       ],
       "category": "RIGID_ATTACHMENT",
-      "defaultOwner": "INHERITED_RIGID"
+      "defaultOwner": "GECKO_COMPOSITE"
     },
     {
       "name": "neck",
@@ -389,7 +389,7 @@
         0.0
       ],
       "category": "UPPER_BODY",
-      "defaultOwner": "BASE_LOCOMOTION"
+      "defaultOwner": "GECKO_COMPOSITE"
     },
     {
       "name": "head",
@@ -405,7 +405,7 @@
         0.0
       ],
       "category": "UPPER_BODY",
-      "defaultOwner": "BASE_LOCOMOTION"
+      "defaultOwner": "GECKO_COMPOSITE"
     },
     {
       "name": "horn",
@@ -421,7 +421,7 @@
         0
       ],
       "category": "RIGID_ATTACHMENT",
-      "defaultOwner": "INHERITED_RIGID"
+      "defaultOwner": "GECKO_COMPOSITE"
     },
     {
       "name": "leg_l",
@@ -437,7 +437,7 @@
         0.0
       ],
       "category": "LOWER_BODY",
-      "defaultOwner": "BASE_LOCOMOTION"
+      "defaultOwner": "GECKO_COMPOSITE"
     },
     {
       "name": "shin_l",
@@ -453,7 +453,7 @@
         0.0
       ],
       "category": "LOWER_BODY",
-      "defaultOwner": "BASE_LOCOMOTION"
+      "defaultOwner": "GECKO_COMPOSITE"
     },
     {
       "name": "leg_r",
@@ -469,7 +469,7 @@
         0.0
       ],
       "category": "LOWER_BODY",
-      "defaultOwner": "BASE_LOCOMOTION"
+      "defaultOwner": "GECKO_COMPOSITE"
     },
     {
       "name": "shin_r",
@@ -485,7 +485,7 @@
         0.0
       ],
       "category": "LOWER_BODY",
-      "defaultOwner": "BASE_LOCOMOTION"
+      "defaultOwner": "GECKO_COMPOSITE"
     },
     {
       "name": "ankle_l",
@@ -501,7 +501,7 @@
         0.0
       ],
       "category": "LOWER_BODY",
-      "defaultOwner": "BASE_LOCOMOTION"
+      "defaultOwner": "GECKO_COMPOSITE"
     },
     {
       "name": "foot_l",
@@ -517,7 +517,7 @@
         0.0
       ],
       "category": "LOWER_BODY",
-      "defaultOwner": "BASE_LOCOMOTION"
+      "defaultOwner": "GECKO_COMPOSITE"
     },
     {
       "name": "ankle_r",
@@ -533,7 +533,7 @@
         0.0
       ],
       "category": "LOWER_BODY",
-      "defaultOwner": "BASE_LOCOMOTION"
+      "defaultOwner": "GECKO_COMPOSITE"
     },
     {
       "name": "foot_r",
@@ -549,7 +549,7 @@
         0.0
       ],
       "category": "LOWER_BODY",
-      "defaultOwner": "BASE_LOCOMOTION"
+      "defaultOwner": "GECKO_COMPOSITE"
     },
     {
       "name": "finger_index_axis_l",
@@ -565,7 +565,7 @@
         15.87776516
       ],
       "category": "GRIP",
-      "defaultOwner": "GRIP_PROFILE"
+      "defaultOwner": "GECKO_COMPOSITE"
     },
     {
       "name": "finger_index_l",
@@ -581,7 +581,7 @@
         0.0
       ],
       "category": "GRIP",
-      "defaultOwner": "GRIP_PROFILE"
+      "defaultOwner": "GECKO_COMPOSITE"
     },
     {
       "name": "finger_index_axis_r",
@@ -597,7 +597,7 @@
         164.12223484
       ],
       "category": "GRIP",
-      "defaultOwner": "GRIP_PROFILE"
+      "defaultOwner": "GECKO_COMPOSITE"
     },
     {
       "name": "finger_index_r",
@@ -613,7 +613,7 @@
         0.0
       ],
       "category": "GRIP",
-      "defaultOwner": "GRIP_PROFILE"
+      "defaultOwner": "GECKO_COMPOSITE"
     },
     {
       "name": "finger_little_axis_l",
@@ -629,7 +629,7 @@
         20.62276844
       ],
       "category": "GRIP",
-      "defaultOwner": "GRIP_PROFILE"
+      "defaultOwner": "GECKO_COMPOSITE"
     },
     {
       "name": "finger_little_l",
@@ -645,7 +645,7 @@
         0.0
       ],
       "category": "GRIP",
-      "defaultOwner": "GRIP_PROFILE"
+      "defaultOwner": "GECKO_COMPOSITE"
     },
     {
       "name": "finger_little_axis_r",
@@ -661,7 +661,7 @@
         159.37723156
       ],
       "category": "GRIP",
-      "defaultOwner": "GRIP_PROFILE"
+      "defaultOwner": "GECKO_COMPOSITE"
     },
     {
       "name": "finger_little_r",
@@ -677,7 +677,7 @@
         0.0
       ],
       "category": "GRIP",
-      "defaultOwner": "GRIP_PROFILE"
+      "defaultOwner": "GECKO_COMPOSITE"
     },
     {
       "name": "finger_middle_axis_l",
@@ -693,7 +693,7 @@
         21.29234199
       ],
       "category": "GRIP",
-      "defaultOwner": "GRIP_PROFILE"
+      "defaultOwner": "GECKO_COMPOSITE"
     },
     {
       "name": "finger_middle_l",
@@ -709,7 +709,7 @@
         0.0
       ],
       "category": "GRIP",
-      "defaultOwner": "GRIP_PROFILE"
+      "defaultOwner": "GECKO_COMPOSITE"
     },
     {
       "name": "finger_middle_axis_r",
@@ -725,7 +725,7 @@
         158.70765801
       ],
       "category": "GRIP",
-      "defaultOwner": "GRIP_PROFILE"
+      "defaultOwner": "GECKO_COMPOSITE"
     },
     {
       "name": "finger_middle_r",
@@ -741,7 +741,7 @@
         0.0
       ],
       "category": "GRIP",
-      "defaultOwner": "GRIP_PROFILE"
+      "defaultOwner": "GECKO_COMPOSITE"
     },
     {
       "name": "finger_ring_axis_l",
@@ -757,7 +757,7 @@
         21.24339729
       ],
       "category": "GRIP",
-      "defaultOwner": "GRIP_PROFILE"
+      "defaultOwner": "GECKO_COMPOSITE"
     },
     {
       "name": "finger_ring_l",
@@ -773,7 +773,7 @@
         0.0
       ],
       "category": "GRIP",
-      "defaultOwner": "GRIP_PROFILE"
+      "defaultOwner": "GECKO_COMPOSITE"
     },
     {
       "name": "finger_ring_axis_r",
@@ -789,7 +789,7 @@
         158.75660271
       ],
       "category": "GRIP",
-      "defaultOwner": "GRIP_PROFILE"
+      "defaultOwner": "GECKO_COMPOSITE"
     },
     {
       "name": "finger_ring_r",
@@ -805,7 +805,7 @@
         0.0
       ],
       "category": "GRIP",
-      "defaultOwner": "GRIP_PROFILE"
+      "defaultOwner": "GECKO_COMPOSITE"
     },
     {
       "name": "finger_thumb_l",
@@ -821,7 +821,7 @@
         0.0
       ],
       "category": "GRIP",
-      "defaultOwner": "GRIP_PROFILE"
+      "defaultOwner": "GECKO_COMPOSITE"
     },
     {
       "name": "finger_thumb_r",
@@ -837,7 +837,7 @@
         0.0
       ],
       "category": "GRIP",
-      "defaultOwner": "GRIP_PROFILE"
+      "defaultOwner": "GECKO_COMPOSITE"
     },
     {
       "name": "finger_index_tip_l",
@@ -853,7 +853,7 @@
         0.0
       ],
       "category": "GRIP",
-      "defaultOwner": "GRIP_PROFILE"
+      "defaultOwner": "GECKO_COMPOSITE"
     },
     {
       "name": "finger_index_tip_r",
@@ -869,7 +869,7 @@
         0.0
       ],
       "category": "GRIP",
-      "defaultOwner": "GRIP_PROFILE"
+      "defaultOwner": "GECKO_COMPOSITE"
     },
     {
       "name": "finger_little_tip_l",
@@ -885,7 +885,7 @@
         0.0
       ],
       "category": "GRIP",
-      "defaultOwner": "GRIP_PROFILE"
+      "defaultOwner": "GECKO_COMPOSITE"
     },
     {
       "name": "finger_little_tip_r",
@@ -901,7 +901,7 @@
         0.0
       ],
       "category": "GRIP",
-      "defaultOwner": "GRIP_PROFILE"
+      "defaultOwner": "GECKO_COMPOSITE"
     },
     {
       "name": "finger_middle_tip_l",
@@ -917,7 +917,7 @@
         0.0
       ],
       "category": "GRIP",
-      "defaultOwner": "GRIP_PROFILE"
+      "defaultOwner": "GECKO_COMPOSITE"
     },
     {
       "name": "finger_middle_tip_r",
@@ -933,7 +933,7 @@
         0.0
       ],
       "category": "GRIP",
-      "defaultOwner": "GRIP_PROFILE"
+      "defaultOwner": "GECKO_COMPOSITE"
     },
     {
       "name": "finger_ring_tip_l",
@@ -949,7 +949,7 @@
         0.0
       ],
       "category": "GRIP",
-      "defaultOwner": "GRIP_PROFILE"
+      "defaultOwner": "GECKO_COMPOSITE"
     },
     {
       "name": "finger_ring_tip_r",
@@ -965,7 +965,7 @@
         0.0
       ],
       "category": "GRIP",
-      "defaultOwner": "GRIP_PROFILE"
+      "defaultOwner": "GECKO_COMPOSITE"
     },
     {
       "name": "finger_thumb_tip_l",
@@ -981,7 +981,7 @@
         0.0
       ],
       "category": "GRIP",
-      "defaultOwner": "GRIP_PROFILE"
+      "defaultOwner": "GECKO_COMPOSITE"
     },
     {
       "name": "finger_thumb_tip_r",
@@ -997,7 +997,7 @@
         0.0
       ],
       "category": "GRIP",
-      "defaultOwner": "GRIP_PROFILE"
+      "defaultOwner": "GECKO_COMPOSITE"
     },
     {
       "name": "finger_index_distal_l",
@@ -1013,7 +1013,7 @@
         0.0
       ],
       "category": "GRIP",
-      "defaultOwner": "GRIP_PROFILE"
+      "defaultOwner": "GECKO_COMPOSITE"
     },
     {
       "name": "finger_index_distal_r",
@@ -1029,7 +1029,7 @@
         0.0
       ],
       "category": "GRIP",
-      "defaultOwner": "GRIP_PROFILE"
+      "defaultOwner": "GECKO_COMPOSITE"
     },
     {
       "name": "finger_little_distal_l",
@@ -1045,7 +1045,7 @@
         0.0
       ],
       "category": "GRIP",
-      "defaultOwner": "GRIP_PROFILE"
+      "defaultOwner": "GECKO_COMPOSITE"
     },
     {
       "name": "finger_little_distal_r",
@@ -1061,7 +1061,7 @@
         0.0
       ],
       "category": "GRIP",
-      "defaultOwner": "GRIP_PROFILE"
+      "defaultOwner": "GECKO_COMPOSITE"
     },
     {
       "name": "finger_middle_distal_l",
@@ -1077,7 +1077,7 @@
         0.0
       ],
       "category": "GRIP",
-      "defaultOwner": "GRIP_PROFILE"
+      "defaultOwner": "GECKO_COMPOSITE"
     },
     {
       "name": "finger_middle_distal_r",
@@ -1093,7 +1093,7 @@
         0.0
       ],
       "category": "GRIP",
-      "defaultOwner": "GRIP_PROFILE"
+      "defaultOwner": "GECKO_COMPOSITE"
     },
     {
       "name": "finger_ring_distal_l",
@@ -1109,7 +1109,7 @@
         0.0
       ],
       "category": "GRIP",
-      "defaultOwner": "GRIP_PROFILE"
+      "defaultOwner": "GECKO_COMPOSITE"
     },
     {
       "name": "finger_ring_distal_r",
@@ -1125,7 +1125,7 @@
         0.0
       ],
       "category": "GRIP",
-      "defaultOwner": "GRIP_PROFILE"
+      "defaultOwner": "GECKO_COMPOSITE"
     },
     {
       "name": "n2",
@@ -1141,7 +1141,7 @@
         0.0
       ],
       "category": "WEAPON_SOCKET",
-      "defaultOwner": "WEAPON_SOCKET"
+      "defaultOwner": "GECKO_COMPOSITE"
     }
   ],
   "variantGeometrySemanticSha256": {

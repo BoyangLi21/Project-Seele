@@ -21,14 +21,15 @@ import com.projectseele.ProjectSeele;
 import com.projectseele.entity.EvaUnit01Entity;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.packs.resources.ResourceManager;
+import software.bernie.geckolib.cache.object.BakedGeoModel;
 
 /**
- * Phase-A observer for the eventual single EVA pose authority.
+ * Phase-B single commit point for every post-Gecko EVA bone write.
  *
- * <p>This class deliberately writes no bone. It resolves the owner that the
- * contract says should win, records every overlapping candidate and exposes
- * that decision to the final-matrix recorder. Promotion to an enforcing pose
- * graph is a separate, human-approved phase.</p>
+ * <p>Gecko's base/arms/strike controller stack remains one explicitly named
+ * upstream composite. MotionEngine previews and the two renderer-era aim
+ * adapters are applied only here, in contract order. No action resource or
+ * gameplay state is changed by this migration.</p>
  */
 public final class EvaPoseGraph
 {
@@ -39,11 +40,17 @@ public final class EvaPoseGraph
     private static final ResourceLocation ACTIONS = new ResourceLocation(
             ProjectSeele.MODID, "eva/eva_approved_actions.json");
     private static volatile Contract contract = Contract.empty();
+    private static final Map<Integer, Snapshot> LAST_COMMITS = new HashMap<>();
+    private static long commitSerial;
+    private static boolean firstCommitLogged;
 
     private EvaPoseGraph() {}
 
     public static void reload(ResourceManager resources)
     {
+        LAST_COMMITS.clear();
+        commitSerial = 0L;
+        firstCommitLogged = false;
         try
         {
             String rigText = read(resources, RIG);
@@ -59,7 +66,7 @@ public final class EvaPoseGraph
                     || actions.get("schema").getAsInt() != 1)
             {
                 throw new IllegalArgumentException(
-                        "unsupported EVA Phase-A contract schema");
+                        "unsupported EVA pose-authority contract schema");
             }
             String rigVersion = rig.get("rigVersion").getAsString();
             String poseGraphVersion = authority.get(
@@ -69,11 +76,11 @@ public final class EvaPoseGraph
                     "rigVersion").getAsString())
                     || !poseGraphVersion.equals(actions.get(
                     "poseGraphVersion").getAsString())
-                    || !"OBSERVE_ONLY_NO_BONE_WRITES".equals(
+                    || !"ENFORCE_POST_GECKO_SINGLE_COMMIT".equals(
                     authority.get("mode").getAsString()))
             {
                 throw new IllegalArgumentException(
-                        "EVA Phase-A contract versions disagree");
+                        "EVA Phase-B contract versions disagree");
             }
 
             List<String> boneOrder = new ArrayList<>();
@@ -112,21 +119,22 @@ public final class EvaPoseGraph
                 actionStatuses.put(entry.getKey(), entry.getValue()
                         .getAsJsonObject().get("status").getAsString());
             }
-            contract = new Contract(true, rigVersion, poseGraphVersion,
+            String mode = authority.get("mode").getAsString();
+            contract = new Contract(true, rigVersion, poseGraphVersion, mode,
                     sha256(rigText), sha256(authorityText),
                     sha256(actionsText), List.copyOf(boneOrder),
                     Map.copyOf(defaultOwners), immutableMasks(masks),
                     List.copyOf(priority), Map.copyOf(actionStatuses));
             ProjectSeele.LOGGER.info(
-                    "EVA PoseGraph observer loaded: rig={} graph={} bones={} actionLocks={}",
-                    rigVersion, poseGraphVersion, boneOrder.size(),
+                    "EVA PoseGraph authority loaded: rig={} graph={} mode={} bones={} actionLocks={}",
+                    rigVersion, poseGraphVersion, mode, boneOrder.size(),
                     actionStatuses.size());
         }
         catch (Exception exception)
         {
             contract = Contract.empty();
             ProjectSeele.LOGGER.error(
-                    "EVA PoseGraph observer contracts rejected", exception);
+                    "EVA PoseGraph authority contracts rejected", exception);
         }
     }
 
@@ -142,6 +150,77 @@ public final class EvaPoseGraph
 
     public static Snapshot observe(EvaUnit01Entity entity, float partialTick)
     {
+        return snapshot(entity, partialTick,
+                EvaMotionEngineV2.BoneWrites.empty(), false);
+    }
+
+    /** Applies every post-Gecko writer once and records the exact final owner. */
+    public static Snapshot commit(EvaUnit01Entity entity,
+                                  BakedGeoModel model, float partialTick)
+    {
+        if (!contract.ready())
+        {
+            return Snapshot.empty();
+        }
+        EvaMotionEngineV2.BoneWrites motionWrites = EvaMotionEngineV2.apply(
+                entity, model, partialTick);
+
+        model.getBone("aim_pitch").ifPresent(aimPitch ->
+        {
+            float pitch = entity.getWeapon() == EvaUnit01Entity.WEAPON_CANNON
+                    || entity.getWeapon() == EvaUnit01Entity.WEAPON_RIFLE
+                    ? (float)Math.toRadians(entity.getCannonAimPitch()) : 0.0F;
+            // Minecraft positive X looks down; the Bedrock parent uses the
+            // opposite sign. This is the exact pre-Phase-B renderer formula.
+            aimPitch.setRotX(-pitch);
+            // Re-commit unchanged channels so one node owns the final
+            // absolute rotation without changing the pre-Phase-B result.
+            aimPitch.setRotY(aimPitch.getRotY());
+            aimPitch.setRotZ(aimPitch.getRotZ());
+        });
+        if (entity.getPilotEntity() != null)
+        {
+            model.getBone("head").ifPresent(head ->
+            {
+                head.setRotY((float)Math.toRadians(
+                        -entity.pilotHeadYawForRender(partialTick)));
+                head.setRotX((float)Math.toRadians(
+                        -entity.pilotHeadPitchForRender(partialTick)));
+                head.setRotZ(head.getRotZ());
+            });
+        }
+        Snapshot committed = snapshot(
+                entity, partialTick, motionWrites, true);
+        if (LAST_COMMITS.size() > 48)
+        {
+            LAST_COMMITS.clear();
+        }
+        LAST_COMMITS.put(entity.getId(), committed);
+        if (!firstCommitLogged)
+        {
+            firstCommitLogged = true;
+            ProjectSeele.LOGGER.info(
+                    "EVA PoseGraph first enforced commit: entity={} serial={} "
+                            + "motionRotationBones={} motionPositionBones={} pilotAim={}",
+                    entity.getId(), committed.commitSerial(),
+                    motionWrites.rotationBones().size(),
+                    motionWrites.positionBones().size(),
+                    entity.getPilotEntity() != null);
+        }
+        return committed;
+    }
+
+    public static Snapshot committedSnapshot(EvaUnit01Entity entity,
+                                             Snapshot fallback)
+    {
+        return LAST_COMMITS.getOrDefault(entity.getId(), fallback);
+    }
+
+    private static Snapshot snapshot(EvaUnit01Entity entity,
+                                     float partialTick,
+                                     EvaMotionEngineV2.BoneWrites motionWrites,
+                                     boolean committed)
+    {
         Contract current = contract;
         if (!current.ready())
         {
@@ -150,89 +229,151 @@ public final class EvaPoseGraph
         String actionToken = actionToken(entity, partialTick);
         float phase = phase(entity, partialTick);
         LinkedHashSet<String> activeLayers = new LinkedHashSet<>();
-        activeLayers.add("BASE_LOCOMOTION");
+        activeLayers.add("GECKO_COMPOSITE");
+        if (!motionWrites.isEmpty())
+        {
+            activeLayers.add("MOTION_ENGINE_PREVIEW");
+        }
+        activeLayers.add("POSE_GRAPH_WEAPON_AIM");
+        if (entity.getPilotEntity() != null)
+        {
+            activeLayers.add("POSE_GRAPH_PILOT_AIM");
+        }
+
+        Map<String, String> rotationOwners = new LinkedHashMap<>();
+        Map<String, String> positionOwners = new LinkedHashMap<>();
+        Map<String, String> scaleOwners = new LinkedHashMap<>();
+        for (String bone : current.boneOrder())
+        {
+            rotationOwners.put(bone, "GECKO_COMPOSITE");
+            positionOwners.put(bone, "GECKO_COMPOSITE");
+            scaleOwners.put(bone, "GECKO_COMPOSITE");
+        }
+        for (String bone : motionWrites.rotationBones())
+        {
+            if (rotationOwners.containsKey(bone))
+            {
+                rotationOwners.put(bone, "MOTION_ENGINE_PREVIEW");
+            }
+        }
+        for (String bone : motionWrites.positionBones())
+        {
+            if (positionOwners.containsKey(bone))
+            {
+                positionOwners.put(bone, "MOTION_ENGINE_PREVIEW");
+            }
+        }
+        if (rotationOwners.containsKey("aim_pitch"))
+        {
+            rotationOwners.put("aim_pitch", "POSE_GRAPH_WEAPON_AIM");
+        }
+        if (entity.getPilotEntity() != null
+                && rotationOwners.containsKey("head"))
+        {
+            rotationOwners.put("head", "POSE_GRAPH_PILOT_AIM");
+        }
+
+        List<String> upstreamSources = upstreamSources(entity, partialTick);
+        Map<String, List<String>> upstreamOverlaps = upstreamOverlaps(
+                entity, partialTick, current);
+        int preview = entity.getMotionLabPhysicsPreview();
+        boolean eligible = preview == 0
+                && entity.getVisualPose() == EvaUnit01Entity.VISUAL_NORMAL;
+        long serial = committed ? ++commitSerial : 0L;
+        return new Snapshot(actionToken, phase,
+                List.copyOf(activeLayers), List.copyOf(upstreamSources),
+                Map.copyOf(rotationOwners), Map.copyOf(positionOwners),
+                Map.copyOf(scaleOwners), Map.of(),
+                Map.copyOf(upstreamOverlaps),
+                eligible, actionStatus(actionToken,
+                current.actionStatuses()), committed, serial);
+    }
+
+    private static List<String> upstreamSources(EvaUnit01Entity entity,
+                                                float partialTick)
+    {
+        List<String> result = new ArrayList<>();
+        result.add("GECKO_CONTROLLER_BASE");
+        if (armsControllerActive(entity))
+        {
+            result.add("GECKO_CONTROLLER_ARMS");
+        }
+        if (strikeActive(entity, partialTick))
+        {
+            result.add("GECKO_CONTROLLER_STRIKE");
+        }
+        return result;
+    }
+
+    private static Map<String, List<String>> upstreamOverlaps(
+            EvaUnit01Entity entity, float partialTick, Contract current)
+    {
         Map<String, LinkedHashSet<String>> candidates = new LinkedHashMap<>();
         for (String bone : current.boneOrder())
         {
             candidates.put(bone, new LinkedHashSet<>(Set.of(
-                    current.defaultOwners().get(bone))));
+                    "GECKO_CONTROLLER_BASE")));
         }
+        if (armsControllerActive(entity))
+        {
+            addCandidate(candidates, current.masks(), "UPPER_BODY",
+                    "GECKO_CONTROLLER_ARMS");
+            addCandidate(candidates, current.masks(), "GRIP",
+                    "GECKO_CONTROLLER_ARMS");
+            addCandidate(candidates, current.masks(), "WEAPON_SOCKET",
+                    "GECKO_CONTROLLER_ARMS");
+        }
+        if (strikeActive(entity, partialTick))
+        {
+            addCandidate(candidates, current.masks(), "LOWER_BODY",
+                    "GECKO_CONTROLLER_STRIKE");
+            addCandidate(candidates, current.masks(), "UPPER_BODY",
+                    "GECKO_CONTROLLER_STRIKE");
+            addCandidate(candidates, current.masks(), "GRIP",
+                    "GECKO_CONTROLLER_STRIKE");
+            addCandidate(candidates, current.masks(), "WEAPON_SOCKET",
+                    "GECKO_CONTROLLER_STRIKE");
+        }
+        Map<String, List<String>> overlaps = new LinkedHashMap<>();
+        candidates.forEach((bone, values) ->
+        {
+            if (values.size() > 1)
+            {
+                overlaps.put(bone, List.copyOf(values));
+            }
+        });
+        return overlaps;
+    }
 
-        int preview = entity.getMotionLabPhysicsPreview();
-        boolean strike = entity.getCockpitAttackAnim(partialTick) > 0.0F
+    private static boolean strikeActive(EvaUnit01Entity entity,
+                                        float partialTick)
+    {
+        return entity.getCockpitAttackAnim(partialTick) > 0.0F
                 || entity.getCockpitSmashAnim(partialTick) > 0.0F;
-        boolean fullBody = strike && !entity.isPilotCrouching()
-                && !entity.isPilotProne();
-        if (preview > 0)
-        {
-            activeLayers.add("MOTION_ENGINE_PREVIEW");
-            addCandidate(candidates, current.masks(), "LOWER_BODY",
-                    "MOTION_ENGINE_PREVIEW");
-            addCandidate(candidates, current.masks(), "UPPER_BODY",
-                    "MOTION_ENGINE_PREVIEW");
-            addCandidate(candidates, current.masks(), "GRIP",
-                    "MOTION_ENGINE_PREVIEW");
-        }
-        if (entity.isCrucified() || entity.isBerserk())
-        {
-            activeLayers.add("FULL_BODY_ACTION");
-            addCandidate(candidates, current.masks(), "LOWER_BODY",
-                    "FULL_BODY_ACTION");
-            addCandidate(candidates, current.masks(), "UPPER_BODY",
-                    "FULL_BODY_ACTION");
-        }
-        else if (strike)
-        {
-            activeLayers.add("STRIKE_ACTION");
-            if (fullBody)
-            {
-                addCandidate(candidates, current.masks(), "LOWER_BODY",
-                        "STRIKE_ACTION");
-            }
-            addCandidate(candidates, current.masks(), "UPPER_BODY",
-                    "STRIKE_ACTION");
-            addCandidate(candidates, current.masks(), "GRIP",
-                    "STRIKE_ACTION");
-        }
+    }
 
-        if (entity.getWeapon() != EvaUnit01Entity.WEAPON_FISTS)
+    private static boolean armsControllerActive(EvaUnit01Entity entity)
+    {
+        if (entity.isCrucified() || entity.isBerserk()
+                || entity.isNervLogisticsLocked() || !entity.isPoweredOn())
         {
-            activeLayers.add("WEAPON_ACTION");
-            addCandidate(candidates, current.masks(), "UPPER_BODY",
-                    "WEAPON_ACTION");
-            activeLayers.add("GRIP_PROFILE");
+            return false;
         }
-        if (entity.getWeapon() == EvaUnit01Entity.WEAPON_CANNON
-                || entity.getWeapon() == EvaUnit01Entity.WEAPON_RIFLE)
-        {
-            activeLayers.add("RENDERER_WEAPON_AIM");
-            addCandidate(candidates, current.masks(), "AIM_ADAPTER",
-                    "RENDERER_WEAPON_AIM");
-        }
-        if (entity.getPilotEntity() != null)
-        {
-            activeLayers.add("RENDERER_PILOT_AIM");
-            addOwnerCandidate(candidates, "head",
-                    "RENDERER_PILOT_AIM");
-        }
-
-        Map<String, String> owners = new LinkedHashMap<>();
-        Map<String, List<String>> conflicts = new LinkedHashMap<>();
-        for (String bone : current.boneOrder())
-        {
-            LinkedHashSet<String> boneCandidates = candidates.get(bone);
-            owners.put(bone, resolve(boneCandidates, current.priority()));
-            if (boneCandidates.size() > 1)
-            {
-                conflicts.put(bone, List.copyOf(boneCandidates));
-            }
-        }
-        boolean eligible = preview == 0
-                && entity.getVisualPose() == EvaUnit01Entity.VISUAL_NORMAL;
-        return new Snapshot(actionToken, phase,
-                List.copyOf(activeLayers), Map.copyOf(owners),
-                Map.copyOf(conflicts), eligible,
-                actionStatus(actionToken, current.actionStatuses()));
+        int weapon = entity.getWeapon();
+        int visual = entity.getVisualPose();
+        if (entity.isShieldBraced()) return true;
+        if (weapon == EvaUnit01Entity.WEAPON_N2)
+            return !entity.isPilotProne()
+                    && visual == EvaUnit01Entity.VISUAL_NORMAL;
+        if (weapon == EvaUnit01Entity.WEAPON_KNIFE
+                || weapon == EvaUnit01Entity.WEAPON_LANCE)
+            return visual == EvaUnit01Entity.VISUAL_NORMAL;
+        if (weapon == EvaUnit01Entity.WEAPON_CANNON
+                || weapon == EvaUnit01Entity.WEAPON_RIFLE)
+            return entity.isPilotProne()
+                    || visual == EvaUnit01Entity.VISUAL_PRONE_CANNON
+                    || visual == EvaUnit01Entity.VISUAL_NORMAL;
+        return false;
     }
 
     private static String actionToken(EvaUnit01Entity entity,
@@ -293,25 +434,12 @@ public final class EvaPoseGraph
         }
     }
 
-    private static String resolve(Set<String> candidates,
-                                  List<String> priority)
-    {
-        for (String owner : priority)
-        {
-            if (candidates.contains(owner))
-            {
-                return owner;
-            }
-        }
-        return candidates.iterator().next();
-    }
-
     private static String read(ResourceManager resources,
                                ResourceLocation location) throws Exception
     {
         try (InputStream stream = resources.getResource(location)
                 .orElseThrow(() -> new IllegalStateException(
-                        "missing EVA Phase-A contract " + location)).open())
+                        "missing EVA pose-authority contract " + location)).open())
         {
             return new String(stream.readAllBytes(), StandardCharsets.UTF_8);
         }
@@ -345,7 +473,8 @@ public final class EvaPoseGraph
     }
 
     public record Contract(boolean ready, String rigVersion,
-                           String poseGraphVersion, String rigSha256,
+                           String poseGraphVersion, String mode,
+                           String rigSha256,
                            String authoritySha256, String actionsSha256,
                            List<String> boneOrder,
                            Map<String, String> defaultOwners,
@@ -356,22 +485,28 @@ public final class EvaPoseGraph
         private static Contract empty()
         {
             return new Contract(false, "missing", "missing", "missing",
-                    "missing", "missing", List.of(), Map.of(), Map.of(),
-                    List.of(), Map.of());
+                    "missing", "missing", "missing", List.of(), Map.of(),
+                    Map.of(), List.of(), Map.of());
         }
     }
 
     public record Snapshot(String actionToken, float phaseProgress,
                            List<String> activeLayers,
+                           List<String> upstreamSources,
                            Map<String, String> owners,
+                           Map<String, String> positionOwners,
+                           Map<String, String> scaleOwners,
                            Map<String, List<String>> conflicts,
+                           Map<String, List<String>> upstreamOverlaps,
                            boolean eligibleForHumanReview,
-                           String actionLockStatus)
+                           String actionLockStatus,
+                           boolean committed, long commitSerial)
     {
         private static Snapshot empty()
         {
             return new Snapshot("pose_graph_unavailable", 0.0F, List.of(),
-                    Map.of(), Map.of(), false, "CONTRACT_REJECTED");
+                    List.of(), Map.of(), Map.of(), Map.of(), Map.of(),
+                    Map.of(), false, "CONTRACT_REJECTED", false, 0L);
         }
     }
 }

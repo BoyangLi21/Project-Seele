@@ -25,6 +25,7 @@ def require(name: str, condition: bool, detail: str) -> None:
 
 entity = read("src/main/java/com/projectseele/entity/EvaUnit01Entity.java")
 renderer = read("src/main/java/com/projectseele/client/render/EvaUnit01Renderer.java")
+pose_graph = read("src/main/java/com/projectseele/client/render/EvaPoseGraph.java")
 client = read("src/main/java/com/projectseele/client/ClientForgeEvents.java")
 hud = read("src/main/java/com/projectseele/client/EvaHud.java")
 director = read("src/main/java/com/projectseele/fx/StrategicExplosionDirector.java")
@@ -49,7 +50,11 @@ visual_automation = read(
     "src/main/java/com/projectseele/visual/VisualLabAutomation.java")
 
 require("aim.bedrock_sign",
-        'setRotX(-pitch)' in renderer and 'setRotX(pitch)' not in renderer,
+        'setRotX(-pitch)' in pose_graph
+        and 'setRotX(pitch)' not in pose_graph
+        and "EvaPoseGraph.commit(animatable, model, partialTick)" in renderer
+        and not any(token in renderer for token in
+                    (".setRotX(", ".setRotY(", ".setRotZ(")),
         "visible Bedrock pitch negates Minecraft XRot")
 require("aim.shared_envelope",
         "player.setXRot(pitch)" in client

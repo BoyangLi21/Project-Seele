@@ -1,7 +1,7 @@
 # EVA Pose Authority Phase A
 
-Status: **observation infrastructure only; no animation or bone is modified by
-the Phase-A PoseGraph**.
+Status: **completed at `cee87f5`; superseded at runtime by
+`docs/EVA_POSE_AUTHORITY_PHASE_B.md`**.
 
 Phase A freezes the current pre-mocap gameplay baseline and makes the actual
 game renderer observable before any new candidate pose is generated.
@@ -22,11 +22,11 @@ game renderer observable before any new candidate pose is generated.
   snapshot, not from the current animation file. Any drift is regenerated as
   `CANDIDATE_HASH_CHANGED` and makes the Phase-A gate fail pending human review.
 
-The contracts are rebuilt deterministically with:
+The same contract files are now rebuilt in their current Phase-B form with:
 
 ```powershell
-py -3 tools\build_eva_phase_a_contracts.py
-py -3 tools\validate_eva_phase_a_contract.py
+py -3 tools\build_eva_phase_b_contracts.py
+py -3 tools\validate_eva_phase_b_contract.py
 ```
 
 ## Final runtime matrix recording
@@ -71,7 +71,8 @@ py -3 tools\validate_eva_pose_capture.py
 py -3 tools\validate_eva_pose_capture.py run\pose-captures\eva_pose_....jsonl
 ```
 
-An automatic one-frame technical smoke capture is available only in userdev:
+An automatic one-frame technical smoke capture remains available in userdev;
+current captures use the Phase-B enforcing authority:
 
 ```powershell
 .\gradlew.bat runClient -PstrictHighDetail=true `

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate a closed Phase-A capture of final Gecko render matrices."""
+"""Validate a closed Phase-B capture of final Gecko render matrices."""
 
 from __future__ import annotations
 
@@ -97,8 +97,9 @@ def main() -> None:
     require(header.get("captureContract") ==
             "FINAL_POST_CONTROLLER_GECKO_MATRICES",
             "capture is not from the final Gecko render path")
-    require(header.get("poseGraphMode") == "OBSERVE_ONLY_NO_BONE_WRITES",
-            "Phase-A capture used an enforcing pose graph")
+    require(header.get("poseGraphMode") ==
+            "ENFORCE_POST_GECKO_SINGLE_COMMIT",
+            "capture did not use the Phase-B single commit authority")
     require(header.get("automaticVisualApproval") is False,
             "capture falsely permits automatic visual approval")
     require(header.get("resultVocabulary") ==
@@ -141,11 +142,28 @@ def main() -> None:
                 f"frame {expected_index} used preview/demo authority")
         require(pose.get("eligibleForHumanReview") is True,
                 f"frame {expected_index} is not eligible for human review")
+        require(pose.get("committed") is True
+                and isinstance(pose.get("commitSerial"), int)
+                and pose["commitSerial"] > 0,
+                f"frame {expected_index} has no enforced PoseGraph commit")
+        require(isinstance(pose.get("upstreamSources"), list)
+                and "GECKO_CONTROLLER_BASE" in pose["upstreamSources"],
+                f"frame {expected_index} has no Gecko upstream provenance")
         owners = pose.get("owners")
         require(isinstance(owners, dict) and set(owners) == bone_set,
                 f"frame {expected_index} owner map differs from canonical rig")
-        require(isinstance(pose.get("ownerConflicts"), dict),
-                f"frame {expected_index} has no owner-conflict map")
+        position_owners = pose.get("positionOwners")
+        scale_owners = pose.get("scaleOwners")
+        require(isinstance(position_owners, dict)
+                and set(position_owners) == bone_set,
+                f"frame {expected_index} position owners differ")
+        require(isinstance(scale_owners, dict)
+                and set(scale_owners) == bone_set,
+                f"frame {expected_index} scale owners differ")
+        require(pose.get("ownerConflicts") == {},
+                f"frame {expected_index} has final owner conflicts")
+        require(isinstance(pose.get("upstreamOverlapCandidates"), dict),
+                f"frame {expected_index} has no upstream overlap audit")
         missing = frame.get("missingCanonicalBones")
         require(missing == [],
                 f"frame {expected_index} misses canonical bones: {missing}")
@@ -155,8 +173,13 @@ def main() -> None:
                 f"frame {expected_index} does not contain every canonical bone")
         for name in bones:
             bone = captured[name]
-            require(bone.get("owner") == owners[name],
-                    f"frame {expected_index} owner differs for {name}")
+            require(bone.get("owner") == owners[name]
+                    and bone.get("rotationOwner") == owners[name],
+                    f"frame {expected_index} rotation owner differs for {name}")
+            require(bone.get("positionOwner") == position_owners[name],
+                    f"frame {expected_index} position owner differs for {name}")
+            require(bone.get("scaleOwner") == scale_owners[name],
+                    f"frame {expected_index} scale owner differs for {name}")
             for matrix_name in ("localMatrix", "modelMatrix", "worldMatrix"):
                 require(finite_vector(bone.get(matrix_name), 16),
                         f"frame {expected_index} {name}.{matrix_name} "
@@ -185,12 +208,25 @@ def main() -> None:
     for name in bones:
         validate_ranges(bone_timeline[name], frame_count,
                         f"owner timeline for {name}")
+    for field, label in (
+            ("boneRotationOwnerTimeline", "rotation owner"),
+            ("bonePositionOwnerTimeline", "position owner"),
+            ("boneScaleOwnerTimeline", "scale owner")):
+        channel_timeline = timeline.get(field)
+        require(isinstance(channel_timeline, dict)
+                and set(channel_timeline) == bone_set,
+                f"{label} timeline differs from canonical rig")
+        for name in bones:
+            validate_ranges(channel_timeline[name], frame_count,
+                            f"{label} timeline for {name}")
     validate_ranges(timeline.get("actionTimeline"), frame_count,
                     "action timeline")
 
     print("EVA final-pose capture passed: "
           f"file={capture.name} frames={frame_count} bones={len(bones)} "
-          "missing=0 matrices=local/model/world result=ELIGIBLE_FOR_HUMAN_REVIEW")
+          "missing=0 matrices=local/model/world "
+          "owners=rotation/position/scale "
+          "result=ELIGIBLE_FOR_HUMAN_REVIEW")
 
 
 if __name__ == "__main__":

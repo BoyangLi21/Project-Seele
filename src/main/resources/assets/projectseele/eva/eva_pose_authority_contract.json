@@ -1,25 +1,43 @@
 {
   "schema": 1,
-  "poseGraphVersion": "eva_pose_graph_observer_r01",
+  "poseGraphVersion": "eva_pose_graph_enforced_r02",
   "rigVersion": "eva_tiger_canonical_r01",
-  "mode": "OBSERVE_ONLY_NO_BONE_WRITES",
+  "phase": "B",
+  "mode": "ENFORCE_POST_GECKO_SINGLE_COMMIT",
+  "migrationBaselineCommit": "cee87f58ab6118f49e8baf80e324e96d0f446cbb",
   "rules": [
     "one bone has exactly one absolute-rotation owner per frame",
     "IK and limits are final constraints inside the owning pose node",
     "render layers may hide geometry but may not claim body rotation",
-    "official captures reject Motion Lab preview/demo pose authority"
+    "official captures reject Motion Lab preview/demo pose authority",
+    "Gecko controllers are one upstream composite at the Phase-B boundary",
+    "all post-Gecko writes are orchestrated by EvaPoseGraph.commit"
+  ],
+  "upstreamBoundary": {
+    "owner": "GECKO_COMPOSITE",
+    "knownControllers": [
+      "base",
+      "arms",
+      "strike"
+    ],
+    "controllerInternalProvenance": "NOT_SEPARATED_IN_PHASE_B"
+  },
+  "commitOrder": [
+    "GECKO_COMPOSITE",
+    "MOTION_ENGINE_PREVIEW",
+    "POSE_GRAPH_WEAPON_AIM",
+    "POSE_GRAPH_PILOT_AIM"
+  ],
+  "ownedChannels": [
+    "rotation",
+    "position",
+    "scale"
   ],
   "ownerPriority": [
+    "POSE_GRAPH_PILOT_AIM",
+    "POSE_GRAPH_WEAPON_AIM",
     "MOTION_ENGINE_PREVIEW",
-    "FULL_BODY_ACTION",
-    "STRIKE_ACTION",
-    "WEAPON_ACTION",
-    "RENDERER_PILOT_AIM",
-    "RENDERER_WEAPON_AIM",
-    "GRIP_PROFILE",
-    "BASE_LOCOMOTION",
-    "WEAPON_SOCKET",
-    "INHERITED_RIGID"
+    "GECKO_COMPOSITE"
   ],
   "boneMasks": {
     "LOWER_BODY": [
@@ -105,6 +123,36 @@
       "finger_ring_distal_r"
     ]
   },
+  "lowLevelWriters": {
+    "EvaMotionEngineV2": {
+      "owner": "MOTION_ENGINE_PREVIEW",
+      "invokedOnlyBy": "EvaPoseGraph.commit",
+      "reportsChannelsSeparately": true,
+      "officialCaptureAllowed": false
+    },
+    "EvaPoseGraph.weaponAim": {
+      "owner": "POSE_GRAPH_WEAPON_AIM",
+      "bones": [
+        "aim_pitch"
+      ]
+    },
+    "EvaPoseGraph.pilotAim": {
+      "owner": "POSE_GRAPH_PILOT_AIM",
+      "bones": [
+        "head"
+      ]
+    }
+  },
+  "rendererPolicy": {
+    "may": [
+      "invoke EvaPoseGraph.commit",
+      "change visibility"
+    ],
+    "mayNot": [
+      "write bone transforms",
+      "invoke MotionEngine directly"
+    ]
+  },
   "worldAuthority": {
     "owner": "SERVER_EVA_ENTITY",
     "fields": [
@@ -124,6 +172,11 @@
     "motionLabPhysicsPreviewMustBe": 0,
     "visualPoseMustBe": 0,
     "recordFinalPostControllerMatrices": true,
+    "finalOwnerConflictsMustBeEmptyFor": [
+      "rotation",
+      "position",
+      "scale"
+    ],
     "resultVocabulary": [
       "FAIL",
       "ELIGIBLE_FOR_HUMAN_REVIEW"

@@ -1,9 +1,10 @@
 # Project SEELE 完整路线图
 
-> 更新：2026-08-31。EVA 正式动作已冻结到 `a910890b` 回滚基线，当前先执行
-> Pose Authority Phase A：只观察、不改骨。MuJoCo/G1 保留为隔离的长期研究，
+> 更新：2026-08-31。EVA 正式动作已冻结到 `a910890b` 回滚基线；Pose
+> Authority Phase B 已把所有 post-Gecko 写骨收口到唯一提交点。MuJoCo/G1
+> 保留为隔离的长期研究，
 > 未通过接触、足滑和受推恢复门槛前不得接管正式游戏。详见
-> `docs/EVA_POSE_AUTHORITY_PHASE_A.md` 与 `docs/EVA_PHYSICS_TRACKER_R01.md`。
+> `docs/EVA_POSE_AUTHORITY_PHASE_B.md` 与 `docs/EVA_PHYSICS_TRACKER_R01.md`。
 > 状态标记：✅ 完成 · 🔄 进行中 · ⬜ 未开始
 > 每个 Phase 附「验收标准」——全部满足才算关档。数值均为初版，游戏内验证后调平衡。
 
@@ -19,7 +20,7 @@
 - ✅ Phase 0：项目骨架、开源仓库（MIT + khara 合规声明）、首次构建、冒烟测试
 - ✅ Phase 1 MVP：Ramiel Boss（八面体直连渲染 + 悬浮 AI + 蓄力光束 + Boss 血条 + 掉落）、阳电子步枪、使徒核心碎片、创造标签页、刷怪蛋、中英双语、战利品表
 - ✅ Phase 1 收尾（2026-07-06，代码完成待目视验收）：警报系统、真·光束渲染、十字爆炸、二阶段钻头、Config、九连原创合成音效、进度树、32x 贴图；地基设施三件套落地（SimpleChannel 网络层 / RibbonRenderer 特效库 / gen_sounds.ps1 音效管线）
-- 🔄 **EVA Pose Authority Phase A**（2026-08-31）：正式游戏继续使用 `a910890b` Tiger/Gecko 回滚动作，八组动作哈希锁均为 `FROZEN_BASELINE_NOT_VISUALLY_APPROVED`。已建立 70 骨规范观察合同、只读 PoseGraph、最终 Gecko local/model/world 矩阵记录器和骨骼 owner 时间线；任何动作哈希漂移自动退回候选并令门禁失败。G1/物理控制器仅作隔离研究：最好 contact F1 约 0.9343，且受推恢复/足滑未过线，禁止迁入 EVA。Phase A 不代表任何动作获得视觉批准。
+- 🔄 **EVA Pose Authority Phase B**（2026-08-31）：正式游戏继续使用 `a910890b` Tiger/Gecko 回滚动作，八组动作哈希锁均为 `FROZEN_BASELINE_NOT_VISUALLY_APPROVED`。70 骨合同与最终矩阵记录器保留；MotionEngine、武器俯仰和驾驶员头部瞄准已统一由 `EvaPoseGraph.commit` 在 Gecko 之后按固定顺序提交，renderer 不再直接写骨。Gecko 的 base/arms/strike 暂作为一个明确的上游 composite，内部重叠另行记录，不能冒充已彻底拆分。G1/物理控制器继续隔离，Hybrid Rig 仍受 stride-8 刚性 mesh 格式阻塞。Phase B 不代表任何动作获得视觉批准。
 - 🔄 **本地三机/量产机资源管线**：零号机、二号机与量产机已有各自 Tiger 网格、统一骨骼合同、离线预览与启动前 validator；三机的站立/步行/单膝/四足卧姿/朗枪/入栓和量产机五状态最新离线矩阵通过。游戏内三机截图、量产机仪式构图与正式发布授权仍未通过。
 - ⚠️ **屋岛作战和后期演出**：发射井已有背部高位门禁、连续梯井、11×11 实体随动载台、载台签名恢复与中断清场；正式第三次冲击已有 schema-v2 `SavedData`、事件/节点实体归属、有限区块票、冻结终态和协议 v4 重进同步。生命树保持 EoE 整图 180° 倒置，无独立左上标题，124 个更小、更密的希伯来标签/符号、22 路径与圈内微缩刻字离线构图通过，但井内碰撞/镜头、存档重进以及九机/初号机十字实机画面仍是未验收原型，不作为发布质量证据。
 - 🔄 **本机连续战区重建**（2026-07-22）：`SEELE_TOKYO3_REBUILT` 使用普通 Overworld 噪声地形与地图 schema v18；416×416 可移动城区位于地表，640 格宽 GeoFront 椭球完全埋在地下，三井从 Y=-443 连续通往 Y=79（实体行程 522 格）。66 栋内城装甲楼、29 栋外环楼与三座本机私有高楼会从地表真正下降，并沿球体曲率在 GeoFront 顶部形成悬挂都市；生成楼宇最大行程 312 层、20t/层，下降与复位均持久化且有防夹门禁。真实 LCL、自然湖/森林、直坡 NERV 金字塔、环境反射光、五屏动态遥测、三块驾驶视频面板、七键作战台、Central/Terminal Dogma、MAGI 深层实验室、屋岛作战与实体发射井均保留自动契约。编译、东京-3 下沉、GeoFront 与发射井静态门禁已通过；完整十分钟升降循环、多人驾驶视频、整体美术和第三方发布授权仍需人工验收。
@@ -63,14 +64,14 @@
 
 ## §3 Phase 2 — 初号机与驾驶体系 🟨
 
-**前置**：先完成 `docs/EVA_POSE_AUTHORITY_PHASE_A.md` 的观察合同与运行时
-真值捕获，再以 Unit-01 六个基础垂直切片逐项推进。现有 Gecko 回滚动作暂时
+**前置**：先保持 `docs/EVA_POSE_AUTHORITY_PHASE_B.md` 的唯一 post-Gecko
+提交合同与运行时真值捕获，再以 Unit-01 六个基础垂直切片逐项推进。现有 Gecko 回滚动作暂时
 维持正式游戏基线；物理控制器仍须通过 `docs/EVA_PHYSICS_TRACKER_R01.md` 的
 接触、足滑和受推恢复门槛，且经另行授权后才能参与生产迁移。
 
 | # | 任务 | 技术方案 |
 |---|---|---|
-| 2.1 🟨 | EvaUnit01Entity | 服务端实体唯一拥有世界位置、yaw、速度、动作阶段、碰撞与伤害；最终局部骨矩阵必须收敛到单一 EvaPoseGraph。Phase A 仅记录现有 Gecko/renderer/MotionEngine 的最终结果和重叠 owner，不写骨；后续无论采用约束关键姿势、Hybrid Rig 或合格物理控制器，都不得绕过同一权威合同 |
+| 2.1 🟨 | EvaUnit01Entity | 服务端实体唯一拥有世界位置、yaw、速度、动作阶段、碰撞与伤害；Phase B 已把 MotionEngine/武器 aim/头部 aim 收敛到单一 `EvaPoseGraph.commit`，Gecko controller stack 作为一个显式上游 composite。后续须继续拆分其内部 mask，并且无论采用约束关键姿势、Hybrid Rig 或合格物理控制器，都不得绕过同一权威合同 |
 | 2.2 🟨 | 电力系统 | 三台机体已实现 0 电黑眼冷机、独立双臂下垂动画、插入栓/LCL 后外电充能、6000 tick 内置电池、32 格 `UmbilicalPylonBlock`/BlockEntity、重大损伤或越界断缆、18 段悬链线电缆和接电每秒修复 1.0；耗尽统一锁住移动/姿态/跳跃/武器/A.T. 力场但允许驾驶员脱出，电量与锚点同步并跨重启保存，HUD 和指挥室共用权威读数。五分钟压力、眼部 UV 和多人边界仍待实机验收 |
 | 2.3 🟨 | 同步率 | Forge Player Capability 已持久化同步率与未满一分钟的驾驶累计；默认 40%，有效驾驶每分钟 +0.25%，驾驶 EVA 击杀使徒 +2.5%。权威值通过机体 EntityData 同步到 HUD/指挥室，最高提供 25% 移动和攻击响应增益；60% 以上仅按真实机体掉血产生渐增神经反噬。重登/死亡、多人读数与成长节奏待实机验收 |
 | 2.4 🟨 | EVA 武器 | 三台机体固有空手/粒子刀，零号机额外固有 N²；帕雷特步枪改为三座发射笼实体升降塔交付，严格装载默认开启并跨重启保存。阳电子炮与朗基努斯保留代码/模型但不再作为默认轮盘装备；后续分别接入专用战略流程与莉莉丝剧情。朗枪以 Terminal Dogma 中插在莉莉丝身上的权威模型为源，另做取枪事件与持握尺度归一化。升降塔机械比例、多人争用与回收仍待实机验收 |

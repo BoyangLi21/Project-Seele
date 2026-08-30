@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Build deterministic Phase-A EVA rig, pose-authority and action locks."""
+"""Build the current deterministic EVA pose-authority contracts.
+
+The historical filename is retained because Phase A established the contract
+files.  It now emits the Phase-B enforcing post-Gecko authority.
+"""
 
 from __future__ import annotations
 
@@ -21,7 +25,8 @@ ANIMATION_REPO_PATH = (
 ROLLBACK = REPO / "tools/eva_pre_mocap_gameplay_rollback.json"
 VARIANTS = ("eva_unit00", "eva_unit01", "eva_unit02")
 RIG_VERSION = "eva_tiger_canonical_r01"
-POSE_GRAPH_VERSION = "eva_pose_graph_observer_r01"
+POSE_GRAPH_VERSION = "eva_pose_graph_enforced_r02"
+MIGRATION_BASELINE_COMMIT = "cee87f58ab6118f49e8baf80e324e96d0f446cbb"
 
 
 def canonical_sha256(value: object) -> str:
@@ -68,14 +73,9 @@ def category(name: str) -> str:
 
 
 def default_owner(name: str) -> str:
-    return {
-        "LOWER_BODY": "BASE_LOCOMOTION",
-        "UPPER_BODY": "BASE_LOCOMOTION",
-        "AIM_ADAPTER": "RENDERER_WEAPON_AIM",
-        "GRIP": "GRIP_PROFILE",
-        "WEAPON_SOCKET": "WEAPON_SOCKET",
-        "RIGID_ATTACHMENT": "INHERITED_RIGID",
-    }[category(name)]
+    if name == "aim_pitch":
+        return "POSE_GRAPH_WEAPON_AIM"
+    return "GECKO_COMPOSITE"
 
 
 def build_rig_schema(geometries: dict[str, dict]) -> dict:
@@ -118,7 +118,7 @@ def build_rig_schema(geometries: dict[str, dict]) -> dict:
     return {
         "schema": 1,
         "rigVersion": RIG_VERSION,
-        "status": "CANONICAL_OBSERVATION_CONTRACT",
+        "status": "CANONICAL_POST_GECKO_AUTHORITY_CONTRACT",
         "coordinateSystem": {
             "source": "Bedrock model space, Y up, runtime reflected X",
             "rotationOrder": "XYZ degrees",
@@ -145,26 +145,56 @@ def build_pose_authority(rig: dict) -> dict:
         "schema": 1,
         "poseGraphVersion": POSE_GRAPH_VERSION,
         "rigVersion": RIG_VERSION,
-        "mode": "OBSERVE_ONLY_NO_BONE_WRITES",
+        "phase": "B",
+        "mode": "ENFORCE_POST_GECKO_SINGLE_COMMIT",
+        "migrationBaselineCommit": MIGRATION_BASELINE_COMMIT,
         "rules": [
             "one bone has exactly one absolute-rotation owner per frame",
             "IK and limits are final constraints inside the owning pose node",
             "render layers may hide geometry but may not claim body rotation",
             "official captures reject Motion Lab preview/demo pose authority",
+            "Gecko controllers are one upstream composite at the Phase-B boundary",
+            "all post-Gecko writes are orchestrated by EvaPoseGraph.commit",
         ],
-        "ownerPriority": [
+        "upstreamBoundary": {
+            "owner": "GECKO_COMPOSITE",
+            "knownControllers": ["base", "arms", "strike"],
+            "controllerInternalProvenance": "NOT_SEPARATED_IN_PHASE_B",
+        },
+        "commitOrder": [
+            "GECKO_COMPOSITE",
             "MOTION_ENGINE_PREVIEW",
-            "FULL_BODY_ACTION",
-            "STRIKE_ACTION",
-            "WEAPON_ACTION",
-            "RENDERER_PILOT_AIM",
-            "RENDERER_WEAPON_AIM",
-            "GRIP_PROFILE",
-            "BASE_LOCOMOTION",
-            "WEAPON_SOCKET",
-            "INHERITED_RIGID",
+            "POSE_GRAPH_WEAPON_AIM",
+            "POSE_GRAPH_PILOT_AIM",
+        ],
+        "ownedChannels": ["rotation", "position", "scale"],
+        "ownerPriority": [
+            "POSE_GRAPH_PILOT_AIM",
+            "POSE_GRAPH_WEAPON_AIM",
+            "MOTION_ENGINE_PREVIEW",
+            "GECKO_COMPOSITE",
         ],
         "boneMasks": masks,
+        "lowLevelWriters": {
+            "EvaMotionEngineV2": {
+                "owner": "MOTION_ENGINE_PREVIEW",
+                "invokedOnlyBy": "EvaPoseGraph.commit",
+                "reportsChannelsSeparately": True,
+                "officialCaptureAllowed": False,
+            },
+            "EvaPoseGraph.weaponAim": {
+                "owner": "POSE_GRAPH_WEAPON_AIM",
+                "bones": ["aim_pitch"],
+            },
+            "EvaPoseGraph.pilotAim": {
+                "owner": "POSE_GRAPH_PILOT_AIM",
+                "bones": ["head"],
+            },
+        },
+        "rendererPolicy": {
+            "may": ["invoke EvaPoseGraph.commit", "change visibility"],
+            "mayNot": ["write bone transforms", "invoke MotionEngine directly"],
+        },
         "worldAuthority": {
             "owner": "SERVER_EVA_ENTITY",
             "fields": ["position", "yaw", "velocity", "AABB"],
@@ -175,6 +205,8 @@ def build_pose_authority(rig: dict) -> dict:
             "motionLabPhysicsPreviewMustBe": 0,
             "visualPoseMustBe": 0,
             "recordFinalPostControllerMatrices": True,
+            "finalOwnerConflictsMustBeEmptyFor": [
+                "rotation", "position", "scale"],
             "resultVocabulary": ["FAIL", "ELIGIBLE_FOR_HUMAN_REVIEW"],
             "forbiddenResult": "VISUALLY_APPROVED",
         },
@@ -252,8 +284,10 @@ def main() -> None:
     write_json(OUTPUT / "eva_pose_authority_contract.json", authority)
     write_json(OUTPUT / "eva_approved_actions.json", actions)
     print(json.dumps({
+        "phase": "B",
         "rigVersion": RIG_VERSION,
         "poseGraphVersion": POSE_GRAPH_VERSION,
+        "mode": authority["mode"],
         "bones": rig["boneCount"],
         "actionLocks": len(actions["actions"]),
         "output": str(OUTPUT),
