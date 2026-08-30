@@ -155,6 +155,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     private static final float MELEE_KNIFE_DAMAGE = 60.0F;
     private static final float MELEE_LANCE_DAMAGE = 120.0F;
     private static final int MELEE_COOLDOWN_TICKS = 12;
+    private static final int MELEE_INPUT_BUFFER_TICKS = 16;
     private static final int ORDINARY_ATTACK_VISUAL_TICKS = 14;
     // Reach geometry follows the shared 60-block frame.
     private static final double MELEE_REACH = EvaScale.fromLegacy(10.0D);
@@ -407,16 +408,6 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     // velocity apex. The compatibility `fall` JSON remains for visual tools.
     private static final RawAnimation ANIM_FALL = ANIM_JUMP;
     private static final RawAnimation ANIM_PRONE = RawAnimation.begin().thenLoop("animation.eva_unit01.prone");
-    private static final RawAnimation ANIM_STAND_TO_CROUCH = RawAnimation.begin().thenPlay("animation.eva_unit01.stand_to_crouch");
-    private static final RawAnimation ANIM_CROUCH_TO_STAND = RawAnimation.begin().thenPlay("animation.eva_unit01.crouch_to_stand");
-    private static final RawAnimation ANIM_CROUCH_TO_PRONE = RawAnimation.begin().thenPlay("animation.eva_unit01.crouch_to_prone");
-    private static final RawAnimation ANIM_PRONE_TO_CROUCH = RawAnimation.begin().thenPlay("animation.eva_unit01.prone_to_crouch");
-    private static final RawAnimation ANIM_STAND_TO_PRONE = RawAnimation.begin()
-            .thenPlay("animation.eva_unit01.stand_to_crouch")
-            .thenPlay("animation.eva_unit01.crouch_to_prone");
-    private static final RawAnimation ANIM_PRONE_TO_STAND = RawAnimation.begin()
-            .thenPlay("animation.eva_unit01.prone_to_crouch")
-            .thenPlay("animation.eva_unit01.crouch_to_stand");
     private static final RawAnimation ANIM_CRUCIFIED = RawAnimation.begin().thenLoop("animation.eva_unit01.crucified");
     private static final RawAnimation ANIM_CRAWL = RawAnimation.begin().thenLoop("animation.eva_unit01.crawl");
     private static final RawAnimation ANIM_AIM = RawAnimation.begin().thenLoop("animation.eva_unit01.aim");
@@ -492,7 +483,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
 
     private boolean chargingHeld;
     private int meleeCooldown;
-    private int ordinaryAttackCycle;
+    private int meleeInputBufferTicks;
     private int ordinaryAttackVisualTicks;
     private int smashCooldown;
     private int stompCooldown;
@@ -825,6 +816,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             this.entityData.set(DATA_CANNON_AIM_PITCH, 0.0F);
         }
         this.chargingHeld = false;
+        this.meleeInputBufferTicks = 0;
     }
 
     public int getPowerTicks()
@@ -1162,7 +1154,8 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     public void setMotionLabDemoGait(boolean sprinting)
     {
         if (this.level().isClientSide
-                || !this.getTags().contains("seele_motion_lab"))
+                || !this.getTags().contains("seele_motion_lab")
+                || this.getControllingPassenger() != null)
         {
             return;
         }
@@ -1171,8 +1164,6 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         // made no-passenger cleanup fight the director every server tick.
         this.entityData.set(DATA_MOTION_LAB_RUNNING, sprinting);
         this.entityData.set(DATA_SPRINTING, false);
-        this.entityData.set(DATA_CROUCHING, false);
-        this.entityData.set(DATA_PRONE, false);
     }
 
     /** Runs the accepted takeoff/airborne/landing chain for the lab dummy. */
@@ -1960,7 +1951,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     public float getCockpitAttackAnim(float partialTick)
     {
         float elapsed = this.tickCount - this.clientMeleeStartTick + partialTick;
-        return elapsed >= 0.0F && elapsed < 10.0F ? elapsed / 10.0F : 0.0F;
+        return elapsed >= 0.0F && elapsed < 28.0F ? elapsed / 28.0F : 0.0F;
     }
 
     public boolean isCockpitSwingingLeft()
@@ -1990,7 +1981,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     public float getCockpitSmashAnim(float partialTick)
     {
         float elapsed = this.tickCount - this.clientSmashStartTick + partialTick;
-        return elapsed >= 0.0F && elapsed < 18.0F ? elapsed / 18.0F : 0.0F;
+        return elapsed >= 0.0F && elapsed < 28.0F ? elapsed / 28.0F : 0.0F;
     }
 
     // ----- pilot commands (validated by the packet handler) -----
@@ -2060,34 +2051,37 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         this.chargingHeld = held && !this.isPilotControlLocked();
     }
 
-    /** Left-click from the plug: reviewed mocap for fists, authored weapon clips otherwise. */
+    /** Left-click from the plug: Tiger-reviewed strikes and weapon clips. */
     public void meleeAttack(ServerPlayer pilot)
     {
-        if (this.isPilotControlLocked() || this.meleeCooldown > 0
-                || !this.isMeleeWeapon())
+        if (this.isPilotControlLocked() || !this.isMeleeWeapon())
         {
             return;
         }
+        if (this.meleeCooldown > 0)
+        {
+            this.meleeInputBufferTicks = MELEE_INPUT_BUFFER_TICKS;
+            if (this.getTags().contains("seele_motion_lab"))
+            {
+                ProjectSeele.LOGGER.info(
+                        "EVA motion-lab melee buffered: eva={} weapon={} cooldown={}",
+                        this.getStringUUID(), this.getWeapon(),
+                        this.meleeCooldown);
+            }
+            return;
+        }
+        this.meleeInputBufferTicks = 0;
         this.meleeCooldown = this.synchronizedCooldown(MELEE_COOLDOWN_TICKS);
         boolean lance = this.getWeapon() == WEAPON_LANCE;
         boolean knife = this.getWeapon() == WEAPON_KNIFE;
-        boolean ordinaryAttack = this.getWeapon() == WEAPON_FISTS
-                && !this.isPilotProne() && !this.isPilotCrouching();
         boolean fixedRightHandWeapon = lance || knife;
-        if (ordinaryAttack)
-        {
-            int stage = this.ordinaryAttackCycle;
-            this.ordinaryAttackCycle = (stage + 1) % 3;
-            this.ordinaryAttackVisualTicks = ORDINARY_ATTACK_VISUAL_TICKS;
-            this.entityData.set(DATA_ORDINARY_ATTACK_STAGE, stage);
-            this.leftSwing = stage == 0;
-        }
-        else
-        {
-            this.ordinaryAttackVisualTicks = 0;
-            this.entityData.set(DATA_ORDINARY_ATTACK_STAGE, -1);
-            this.leftSwing = fixedRightHandWeapon ? false : !this.leftSwing;
-        }
+        // The promoted three-clip runtime layer remains available only in the
+        // isolated demo. In live play it produced a folded two-arm silhouette;
+        // use the Tiger-reviewed alternating strikes until a replacement is
+        // accepted in game.
+        this.ordinaryAttackVisualTicks = 0;
+        this.entityData.set(DATA_ORDINARY_ATTACK_STAGE, -1);
+        this.leftSwing = fixedRightHandWeapon ? false : !this.leftSwing;
         this.entityData.set(DATA_MELEE_LEFT, this.leftSwing);
         this.entityData.set(DATA_MELEE_SEQUENCE,
                 (this.entityData.get(DATA_MELEE_SEQUENCE) + 1) & Integer.MAX_VALUE);
@@ -2105,9 +2099,12 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
                 : lance ? "lance_thrust"
                     : knife ? "knife"
                     : (this.leftSwing ? "melee_left" : "melee");
-        if (!ordinaryAttack)
+        this.triggerAnim("strike", animation);
+        if (this.getTags().contains("seele_motion_lab"))
         {
-            this.triggerAnim("strike", animation);
+            ProjectSeele.LOGGER.info(
+                    "EVA motion-lab melee accepted: eva={} weapon={} animation={}",
+                    this.getStringUUID(), this.getWeapon(), animation);
         }
         float baseDamage = lance ? MELEE_LANCE_DAMAGE : knife ? MELEE_KNIFE_DAMAGE : MELEE_FIST_DAMAGE;
         float damage = baseDamage * this.getMeleeMultiplier();
@@ -2138,7 +2135,10 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
 
         boolean knife = this.getWeapon() == WEAPON_KNIFE;
         boolean lance = this.getWeapon() == WEAPON_LANCE;
-        String animation = knife
+        String animation = this.getWeapon() == WEAPON_FISTS
+                && !this.isPilotProne() && !this.isPilotCrouching()
+                ? "fist_heavy"
+                : knife
                 ? this.isPilotProne() ? "prone_knife_heavy"
                     : this.isPilotCrouching() ? "crouch_knife_heavy" : "knife_heavy"
                 : lance
@@ -2296,7 +2296,6 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             pilot.displayClientMessage(Component.translatable("msg.projectseele.cannot_stand"), true);
             return;
         }
-        boolean wasProne = this.isPilotProne();
         if (crouching)
         {
             this.entityData.set(DATA_PRONE, false);
@@ -2304,9 +2303,10 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         this.entityData.set(DATA_CROUCHING, crouching);
         this.entityData.set(DATA_SPRINTING, false);
         this.updatePoseDimensions();
-        this.triggerAnim("strike", crouching
-                ? wasProne ? "prone_to_crouch" : "stand_to_crouch"
-                : "crouch_to_stand");
+        ProjectSeele.LOGGER.info(
+                "EVA pilot stance changed: eva={} crouching={} prone={}",
+                this.getStringUUID(), this.isPilotCrouching(),
+                this.isPilotProne());
     }
 
     public void toggleProne(ServerPlayer pilot)
@@ -2316,7 +2316,6 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             return;
         }
         boolean prone = !this.isPilotProne();
-        boolean wasCrouching = this.isPilotCrouching();
         if (!prone && !this.hasStandingRoom())
         {
             pilot.displayClientMessage(Component.translatable("msg.projectseele.cannot_stand"), true);
@@ -2326,9 +2325,10 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         this.entityData.set(DATA_CROUCHING, false);
         this.entityData.set(DATA_SPRINTING, false);
         this.updatePoseDimensions();
-        this.triggerAnim("strike", prone
-                ? wasCrouching ? "crouch_to_prone" : "stand_to_prone"
-                : "prone_to_stand");
+        ProjectSeele.LOGGER.info(
+                "EVA pilot stance changed: eva={} crouching={} prone={}",
+                this.getStringUUID(), this.isPilotCrouching(),
+                this.isPilotProne());
     }
 
     public void setPilotSprinting(ServerPlayer pilot, boolean sprinting)
@@ -3125,6 +3125,16 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         if (this.meleeCooldown > 0)
         {
             this.meleeCooldown--;
+        }
+        if (this.meleeInputBufferTicks > 0)
+        {
+            this.meleeInputBufferTicks--;
+            if (this.meleeCooldown == 0
+                    && this.getControllingPassenger() instanceof ServerPlayer pilot
+                    && !this.isPilotControlLocked() && this.isMeleeWeapon())
+            {
+                this.meleeAttack(pilot);
+            }
         }
         if (this.ordinaryAttackVisualTicks > 0)
         {
@@ -4798,6 +4808,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             leavingPilot.setInvisible(false);
         }
         this.clearJumpRequestState();
+        this.meleeInputBufferTicks = 0;
         this.chargingHeld = false;
         this.entityData.set(DATA_CANNON_CHARGE, 0);
         this.entityData.set(DATA_N2_ARM_TICKS, 0);
@@ -4981,10 +4992,13 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
                 this.clientMeleeStartTick = this.tickCount;
             }
         }
-        if (DATA_ORDINARY_ATTACK_STAGE.equals(key)
-                && this.entityData.get(DATA_ORDINARY_ATTACK_STAGE) < 0)
+        if (DATA_ORDINARY_ATTACK_STAGE.equals(key))
         {
-            this.clientOrdinaryAttackStage = -1;
+            // Synched-data callbacks arrive in accessor-id order. The melee
+            // sequence precedes this field, so reading the stage only from the
+            // sequence callback always lagged one click and dropped the first.
+            this.clientOrdinaryAttackStage =
+                    this.entityData.get(DATA_ORDINARY_ATTACK_STAGE);
         }
         if (DATA_SMASH_SEQUENCE.equals(key))
         {
@@ -5567,6 +5581,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
                 .triggerableAnim("knife", ANIM_KNIFE)
                 .triggerableAnim("knife_left", ANIM_KNIFE_LEFT)
                 .triggerableAnim("knife_heavy", ANIM_KNIFE_HEAVY)
+                .triggerableAnim("fist_heavy", ANIM_BERSERK_CLAW_R)
                 .triggerableAnim("lance_thrust", ANIM_LANCE_THRUST)
                 .triggerableAnim("prone_melee", ANIM_PRONE_MELEE)
                 .triggerableAnim("prone_melee_left", ANIM_PRONE_MELEE_LEFT)
@@ -5589,12 +5604,6 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
                 .triggerableAnim("land", ANIM_LAND)
                 .triggerableAnim("stomp", ANIM_STOMP)
                 .triggerableAnim("berserk_roar", ANIM_BERSERK_ROAR)
-                .triggerableAnim("stand_to_crouch", ANIM_STAND_TO_CROUCH)
-                .triggerableAnim("crouch_to_stand", ANIM_CROUCH_TO_STAND)
-                .triggerableAnim("crouch_to_prone", ANIM_CROUCH_TO_PRONE)
-                .triggerableAnim("prone_to_crouch", ANIM_PRONE_TO_CROUCH)
-                .triggerableAnim("stand_to_prone", ANIM_STAND_TO_PRONE)
-                .triggerableAnim("prone_to_stand", ANIM_PRONE_TO_STAND)
                 .triggerableAnim("berserk_claw_r", ANIM_BERSERK_CLAW_R)
                 .triggerableAnim("berserk_claw_l", ANIM_BERSERK_CLAW_L)
                 .triggerableAnim("berserk_pounce", ANIM_BERSERK_POUNCE)

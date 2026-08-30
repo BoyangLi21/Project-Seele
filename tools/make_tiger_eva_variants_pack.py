@@ -329,7 +329,7 @@ def write_unit(config, output):
     # Match the packaged fallback to the generated private pack.  Both files
     # use the same semantic rig; allowing them to diverge made EVA-00/02 fall
     # back to stale arm joints on a fresh client/server installation.
-    write_json(config["base_animation"], animation)
+    tiger.write_animation_catalogue(config["base_animation"], animation)
     write_json(output / "mesh" / f"{target}.mesh.json", mesh, compact=True)
     texture_path = output / "textures/entity" / f"{target}.png"
     texture_path.parent.mkdir(parents=True, exist_ok=True)

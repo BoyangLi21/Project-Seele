@@ -347,7 +347,9 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
             // lab previews: quarantined MuJoCo experiments and the audited
             // grounded mocap adapter. Neither replaces campaign locomotion.
             EvaMotionEngineV2.apply(animatable, model, partialTick);
-            if (animatable.getPilotEntity() != null)
+            boolean meleePose = animatable.getCockpitAttackAnim(partialTick) > 0.0F
+                    || animatable.getCockpitSmashAnim(partialTick) > 0.0F;
+            if (animatable.getPilotEntity() != null && !meleePose)
             {
                 model.getBone("head").ifPresent(head ->
                 {

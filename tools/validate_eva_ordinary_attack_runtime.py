@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fail closed unless promoted ordinary-attack mocap is wired to live fists."""
+"""Fail closed unless rejected fist mocap stays isolated from live combat."""
 
 from __future__ import annotations
 
@@ -53,23 +53,24 @@ def main() -> None:
     entity = ENTITY.read_text(encoding="utf-8")
     for token in (
             '"motion/eva_ordinary_attack_v1.json"',
-            "gameplayOrdinaryAttack",
+            "boolean gameplayOrdinaryAttack = false;",
             'case 0 -> "ordinary_attack_jab_left"',
             'case 1 -> "ordinary_attack_cross_right"',
             'default -> "ordinary_attack_hook_right"'):
         require(token in engine, f"engine wiring missing {token}")
     for token in (
             "DATA_ORDINARY_ATTACK_STAGE",
-            "ORDINARY_ATTACK_VISUAL_TICKS = 14",
-            "this.ordinaryAttackCycle = (stage + 1) % 3",
-            "if (!ordinaryAttack)"):
+            "MELEE_INPUT_BUFFER_TICKS = 16",
+            '"fist_heavy"'):
         require(token in entity, f"entity wiring missing {token}")
+    require("this.ordinaryAttackCycle = (stage + 1) % 3" not in entity,
+            "rejected three-stage cycle is still wired to live fists")
     require("MELEE_COOLDOWN_TICKS = 12" in entity,
             "server melee cooldown changed")
     old = MOTION.with_name("eva_ordinary_attack_review_v1.json")
     require(not old.exists(), "superseded preview resource still exists")
-    print("EVA ordinary attack runtime validation passed: "
-          "clips=3 bones=50 frames=243 cooldown=12t visual=14t")
+    print("EVA ordinary attack quarantine validation passed: "
+          "clips=3 bones=50 frames=243 cooldown=12t gameplay=false")
 
 
 if __name__ == "__main__":

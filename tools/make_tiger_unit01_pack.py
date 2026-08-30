@@ -1181,6 +1181,93 @@ def static_pose(animation, time):
     return {"loop": True, "animation_length": 1.0, "bones": bones}
 
 
+def _json_value_span(text, key):
+    marker = json.dumps(key) + ": "
+    start = text.index(marker) + len(marker)
+    depth = 0
+    quoted = False
+    escaped = False
+    for index in range(start, len(text)):
+        char = text[index]
+        if quoted:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                quoted = False
+        elif char == '"':
+            quoted = True
+        elif char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                return start, index + 1
+    raise RuntimeError(f"unterminated animation object: {key}")
+
+
+def write_animation_catalogue(path, candidate):
+    """Preserve the tracked catalogue layout while updating changed clips."""
+    if not path.is_file():
+        path.write_text(json.dumps(
+            candidate, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        return
+    text = path.read_text(encoding="utf-8")
+    current = json.loads(text)
+    if (current.get("format_version") != candidate.get("format_version")
+            or set(current.get("animations", {}))
+            != set(candidate.get("animations", {}))):
+        raise RuntimeError(
+            f"animation catalogue shape changed unexpectedly: {path}")
+    replacements = []
+    for name, animation in candidate["animations"].items():
+        if current["animations"][name] == animation:
+            continue
+        start, end = _json_value_span(text, name)
+        value = json.dumps(animation, ensure_ascii=False, indent=2)
+        lines = value.splitlines()
+        indented = lines[0] + "\n" + "\n".join(
+            "    " + line for line in lines[1:])
+        replacements.append((start, end, indented))
+    for start, end, value in sorted(replacements, reverse=True):
+        text = text[:start] + value + text[end:]
+    path.write_text(text, encoding="utf-8", newline="")
+
+
+def _match_animation_edge(animation, target, edge, fade_seconds=0.28):
+    """Blend one captured action edge onto its persistent ready pose."""
+    duration = float(animation.get("animation_length", 0.0))
+    edge_time = 0.0 if edge == "start" else duration
+    for bone_name in animation.get("bones", {}).keys() & target.get("bones", {}).keys():
+        channels = animation["bones"][bone_name]
+        target_channels = target["bones"][bone_name]
+        for channel_name in channels.keys() & target_channels.keys():
+            keyed = channels[channel_name]
+            if not isinstance(keyed, dict):
+                continue
+            desired = sample_channel(target_channels[channel_name], 0.0)
+            current = sample_channel(keyed, edge_time)
+            if (not isinstance(desired, list) or not isinstance(current, list)
+                    or len(desired) != len(current)):
+                continue
+            correction = [float(wanted) - float(actual)
+                          for wanted, actual in zip(desired, current)]
+            for key, value in list(keyed.items()):
+                try:
+                    seconds = float(key)
+                except (TypeError, ValueError):
+                    continue
+                if not isinstance(value, list) or len(value) != len(correction):
+                    continue
+                distance = seconds if edge == "start" else duration - seconds
+                weight = max(0.0, 1.0 - distance / fade_seconds)
+                if weight <= 0.0:
+                    continue
+                keyed[key] = [round(float(component) + delta * weight, 5)
+                              for component, delta in zip(value, correction)]
+
+
 def retime_animation(animation, factor):
     """Scale every numeric Bedrock key time without touching key values."""
     result = copy.deepcopy(animation)
@@ -1448,6 +1535,54 @@ def _set_knife_grip(bones):
     _set_hand_curl(bones, "l", curl=22, thumb=15,
                    tip_curl=14, thumb_tip=6,
                    distal_curl=7, thumb_distal=3)
+
+
+def _finalize_gameplay_review_layers(data):
+    """Apply corrections found only after direct in-game pilot review."""
+    animations = data["animations"]
+    prefix = "animation.eva_unit01."
+
+    # Locomotion owns the spine. Weapon-ready overlays own only arms, hands and
+    # attachments; letting their torso channel replace the walk made the entire
+    # airframe lean backwards while carrying a cannon, rifle or N2 device.
+    for suffix in ("aim", "rifle_aim", "n2_ready"):
+        animations[prefix + suffix].get("bones", {}).pop("torso_upper", None)
+
+    ready = animations[prefix + "knife_ready"]
+    knife_layers = (
+        "knife_ready", "knife", "knife_heavy",
+        "crouch_knife", "crouch_knife_heavy",
+        "prone_knife", "prone_knife_heavy", "prone_knife_ready",
+    )
+    for suffix in knife_layers:
+        animation = animations.get(prefix + suffix)
+        if animation is None:
+            continue
+        bones = animation.setdefault("bones", {})
+        # The pilot-look layer already supplies a stable head outside attacks.
+        # Captured neck/head pitch compounded with it and pulled the head into
+        # the chest during every knife strike.
+        bones.pop("neck", None)
+        bones.pop("head", None)
+
+    # The light source already starts at ready but did not recover to it; the
+    # heavy source matched neither edge. Close both actions onto the persistent
+    # grip so the base standing pose never flashes for one frame between them.
+    for suffix in ("knife", "knife_heavy"):
+        animation = animations[prefix + suffix]
+        _match_animation_edge(animation, ready, "start")
+        _match_animation_edge(animation, ready, "end")
+
+    # The mocap patch contains no trustworthy finger capture. It used a legacy
+    # uniform 92-degree channel that bypassed the native-thumb/axis repair and
+    # opened every plated digit away from the hilt in game.
+    for suffix in knife_layers:
+        animation = animations.get(prefix + suffix)
+        if animation is not None:
+            bones = animation.setdefault("bones", {})
+            _set_knife_grip(bones)
+            bones.pop("finger_thumb_distal_l", None)
+            bones.pop("finger_thumb_distal_r", None)
 
 
 def _set_claw_hand(bones, side):
@@ -2641,6 +2776,7 @@ def build_animations():
     # contain the solved native-thumb opposition quaternion.
     _repair_native_thumb_animation_channels(data)
     _apply_accepted_real_mocap_actions(data)
+    _finalize_gameplay_review_layers(data)
     animations = data["animations"]
     animations["animation.eva_unit01.visual_crouch_walk"] = static_pose(
         animations["animation.eva_unit01.crouch_walk"], 0.0)
@@ -2671,6 +2807,7 @@ def build_animations():
         "animation.eva_unit01.crouch", 0.0,
         "animation.eva_unit01.crouch_lance_thrust", 0.66)
     _apply_cmu_rifle_body_layer(data)
+    _finalize_gameplay_review_layers(data)
     animations["animation.eva_unit01.visual_rifle"] = static_pose(
         animations["animation.eva_unit01.rifle_aim"], 0.0)
     animations["animation.eva_unit01.visual_rifle_walk_contact"] = composed_pose(
@@ -2716,7 +2853,7 @@ def main():
     # different joint catalogues.  Keep the tracked canonical resource in
     # lockstep so a packaged client cannot silently restore the old detached
     # shoulder/elbow poses when the external pack is absent or reordered.
-    BASE_ANIMATION.write_text(animation_text, encoding="utf-8")
+    write_animation_catalogue(BASE_ANIMATION, json.loads(animation_text))
     (mesh_dir / "eva_unit01.mesh.json").write_text(
         json.dumps(mesh, separators=(",", ":")), encoding="utf-8")
     build_atlas(texture).save(texture_dir / "eva_unit01.png")

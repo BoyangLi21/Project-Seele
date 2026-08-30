@@ -154,7 +154,13 @@ public final class EvaMotionLabDirector
             }
             if (mode == DemoMode.STOP)
             {
-                eva.setMotionLabDemoGait(false);
+                // Manual pilots own sprint/crouch/prone while the autonomous
+                // demo is stopped. Reasserting the demo state every server
+                // tick used to erase a real stance one tick after its packet.
+                if (eva.getControllingPassenger() == null)
+                {
+                    eva.setMotionLabDemoGait(false);
+                }
                 continue;
             }
             double speed = switch (mode)

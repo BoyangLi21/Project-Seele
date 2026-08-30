@@ -13,6 +13,13 @@ reject the lance slot so it cannot be selected accidentally. Launch the
 remaining actions directly into `SEELE_EVA_MOTION_LAB` with
 `START_EVA_ACTION_REVIEW.bat` or `tools/start_motion_lab.bat`.
 
+The same review rejected the live three-stage fist layer and all authored
+crouch/prone connector clips. The three ACCAD strikes remain selectable only
+through `motionlab demo`; live left-click returns to the Tiger-specific
+alternating strikes with input buffering. Crouch and prone now switch directly
+between their persistent poses and collision dimensions without playing
+stand/crouch/prone transition animations.
+
 The 2026-08-28 in-game review rejected the original CMU 02 weapon clips and
 the ACCAD kneel/prone/crawl chain. R02 replaced the weapon and crouch subset;
 R03 added a complete UT Dallas prone capture and re-solved rifle contact. R04

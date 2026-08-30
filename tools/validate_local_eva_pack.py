@@ -594,6 +594,45 @@ def validate_real_mocap_animation_contract(stem: str,
                 f"{maximum_step:.4f} degrees at {location} exceeds 60.0"
             )
 
+    for suffix in ("aim", "rifle_aim", "n2_ready"):
+        bones = animations[f"animation.eva_unit01.{suffix}"].get("bones", {})
+        if "torso_upper" in bones:
+            raise ValidationError(
+                f"{stem}: {suffix} weapon overlay must not own the walking torso"
+            )
+
+    knife_ready = animations["animation.eva_unit01.knife_ready"]
+    for suffix in ("knife_ready", "knife", "knife_heavy"):
+        animation = animations[f"animation.eva_unit01.{suffix}"]
+        leaked = {"neck", "head"} & animation.get("bones", {}).keys()
+        if leaked:
+            raise ValidationError(
+                f"{stem}: {suffix} overrides pilot head chain: {sorted(leaked)}"
+            )
+        right_index = rotation_edge(animation, "finger_index_r", "start")
+        expected_index = authored_quaternion((0.0, 0.0, 92.0))
+        if right_index is None or quaternion_angle_degrees(
+                right_index, expected_index) > 0.01:
+            raise ValidationError(
+                f"{stem}: {suffix} lost the reviewed right knife grip"
+            )
+
+    for suffix in ("knife", "knife_heavy"):
+        animation = animations[f"animation.eva_unit01.{suffix}"]
+        shared = animation.get("bones", {}).keys() & \
+            knife_ready.get("bones", {}).keys()
+        for bone_name in shared:
+            action_end = rotation_edge(animation, bone_name, "end")
+            ready_start = rotation_edge(knife_ready, bone_name, "start")
+            if action_end is None or ready_start is None:
+                continue
+            error = quaternion_angle_degrees(action_end, ready_start)
+            if error > 0.02:
+                raise ValidationError(
+                    f"{stem}: {suffix} recovery differs from knife_ready by "
+                    f"{error:.4f} degrees on {bone_name}"
+                )
+
 
 def validate_mesh(path: Path, spec: dict) -> tuple[int, int, dict[str, tuple[float, float, float]]]:
     mesh = read_json(path)

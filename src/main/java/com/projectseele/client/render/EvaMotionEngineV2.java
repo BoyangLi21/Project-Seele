@@ -121,9 +121,9 @@ public final class EvaMotionEngineV2
         boolean ordinaryAttackReview = previewMode >= 6 && previewMode <= 9;
         boolean labPreview = replayPreview || groundedPreview
                 || ordinaryAttackReview;
-        boolean gameplayOrdinaryAttack = !labPreview
-                && entity.getWeapon() == EvaUnit01Entity.WEAPON_FISTS
-                && entity.getOrdinaryAttackStage() >= 0;
+        // The three-stage capture remains useful as an isolated comparison,
+        // but its full-body runtime composition failed human in-game review.
+        boolean gameplayOrdinaryAttack = false;
         boolean motionDriven = labPreview || gameplayOrdinaryAttack;
         MotionDatabase db = ordinaryAttackReview || gameplayOrdinaryAttack
                 ? ordinaryAttackDatabase

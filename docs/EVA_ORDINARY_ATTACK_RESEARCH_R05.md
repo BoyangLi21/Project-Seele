@@ -2,9 +2,10 @@
 
 Date: 2026-08-27
 
-Status: **three independent raw ACCAD attacks drive normal standing fist
-attacks in a left-jab → right-cross → right-hook cycle. The visual skeleton is
-client-side mocap; damage, cooldown and hit zones remain server-authoritative**.
+Status: **the three independent raw ACCAD attacks are quarantined to the
+isolated Motion Lab after failing direct in-game visual review. Live standing
+fists use the Tiger-reviewed alternating strikes; damage, cooldown and hit
+zones remain server-authoritative**.
 
 ## Body-motion contract
 
@@ -73,15 +74,15 @@ keyframes, and no IK or physics correction.
 - `attack_c`: right hook
 - `attack_combo`: jab → cross → hook, repeated for review
 
-These commands remain available for isolated visual review. Normal standing
-fist left-clicks now cycle through the same three clips; knife/lance attacks,
-crouching attacks and prone attacks keep their existing authored layers.
+These commands remain available for isolated visual review. They no longer
+drive normal left-click combat. Live clicks use an input-buffered alternating
+Tiger strike, while standing right-click uses the distinct heavy claw action.
 
 The packaged runtime resource is
 `assets/projectseele/motion/eva_ordinary_attack_v1.json`. One clip is sampled
-over 14 game ticks while the established 12-tick server cooldown remains
-unchanged, allowing a new click to enter during the final recovery frames
-without adding a dead frame between strikes.
+only by the isolated review modes. The established 12-tick server cooldown is
+unchanged; a 16-tick input buffer now retains a click made during recovery
+instead of silently dropping it.
 
 ## Review artifacts
 
