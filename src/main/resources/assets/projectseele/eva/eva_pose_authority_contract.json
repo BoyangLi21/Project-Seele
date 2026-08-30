@@ -1,0 +1,133 @@
+{
+  "schema": 1,
+  "poseGraphVersion": "eva_pose_graph_observer_r01",
+  "rigVersion": "eva_tiger_canonical_r01",
+  "mode": "OBSERVE_ONLY_NO_BONE_WRITES",
+  "rules": [
+    "one bone has exactly one absolute-rotation owner per frame",
+    "IK and limits are final constraints inside the owning pose node",
+    "render layers may hide geometry but may not claim body rotation",
+    "official captures reject Motion Lab preview/demo pose authority"
+  ],
+  "ownerPriority": [
+    "MOTION_ENGINE_PREVIEW",
+    "FULL_BODY_ACTION",
+    "STRIKE_ACTION",
+    "WEAPON_ACTION",
+    "RENDERER_PILOT_AIM",
+    "RENDERER_WEAPON_AIM",
+    "GRIP_PROFILE",
+    "BASE_LOCOMOTION",
+    "WEAPON_SOCKET",
+    "INHERITED_RIGID"
+  ],
+  "boneMasks": {
+    "LOWER_BODY": [
+      "root",
+      "torso_lower",
+      "leg_l",
+      "shin_l",
+      "leg_r",
+      "shin_r",
+      "ankle_l",
+      "foot_l",
+      "ankle_r",
+      "foot_r"
+    ],
+    "UPPER_BODY": [
+      "torso_upper",
+      "clavicle_l",
+      "arm_l",
+      "forearm_l",
+      "wrist_l",
+      "hand_l",
+      "clavicle_r",
+      "arm_r",
+      "forearm_r",
+      "wrist_r",
+      "hand_r",
+      "neck",
+      "head"
+    ],
+    "RIGID_ATTACHMENT": [
+      "pylon_l",
+      "pylon_r",
+      "entry_plug",
+      "plug_hatch_l",
+      "plug_hatch_r",
+      "horn"
+    ],
+    "AIM_ADAPTER": [
+      "aim_pitch"
+    ],
+    "WEAPON_SOCKET": [
+      "knife",
+      "cannon",
+      "lance",
+      "n2"
+    ],
+    "GRIP": [
+      "finger_index_axis_l",
+      "finger_index_l",
+      "finger_index_axis_r",
+      "finger_index_r",
+      "finger_little_axis_l",
+      "finger_little_l",
+      "finger_little_axis_r",
+      "finger_little_r",
+      "finger_middle_axis_l",
+      "finger_middle_l",
+      "finger_middle_axis_r",
+      "finger_middle_r",
+      "finger_ring_axis_l",
+      "finger_ring_l",
+      "finger_ring_axis_r",
+      "finger_ring_r",
+      "finger_thumb_l",
+      "finger_thumb_r",
+      "finger_index_tip_l",
+      "finger_index_tip_r",
+      "finger_little_tip_l",
+      "finger_little_tip_r",
+      "finger_middle_tip_l",
+      "finger_middle_tip_r",
+      "finger_ring_tip_l",
+      "finger_ring_tip_r",
+      "finger_thumb_tip_l",
+      "finger_thumb_tip_r",
+      "finger_index_distal_l",
+      "finger_index_distal_r",
+      "finger_little_distal_l",
+      "finger_little_distal_r",
+      "finger_middle_distal_l",
+      "finger_middle_distal_r",
+      "finger_ring_distal_l",
+      "finger_ring_distal_r"
+    ]
+  },
+  "worldAuthority": {
+    "owner": "SERVER_EVA_ENTITY",
+    "fields": [
+      "position",
+      "yaw",
+      "velocity",
+      "AABB"
+    ],
+    "renderMay": [
+      "interpolate"
+    ],
+    "renderMayNot": [
+      "write entity transform"
+    ]
+  },
+  "officialCapture": {
+    "motionLabPhysicsPreviewMustBe": 0,
+    "visualPoseMustBe": 0,
+    "recordFinalPostControllerMatrices": true,
+    "resultVocabulary": [
+      "FAIL",
+      "ELIGIBLE_FOR_HUMAN_REVIEW"
+    ],
+    "forbiddenResult": "VISUALLY_APPROVED"
+  }
+}

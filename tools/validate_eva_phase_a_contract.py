@@ -1,0 +1,232 @@
+#!/usr/bin/env python3
+"""Fail closed on the Phase-A EVA pose-authority observation contract."""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import subprocess
+from pathlib import Path
+
+
+REPO = Path(__file__).resolve().parent.parent
+RESOURCE = REPO / "src/main/resources/assets/projectseele/eva"
+RUNTIME = REPO / "run/resourcepacks/eva_real_model/assets/projectseele"
+RIG = RESOURCE / "eva_rig_schema.json"
+AUTHORITY = RESOURCE / "eva_pose_authority_contract.json"
+ACTIONS = RESOURCE / "eva_approved_actions.json"
+ANIMATION = REPO / (
+    "src/main/resources/assets/projectseele/animations/"
+    "eva_unit01.animation.json")
+ANIMATION_REPO_PATH = (
+    "src/main/resources/assets/projectseele/animations/"
+    "eva_unit01.animation.json")
+ROLLBACK = REPO / "tools/eva_pre_mocap_gameplay_rollback.json"
+
+
+def read_json(path: Path) -> dict:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def read_json_at_commit(commit: str, repo_path: str) -> dict:
+    result = subprocess.run(
+        ["git", "show", f"{commit}:{repo_path}"], cwd=REPO,
+        check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+    )
+    return json.loads(result.stdout.decode("utf-8"))
+
+
+def read(relative: str) -> str:
+    return (REPO / relative).read_text(encoding="utf-8")
+
+
+def canonical_sha256(value: object) -> str:
+    encoded = json.dumps(
+        value, ensure_ascii=False, sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def require(condition: bool, message: str) -> None:
+    if not condition:
+        raise SystemExit("EVA Phase-A contract invalid: " + message)
+
+
+def main() -> None:
+    rig = read_json(RIG)
+    authority = read_json(AUTHORITY)
+    actions = read_json(ACTIONS)
+    animation = read_json(ANIMATION)["animations"]
+    rollback = read_json(ROLLBACK)
+    baseline_animation = read_json_at_commit(
+        rollback["source_commit"], ANIMATION_REPO_PATH)["animations"]
+
+    require(rig.get("schema") == 1, "rig schema is not 1")
+    require(rig.get("rigVersion") == "eva_tiger_canonical_r01",
+            "unexpected rig version")
+    bones = rig.get("bones", [])
+    require(rig.get("boneCount") == 70 == len(bones),
+            "canonical rig must contain exactly 70 Unit-01 bones")
+    names = [bone["name"] for bone in bones]
+    require(len(names) == len(set(names)), "duplicate canonical bone")
+    by_name = {bone["name"]: bone for bone in bones}
+    require(names[0] == "root" and by_name["root"].get("parent") is None,
+            "root hierarchy is invalid")
+    for bone in bones[1:]:
+        require(bone.get("parent") in by_name,
+                f"unknown parent for {bone['name']}")
+        seen = {bone["name"]}
+        parent = bone.get("parent")
+        while parent is not None:
+            require(parent not in seen,
+                    f"cycle in canonical hierarchy at {bone['name']}")
+            seen.add(parent)
+            parent = by_name[parent].get("parent")
+    require(rig["variantExtraBones"]["eva_unit00"] == ["shield"],
+            "Unit-00 shield must remain an explicit variant extra")
+    require(rig["canonicalBoneOrderMustMatch"]
+            and all(rig["variantCanonicalBoneOrderMatches"].values()),
+            "variant canonical bone subsequences must match Unit-01")
+    canonical_names = set(names)
+    for variant in ("eva_unit00", "eva_unit01", "eva_unit02"):
+        geometry = read_json(RUNTIME / "geo" / f"{variant}.geo.json")
+        require(rig["variantGeometrySemanticSha256"][variant] ==
+                canonical_sha256(geometry),
+                f"{variant} geometry hash differs from canonical rig")
+        rows = geometry["minecraft:geometry"][0]["bones"]
+        variant_names = [row["name"] for row in rows]
+        require([name for name in variant_names
+                 if name in canonical_names] == names,
+                f"{variant} canonical bone order differs")
+        require(sorted(set(variant_names) - canonical_names) ==
+                rig["variantExtraBones"][variant],
+                f"{variant} extra bone declaration differs")
+        variant_parents = {row["name"]: row.get("parent") for row in rows}
+        require(all(variant_parents[name] == by_name[name].get("parent")
+                    for name in names),
+                f"{variant} canonical parent map differs")
+
+    runtime_animation = read_json(
+        RUNTIME / "animations/eva_unit01.animation.json")
+    require(canonical_sha256(runtime_animation) ==
+            canonical_sha256(read_json(ANIMATION)),
+            "active eva_real_model animation differs from source baseline")
+
+    require(authority.get("schema") == 1,
+            "authority schema is not 1")
+    require(authority.get("rigVersion") == rig["rigVersion"],
+            "authority rig version differs")
+    require(authority.get("poseGraphVersion") ==
+            "eva_pose_graph_observer_r01", "unexpected pose graph version")
+    require(authority.get("mode") == "OBSERVE_ONLY_NO_BONE_WRITES",
+            "Phase-A pose graph must remain read-only")
+    masks = authority.get("boneMasks", {})
+    masked = [name for values in masks.values() for name in values]
+    require(len(masked) == len(set(masked)) == 70,
+            "bone masks must partition the canonical rig exactly once")
+    require(set(masked) == set(names), "bone masks miss canonical bones")
+    capture = authority["officialCapture"]
+    require(capture["motionLabPhysicsPreviewMustBe"] == 0
+            and capture["visualPoseMustBe"] == 0,
+            "official capture must reject preview authority")
+    require(capture["resultVocabulary"] ==
+            ["FAIL", "ELIGIBLE_FOR_HUMAN_REVIEW"],
+            "automatic result vocabulary drifted")
+    require(capture["forbiddenResult"] == "VISUALLY_APPROVED",
+            "visual approval must remain human-only")
+
+    require(actions.get("schema") == 1, "action lock schema is not 1")
+    require(actions["rigVersion"] == rig["rigVersion"]
+            and actions["poseGraphVersion"] ==
+            authority["poseGraphVersion"], "action lock versions differ")
+    require(actions["baselineCommit"] == rollback["source_commit"],
+            "action baseline commit differs from rollback")
+    require(not actions["policy"]["generatorMayOverwriteFrozenAction"]
+            and not actions["policy"]["automaticApprovalAllowed"],
+            "frozen actions are not fail-closed")
+    require(actions["rollbackPatchSemanticSha256"] ==
+            canonical_sha256(rollback), "rollback patch hash differs")
+    candidate_actions = []
+    for action, contract in actions["actions"].items():
+        require(contract["approvedBy"] is None
+                and contract["humanReviewRequired"],
+                f"{action} bypasses human review")
+        baseline_payload = {
+            key: baseline_animation[key]
+            for key in contract["animationKeys"]
+        }
+        observed_payload = {
+            key: animation[key] for key in contract["animationKeys"]
+        }
+        baseline_hash = canonical_sha256(baseline_payload)
+        observed_hash = canonical_sha256(observed_payload)
+        require(contract["baselineSemanticSha256"] == baseline_hash,
+                f"{action} baseline hash is not anchored to rollback")
+        require(contract["observedSemanticSha256"] == observed_hash,
+                f"{action} observed hash differs from live animation")
+        if observed_hash == baseline_hash:
+            require(contract["status"] ==
+                    "FROZEN_BASELINE_NOT_VISUALLY_APPROVED"
+                    and contract["candidateReason"] is None,
+                    f"{action} has a false baseline status")
+        else:
+            require(contract["status"] == "CANDIDATE_HASH_CHANGED"
+                    and contract["candidateReason"] ==
+                    "ANIMATION_HASH_CHANGED",
+                    f"{action} drift did not return to candidate status")
+            candidate_actions.append(action)
+    require(not candidate_actions,
+            "frozen action drift requires human review: "
+            + ", ".join(candidate_actions))
+
+    graph_source = read(
+        "src/main/java/com/projectseele/client/render/EvaPoseGraph.java")
+    recorder_source = read(
+        "src/main/java/com/projectseele/client/render/"
+        "EvaPoseRuntimeRecorder.java")
+    renderer_source = read(
+        "src/main/java/com/projectseele/client/render/EvaUnit01Renderer.java")
+    command_source = read(
+        "src/main/java/com/projectseele/visual/EvaMotionLabCommands.java")
+    network_source = read(
+        "src/main/java/com/projectseele/network/SeeleNetwork.java")
+    entity_source = read(
+        "src/main/java/com/projectseele/entity/EvaUnit01Entity.java")
+    require("OBSERVE_ONLY_NO_BONE_WRITES" in graph_source,
+            "read-only pose graph marker is missing")
+    for forbidden in (".setRotX(", ".setRotY(", ".setRotZ(",
+                      ".setPosX(", ".setScaleX("):
+        require(forbidden not in graph_source,
+                "PoseGraph writes runtime bones: " + forbidden)
+    for token in ("getLocalSpaceMatrix()", "getModelSpaceMatrix()",
+                  "getWorldSpaceMatrix()", "boneOwnerTimeline",
+                  "FINAL_POST_CONTROLLER_GECKO_MATRICES",
+                  "automaticVisualApproval", "MAX_FRAMES = 900"):
+        require(token in recorder_source,
+                "recorder contract missing " + token)
+    for token in ("beginFrame(entity, partialTick)",
+                  "captureBone(animatable, bone, isReRender)",
+                  "endFrame(entity)", "trackMatrices(bone)",
+                  "requestsSmokeRender()"):
+        require(token in renderer_source,
+                "renderer final-matrix hook missing " + token)
+    require("Commands.literal(\"record\")" in command_source
+            and "Official pose recording rejects demo/preview authority"
+            in command_source
+            and "EvaPilotResolver.controlTarget(player)" in command_source,
+            "Motion Lab recorder bypasses normal pilot authority")
+    require("ClientboundEvaPoseRecorderPacket" in network_source
+            and 'PROTOCOL_VERSION = "23"' in network_source,
+            "pose recorder packet is not registered")
+    require("getAimDirectionForPoseCapture" in entity_source
+            and "getMuzzlePositionForPoseCapture" in entity_source,
+            "final gameplay sockets are not exposed read-only")
+
+    print("EVA Phase-A pose authority contract passed: "
+          f"rig={rig['rigVersion']} bones=70 locks={len(actions['actions'])} "
+          "mode=OBSERVE_ONLY")
+
+
+if __name__ == "__main__":
+    main()

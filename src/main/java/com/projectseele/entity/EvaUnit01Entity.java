@@ -987,6 +987,29 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         return this.entityData.get(DATA_CANNON_AIM_PITCH);
     }
 
+    /** Read-only Phase-A export of the same aim used by weapon gameplay. */
+    public Vec3 getAimDirectionForPoseCapture()
+    {
+        LivingEntity pilot = this.getPilotEntity();
+        float yaw = pilot == null ? this.getYRot() : pilot.getYRot();
+        float pitch = (this.getWeapon() == WEAPON_CANNON
+                || this.getWeapon() == WEAPON_RIFLE)
+                ? this.getCannonAimPitch() : 0.0F;
+        return Vec3.directionFromRotation(pitch, yaw).normalize();
+    }
+
+    /** Final gameplay muzzle socket; null for non-firearm loadouts. */
+    @Nullable
+    public Vec3 getMuzzlePositionForPoseCapture(Vec3 aimDirection)
+    {
+        return switch (this.getWeapon())
+        {
+            case WEAPON_CANNON -> this.cannonMuzzlePosition(aimDirection);
+            case WEAPON_RIFLE -> this.rifleMuzzlePosition(aimDirection);
+            default -> null;
+        };
+    }
+
     /** Render-space neck yaw: the pilot looks first while the chassis follows. */
     public float pilotHeadYawForRender(float partialTick)
     {

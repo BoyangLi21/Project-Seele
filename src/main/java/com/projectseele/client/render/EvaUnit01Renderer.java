@@ -15,6 +15,7 @@ import com.projectseele.world.EvaPilotResolver;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.LightTexture;
 import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.culling.Frustum;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.resources.ResourceLocation;
@@ -187,6 +188,7 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
         }
         Minecraft minecraft = Minecraft.getInstance();
         this.pilotView = isLocalPilotView(minecraft, entity);
+        EvaPoseRuntimeRecorder.maybeStartSmoke(entity);
         // Wet cages and launch shafts use dedicated NERV floodlights.  Keeping
         // the airframe full-bright only while logistics-locked prevents a
         // 24-block model from sampling one dark centre voxel and becoming a
@@ -201,9 +203,24 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
                     nervFloodlit ? LightTexture.FULL_BRIGHT : packedLight,
                     entity.getUnitVariant());
         }
-        super.render(entity, entityYaw, partialTick, poseStack, bufferSource,
-                entity.isCrucified() || nervFloodlit
-                        ? LightTexture.FULL_BRIGHT : packedLight);
+        boolean recording = EvaPoseRuntimeRecorder.wants(entity);
+        if (recording)
+        {
+            EvaPoseRuntimeRecorder.beginFrame(entity, partialTick);
+        }
+        try
+        {
+            super.render(entity, entityYaw, partialTick, poseStack, bufferSource,
+                    entity.isCrucified() || nervFloodlit
+                            ? LightTexture.FULL_BRIGHT : packedLight);
+        }
+        finally
+        {
+            if (recording)
+            {
+                EvaPoseRuntimeRecorder.endFrame(entity);
+            }
+        }
     }
 
     private record MuzzleSample(Vec3 position, long capturedNanos) {}
@@ -251,6 +268,10 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
     public boolean shouldRender(EvaUnit01Entity entity, Frustum frustum,
                                 double cameraX, double cameraY, double cameraZ)
     {
+        if (EvaPoseRuntimeRecorder.requestsSmokeRender())
+        {
+            return true;
+        }
         Minecraft minecraft = Minecraft.getInstance();
         // The crouch/prone head socket can sit just beyond the entity's coarse
         // gameplay AABB while hands and weapon remain in front of the camera.
@@ -284,6 +305,10 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
         {
             bone.setHidden(false);
             bone.setChildrenHidden(false);
+            if (EvaPoseRuntimeRecorder.wants(animatable))
+            {
+                EvaPoseRuntimeRecorder.trackMatrices(bone);
+            }
         });
         if (this.pilotView)
         {
@@ -378,6 +403,22 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
         setWeaponVisibility(model, "entry_plug", false);
         setWeaponVisibility(model, "plug_hatch_l", false);
         setWeaponVisibility(model, "plug_hatch_r", false);
+    }
+
+    @Override
+    public void renderRecursively(PoseStack poseStack,
+                                  EvaUnit01Entity animatable, GeoBone bone,
+                                  RenderType renderType,
+                                  MultiBufferSource bufferSource,
+                                  VertexConsumer buffer, boolean isReRender,
+                                  float partialTick, int packedLight,
+                                  int packedOverlay, float red, float green,
+                                  float blue, float alpha)
+    {
+        super.renderRecursively(poseStack, animatable, bone, renderType,
+                bufferSource, buffer, isReRender, partialTick, packedLight,
+                packedOverlay, red, green, blue, alpha);
+        EvaPoseRuntimeRecorder.captureBone(animatable, bone, isReRender);
     }
 
     private static void setWeaponVisibility(BakedGeoModel model, String name, boolean active)

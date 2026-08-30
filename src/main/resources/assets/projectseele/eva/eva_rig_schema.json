@@ -1,0 +1,1152 @@
+{
+  "schema": 1,
+  "rigVersion": "eva_tiger_canonical_r01",
+  "status": "CANONICAL_OBSERVATION_CONTRACT",
+  "coordinateSystem": {
+    "source": "Bedrock model space, Y up, runtime reflected X",
+    "rotationOrder": "XYZ degrees",
+    "matrixStorage": "JOML column-major float[16]"
+  },
+  "worldTransformAuthority": "SERVER_EVA_ENTITY",
+  "canonicalBoneOrderMustMatch": true,
+  "variantCanonicalBoneOrderMatches": {
+    "eva_unit00": true,
+    "eva_unit01": true,
+    "eva_unit02": true
+  },
+  "variantExtraBones": {
+    "eva_unit00": [
+      "shield"
+    ],
+    "eva_unit01": [],
+    "eva_unit02": []
+  },
+  "boneCount": 70,
+  "bones": [
+    {
+      "name": "root",
+      "parent": null,
+      "pivot": [
+        0.0,
+        0.18801,
+        -0.0
+      ],
+      "bindRotationDegrees": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "category": "LOWER_BODY",
+      "defaultOwner": "BASE_LOCOMOTION"
+    },
+    {
+      "name": "torso_lower",
+      "parent": "root",
+      "pivot": [
+        0.0,
+        91.15596,
+        -0.0
+      ],
+      "bindRotationDegrees": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "category": "LOWER_BODY",
+      "defaultOwner": "BASE_LOCOMOTION"
+    },
+    {
+      "name": "torso_upper",
+      "parent": "torso_lower",
+      "pivot": [
+        0.0,
+        125.26894,
+        -0.0
+      ],
+      "bindRotationDegrees": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "category": "UPPER_BODY",
+      "defaultOwner": "BASE_LOCOMOTION"
+    },
+    {
+      "name": "pylon_l",
+      "parent": "torso_upper",
+      "pivot": [
+        19.24322,
+        159.38191,
+        -0.0
+      ],
+      "bindRotationDegrees": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "category": "RIGID_ATTACHMENT",
+      "defaultOwner": "INHERITED_RIGID"
+    },
+    {
+      "name": "pylon_r",
+      "parent": "torso_upper",
+      "pivot": [
+        -19.24322,
+        159.38191,
+        -0.0
+      ],
+      "bindRotationDegrees": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "category": "RIGID_ATTACHMENT",
+      "defaultOwner": "INHERITED_RIGID"
+    },
+    {
+      "name": "aim_pitch",
+      "parent": "torso_upper",
+      "pivot": [
+        0.0,
+        155.00845,
+        0.0
+      ],
+      "bindRotationDegrees": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "category": "AIM_ADAPTER",
+      "defaultOwner": "RENDERER_WEAPON_AIM"
+    },
+    {
+      "name": "clavicle_l",
+      "parent": "aim_pitch",
+      "pivot": [
+        0.0,
+        155.00845,
+        0.0
+      ],
+      "bindRotationDegrees": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "category": "UPPER_BODY",
+      "defaultOwner": "BASE_LOCOMOTION"
+    },
+    {
+      "name": "arm_l",
+      "parent": "clavicle_l",
+      "pivot": [
+        19.24322,
+        155.00845,
+        -0.0
+      ],
+      "bindRotationDegrees": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "category": "UPPER_BODY",
+      "defaultOwner": "BASE_LOCOMOTION"
+    },
+    {
+      "name": "forearm_l",
+      "parent": "arm_l",
+      "pivot": [
+        23.61668,
+        122.64486,
+        1.31204
+      ],
+      "bindRotationDegrees": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "category": "UPPER_BODY",
+      "defaultOwner": "BASE_LOCOMOTION"
+    },
+    {
+      "name": "wrist_l",
+      "parent": "forearm_l",
+      "pivot": [
+        24.49137,
+        93.34269,
+        0.87469
+      ],
+      "bindRotationDegrees": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "category": "UPPER_BODY",
+      "defaultOwner": "BASE_LOCOMOTION"
+    },
+    {
+      "name": "hand_l",
+      "parent": "wrist_l",
+      "pivot": [
+        24.49137,
+        93.34269,
+        0.87469
+      ],
+      "bindRotationDegrees": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "category": "UPPER_BODY",
+      "defaultOwner": "BASE_LOCOMOTION"
+    },
+    {
+      "name": "clavicle_r",
+      "parent": "aim_pitch",
+      "pivot": [
+        0.0,
+        155.00845,
+        0.0
+      ],
+      "bindRotationDegrees": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "category": "UPPER_BODY",
+      "defaultOwner": "BASE_LOCOMOTION"
+    },
+    {
+      "name": "arm_r",
+      "parent": "clavicle_r",
+      "pivot": [
+        -19.24322,
+        155.00845,
+        -0.0
+      ],
+      "bindRotationDegrees": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "category": "UPPER_BODY",
+      "defaultOwner": "BASE_LOCOMOTION"
+    },
+    {
+      "name": "forearm_r",
+      "parent": "arm_r",
+      "pivot": [
+        -23.61668,
+        122.64486,
+        1.31204
+      ],
+      "bindRotationDegrees": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "category": "UPPER_BODY",
+      "defaultOwner": "BASE_LOCOMOTION"
+    },
+    {
+      "name": "wrist_r",
+      "parent": "forearm_r",
+      "pivot": [
+        -24.49137,
+        93.34269,
+        0.87469
+      ],
+      "bindRotationDegrees": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "category": "UPPER_BODY",
+      "defaultOwner": "BASE_LOCOMOTION"
+    },
+    {
+      "name": "hand_r",
+      "parent": "wrist_r",
+      "pivot": [
+        -24.49137,
+        93.34269,
+        0.87469
+      ],
+      "bindRotationDegrees": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "category": "UPPER_BODY",
+      "defaultOwner": "BASE_LOCOMOTION"
+    },
+    {
+      "name": "knife",
+      "parent": "hand_r",
+      "pivot": [
+        -24.49137,
+        88.34269,
+        0.87469
+      ],
+      "bindRotationDegrees": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "category": "WEAPON_SOCKET",
+      "defaultOwner": "WEAPON_SOCKET"
+    },
+    {
+      "name": "cannon",
+      "parent": "hand_r",
+      "pivot": [
+        -24.49137,
+        88.34269,
+        0.87469
+      ],
+      "bindRotationDegrees": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "category": "WEAPON_SOCKET",
+      "defaultOwner": "WEAPON_SOCKET"
+    },
+    {
+      "name": "lance",
+      "parent": "hand_r",
+      "pivot": [
+        -24.49137,
+        88.34269,
+        0.87469
+      ],
+      "bindRotationDegrees": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "category": "WEAPON_SOCKET",
+      "defaultOwner": "WEAPON_SOCKET"
+    },
+    {
+      "name": "entry_plug",
+      "parent": "torso_upper",
+      "pivot": [
+        0.0,
+        172.26894,
+        8.0
+      ],
+      "bindRotationDegrees": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "category": "RIGID_ATTACHMENT",
+      "defaultOwner": "INHERITED_RIGID"
+    },
+    {
+      "name": "plug_hatch_l",
+      "parent": "torso_upper",
+      "pivot": [
+        0.0,
+        172.26894,
+        7.0
+      ],
+      "bindRotationDegrees": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "category": "RIGID_ATTACHMENT",
+      "defaultOwner": "INHERITED_RIGID"
+    },
+    {
+      "name": "plug_hatch_r",
+      "parent": "torso_upper",
+      "pivot": [
+        0.0,
+        172.26894,
+        7.0
+      ],
+      "bindRotationDegrees": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "category": "RIGID_ATTACHMENT",
+      "defaultOwner": "INHERITED_RIGID"
+    },
+    {
+      "name": "neck",
+      "parent": "torso_upper",
+      "pivot": [
+        0.0,
+        157.63253,
+        -0.87469
+      ],
+      "bindRotationDegrees": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "category": "UPPER_BODY",
+      "defaultOwner": "BASE_LOCOMOTION"
+    },
+    {
+      "name": "head",
+      "parent": "neck",
+      "pivot": [
+        0.0,
+        157.63253,
+        -0.87469
+      ],
+      "bindRotationDegrees": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "category": "UPPER_BODY",
+      "defaultOwner": "BASE_LOCOMOTION"
+    },
+    {
+      "name": "horn",
+      "parent": "head",
+      "pivot": [
+        0.0,
+        169.63253,
+        -4.87469
+      ],
+      "bindRotationDegrees": [
+        -22,
+        0,
+        0
+      ],
+      "category": "RIGID_ATTACHMENT",
+      "defaultOwner": "INHERITED_RIGID"
+    },
+    {
+      "name": "leg_l",
+      "parent": "torso_lower",
+      "pivot": [
+        10.93365,
+        114.77263,
+        -0.0
+      ],
+      "bindRotationDegrees": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "category": "LOWER_BODY",
+      "defaultOwner": "BASE_LOCOMOTION"
+    },
+    {
+      "name": "shin_l",
+      "parent": "leg_l",
+      "pivot": [
+        15.30711,
+        60.1044,
+        0.87469
+      ],
+      "bindRotationDegrees": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "category": "LOWER_BODY",
+      "defaultOwner": "BASE_LOCOMOTION"
+    },
+    {
+      "name": "leg_r",
+      "parent": "torso_lower",
+      "pivot": [
+        -10.93365,
+        114.77263,
+        -0.0
+      ],
+      "bindRotationDegrees": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "category": "LOWER_BODY",
+      "defaultOwner": "BASE_LOCOMOTION"
+    },
+    {
+      "name": "shin_r",
+      "parent": "leg_r",
+      "pivot": [
+        -15.30711,
+        60.1044,
+        0.87469
+      ],
+      "bindRotationDegrees": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "category": "LOWER_BODY",
+      "defaultOwner": "BASE_LOCOMOTION"
+    },
+    {
+      "name": "ankle_l",
+      "parent": "shin_l",
+      "pivot": [
+        15.30711,
+        18.55654,
+        0.87469
+      ],
+      "bindRotationDegrees": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "category": "LOWER_BODY",
+      "defaultOwner": "BASE_LOCOMOTION"
+    },
+    {
+      "name": "foot_l",
+      "parent": "ankle_l",
+      "pivot": [
+        15.30711,
+        18.55654,
+        0.87469
+      ],
+      "bindRotationDegrees": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "category": "LOWER_BODY",
+      "defaultOwner": "BASE_LOCOMOTION"
+    },
+    {
+      "name": "ankle_r",
+      "parent": "shin_r",
+      "pivot": [
+        -15.30711,
+        18.55654,
+        0.87469
+      ],
+      "bindRotationDegrees": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "category": "LOWER_BODY",
+      "defaultOwner": "BASE_LOCOMOTION"
+    },
+    {
+      "name": "foot_r",
+      "parent": "ankle_r",
+      "pivot": [
+        -15.30711,
+        18.55654,
+        0.87469
+      ],
+      "bindRotationDegrees": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "category": "LOWER_BODY",
+      "defaultOwner": "BASE_LOCOMOTION"
+    },
+    {
+      "name": "finger_index_axis_l",
+      "parent": "hand_l",
+      "pivot": [
+        27.03787,
+        90.5902,
+        0.90649
+      ],
+      "bindRotationDegrees": [
+        -45.35461414,
+        24.53671482,
+        15.87776516
+      ],
+      "category": "GRIP",
+      "defaultOwner": "GRIP_PROFILE"
+    },
+    {
+      "name": "finger_index_l",
+      "parent": "finger_index_axis_l",
+      "pivot": [
+        27.03787,
+        90.5902,
+        0.90649
+      ],
+      "bindRotationDegrees": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "category": "GRIP",
+      "defaultOwner": "GRIP_PROFILE"
+    },
+    {
+      "name": "finger_index_axis_r",
+      "parent": "hand_r",
+      "pivot": [
+        -27.03787,
+        90.5902,
+        0.90649
+      ],
+      "bindRotationDegrees": [
+        -134.64538586,
+        24.53671482,
+        164.12223484
+      ],
+      "category": "GRIP",
+      "defaultOwner": "GRIP_PROFILE"
+    },
+    {
+      "name": "finger_index_r",
+      "parent": "finger_index_axis_r",
+      "pivot": [
+        -27.03787,
+        90.5902,
+        0.90649
+      ],
+      "bindRotationDegrees": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "category": "GRIP",
+      "defaultOwner": "GRIP_PROFILE"
+    },
+    {
+      "name": "finger_little_axis_l",
+      "parent": "hand_l",
+      "pivot": [
+        23.01068,
+        90.47742,
+        5.95746
+      ],
+      "bindRotationDegrees": [
+        -27.53088096,
+        24.0270688,
+        20.62276844
+      ],
+      "category": "GRIP",
+      "defaultOwner": "GRIP_PROFILE"
+    },
+    {
+      "name": "finger_little_l",
+      "parent": "finger_little_axis_l",
+      "pivot": [
+        23.01068,
+        90.47742,
+        5.95746
+      ],
+      "bindRotationDegrees": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "category": "GRIP",
+      "defaultOwner": "GRIP_PROFILE"
+    },
+    {
+      "name": "finger_little_axis_r",
+      "parent": "hand_r",
+      "pivot": [
+        -23.01068,
+        90.47742,
+        5.95746
+      ],
+      "bindRotationDegrees": [
+        -152.46911904,
+        24.0270688,
+        159.37723156
+      ],
+      "category": "GRIP",
+      "defaultOwner": "GRIP_PROFILE"
+    },
+    {
+      "name": "finger_little_r",
+      "parent": "finger_little_axis_r",
+      "pivot": [
+        -23.01068,
+        90.47742,
+        5.95746
+      ],
+      "bindRotationDegrees": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "category": "GRIP",
+      "defaultOwner": "GRIP_PROFILE"
+    },
+    {
+      "name": "finger_middle_axis_l",
+      "parent": "hand_l",
+      "pivot": [
+        26.33684,
+        90.33443,
+        3.40775
+      ],
+      "bindRotationDegrees": [
+        -40.53647513,
+        28.34707887,
+        21.29234199
+      ],
+      "category": "GRIP",
+      "defaultOwner": "GRIP_PROFILE"
+    },
+    {
+      "name": "finger_middle_l",
+      "parent": "finger_middle_axis_l",
+      "pivot": [
+        26.33684,
+        90.33443,
+        3.40775
+      ],
+      "bindRotationDegrees": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "category": "GRIP",
+      "defaultOwner": "GRIP_PROFILE"
+    },
+    {
+      "name": "finger_middle_axis_r",
+      "parent": "hand_r",
+      "pivot": [
+        -26.33684,
+        90.33443,
+        3.40775
+      ],
+      "bindRotationDegrees": [
+        -139.46352487,
+        28.34707887,
+        158.70765801
+      ],
+      "category": "GRIP",
+      "defaultOwner": "GRIP_PROFILE"
+    },
+    {
+      "name": "finger_middle_r",
+      "parent": "finger_middle_axis_r",
+      "pivot": [
+        -26.33684,
+        90.33443,
+        3.40775
+      ],
+      "bindRotationDegrees": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "category": "GRIP",
+      "defaultOwner": "GRIP_PROFILE"
+    },
+    {
+      "name": "finger_ring_axis_l",
+      "parent": "hand_l",
+      "pivot": [
+        24.71974,
+        90.35524,
+        4.80056
+      ],
+      "bindRotationDegrees": [
+        -38.85407008,
+        27.71773177,
+        21.24339729
+      ],
+      "category": "GRIP",
+      "defaultOwner": "GRIP_PROFILE"
+    },
+    {
+      "name": "finger_ring_l",
+      "parent": "finger_ring_axis_l",
+      "pivot": [
+        24.71974,
+        90.35524,
+        4.80056
+      ],
+      "bindRotationDegrees": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "category": "GRIP",
+      "defaultOwner": "GRIP_PROFILE"
+    },
+    {
+      "name": "finger_ring_axis_r",
+      "parent": "hand_r",
+      "pivot": [
+        -24.71974,
+        90.35524,
+        4.80056
+      ],
+      "bindRotationDegrees": [
+        -141.14592992,
+        27.71773177,
+        158.75660271
+      ],
+      "category": "GRIP",
+      "defaultOwner": "GRIP_PROFILE"
+    },
+    {
+      "name": "finger_ring_r",
+      "parent": "finger_ring_axis_r",
+      "pivot": [
+        -24.71974,
+        90.35524,
+        4.80056
+      ],
+      "bindRotationDegrees": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "category": "GRIP",
+      "defaultOwner": "GRIP_PROFILE"
+    },
+    {
+      "name": "finger_thumb_l",
+      "parent": "hand_l",
+      "pivot": [
+        22.47416,
+        93.67709,
+        -1.16058
+      ],
+      "bindRotationDegrees": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "category": "GRIP",
+      "defaultOwner": "GRIP_PROFILE"
+    },
+    {
+      "name": "finger_thumb_r",
+      "parent": "hand_r",
+      "pivot": [
+        -22.47416,
+        93.67709,
+        -1.16058
+      ],
+      "bindRotationDegrees": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "category": "GRIP",
+      "defaultOwner": "GRIP_PROFILE"
+    },
+    {
+      "name": "finger_index_tip_l",
+      "parent": "finger_index_l",
+      "pivot": [
+        27.03787,
+        87.09143,
+        0.90649
+      ],
+      "bindRotationDegrees": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "category": "GRIP",
+      "defaultOwner": "GRIP_PROFILE"
+    },
+    {
+      "name": "finger_index_tip_r",
+      "parent": "finger_index_r",
+      "pivot": [
+        -27.03787,
+        87.09143,
+        0.90649
+      ],
+      "bindRotationDegrees": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "category": "GRIP",
+      "defaultOwner": "GRIP_PROFILE"
+    },
+    {
+      "name": "finger_little_tip_l",
+      "parent": "finger_little_l",
+      "pivot": [
+        23.01068,
+        87.416,
+        5.95746
+      ],
+      "bindRotationDegrees": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "category": "GRIP",
+      "defaultOwner": "GRIP_PROFILE"
+    },
+    {
+      "name": "finger_little_tip_r",
+      "parent": "finger_little_r",
+      "pivot": [
+        -23.01068,
+        87.416,
+        5.95746
+      ],
+      "bindRotationDegrees": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "category": "GRIP",
+      "defaultOwner": "GRIP_PROFILE"
+    },
+    {
+      "name": "finger_middle_tip_l",
+      "parent": "finger_middle_l",
+      "pivot": [
+        26.33684,
+        86.61699,
+        3.40775
+      ],
+      "bindRotationDegrees": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "category": "GRIP",
+      "defaultOwner": "GRIP_PROFILE"
+    },
+    {
+      "name": "finger_middle_tip_r",
+      "parent": "finger_middle_r",
+      "pivot": [
+        -26.33684,
+        86.61699,
+        3.40775
+      ],
+      "bindRotationDegrees": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "category": "GRIP",
+      "defaultOwner": "GRIP_PROFILE"
+    },
+    {
+      "name": "finger_ring_tip_l",
+      "parent": "finger_ring_l",
+      "pivot": [
+        24.71974,
+        86.85647,
+        4.80056
+      ],
+      "bindRotationDegrees": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "category": "GRIP",
+      "defaultOwner": "GRIP_PROFILE"
+    },
+    {
+      "name": "finger_ring_tip_r",
+      "parent": "finger_ring_r",
+      "pivot": [
+        -24.71974,
+        86.85647,
+        4.80056
+      ],
+      "bindRotationDegrees": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "category": "GRIP",
+      "defaultOwner": "GRIP_PROFILE"
+    },
+    {
+      "name": "finger_thumb_tip_l",
+      "parent": "finger_thumb_l",
+      "pivot": [
+        21.70641,
+        91.61885,
+        -2.59585
+      ],
+      "bindRotationDegrees": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "category": "GRIP",
+      "defaultOwner": "GRIP_PROFILE"
+    },
+    {
+      "name": "finger_thumb_tip_r",
+      "parent": "finger_thumb_r",
+      "pivot": [
+        -21.70641,
+        91.61885,
+        -2.59585
+      ],
+      "bindRotationDegrees": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "category": "GRIP",
+      "defaultOwner": "GRIP_PROFILE"
+    },
+    {
+      "name": "finger_index_distal_l",
+      "parent": "finger_index_tip_l",
+      "pivot": [
+        27.03787,
+        85.34205,
+        0.90649
+      ],
+      "bindRotationDegrees": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "category": "GRIP",
+      "defaultOwner": "GRIP_PROFILE"
+    },
+    {
+      "name": "finger_index_distal_r",
+      "parent": "finger_index_tip_r",
+      "pivot": [
+        -27.03787,
+        85.34205,
+        0.90649
+      ],
+      "bindRotationDegrees": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "category": "GRIP",
+      "defaultOwner": "GRIP_PROFILE"
+    },
+    {
+      "name": "finger_little_distal_l",
+      "parent": "finger_little_tip_l",
+      "pivot": [
+        23.01068,
+        85.92902,
+        5.95746
+      ],
+      "bindRotationDegrees": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "category": "GRIP",
+      "defaultOwner": "GRIP_PROFILE"
+    },
+    {
+      "name": "finger_little_distal_r",
+      "parent": "finger_little_tip_r",
+      "pivot": [
+        -23.01068,
+        85.92902,
+        5.95746
+      ],
+      "bindRotationDegrees": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "category": "GRIP",
+      "defaultOwner": "GRIP_PROFILE"
+    },
+    {
+      "name": "finger_middle_distal_l",
+      "parent": "finger_middle_tip_l",
+      "pivot": [
+        26.33684,
+        84.7364,
+        3.40775
+      ],
+      "bindRotationDegrees": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "category": "GRIP",
+      "defaultOwner": "GRIP_PROFILE"
+    },
+    {
+      "name": "finger_middle_distal_r",
+      "parent": "finger_middle_tip_r",
+      "pivot": [
+        -26.33684,
+        84.7364,
+        3.40775
+      ],
+      "bindRotationDegrees": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "category": "GRIP",
+      "defaultOwner": "GRIP_PROFILE"
+    },
+    {
+      "name": "finger_ring_distal_l",
+      "parent": "finger_ring_tip_l",
+      "pivot": [
+        24.71974,
+        85.10709,
+        4.80056
+      ],
+      "bindRotationDegrees": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "category": "GRIP",
+      "defaultOwner": "GRIP_PROFILE"
+    },
+    {
+      "name": "finger_ring_distal_r",
+      "parent": "finger_ring_tip_r",
+      "pivot": [
+        -24.71974,
+        85.10709,
+        4.80056
+      ],
+      "bindRotationDegrees": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "category": "GRIP",
+      "defaultOwner": "GRIP_PROFILE"
+    },
+    {
+      "name": "n2",
+      "parent": "hand_r",
+      "pivot": [
+        -24.49137,
+        88.34269,
+        0.87469
+      ],
+      "bindRotationDegrees": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "category": "WEAPON_SOCKET",
+      "defaultOwner": "WEAPON_SOCKET"
+    }
+  ],
+  "variantGeometrySemanticSha256": {
+    "eva_unit00": "a63f4073b43cb15861894af390f478c82a7dc7efaebf309965d075f1aa7d69c0",
+    "eva_unit01": "0acd98691b306f18ee8371057558b37077e9bd4e2bbd37b308a0ec99c82463ed",
+    "eva_unit02": "6499cf642a8915d2230af4dee054c49787bdc093e99586106a4c19fe9efba1ba"
+  }
+}

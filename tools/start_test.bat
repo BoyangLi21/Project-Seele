@@ -495,13 +495,15 @@ echo   2. /seele motionlab enter unit00^|unit01^|unit02 links directly to a test
 echo   3. /seele motionlab weapon unit01 fists^|knife^|rifle^|cannon changes the loadout.
 echo      Longinus motion is withdrawn from this review and cannot be selected.
 echo   4. /seele motionlab camera opens the elevated external observation view.
-echo   5. /seele motionlab reset rebuilds the three test EVAs and returns the arena to noon.
-echo   6. G1 live calibration is quarantined; start_test.bat motion does not launch it.
-echo   7. start_test.bat motion live is an explicit engineering-only transport test.
-echo   8. physics/recovery remain offline comparison modes; they are not the live controller.
-echo   9. Rejected grounded previews are quarantined until external 3D review passes.
-echo  10. /seele motionlab camera follows from the external review platform.
-echo  11. /seele motionlab demo unit01 stop exits every test mode.
+echo   5. /seele motionlab record start LABEL records final rendered matrices from normal pilot input.
+echo      Use /seele motionlab record status and /seele motionlab record stop to inspect or close it.
+echo   6. /seele motionlab reset rebuilds the three test EVAs and returns the arena to noon.
+echo   7. G1 live calibration is quarantined; start_test.bat motion does not launch it.
+echo   8. start_test.bat motion live is an explicit engineering-only transport test.
+echo   9. physics/recovery remain offline comparison modes; they are not the live controller.
+echo  10. Rejected grounded previews are quarantined until external 3D review passes.
+echo  11. /seele motionlab camera follows from the external review platform.
+echo  12. /seele motionlab demo unit01 stop exits every test mode.
 echo.
 goto SEELE_INSTRUCTIONS_DONE
 :SEELE_MANUAL_INSTRUCTIONS

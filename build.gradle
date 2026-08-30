@@ -116,6 +116,9 @@ minecraft {
                 property 'projectseele.strictHighDetail', 'true'
                 args '--width', '1280', '--height', '720'
             }
+            if (project.hasProperty('poseCaptureSmoke')) {
+                property 'projectseele.poseCaptureSmoke', 'true'
+            }
             // The 784-block-tall connected Tokyo-3 / GeoFront dimension
             // contains roughly twice vanilla's section count. Both manual
             // high-detail play and fresh-map capture need more than the

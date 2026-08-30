@@ -1,0 +1,111 @@
+{
+  "schema": 1,
+  "rigVersion": "eva_tiger_canonical_r01",
+  "poseGraphVersion": "eva_pose_graph_observer_r01",
+  "baselineCommit": "a910890b2d16741e72843cfa534a74def6113078",
+  "baselineDecision": "user_requested_pre_mocap_rollback",
+  "policy": {
+    "generatorMayOverwriteFrozenAction": false,
+    "hashChangeReturnsStatusTo": "CANDIDATE",
+    "automaticApprovalAllowed": false
+  },
+  "rollbackPatchSemanticSha256": "1f883eaffa6895e0b5bcb3cb6e6114d5f420ac4ee0937bde87794ddb2b9e44f4",
+  "actions": {
+    "idle": {
+      "status": "FROZEN_BASELINE_NOT_VISUALLY_APPROVED",
+      "animationKeys": [
+        "animation.eva_unit01.idle"
+      ],
+      "baselineSemanticSha256": "179beb02e8854d150660b9d82a1a4a360dc9ff57eaf9bdd46b6f62e77f04740b",
+      "observedSemanticSha256": "179beb02e8854d150660b9d82a1a4a360dc9ff57eaf9bdd46b6f62e77f04740b",
+      "candidateReason": null,
+      "approvedBy": null,
+      "humanReviewRequired": true
+    },
+    "walk": {
+      "status": "FROZEN_BASELINE_NOT_VISUALLY_APPROVED",
+      "animationKeys": [
+        "animation.eva_unit01.walk"
+      ],
+      "baselineSemanticSha256": "ecfe754cc8a04d35fcd1e72c04b62c6700e3ec7bcdbb5b46fa9edc6b4167817e",
+      "observedSemanticSha256": "ecfe754cc8a04d35fcd1e72c04b62c6700e3ec7bcdbb5b46fa9edc6b4167817e",
+      "candidateReason": null,
+      "approvedBy": null,
+      "humanReviewRequired": true
+    },
+    "run": {
+      "status": "FROZEN_BASELINE_NOT_VISUALLY_APPROVED",
+      "animationKeys": [
+        "animation.eva_unit01.run"
+      ],
+      "baselineSemanticSha256": "b7939a162cf4104bf003f23de9672980958322b7df05ed272ba608947b52c2ce",
+      "observedSemanticSha256": "b7939a162cf4104bf003f23de9672980958322b7df05ed272ba608947b52c2ce",
+      "candidateReason": null,
+      "approvedBy": null,
+      "humanReviewRequired": true
+    },
+    "jump_landing": {
+      "status": "FROZEN_BASELINE_NOT_VISUALLY_APPROVED",
+      "animationKeys": [
+        "animation.eva_unit01.takeoff",
+        "animation.eva_unit01.jump",
+        "animation.eva_unit01.land"
+      ],
+      "baselineSemanticSha256": "ad5ebce5a97553a86db2fe88d3badc92586229f4edeb370083bd146a977ace38",
+      "observedSemanticSha256": "ad5ebce5a97553a86db2fe88d3badc92586229f4edeb370083bd146a977ace38",
+      "candidateReason": null,
+      "approvedBy": null,
+      "humanReviewRequired": true
+    },
+    "unarmed_attack": {
+      "status": "FROZEN_BASELINE_NOT_VISUALLY_APPROVED",
+      "animationKeys": [
+        "animation.eva_unit01.melee",
+        "animation.eva_unit01.melee_left",
+        "animation.eva_unit01.smash"
+      ],
+      "baselineSemanticSha256": "d5e85e939d39da1bc8b6a321b68d75dd2c4f2dce05c393d08ebea713c2787ac5",
+      "observedSemanticSha256": "d5e85e939d39da1bc8b6a321b68d75dd2c4f2dce05c393d08ebea713c2787ac5",
+      "candidateReason": null,
+      "approvedBy": null,
+      "humanReviewRequired": true
+    },
+    "progressive_knife": {
+      "status": "FROZEN_BASELINE_NOT_VISUALLY_APPROVED",
+      "animationKeys": [
+        "animation.eva_unit01.knife_ready",
+        "animation.eva_unit01.knife",
+        "animation.eva_unit01.knife_heavy"
+      ],
+      "baselineSemanticSha256": "68e194a1ce85e5759df7abb48a810cdfeda6ebd10009dcfc03474f63b929ee43",
+      "observedSemanticSha256": "68e194a1ce85e5759df7abb48a810cdfeda6ebd10009dcfc03474f63b929ee43",
+      "candidateReason": null,
+      "approvedBy": null,
+      "humanReviewRequired": true
+    },
+    "crouch": {
+      "status": "FROZEN_BASELINE_NOT_VISUALLY_APPROVED",
+      "animationKeys": [
+        "animation.eva_unit01.crouch",
+        "animation.eva_unit01.crouch_walk"
+      ],
+      "baselineSemanticSha256": "4fd617585efdf2dc9616f2189408d30ff3f26eaeac23cfe304f55cd03c666874",
+      "observedSemanticSha256": "4fd617585efdf2dc9616f2189408d30ff3f26eaeac23cfe304f55cd03c666874",
+      "candidateReason": null,
+      "approvedBy": null,
+      "humanReviewRequired": true
+    },
+    "prone_crawl": {
+      "status": "FROZEN_BASELINE_NOT_VISUALLY_APPROVED",
+      "animationKeys": [
+        "animation.eva_unit01.prone",
+        "animation.eva_unit01.crawl"
+      ],
+      "baselineSemanticSha256": "148875b1e6879db800cf43e9beb02077f97666e0f55a2ee9ff54184f54226d32",
+      "observedSemanticSha256": "148875b1e6879db800cf43e9beb02077f97666e0f55a2ee9ff54184f54226d32",
+      "candidateReason": null,
+      "approvedBy": null,
+      "humanReviewRequired": true
+    }
+  }
+}
