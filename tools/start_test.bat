@@ -492,7 +492,8 @@ echo.
 echo EVA motion laboratory:
 echo   1. SEELE_EVA_MOTION_LAB opens automatically and never writes R28.
 echo   2. /seele motionlab enter unit00^|unit01^|unit02 links directly to a test EVA.
-echo   3. /seele motionlab weapon unit01 fists^|knife^|rifle^|lance changes the loadout.
+echo   3. /seele motionlab weapon unit01 fists^|knife^|rifle^|cannon changes the loadout.
+echo      Longinus motion is withdrawn from this review and cannot be selected.
 echo   4. /seele motionlab camera opens the elevated external observation view.
 echo   5. /seele motionlab reset rebuilds the three test EVAs and returns the arena to noon.
 echo   6. G1 live calibration is quarantined; start_test.bat motion does not launch it.

@@ -1093,7 +1093,13 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         int allWeapons = 0;
         for (int weapon = WEAPON_FISTS; weapon <= WEAPON_N2; weapon++)
         {
-            allWeapons |= 1 << weapon;
+            // Longinus/Unit-02 special currently share the withdrawn lance
+            // motion set. Keep that set out of human review until a replacement
+            // has passed visual approval.
+            if (weapon != WEAPON_LANCE)
+            {
+                allWeapons |= 1 << weapon;
+            }
         }
         this.entityData.set(DATA_ARMAMENT_MASK, allWeapons);
         this.entityData.set(DATA_POWER_TICKS, 72_000);
@@ -1115,7 +1121,8 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     public boolean selectMotionLabWeapon(int weapon)
     {
         if (this.level().isClientSide
-                || weapon < WEAPON_FISTS || weapon > WEAPON_N2)
+                || weapon < WEAPON_FISTS || weapon > WEAPON_N2
+                || weapon == WEAPON_LANCE)
         {
             return false;
         }

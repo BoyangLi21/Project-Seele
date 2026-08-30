@@ -1,8 +1,17 @@
 # Project SEELE — EVA real-human combat and posture runtime R05
 
-Status: **R04 visual acceptance is revoked. R05 fixes the exact-preview atlas
-contract and replaces only the rejected Longinus action. Low stance, prone,
-crawl and their transitions remain rejected pending a new coherent chain.**
+Status: **R04 visual acceptance is revoked. The R05 exact-preview atlas fix is
+retained, but its Longinus action is withdrawn from the in-game review. Low
+stance, prone, crawl and their transitions remain pending human acceptance.**
+
+## Current human-review scope
+
+The R05 Longinus action was withdrawn from the in-game Motion Lab at the
+user's request on 2026-08-30. It remains research history only and is not part
+of the current acceptance pass. The lab weapon mask and command parser both
+reject the lance slot so it cannot be selected accidentally. Launch the
+remaining actions directly into `SEELE_EVA_MOTION_LAB` with
+`START_EVA_ACTION_REVIEW.bat` or `tools/start_motion_lab.bat`.
 
 The 2026-08-28 in-game review rejected the original CMU 02 weapon clips and
 the ACCAD kneel/prone/crawl chain. R02 replaced the weapon and crouch subset;

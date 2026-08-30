@@ -223,7 +223,6 @@ public final class EvaMotionLabCommands
             case "fist", "fists", "unarmed" -> EvaUnit01Entity.WEAPON_FISTS;
             case "knife" -> EvaUnit01Entity.WEAPON_KNIFE;
             case "cannon", "positron" -> EvaUnit01Entity.WEAPON_CANNON;
-            case "lance", "longinus" -> EvaUnit01Entity.WEAPON_LANCE;
             case "rifle", "pallet" -> EvaUnit01Entity.WEAPON_RIFLE;
             case "n2" -> EvaUnit01Entity.WEAPON_N2;
             default -> -1;
