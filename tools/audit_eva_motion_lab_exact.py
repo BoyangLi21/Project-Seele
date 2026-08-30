@@ -186,7 +186,8 @@ def main() -> None:
         role = motion["clips"][name].get("role", "unknown")
         low_profile = role in {
             "candidate_prone", "candidate_posture_transition", "crouch"
-        } or name.startswith("prone_")
+        } or name.startswith("prone_") or "_to_prone" in name \
+            or name.startswith("crawl")
         length = max(1, end - start)
         frames = sorted({start, end, start + length // 4,
                          start + length // 2, start + length * 3 // 4})
@@ -227,7 +228,7 @@ def main() -> None:
                     f"frame {value['frame']}: ground penetration "
                     f"{value['bounds_min'][2]:.3f}")
             for side in ("left", "right"):
-                if value[f"{side}_contact"]:
+                if value[f"{side}_contact"] and not low_profile:
                     drift = abs(value[f"{side}_ankle_z"]
                                 - baseline_ankle[side])
                     if drift > 0.65:

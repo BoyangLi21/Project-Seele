@@ -1,12 +1,12 @@
-# Project SEELE — EVA real-human combat and posture runtime R02
+# Project SEELE — EVA real-human combat and posture runtime R03
 
-Status: **R02 weapon and crouch candidates passed exact-mesh and client-load
-review; prone/crawl replacement remains rejected and is not promoted**.
+Status: **R03 weapon, crouch, prone, crawl and posture-transition captures
+passed exact-mesh review; the final client-load review is recorded below**.
 
 The 2026-08-28 in-game review rejected the original CMU 02 weapon clips and
-the ACCAD kneel/prone/crawl chain. R02 does not repair those clips with manual
-poses. It replaces only the actions for which a different real-human capture
-and an exact Tiger-mesh review produced a readable result.
+the ACCAD kneel/prone/crawl chain. R02 replaced the weapon and crouch subset;
+R03 adds a complete UT Dallas prone capture and re-solves the rifle contact.
+Neither revision repairs rejected body motion with hand-authored poses.
 
 ## R02 promoted capture windows
 
@@ -18,14 +18,21 @@ and an exact Tiger-mesh review produced a readable result.
 | stand to crouch | CMU 136_09 Walk Crouched | 51–230 | continuous standing-height to low stance |
 | crouch idle | CMU 136_09 Walk Crouched | 211–260 | settled low stance loop |
 | crouch walk | CMU 136_09 Walk Crouched | 911–1055 | in-place tactical crouch gait loop |
+| stand to prone | UT Dallas MCP_prone01 | 100–340 | continuous full descent |
+| crouch to prone | UT Dallas MCP_prone01 | 180–340 | low-stance descent |
+| prone idle | UT Dallas MCP_prone01 | 384–416 | belly-down hold loop |
+| prone crawl | UT Dallas MCP_prone01 | 1602–1676 | in-place belly crawl loop |
+| prone to crouch | UT Dallas MCP_prone01 | 1760–1895 | continuous low get-up |
+| prone to stand | UT Dallas MCP_prone01 | 1760–2000 | complete standing recovery |
 
 ACCAD is CC BY 3.0. CMU reuse follows the official database terms. The
 existing accepted berserk subset remains unchanged: CMU 54_13 and 120_02 plus
-CMCD `KingKong2` under CC BY 4.0.
+CMCD `KingKong2` under CC BY 4.0. The UT Dallas Motion Capture Database archive
+publishes `MCP_prone01` under CC BY 4.0.
 
 The tracked deterministic runtime overlay is
-`tools/eva_real_mocap_accepted_r02.json`. It replaces 13 standing/crouched
-weapon and crouch animations. The rejected
+`tools/eva_real_mocap_accepted_r02.json`. It replaces 20 weapon, crouch, prone,
+crawl, transition and solved prone-rifle animations. The rejected
 `tools/eva_real_mocap_weapon_contacts_r01.json` is deleted and remains
 available only in Git history.
 
@@ -46,9 +53,16 @@ available only in Git history.
    the exact animated lance surface. No child-limb translation is introduced.
 6. Crouched knife and Longinus actions reuse only the accepted upper-body
    weapon layer over the accepted CMU low stance.
-7. Exact body grounding changes root height only. Maximum lift is `0.03401 m`
-   for weapon strikes and `0.08422 m` for crouch locomotion; captured joint
-   rotations and weapon contacts remain unchanged.
+7. Exact body grounding changes root height only. The UTD source-level pass
+   needs at most `0.175315 m` of clearance. After the captured transition is
+   matched to the Gecko stance edges, crouch-to-prone receives at most
+   `0.244307 m` and prone-to-crouch `0.015788 m` of root-only lift; captured
+   joint rotations remain unchanged.
+8. The prone-rifle overlay is solved again on the accepted UTD body. The
+   cannon socket is translated onto the trigger hand, the bore is aligned to
+   runtime forward, and the support arm is solved to the fore-end with
+   two-bone IK. The solved overlay is exported into the deterministic patch,
+   rather than existing only in a Blender review file.
 
 ## Rejected and deliberately unpromoted
 
@@ -63,32 +77,32 @@ available only in Git history.
   side support, kneeling and rolling; the short loop still reads as an arched
   side crawl on EVA proportions.
 - CMU 111_03: crawling on knees, not prone locomotion.
-- UT Dallas `MCP_prone01`: the archived project states CC BY 4.0 and names a
-  dedicated prone-crawl FBX, but the live site database is broken and the only
-  archived payload is truncated at 1 MiB. The damaged file is not used.
-
-Prone idle, prone rifle, crawl, crouch-to-prone and prone-to-crouch therefore
-remain on the last stable pre-R01 catalogue. R02 makes no claim that those
-actions have been replaced or approved.
+- The first indexed UT Dallas archive request returned a truncated 1 MiB
+  response and was rejected. The complete archived package endpoint was then
+  recovered and produced a valid `2,862,144`-byte FBX. Only that complete,
+  hash-recorded source is used.
 
 ## Gameplay scope
 
 Input bindings, state switching, damage, cooldown, reach, AOE and server
-authority are unchanged. R02 changes only client-side animation resources and
-restores the accepted stand/crouch transition clips required by the existing
-stance controller.
+authority are unchanged. R03 changes only client-side animation resources and
+fills the posture clips already addressed by the existing stance controller.
 
 Ignored review artefacts are under
-`artifacts/motion_research/eva_action_r02_direct/`. Source and licence notices
-remain in `docs/THIRD_PARTY_MOTION_NOTICES.md`.
+`artifacts/motion_research/eva_action_r02_direct/` and
+`artifacts/motion_research/eva_action_r03_utd_prone/`. Source and licence
+notices remain in `docs/THIRD_PARTY_MOTION_NOTICES.md`.
 
 ## Final local gates
 
-- exact body audit: knife `2/0`, Longinus `1/0`, crouch chain `3/0`
-  (clips/failures);
+- exact body audit: knife `2/0`, Longinus `1/0`, crouch chain `3/0`, final UTD
+  prone/crawl/rifle review `8/0` (clips/failures);
 - exact Longinus audit: right-hand surface distance at most `0.000001`,
   left-hand distance at most `0.017129`, forward-axis cosine at least
   `0.999780`;
+- exact prone-rifle audit: right-hand surface distance at most `0.0000015`,
+  left-hand distance at most `0.053818`, forward-axis cosine at least
+  `0.999660`;
 - every promoted loop and stand/crouch rotational and root-position seam is
   within `0.01` degrees/pixels;
 - local high-detail pack validation, weapon-system contract, berserk contract,
@@ -97,5 +111,7 @@ remain in `docs/THIRD_PARTY_MOTION_NOTICES.md`.
   `3 clips / 50 bones / 243 frames`, all three local EVA triangle meshes, and
   no Project SEELE error/fatal line.
 
-The 431-frame review video is
-`artifacts/motion_research/eva_action_r02_direct/EVA_R02_ACCEPTED_WEAPON_CROUCH_REVIEW.mp4`.
+Review videos:
+
+- weapon/crouch: `artifacts/motion_research/eva_action_r02_direct/EVA_R02_ACCEPTED_WEAPON_CROUCH_REVIEW.mp4` (`431` frames);
+- UTD prone/crawl/rifle: `artifacts/motion_research/eva_action_r03_utd_prone/EVA_R03_UTD_PRONE_CRAWL_RIFLE_FINAL.mp4` (`236` frames, `15.73 s`).

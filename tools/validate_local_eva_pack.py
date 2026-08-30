@@ -136,7 +136,9 @@ REAL_MOCAP_REQUIRED_ANIMATIONS = {
     for suffix in (
         "knife", "knife_heavy", "lance_thrust",
         "crouch", "crouch_walk", "stand_to_crouch",
-        "crouch_to_stand",
+        "crouch_to_stand", "prone", "crawl",
+        "crouch_to_prone", "prone_to_crouch",
+        "stand_to_prone", "prone_to_stand",
         "berserk_roar", "berserk_run", "berserk_claw_r",
         "berserk_claw_l", "berserk_pounce",
     )
@@ -146,13 +148,19 @@ REAL_MOCAP_LOOP_ANIMATIONS = {
     f"animation.eva_unit01.{suffix}"
     for suffix in (
         "knife_ready", "lance_ready", "lance_carry",
-        "crouch", "crouch_walk", "berserk_run",
+        "crouch", "crouch_walk", "prone", "crawl", "berserk_run",
     )
 }
 
 REAL_MOCAP_TRANSITION_EDGES = (
     ("stand_to_crouch", "end", "crouch", "start"),
     ("crouch_to_stand", "start", "crouch", "start"),
+    ("crouch_to_prone", "start", "crouch", "start"),
+    ("crouch_to_prone", "end", "prone", "start"),
+    ("prone_to_crouch", "start", "prone", "start"),
+    ("prone_to_crouch", "end", "crouch", "start"),
+    ("stand_to_prone", "end", "prone", "start"),
+    ("prone_to_stand", "start", "prone", "start"),
 )
 
 ROTATION_ONLY_LIMB_BONES = {
@@ -453,7 +461,10 @@ def authored_quaternion(degrees):
     qx = (math.cos(x), math.sin(x), 0.0, 0.0)
     qy = (math.cos(y), 0.0, math.sin(y), 0.0)
     qz = (math.cos(z), 0.0, 0.0, math.sin(z))
-    return quaternion_multiply(quaternion_multiply(qx, qy), qz)
+    # Gecko/Blender XYZ Euler channels compose as qz * qy * qx.  The former
+    # reversed product could report a 170-degree jump when a continuous pose
+    # crossed an equivalent Euler branch near +/-90 degrees.
+    return quaternion_multiply(qz, quaternion_multiply(qy, qx))
 
 
 def rotation_edge(animation: dict, bone_name: str, edge: str):
@@ -480,6 +491,25 @@ def position_distance(left, right) -> float:
 def quaternion_angle_degrees(left, right) -> float:
     dot = abs(sum(a * b for a, b in zip(left, right)))
     return math.degrees(2.0 * math.acos(max(-1.0, min(1.0, dot))))
+
+
+def maximum_rotation_key_step(animation: dict) -> tuple[float, str]:
+    maximum = 0.0
+    location = ""
+    for bone_name, channels in animation.get("bones", {}).items():
+        channel = channels.get("rotation")
+        if not isinstance(channel, dict) or len(channel) < 2:
+            continue
+        keys = sorted(channel, key=float)
+        previous = authored_quaternion(channel[keys[0]])
+        for key in keys[1:]:
+            current = authored_quaternion(channel[key])
+            step = quaternion_angle_degrees(previous, current)
+            if step > maximum:
+                maximum = step
+                location = f"{bone_name}@{key}"
+            previous = current
+    return maximum, location
 
 
 def validate_real_mocap_animation_contract(stem: str,
@@ -555,6 +585,13 @@ def validate_real_mocap_animation_contract(stem: str,
             raise ValidationError(
                 f"{stem}: {animation_name} translates limb bones "
                 f"{', '.join(translated)}"
+            )
+        maximum_step, location = maximum_rotation_key_step(
+            animations[animation_name])
+        if maximum_step > 60.0:
+            raise ValidationError(
+                f"{stem}: {animation_name} rotation key step "
+                f"{maximum_step:.4f} degrees at {location} exceeds 60.0"
             )
 
 

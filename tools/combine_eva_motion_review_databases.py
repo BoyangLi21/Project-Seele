@@ -23,7 +23,7 @@ def main() -> None:
     for path, document in zip(args.input, documents):
         for key in ("schema", "coordinate_system", "quaternion_order",
                     "bones", "authority"):
-            if document[key] != first[key]:
+            if document.get(key) != first.get(key):
                 raise RuntimeError(f"incompatible {key} in {path}")
         overlap = set(clips) & set(document["clips"])
         if overlap:

@@ -4,8 +4,10 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import hashlib
 import json
+import math
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -67,6 +69,17 @@ EXPORTS = (
            frozenset(FULL), reverse=True),
     Export("crouch_walk", "crouch_walk", "crouch_walk",
            frozenset(FULL), loop=True),
+    Export("utd_prone_idle", "prone_idle", "prone",
+           frozenset(FULL), loop=True),
+    Export("utd_crawl", "crawl", "crawl", frozenset(FULL), loop=True),
+    Export("utd_crouch_to_prone", "crouch_to_prone",
+           "crouch_to_prone", frozenset(FULL)),
+    Export("utd_prone_to_crouch", "prone_to_crouch",
+           "prone_to_crouch", frozenset(FULL)),
+    Export("utd_stand_to_prone", "stand_to_prone", "stand_to_prone",
+           frozenset(FULL)),
+    Export("utd_prone_to_stand", "prone_to_stand", "prone_to_stand",
+           frozenset(FULL)),
 )
 
 
@@ -77,6 +90,37 @@ def key(seconds: float) -> str:
 def clean(value: float) -> float:
     result = round(float(value), 5)
     return 0.0 if abs(result) < 0.000005 else result
+
+
+def continuous_euler_xyz(rotations: Rotation) -> np.ndarray:
+    """Choose the nearest equivalent XYZ Euler branch frame by frame."""
+    raw = rotations.as_euler("xyz", degrees=False)
+    if len(raw) <= 1:
+        return raw
+    result = [raw[0]]
+    two_pi = math.tau
+    for row in raw[1:]:
+        branches = (
+            row,
+            np.asarray((row[0] + math.pi,
+                        math.pi - row[1],
+                        row[2] + math.pi), dtype=np.float64),
+            np.asarray((row[0] - math.pi,
+                        math.pi - row[1],
+                        row[2] - math.pi), dtype=np.float64),
+        )
+        previous = result[-1]
+        candidates = []
+        for branch in branches:
+            adjusted = branch + two_pi * np.round(
+                (previous - branch) / two_pi)
+            candidates.append(adjusted)
+        result.append(min(
+            candidates,
+            key=lambda candidate: float(np.linalg.norm(
+                candidate - previous)),
+        ))
+    return np.asarray(result, dtype=np.float64)
 
 
 def animation(document: dict, clip_name: str, selected: frozenset[str],
@@ -110,9 +154,7 @@ def animation(document: dict, clip_name: str, selected: frozenset[str],
                 correction * (index / (len(rotations) - 1))
                 for index in range(len(rotations))
             ]))
-        euler = rotations.as_euler(
-            "xyz", degrees=False)
-        euler = np.unwrap(euler, axis=0)
+        euler = continuous_euler_xyz(rotations)
         degrees = np.degrees(euler)
         if static:
             values = [clean(value) for value in degrees[0]]
@@ -154,6 +196,38 @@ def animation(document: dict, clip_name: str, selected: frozenset[str],
     return output
 
 
+def solved_weapon_overlay(base_document: dict, solved: dict,
+                          clip_name: str = "prone_rifle_review") -> dict:
+    """Preserve the reviewed grip while installing exact-mesh IK channels."""
+    source = base_document["animations"][
+        "animation.eva_unit01.prone_rifle_aim"]
+    output = copy.deepcopy(source)
+    frames = solved["clips"][clip_name]["frames"]
+    fps = float(solved.get("sample_rate", 30.0))
+    bone_indices = {name: index for index, name in enumerate(solved["bones"])}
+    times = [index / fps for index in range(len(frames))]
+    for bone_name in ("arm_l", "forearm_l", "cannon"):
+        quaternion = np.asarray([
+            frame["rotation_wxyz"][bone_indices[bone_name]]
+            for frame in frames
+        ], dtype=np.float64)
+        rotations = Rotation.from_quat(quaternion[:, [1, 2, 3, 0]])
+        degrees = np.degrees(continuous_euler_xyz(rotations))
+        output.setdefault("bones", {}).setdefault(bone_name, {})[
+            "rotation"] = {
+                key(seconds): [clean(value) for value in row]
+                for seconds, row in zip(times, degrees)
+            }
+    output["bones"]["cannon"]["position"] = {
+        key(seconds): [clean(value) for value in
+                       frame["bone_position_xyz"]["cannon"]]
+        for seconds, frame in zip(times, frames)
+    }
+    output["animation_length"] = clean(times[-1])
+    output["loop"] = True
+    return output
+
+
 def match_edge(animation: dict, target: dict, edge: str,
                fade_seconds: float = 0.35) -> None:
     """Close a captured transition onto the adjacent runtime stance."""
@@ -183,8 +257,7 @@ def match_edge(animation: dict, target: dict, edge: str,
                              / fade_seconds)
             corrected.append(
                 rotation * Rotation.from_rotvec(correction * weight))
-        euler = np.unwrap(Rotation.concatenate(corrected).as_euler(
-            "xyz", degrees=False), axis=0)
+        euler = continuous_euler_xyz(Rotation.concatenate(corrected))
         channel.clear()
         channel.update({
             item: [clean(value) for value in row]
@@ -222,7 +295,12 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input-dir", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument("--base-animation", type=Path)
+    parser.add_argument("--prone-rifle-solved-db", type=Path)
     args = parser.parse_args()
+    if bool(args.base_animation) != bool(args.prone_rifle_solved_db):
+        parser.error(
+            "--base-animation and --prone-rifle-solved-db are required together")
     documents = {}
     sources = {}
     replacements = {}
@@ -239,10 +317,35 @@ def main() -> None:
             documents[item.source], item.clip, item.bones,
             item.loop, item.static, item.reverse)
     crouch = replacements["animation.eva_unit01.crouch"]
+    prone = replacements["animation.eva_unit01.prone"]
     match_edge(replacements["animation.eva_unit01.stand_to_crouch"],
                crouch, "end")
     match_edge(replacements["animation.eva_unit01.crouch_to_stand"],
                crouch, "start")
+    match_edge(replacements["animation.eva_unit01.crouch_to_prone"],
+               crouch, "start", fade_seconds=0.80)
+    match_edge(replacements["animation.eva_unit01.crouch_to_prone"],
+               prone, "end", fade_seconds=0.35)
+    match_edge(replacements["animation.eva_unit01.prone_to_crouch"],
+               prone, "start", fade_seconds=0.35)
+    match_edge(replacements["animation.eva_unit01.prone_to_crouch"],
+               crouch, "end", fade_seconds=0.80)
+    match_edge(replacements["animation.eva_unit01.stand_to_prone"],
+               prone, "end", fade_seconds=0.35)
+    match_edge(replacements["animation.eva_unit01.prone_to_stand"],
+               prone, "start", fade_seconds=0.35)
+    if args.prone_rifle_solved_db:
+        base_animation = json.loads(args.base_animation.read_text(
+            encoding="utf-8"))
+        solved = json.loads(args.prone_rifle_solved_db.read_text(
+            encoding="utf-8"))
+        replacements["animation.eva_unit01.prone_rifle_aim"] = \
+            solved_weapon_overlay(base_animation, solved)
+        sources["prone_rifle_exact_solve"] = {
+            "path": str(args.prone_rifle_solved_db.resolve()),
+            "sha256": hashlib.sha256(
+                args.prone_rifle_solved_db.read_bytes()).hexdigest(),
+        }
     payload = {
         "schema": 1,
         "authority": "real_human_mocap_body_plus_target_weapon_constraints",

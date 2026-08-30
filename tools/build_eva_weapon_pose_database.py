@@ -34,6 +34,8 @@ POSES = {
     "prone_review": ("prone",),
     "crouch_to_prone_review": ("crouch_to_prone",),
     "prone_to_crouch_review": ("prone_to_crouch",),
+    "stand_to_prone_review": ("stand_to_prone",),
+    "prone_to_stand_review": ("prone_to_stand",),
     "crawl_review": ("crawl",),
     "berserk_roar_review": ("berserk_roar",),
     "berserk_run_review": ("berserk_run",),
@@ -50,7 +52,8 @@ def pose_role(name: str) -> str:
         return "candidate_prone"
     if name in {
             "stand_to_crouch_review", "crouch_to_stand_review",
-            "crouch_to_prone_review", "prone_to_crouch_review"}:
+            "crouch_to_prone_review", "prone_to_crouch_review",
+            "stand_to_prone_review", "prone_to_stand_review"}:
         return "candidate_posture_transition"
     return "weapon_pose_review"
 

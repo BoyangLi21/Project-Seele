@@ -1334,6 +1334,10 @@ def _apply_accepted_real_mocap_actions(data):
     creatable = {
         "animation.eva_unit01.stand_to_crouch",
         "animation.eva_unit01.crouch_to_stand",
+        "animation.eva_unit01.crouch_to_prone",
+        "animation.eva_unit01.prone_to_crouch",
+        "animation.eva_unit01.stand_to_prone",
+        "animation.eva_unit01.prone_to_stand",
     }
     for name, replacement in patch["replace_animations"].items():
         if name not in animations and name not in creatable:
@@ -2501,6 +2505,7 @@ def build_animations():
     for suffix in (
             "stand_to_crouch", "crouch_to_stand",
             "crouch_to_prone", "prone_to_crouch",
+            "stand_to_prone", "prone_to_stand",
             "berserk_run", "berserk_claw_r", "berserk_claw_l",
             "berserk_pounce"):
         data["animations"].pop(f"animation.eva_unit01.{suffix}", None)
@@ -2619,6 +2624,8 @@ def build_animations():
     animations = data["animations"]
     animations["animation.eva_unit01.visual_crouch_walk"] = static_pose(
         animations["animation.eva_unit01.crouch_walk"], 0.0)
+    animations["animation.eva_unit01.visual_crawl"] = static_pose(
+        animations["animation.eva_unit01.crawl"], 0.0)
     animations["animation.eva_unit01.visual_knife_ready"] = static_pose(
         animations["animation.eva_unit01.knife_ready"], 0.0)
     animations["animation.eva_unit01.visual_knife_windup"] = static_pose(
@@ -2652,6 +2659,9 @@ def build_animations():
     animations["animation.eva_unit01.visual_crouch_rifle_contact"] = composed_pose(
         "animation.eva_unit01.crouch_walk", 0.0,
         "animation.eva_unit01.rifle_aim", 0.0)
+    animations["animation.eva_unit01.visual_prone_rifle"] = composed_pose(
+        "animation.eva_unit01.prone", 0.0,
+        "animation.eva_unit01.prone_rifle_aim", 0.0)
     return data
 
 

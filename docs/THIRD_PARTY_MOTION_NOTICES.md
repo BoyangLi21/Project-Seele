@@ -48,6 +48,23 @@ QA record.
   Tiger retargeting, target-rig constraint repair and private QA rendering.
 - Distributed derivatives must retain attribution and identify modifications.
 
+## UT Dallas Motion Capture Database
+
+- Creator/attribution party: University of Texas at Dallas Motion Capture
+  Database project.
+- Archived project page:
+  https://web.archive.org/web/20210919020421/http://mocaputd.com/
+- Archived complete package endpoint:
+  https://web.archive.org/web/20210919020421id_/http://mocaputd.com/download/prone-crawling/?wpdmdl=586
+- Licence: Creative Commons Attribution 4.0 International, as stated by the
+  archived project page.
+- Accepted source: `MCP_prone01.fbx`, `2,862,144` bytes, SHA-256
+  `df634e5921b01fb3f567ad6fea4451be4f7570309f1278a3ca26b53e6625182e`.
+- Local use: FBX-to-BVH conversion, 120-to-60 Hz sampling, Tiger retargeting,
+  exact root-only grounding, loop closure, transition edge matching and
+  private QA rendering. Distributed derivatives must retain attribution and
+  identify these changes.
+
 ## Quaternius Universal Animation Library 2
 
 - Creator: Quaternius.

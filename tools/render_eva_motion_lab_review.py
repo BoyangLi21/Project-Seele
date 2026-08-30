@@ -19,6 +19,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--clip", required=True)
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--fps", type=int, default=60)
+    parser.add_argument("--frame-step", type=int, default=1)
+    parser.add_argument("--width", type=int, default=960)
+    parser.add_argument("--height", type=int, default=720)
     parser.add_argument(
         "--view",
         choices=("front_three_quarter", "front", "side", "rear_three_quarter"),
@@ -87,10 +90,11 @@ def main() -> None:
     scene = bpy.context.scene
     scene.frame_start = start
     scene.frame_end = end
+    scene.frame_step = args.frame_step
     scene.frame_set(start)
     scene.render.engine = "BLENDER_EEVEE"
-    scene.render.resolution_x = 960
-    scene.render.resolution_y = 720
+    scene.render.resolution_x = args.width
+    scene.render.resolution_y = args.height
     scene.render.resolution_percentage = 100
     scene.render.image_settings.file_format = "PNG"
     scene.render.fps = args.fps
