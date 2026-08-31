@@ -61,7 +61,8 @@ public final class EvaPoseRuntimeRecorder
             return;
         }
         smokeStarted = true;
-        start(entity.getId(), "phase_c_smoke");
+        start(entity.getId(), EvaWeightedInnerProxy.previewEnabled()
+                ? "phase_d_smoke" : "phase_c_smoke");
     }
 
     public static void start(int entityId, String rawLabel)
@@ -227,6 +228,7 @@ public final class EvaPoseRuntimeRecorder
         root.add("camera", cameraJson());
         root.add("poseGraph", poseJson(frame.pose));
         root.add("contacts", contactsJson(entity));
+        root.add("weightedProxy", weightedProxyJson());
 
         LocalVisualAssetFingerprint.Fingerprint fingerprint =
                 EvaUnit01Renderer.visualFingerprintForVariant(
@@ -357,6 +359,19 @@ public final class EvaPoseRuntimeRecorder
         return json;
     }
 
+    private static JsonObject weightedProxyJson()
+    {
+        EvaWeightedInnerProxy.Status proxy = EvaWeightedInnerProxy.status();
+        JsonObject json = new JsonObject();
+        json.addProperty("ready", proxy.ready());
+        json.addProperty("previewEnabled", proxy.previewEnabled());
+        json.addProperty("renderedFrames", proxy.renderedFrames());
+        json.addProperty("lastEntityId", proxy.lastEntityId());
+        json.addProperty("lastBindDelta", proxy.lastBindDelta());
+        json.addProperty("failure", proxy.failure());
+        return json;
+    }
+
     private static JsonObject socketJson(EvaUnit01Entity entity,
                                          FrameCapture frame)
     {
@@ -420,6 +435,23 @@ public final class EvaPoseRuntimeRecorder
         header.addProperty("skinnedMeshNormalDelta", skinning.normalError());
         header.addProperty("skinnedLiveBodyEnabled",
                 skinning.liveBodyEnabled());
+        EvaWeightedInnerProxy.Status proxy =
+                EvaWeightedInnerProxy.status();
+        header.addProperty("weightedProxyReady", proxy.ready());
+        header.addProperty("weightedProxyPreviewEnabled",
+                proxy.previewEnabled());
+        header.addProperty("weightedProxyPaletteBones",
+                proxy.paletteBones());
+        header.addProperty("weightedProxySegments", proxy.segments());
+        header.addProperty("weightedProxyVertices", proxy.vertices());
+        header.addProperty("weightedProxyTriangles", proxy.triangles());
+        header.addProperty("weightedProxyBlendedVertices",
+                proxy.blendedVertices());
+        header.addProperty("weightedProxyContractSha256",
+                proxy.contractSha256());
+        header.addProperty("weightedProxyResourceSha256",
+                proxy.proxySha256());
+        header.addProperty("weightedProxyReplacesTiger", false);
         header.addProperty("automaticVisualApproval", false);
         header.add("resultVocabulary", strings(List.of(
                 "FAIL", "ELIGIBLE_FOR_HUMAN_REVIEW")));

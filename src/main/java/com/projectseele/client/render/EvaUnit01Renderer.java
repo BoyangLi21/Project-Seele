@@ -310,6 +310,7 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
                 EvaPoseRuntimeRecorder.trackMatrices(bone);
             }
         });
+        EvaWeightedInnerProxy.prepare(model);
         if (this.pilotView)
         {
             forEachBone(model, bone ->
@@ -370,6 +371,12 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
                 bufferSource, buffer, isReRender, partialTick, packedLight,
                 packedOverlay, red, green, blue, alpha);
         EvaPoseRuntimeRecorder.captureBone(animatable, bone, isReRender);
+        if (!isReRender && bone.getParent() == null)
+        {
+            EvaWeightedInnerProxy.renderAfterRoot(
+                    poseStack, animatable, bone, bufferSource,
+                    packedLight, packedOverlay);
+        }
     }
 
     private static void setWeaponVisibility(BakedGeoModel model, String name, boolean active)

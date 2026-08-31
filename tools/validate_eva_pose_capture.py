@@ -17,6 +17,8 @@ AUTHORITY = CONTRACT_DIR / "eva_pose_authority_contract.json"
 ACTIONS = CONTRACT_DIR / "eva_approved_actions.json"
 SKIN_CONTRACT = CONTRACT_DIR / "eva_skinned_mesh_contract.json"
 SKIN_PROBE = CONTRACT_DIR / "skinning_probe_v1.json"
+WEIGHTED_PROXY_CONTRACT = CONTRACT_DIR / "eva_weighted_proxy_contract.json"
+WEIGHTED_PROXY = CONTRACT_DIR / "eva_unit01_inner_proxy.skinned.json"
 CAPTURE_DIR = REPO / "run/pose-captures"
 
 
@@ -126,6 +128,20 @@ def main() -> None:
         require(isinstance(value, (int, float)) and math.isfinite(value)
                 and value <= 1.0e-5,
                 f"capture {field} exceeds tolerance")
+    require(header.get("weightedProxyReady") is True
+            and header.get("weightedProxyPaletteBones") == 18
+            and header.get("weightedProxySegments") == 15
+            and header.get("weightedProxyVertices") == 390
+            and header.get("weightedProxyTriangles") == 720
+            and header.get("weightedProxyBlendedVertices") == 120,
+            "capture weighted proxy dimensions differ")
+    require(header.get("weightedProxyContractSha256") ==
+            raw_sha256(WEIGHTED_PROXY_CONTRACT)
+            and header.get("weightedProxyResourceSha256") ==
+            raw_sha256(WEIGHTED_PROXY),
+            "capture weighted proxy hashes differ")
+    require(header.get("weightedProxyReplacesTiger") is False,
+            "weighted proxy unexpectedly replaced Tiger")
     require(header.get("resultVocabulary") ==
             ["FAIL", "ELIGIBLE_FOR_HUMAN_REVIEW"],
             "capture result vocabulary drifted")
@@ -188,6 +204,21 @@ def main() -> None:
                 f"frame {expected_index} has final owner conflicts")
         require(isinstance(pose.get("upstreamOverlapCandidates"), dict),
                 f"frame {expected_index} has no upstream overlap audit")
+        weighted_proxy = frame.get("weightedProxy")
+        require(isinstance(weighted_proxy, dict)
+                and weighted_proxy.get("ready") is True
+                and weighted_proxy.get("failure") == "none",
+                f"frame {expected_index} weighted proxy failed")
+        if header.get("weightedProxyPreviewEnabled") is True:
+            require(weighted_proxy.get("previewEnabled") is True
+                    and weighted_proxy.get("renderedFrames", 0) > 0
+                    and weighted_proxy.get("lastEntityId") ==
+                    entity.get("id")
+                    and isinstance(weighted_proxy.get("lastBindDelta"),
+                                   (int, float))
+                    and math.isfinite(weighted_proxy["lastBindDelta"])
+                    and weighted_proxy["lastBindDelta"] <= 1.0e-5,
+                    f"frame {expected_index} did not render weighted proxy")
         missing = frame.get("missingCanonicalBones")
         require(missing == [],
                 f"frame {expected_index} misses canonical bones: {missing}")

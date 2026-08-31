@@ -79,7 +79,10 @@ rigid owning bone per part. Phase C performs no aesthetic change and therefore
 needs no human animation review.
 
 A later phase must still provide a Unit-01 weighted inner body, rigid armor
-shell assignments and an after-recursion palette renderer. It may set
+shell assignments and an after-recursion palette renderer. Phase D now proves
+that hook with an isolated procedural joint proxy
+(`docs/EVA_WEIGHTED_PROXY_PHASE_D.md`), but its overlapping tubes are not a
+welded production body. It may set
 `skinnedBodyEnabled=true` only after evaluated shoulder, wrist, hip and ankle
 seam growth is at most `0.005 H`, all six foundation action slices pass runtime
 capture, and a human accepts the resulting silhouette and deformation.
