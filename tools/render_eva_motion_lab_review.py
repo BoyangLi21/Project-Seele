@@ -24,7 +24,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--height", type=int, default=720)
     parser.add_argument(
         "--view",
-        choices=("front_three_quarter", "front", "side", "rear_three_quarter"),
+        choices=("front_three_quarter", "front", "side", "back",
+                 "rear_three_quarter"),
         default="front_three_quarter",
     )
     parser.add_argument("--sheet-only", action="store_true")
@@ -83,6 +84,7 @@ def main() -> None:
         "front_three_quarter": (1.45, 2.15, 0.55),
         "front": (0.0, 2.50, 0.45),
         "side": (2.50, 0.0, 0.45),
+        "back": (0.0, -2.50, 0.45),
         "rear_three_quarter": (1.45, -2.15, 0.55),
     }
     camera.location = centre + Vector(tuple(

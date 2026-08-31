@@ -80,6 +80,21 @@
   "manualReview": {
     "automaticResult": "ELIGIBLE_FOR_HUMAN_REVIEW_ONLY",
     "redNumberMeaning": "ACTION_ORDER-FRAME_ORDER; chronological review locator only; not model geometry, texture, UI, or a joint marker",
-    "promotionRequiresHumanAcceptance": true
+    "promotionRequiresHumanAcceptance": true,
+    "humanDecision": {
+      "recordedAt": "2026-08-31",
+      "approvedBy": "project_owner",
+      "acceptedActions": [
+        "idle",
+        "walk",
+        "run",
+        "jump_landing"
+      ],
+      "replacementRequired": [
+        "unarmed_attack",
+        "progressive_knife"
+      ],
+      "landingDecision": "KEEP_PHASE_F_CONSTRAINED_LAND"
+    }
   }
 }

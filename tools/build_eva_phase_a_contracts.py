@@ -23,6 +23,7 @@ ANIMATION_REPO_PATH = (
     "src/main/resources/assets/projectseele/animations/"
     "eva_unit01.animation.json")
 ROLLBACK = REPO / "tools/eva_pre_mocap_gameplay_rollback.json"
+ACTION_LOCKS = OUTPUT / "eva_approved_actions.json"
 VARIANTS = ("eva_unit00", "eva_unit01", "eva_unit02")
 RIG_VERSION = "eva_tiger_canonical_r01"
 POSE_GRAPH_VERSION = "eva_pose_graph_enforced_r02"
@@ -214,7 +215,7 @@ def build_pose_authority(rig: dict) -> dict:
 
 
 def build_action_lock(animation: dict, baseline_animation: dict,
-                      rollback: dict) -> dict:
+                      rollback: dict, existing: dict | None = None) -> dict:
     animations = animation["animations"]
     baseline_animations = baseline_animation["animations"]
     groups = {
@@ -228,6 +229,7 @@ def build_action_lock(animation: dict, baseline_animation: dict,
         "prone_crawl": ["prone", "crawl"],
     }
     actions = {}
+    existing_actions = (existing or {}).get("actions", {})
     for action, suffixes in groups.items():
         keys = [f"animation.eva_unit01.{suffix}" for suffix in suffixes]
         baseline_payload = {key: baseline_animations[key] for key in keys}
@@ -235,15 +237,29 @@ def build_action_lock(animation: dict, baseline_animation: dict,
         baseline_hash = canonical_sha256(baseline_payload)
         observed_hash = canonical_sha256(observed_payload)
         matches = baseline_hash == observed_hash
+        previous = existing_actions.get(action, {})
+        approval_matches = (
+            previous.get("status") == "VISUALLY_APPROVED"
+            and previous.get("approvedSemanticSha256") == observed_hash
+            and previous.get("approvedBy")
+        )
         actions[action] = {
-            "status": ("FROZEN_BASELINE_NOT_VISUALLY_APPROVED" if matches
-                       else "CANDIDATE_HASH_CHANGED"),
+            "status": ("VISUALLY_APPROVED" if approval_matches else
+                       "FROZEN_BASELINE_NOT_VISUALLY_APPROVED" if matches else
+                       "CANDIDATE_HASH_CHANGED"),
             "animationKeys": keys,
             "baselineSemanticSha256": baseline_hash,
             "observedSemanticSha256": observed_hash,
-            "candidateReason": None if matches else "ANIMATION_HASH_CHANGED",
-            "approvedBy": None,
-            "humanReviewRequired": True,
+            "approvedSemanticSha256": (
+                observed_hash if approval_matches else None),
+            "candidateReason": (
+                None if approval_matches or matches
+                else "ANIMATION_HASH_CHANGED"),
+            "approvedBy": (previous.get("approvedBy")
+                           if approval_matches else None),
+            "approvedAt": (previous.get("approvedAt")
+                           if approval_matches else None),
+            "humanReviewRequired": not approval_matches,
         }
     return {
         "schema": 1,
@@ -278,8 +294,9 @@ def main() -> None:
     rollback = read_json(ROLLBACK)
     baseline_animation = read_json_at_commit(
         rollback["source_commit"], ANIMATION_REPO_PATH)
+    existing_actions = read_json(ACTION_LOCKS) if ACTION_LOCKS.is_file() else None
     actions = build_action_lock(
-        source_animation, baseline_animation, rollback)
+        source_animation, baseline_animation, rollback, existing_actions)
     write_json(OUTPUT / "eva_rig_schema.json", rig)
     write_json(OUTPUT / "eva_pose_authority_contract.json", authority)
     write_json(OUTPUT / "eva_approved_actions.json", actions)

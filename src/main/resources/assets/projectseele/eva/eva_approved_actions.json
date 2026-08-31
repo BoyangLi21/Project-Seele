@@ -12,40 +12,46 @@
   "rollbackPatchSemanticSha256": "1f883eaffa6895e0b5bcb3cb6e6114d5f420ac4ee0937bde87794ddb2b9e44f4",
   "actions": {
     "idle": {
-      "status": "FROZEN_BASELINE_NOT_VISUALLY_APPROVED",
+      "status": "VISUALLY_APPROVED",
       "animationKeys": [
         "animation.eva_unit01.idle"
       ],
       "baselineSemanticSha256": "179beb02e8854d150660b9d82a1a4a360dc9ff57eaf9bdd46b6f62e77f04740b",
       "observedSemanticSha256": "179beb02e8854d150660b9d82a1a4a360dc9ff57eaf9bdd46b6f62e77f04740b",
+      "approvedSemanticSha256": "179beb02e8854d150660b9d82a1a4a360dc9ff57eaf9bdd46b6f62e77f04740b",
       "candidateReason": null,
-      "approvedBy": null,
-      "humanReviewRequired": true
+      "approvedBy": "project_owner",
+      "approvedAt": "2026-08-31",
+      "humanReviewRequired": false
     },
     "walk": {
-      "status": "FROZEN_BASELINE_NOT_VISUALLY_APPROVED",
+      "status": "VISUALLY_APPROVED",
       "animationKeys": [
         "animation.eva_unit01.walk"
       ],
       "baselineSemanticSha256": "ecfe754cc8a04d35fcd1e72c04b62c6700e3ec7bcdbb5b46fa9edc6b4167817e",
       "observedSemanticSha256": "ecfe754cc8a04d35fcd1e72c04b62c6700e3ec7bcdbb5b46fa9edc6b4167817e",
+      "approvedSemanticSha256": "ecfe754cc8a04d35fcd1e72c04b62c6700e3ec7bcdbb5b46fa9edc6b4167817e",
       "candidateReason": null,
-      "approvedBy": null,
-      "humanReviewRequired": true
+      "approvedBy": "project_owner",
+      "approvedAt": "2026-08-31",
+      "humanReviewRequired": false
     },
     "run": {
-      "status": "FROZEN_BASELINE_NOT_VISUALLY_APPROVED",
+      "status": "VISUALLY_APPROVED",
       "animationKeys": [
         "animation.eva_unit01.run"
       ],
       "baselineSemanticSha256": "b7939a162cf4104bf003f23de9672980958322b7df05ed272ba608947b52c2ce",
       "observedSemanticSha256": "b7939a162cf4104bf003f23de9672980958322b7df05ed272ba608947b52c2ce",
+      "approvedSemanticSha256": "b7939a162cf4104bf003f23de9672980958322b7df05ed272ba608947b52c2ce",
       "candidateReason": null,
-      "approvedBy": null,
-      "humanReviewRequired": true
+      "approvedBy": "project_owner",
+      "approvedAt": "2026-08-31",
+      "humanReviewRequired": false
     },
     "jump_landing": {
-      "status": "CANDIDATE_HASH_CHANGED",
+      "status": "VISUALLY_APPROVED",
       "animationKeys": [
         "animation.eva_unit01.takeoff",
         "animation.eva_unit01.jump",
@@ -53,9 +59,11 @@
       ],
       "baselineSemanticSha256": "ad5ebce5a97553a86db2fe88d3badc92586229f4edeb370083bd146a977ace38",
       "observedSemanticSha256": "12b830de1069fd14513dce661323fa3f18003affb6d28f2a05c47fec968a5ba7",
-      "candidateReason": "ANIMATION_HASH_CHANGED",
-      "approvedBy": null,
-      "humanReviewRequired": true
+      "approvedSemanticSha256": "12b830de1069fd14513dce661323fa3f18003affb6d28f2a05c47fec968a5ba7",
+      "candidateReason": null,
+      "approvedBy": "project_owner",
+      "approvedAt": "2026-08-31",
+      "humanReviewRequired": false
     },
     "unarmed_attack": {
       "status": "FROZEN_BASELINE_NOT_VISUALLY_APPROVED",
@@ -66,8 +74,10 @@
       ],
       "baselineSemanticSha256": "d5e85e939d39da1bc8b6a321b68d75dd2c4f2dce05c393d08ebea713c2787ac5",
       "observedSemanticSha256": "d5e85e939d39da1bc8b6a321b68d75dd2c4f2dce05c393d08ebea713c2787ac5",
+      "approvedSemanticSha256": null,
       "candidateReason": null,
       "approvedBy": null,
+      "approvedAt": null,
       "humanReviewRequired": true
     },
     "progressive_knife": {
@@ -79,8 +89,10 @@
       ],
       "baselineSemanticSha256": "68e194a1ce85e5759df7abb48a810cdfeda6ebd10009dcfc03474f63b929ee43",
       "observedSemanticSha256": "68e194a1ce85e5759df7abb48a810cdfeda6ebd10009dcfc03474f63b929ee43",
+      "approvedSemanticSha256": null,
       "candidateReason": null,
       "approvedBy": null,
+      "approvedAt": null,
       "humanReviewRequired": true
     },
     "crouch": {
@@ -91,8 +103,10 @@
       ],
       "baselineSemanticSha256": "4fd617585efdf2dc9616f2189408d30ff3f26eaeac23cfe304f55cd03c666874",
       "observedSemanticSha256": "4fd617585efdf2dc9616f2189408d30ff3f26eaeac23cfe304f55cd03c666874",
+      "approvedSemanticSha256": null,
       "candidateReason": null,
       "approvedBy": null,
+      "approvedAt": null,
       "humanReviewRequired": true
     },
     "prone_crawl": {
@@ -103,8 +117,10 @@
       ],
       "baselineSemanticSha256": "148875b1e6879db800cf43e9beb02077f97666e0f55a2ee9ff54184f54226d32",
       "observedSemanticSha256": "148875b1e6879db800cf43e9beb02077f97666e0f55a2ee9ff54184f54226d32",
+      "approvedSemanticSha256": null,
       "candidateReason": null,
       "approvedBy": null,
+      "approvedAt": null,
       "humanReviewRequired": true
     }
   }

@@ -167,10 +167,8 @@ def main() -> None:
     require(actions["rollbackPatchSemanticSha256"] ==
             canonical_sha256(rollback), "rollback patch hash differs")
     candidate_actions = []
+    approved_actions = []
     for action, contract in actions["actions"].items():
-        require(contract["approvedBy"] is None
-                and contract["humanReviewRequired"],
-                f"{action} bypasses human review")
         baseline_payload = {
             key: baseline_animation[key]
             for key in contract["animationKeys"]
@@ -184,17 +182,37 @@ def main() -> None:
                 f"{action} baseline hash is not anchored to rollback")
         require(contract["observedSemanticSha256"] == observed_hash,
                 f"{action} observed hash differs from live animation")
+        approved = contract["status"] == "VISUALLY_APPROVED"
+        if approved:
+            require(contract["approvedSemanticSha256"] == observed_hash
+                    and contract["approvedBy"] == "project_owner"
+                    and contract["approvedAt"] == "2026-08-31"
+                    and not contract["humanReviewRequired"]
+                    and contract["candidateReason"] is None,
+                    f"{action} visual approval receipt is incomplete")
+            approved_actions.append(action)
+        else:
+            require(contract["approvedSemanticSha256"] is None
+                    and contract["approvedBy"] is None
+                    and contract["approvedAt"] is None
+                    and contract["humanReviewRequired"],
+                    f"{action} bypasses human review")
         if observed_hash == baseline_hash:
-            require(contract["status"] ==
-                    "FROZEN_BASELINE_NOT_VISUALLY_APPROVED"
+            require((approved or contract["status"] ==
+                     "FROZEN_BASELINE_NOT_VISUALLY_APPROVED")
                     and contract["candidateReason"] is None,
                     f"{action} has a false baseline status")
         else:
-            require(contract["status"] == "CANDIDATE_HASH_CHANGED"
+            require(approved or (
+                    contract["status"] == "CANDIDATE_HASH_CHANGED"
                     and contract["candidateReason"] ==
-                    "ANIMATION_HASH_CHANGED",
+                    "ANIMATION_HASH_CHANGED"),
                     f"{action} drift did not return to candidate status")
-            candidate_actions.append(action)
+            if not approved:
+                candidate_actions.append(action)
+    require(set(approved_actions) == {
+        "idle", "walk", "run", "jump_landing",
+    }, "recorded Phase-F human approvals differ")
     require(not candidate_actions,
             "frozen action drift requires human review: "
             + ", ".join(candidate_actions))

@@ -171,7 +171,7 @@ def build(batch: Path, output: Path) -> tuple[Path, Path]:
 
 这不是“已视觉批准”的交付，而是已通过自动形变门禁、等待人眼裁决的候选包。
 画面来自实际 Minecraft 游戏 framebuffer；走、跑、跳、徒手攻击和粒子刀攻击均走正式驾驶输入/服务端动作入口。三栏依次为正面、侧面、背面。
-其中 jump + landing 已因旧 land 的手—胫穿透进入 `CANDIDATE_HASH_CHANGED`；只有人工接受后才可晋升，其他五段仍是冻结基线的实机重放。
+项目负责人已接受 idle、walk、run 与修正后的 jump + landing，并明确不恢复旧 land。徒手和粒子刀仍只是冻结回滚基线，需要新的真人动捕候选；它们没有因本包获得目标动作批准。
 
 ## 红色编号
 
@@ -204,6 +204,7 @@ def build(batch: Path, output: Path) -> tuple[Path, Path]:
         "views": contract["views"],
         "actions": contract["actions"],
         "redNumberMeaning": contract["manualReview"]["redNumberMeaning"],
+        "humanDecision": contract["manualReview"].get("humanDecision"),
         "automaticGateReport": report,
         "files": [{"name": path.name, "bytes": path.stat().st_size,
                    "sha256": digest(path)} for path in files],

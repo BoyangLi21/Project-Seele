@@ -49,16 +49,22 @@ def main() -> None:
             and contract["manualReview"]["promotionRequiresHumanAcceptance"],
             "automatic pipeline may not grant visual approval")
     locks = json.loads(ACTION_LOCKS.read_text(encoding="utf-8"))
-    require(locks["actions"]["jump_landing"]["status"]
-            == "CANDIDATE_HASH_CHANGED"
-            and locks["actions"]["jump_landing"]["approvedBy"] is None
-            and locks["actions"]["jump_landing"]["humanReviewRequired"],
-            "landing candidate escaped human review lock")
+    approved = {"idle", "walk", "run", "jump_landing"}
+    require(all(locks["actions"][key]["status"] == "VISUALLY_APPROVED"
+                and locks["actions"][key]["approvedBy"] == "project_owner"
+                and not locks["actions"][key]["humanReviewRequired"]
+                for key in approved),
+            "accepted Phase-F foundation action lost its human approval")
     require(all(value["status"]
                 == "FROZEN_BASELINE_NOT_VISUALLY_APPROVED"
                 for key, value in locks["actions"].items()
-                if key != "jump_landing"),
-            "an unrelated frozen action changed")
+                if key not in approved),
+            "a non-approved action changed its frozen status")
+    decision = contract["manualReview"]["humanDecision"]
+    require(set(decision["acceptedActions"]) == approved
+            and set(decision["replacementRequired"]) == {
+                "unarmed_attack", "progressive_knife",
+            }, "Phase-F manual decision differs")
 
     gradle = read("build.gradle")
     capture = read(
