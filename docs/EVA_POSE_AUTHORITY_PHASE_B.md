@@ -65,7 +65,9 @@ The Phase-A `004012` and final Phase-B `012027` idle captures were also checked
 with `tools/audit_eva_pose_capture_equivalence.py`: all 70 final position,
 rotation and scale vectors were identical; maximum local/model matrix deltas
 were `8.0e-6` and `1.90e-6`, both below the `1.0e-5` migration limit. The tool
-is generic and should be reused for later authority-only migrations.
+is generic and should be reused for later authority-only migrations; it now
+keeps `modelMatrix` at `1.0e-5` and gives Gecko's camera-bearing
+`localSpaceMatrix` a separate `2.0e-5` cross-launch limit.
 
 ## What Phase B does not solve
 
@@ -73,8 +75,9 @@ The Gecko `base`/`arms`/`strike` stack is still one upstream composite. A later
 phase may replace it with explicit mask-aware pose nodes, but only after a
 matrix-equivalent adapter exists. The current stride-8 local mesh format also
 remains single-bone rigid geometry; it cannot express the canonical weighted
-inner body required by a Hybrid Rig. That renderer/asset migration is the next
-structural step and must remain isolated until its evaluated-mesh seam gates
+inner body required by a Hybrid Rig. Phase C now defines and validates the
+weighted format (`docs/EVA_SKINNED_MESH_PHASE_C.md`), while the production
+renderer/asset migration remains isolated until its evaluated-mesh seam gates
 pass.
 
 Phase B needs no aesthetic approval because it introduces no candidate motion.

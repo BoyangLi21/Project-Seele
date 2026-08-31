@@ -13,7 +13,9 @@ FIELDS = {
     "finalPosition": 1.0e-7,
     "finalRotationRadians": 1.0e-7,
     "finalScale": 1.0e-7,
-    "localMatrix": 1.0e-5,
+    # Gecko's localSpaceMatrix includes render-offset/camera terms and varies
+    # slightly between client launches even when final bone channels match.
+    "localMatrix": 2.0e-5,
     "modelMatrix": 1.0e-5,
 }
 RESOURCE_FIELDS = (

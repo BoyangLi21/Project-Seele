@@ -5,6 +5,7 @@ import com.projectseele.client.render.EntryPlugCarrierRenderer;
 import com.projectseele.client.render.EvaUnit01Renderer;
 import com.projectseele.client.render.EvaMotionEngineV2;
 import com.projectseele.client.render.EvaPoseGraph;
+import com.projectseele.client.render.EvaSkinnedMeshRuntime;
 import com.projectseele.client.render.LocalTriangleMeshLayer;
 import com.projectseele.client.render.LocalVisualAssetFingerprint;
 import com.projectseele.client.render.NervCarrierPlatformRenderer;
@@ -150,6 +151,7 @@ public class ClientEvents
             LocalTriangleMeshLayer.clearCache();
             LocalVisualAssetFingerprint.clearCache();
             EvaPoseGraph.reload(resourceManager);
+            EvaSkinnedMeshRuntime.reload(resourceManager);
             EvaMotionEngineV2.reload(resourceManager);
             EvaUnit01Renderer.prewarmLocalBodyMeshes(resourceManager);
         });

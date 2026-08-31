@@ -15,6 +15,8 @@ CONTRACT_DIR = REPO / "src/main/resources/assets/projectseele/eva"
 RIG = CONTRACT_DIR / "eva_rig_schema.json"
 AUTHORITY = CONTRACT_DIR / "eva_pose_authority_contract.json"
 ACTIONS = CONTRACT_DIR / "eva_approved_actions.json"
+SKIN_CONTRACT = CONTRACT_DIR / "eva_skinned_mesh_contract.json"
+SKIN_PROBE = CONTRACT_DIR / "skinning_probe_v1.json"
 CAPTURE_DIR = REPO / "run/pose-captures"
 
 
@@ -102,6 +104,28 @@ def main() -> None:
             "capture did not use the Phase-B single commit authority")
     require(header.get("automaticVisualApproval") is False,
             "capture falsely permits automatic visual approval")
+    require(header.get("skinnedMeshRuntimeReady") is True
+            and header.get("skinnedMeshFormat") ==
+            "projectseele:skinned_mesh_v1",
+            "capture has no validated Phase-C skinning runtime")
+    require(header.get("skinnedMeshContractSha256") ==
+            raw_sha256(SKIN_CONTRACT)
+            and header.get("skinnedMeshProbeSha256") ==
+            raw_sha256(SKIN_PROBE),
+            "capture skinning resource hashes differ")
+    require(header.get("skinnedLiveBodyEnabled") is False,
+            "Phase-C probe unexpectedly replaced the live body")
+    require(header.get("skinnedMeshPaletteBones") == 2
+            and header.get("skinnedMeshProbeVertices") == 6
+            and header.get("skinnedMeshProbeTriangles") == 4
+            and header.get("skinnedMeshBlendedVertices") == 2,
+            "capture skinning probe dimensions differ")
+    for field in ("skinnedMeshBindDelta", "skinnedMeshPoseDelta",
+                  "skinnedMeshNormalDelta"):
+        value = header.get(field)
+        require(isinstance(value, (int, float)) and math.isfinite(value)
+                and value <= 1.0e-5,
+                f"capture {field} exceeds tolerance")
     require(header.get("resultVocabulary") ==
             ["FAIL", "ELIGIBLE_FOR_HUMAN_REVIEW"],
             "capture result vocabulary drifted")

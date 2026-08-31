@@ -61,7 +61,7 @@ public final class EvaPoseRuntimeRecorder
             return;
         }
         smokeStarted = true;
-        start(entity.getId(), "phase_b_smoke");
+        start(entity.getId(), "phase_c_smoke");
     }
 
     public static void start(int entityId, String rawLabel)
@@ -399,6 +399,27 @@ public final class EvaPoseRuntimeRecorder
         header.addProperty("approvedActionsSha256",
                 contract.actionsSha256());
         header.addProperty("poseGraphMode", contract.mode());
+        EvaSkinnedMeshRuntime.Status skinning =
+                EvaSkinnedMeshRuntime.status();
+        header.addProperty("skinnedMeshRuntimeReady", skinning.ready());
+        header.addProperty("skinnedMeshFormat", skinning.format());
+        header.addProperty("skinnedMeshContractSha256",
+                skinning.contractSha256());
+        header.addProperty("skinnedMeshProbeSha256",
+                skinning.probeSha256());
+        header.addProperty("skinnedMeshPaletteBones",
+                skinning.paletteBones());
+        header.addProperty("skinnedMeshProbeVertices",
+                skinning.vertices());
+        header.addProperty("skinnedMeshProbeTriangles",
+                skinning.triangles());
+        header.addProperty("skinnedMeshBlendedVertices",
+                skinning.blendedVertices());
+        header.addProperty("skinnedMeshBindDelta", skinning.bindError());
+        header.addProperty("skinnedMeshPoseDelta", skinning.probeError());
+        header.addProperty("skinnedMeshNormalDelta", skinning.normalError());
+        header.addProperty("skinnedLiveBodyEnabled",
+                skinning.liveBodyEnabled());
         header.addProperty("automaticVisualApproval", false);
         header.add("resultVocabulary", strings(List.of(
                 "FAIL", "ELIGIBLE_FOR_HUMAN_REVIEW")));
