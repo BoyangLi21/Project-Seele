@@ -77,6 +77,11 @@ public final class VisualCaptureManager
     private static final String[] LIVE_JUMP_VIEWS = {
             "side_close"
     };
+    private static final boolean FOUNDATION_VIDEO =
+            Boolean.getBoolean("projectseele.foundationVideoCapture");
+    private static final String[] FOUNDATION_VIDEO_VIEWS = {
+            "front_close", "side_close", "back_close"
+    };
     private static Session session;
     private static ImpactSession impactSession;
     private static SiloSession siloSession;
@@ -3319,6 +3324,8 @@ public final class VisualCaptureManager
         private final CameraType originalCameraType;
         private final boolean originalHideGui;
         private final boolean originalUseDown;
+        private final boolean originalUpDown;
+        private final boolean originalSprintDown;
         private final float originalYaw;
         private final float originalPitch;
         private final String bodyModelTag;
@@ -3333,6 +3340,8 @@ public final class VisualCaptureManager
         private boolean positioned;
         private boolean poseAudited;
         private boolean liveTriggerSent;
+        private boolean foundationInputStarted;
+        private int videoFrame;
         private double liveActionStartY = Double.NaN;
         private float referenceYaw = Float.NaN;
 
@@ -3344,13 +3353,17 @@ public final class VisualCaptureManager
             this.originalCameraType = minecraft.options.getCameraType();
             this.originalHideGui = minecraft.options.hideGui;
             this.originalUseDown = minecraft.options.keyUse.isDown();
+            this.originalUpDown = minecraft.options.keyUp.isDown();
+            this.originalSprintDown = minecraft.options.keySprint.isDown();
             this.originalYaw = minecraft.player.getYRot();
             this.originalPitch = minecraft.player.getXRot();
             Entity visualEntity = minecraft.level == null ? null : minecraft.level.getEntity(entityId);
             this.massSubject = visualEntity instanceof MassProductionEvaEntity;
             this.poseName = this.massSubject
                     ? MassProductionEvaEntity.visualPoseName(pose) : poseName(pose);
-            this.views = this.massSubject ? MASS_VIEWS
+            this.views = FOUNDATION_VIDEO && !this.massSubject
+                    ? FOUNDATION_VIDEO_VIEWS
+                    : this.massSubject ? MASS_VIEWS
                     : this.poseName.equals("live_jump") ? LIVE_JUMP_VIEWS
                     : this.isLiveAttack() ? LIVE_ATTACK_VIEWS : VIEWS;
             int variant = visualEntity instanceof EvaUnit01Entity eva
@@ -3446,7 +3459,7 @@ public final class VisualCaptureManager
                                 + CAPTURE_BATCH), false);
                 if (isLastAutomatedPose(this.unitName, this.poseName))
                 {
-                    shutdownTicks = 20;
+                    shutdownTicks = FOUNDATION_VIDEO ? 100 : 20;
                 }
                 return false;
             }
@@ -3456,11 +3469,17 @@ public final class VisualCaptureManager
                 this.positioned = true;
                 this.settleTicks = 8;
                 this.liveTriggerSent = false;
+                this.foundationInputStarted = false;
+                this.videoFrame = 0;
                 return true;
             }
             if (entity instanceof EvaUnit01Entity unit)
             {
                 this.maintainFirstPerson(minecraft, unit);
+            }
+            if (FOUNDATION_VIDEO)
+            {
+                return this.tickFoundationVideo(minecraft, entity);
             }
             if (this.isLiveAttack() && !this.liveTriggerSent)
             {
@@ -3585,7 +3604,8 @@ public final class VisualCaptureManager
                         .add(forward.scale(close ? 8.0D : 12.0D));
                 case "side_opposite_close" -> centre.subtract(right.scale(distance))
                         .add(forward.scale(8.0D));
-                case "back" -> centre.subtract(forward.scale(distance));
+                case "back", "back_close" ->
+                        centre.subtract(forward.scale(distance));
                 default -> centre.add(forward.scale(distance));
             };
             this.camera.setPos(cameraPos.x, cameraPos.y - this.camera.getEyeHeight(), cameraPos.z);
@@ -3676,8 +3696,176 @@ public final class VisualCaptureManager
             }
         }
 
+        private boolean tickFoundationVideo(Minecraft minecraft,
+                                            Entity entity)
+        {
+            if (this.foundationInputStarted && this.isFoundationLocomotion())
+            {
+                this.applyFoundationMovementInput(minecraft, true);
+            }
+            if ((this.poseName.equals("live_jump") && this.liveTriggerSent
+                    || this.isFoundationLocomotion())
+                    && this.camera != null)
+            {
+                this.position(minecraft, entity);
+            }
+            if (this.settleTicks-- > 0)
+            {
+                return true;
+            }
+            if (!this.foundationInputStarted)
+            {
+                this.startFoundationInput(minecraft, entity);
+                return true;
+            }
+            if (this.isLiveAttack() && !this.liveTriggerSent)
+            {
+                int action = this.liveAttackAction();
+                this.liveActionStartY = entity.getY();
+                SeeleNetwork.CHANNEL.sendToServer(
+                        new ServerboundEvaControlPacket(action));
+                this.liveTriggerSent = true;
+                this.videoFrame = 0;
+                ProjectSeele.LOGGER.info(
+                        "Foundation review trigger {} action {} for view {}",
+                        this.poseName, action, this.views[this.view]);
+                return true;
+            }
+            if (!this.captureFoundationFrame(minecraft, entity))
+            {
+                return true;
+            }
+            this.videoFrame++;
+            int limit = this.foundationFrameLimit();
+            if (this.videoFrame >= limit)
+            {
+                ProjectSeele.LOGGER.info(
+                        "Foundation review sequence complete: pose={} view={} frames={}",
+                        this.poseName, this.views[this.view], this.videoFrame);
+                this.stopFoundationInput(minecraft);
+                this.view++;
+                this.positioned = false;
+            }
+            return true;
+        }
+
+        private int foundationFrameLimit()
+        {
+            return switch (this.poseName)
+            {
+                case "live_jump" -> 120;
+                case "live_knife" -> 40;
+                case "live_melee" -> 30;
+                case "idle" -> 60;
+                case "walk_contact" -> 30;
+                case "run_contact" -> 24;
+                default -> 40;
+            };
+        }
+
+        private boolean isFoundationLocomotion()
+        {
+            return this.poseName.equals("walk_contact")
+                    || this.poseName.equals("run_contact");
+        }
+
+        private void startFoundationInput(Minecraft minecraft,
+                                          Entity entity)
+        {
+            this.foundationInputStarted = true;
+            boolean moving = this.isFoundationLocomotion();
+            boolean running = this.poseName.equals("run_contact");
+            this.applyFoundationMovementInput(minecraft, moving);
+            minecraft.options.keySprint.setDown(running);
+            if (entity instanceof EvaUnit01Entity)
+            {
+                SeeleNetwork.CHANNEL.sendToServer(
+                        new ServerboundEvaControlPacket(running
+                                ? ServerboundEvaControlPacket.ACTION_SPRINT_START
+                                : ServerboundEvaControlPacket.ACTION_SPRINT_STOP));
+            }
+            ProjectSeele.LOGGER.info(
+                    "Foundation review input started: pose={} view={} forward={} sprint={}",
+                    this.poseName, this.views[this.view], moving, running);
+        }
+
+        private void stopFoundationInput(Minecraft minecraft)
+        {
+            this.applyFoundationMovementInput(minecraft, false);
+            minecraft.options.keySprint.setDown(false);
+            SeeleNetwork.CHANNEL.sendToServer(new ServerboundEvaControlPacket(
+                    ServerboundEvaControlPacket.ACTION_SPRINT_STOP));
+        }
+
+        private void applyFoundationMovementInput(Minecraft minecraft,
+                                                  boolean moving)
+        {
+            minecraft.options.keyUp.setDown(moving);
+            if (minecraft.player == null)
+            {
+                return;
+            }
+            minecraft.player.input.up = moving;
+            minecraft.player.input.forwardImpulse = moving ? 1.0F : 0.0F;
+            minecraft.player.xxa = 0.0F;
+            minecraft.player.zza = moving ? 1.0F : 0.0F;
+        }
+
+        private boolean captureFoundationFrame(Minecraft minecraft,
+                                               Entity entity)
+        {
+            try
+            {
+                String viewName = this.views[this.view];
+                File directory = new File(minecraft.gameDirectory,
+                        "screenshots/projectseele_foundation/"
+                                + CAPTURE_BATCH + "/" + this.poseName + "/"
+                                + viewName);
+                Files.createDirectories(directory.toPath());
+                int frameNumber = this.videoFrame + 1;
+                String frameName = String.format("frame_%04d.png",
+                        frameNumber);
+                if (!EvaFoundationReviewAudit.record(
+                        minecraft, entity.getId(), CAPTURE_BATCH,
+                        this.poseName, viewName, frameNumber))
+                {
+                    return false;
+                }
+                Screenshot.grab(minecraft.gameDirectory,
+                        "projectseele_foundation/" + CAPTURE_BATCH + "/"
+                                + this.poseName + "/" + viewName + "/"
+                                + frameName,
+                        minecraft.getMainRenderTarget(),
+                        message ->
+                        {
+                            if (frameNumber % 20 == 0)
+                            {
+                                ProjectSeele.LOGGER.info(
+                                        "Foundation frame {}/{}/{}/{}: {}",
+                                        CAPTURE_BATCH, this.poseName,
+                                        viewName, frameName,
+                                        message.getString());
+                            }
+                        });
+                return true;
+            }
+            catch (Exception exception)
+            {
+                ProjectSeele.LOGGER.error(
+                        "Foundation review frame capture failed", exception);
+                return false;
+            }
+        }
+
         void restore(Minecraft minecraft)
         {
+            if (FOUNDATION_VIDEO)
+            {
+                this.stopFoundationInput(minecraft);
+                minecraft.options.keyUp.setDown(this.originalUpDown);
+                minecraft.options.keySprint.setDown(
+                        this.originalSprintDown);
+            }
             minecraft.setCameraEntity(this.originalCamera != null ? this.originalCamera : minecraft.player);
             minecraft.options.setCameraType(this.originalCameraType);
             minecraft.options.hideGui = this.originalHideGui;

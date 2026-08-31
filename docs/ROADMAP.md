@@ -8,6 +8,7 @@
 > 受推恢复门槛前不得接管正式游戏。详见
 > `docs/EVA_POSE_AUTHORITY_PHASE_B.md`、`docs/EVA_SKINNED_MESH_PHASE_C.md`、
 > `docs/EVA_WEIGHTED_PROXY_PHASE_D.md`、`docs/EVA_MANIFOLD_INNER_PHASE_E.md`
+>、`docs/EVA_FOUNDATION_REVIEW_PHASE_F.md`
 > 与 `docs/EVA_PHYSICS_TRACKER_R01.md`。
 > 状态标记：✅ 完成 · 🔄 进行中 · ⬜ 未开始
 > 每个 Phase 附「验收标准」——全部满足才算关档。数值均为初版，游戏内验证后调平衡。
@@ -28,6 +29,7 @@
 - 🔄 **EVA weighted-mesh Phase C**（2026-08-31）：新增 `projectseele:skinned_mesh_v1`，明确 Gecko model-space、inverse-bind palette、四索引/四权重、位置和法线求值合同；项目自有双骨探针在 Java 和独立 Python 门禁中均为零误差。正式 Tiger body 仍明确使用 stride-8 单骨刚性 layer，`skinnedBodyEnabled=false`，没有生产加权资产，也没有视觉批准。下一步才是 Unit-01 weighted inner body、刚性装甲 shell 和 after-recursion palette renderer。
 - 🔄 **EVA weighted proxy Phase D**（2026-08-31）：项目自有 Unit-01 内层代理含 18 骨 palette、15 个封闭关节段、390 顶点、720 三角面和 120 个双权重点；真实 Gecko root recursion 完成后可由显式 userdev 开关渲染，idle bind delta 约 `1.43e-6`，Tiger 不被隐藏或替换，骨姿态保持不变。该代理的管段彼此重叠但未焊接，仍不是生产级连续皮肤；下一步是 manifold inner body、刚性装甲 mask 与六动作 evaluated seam gate。
 - 🔄 **EVA manifold inner Phase E**（2026-08-31）：项目自有体素并集内层含 23 骨、20 primitive、3278 顶点和 6552 三角面；拓扑为单组件、0 非流形边、Euler=2、正体积，运行时 bind delta 约 `2.86e-6`。当前 Tiger 43 个 part / 6044 面全部纳入单骨刚性 shell mask，并由本地 mesh 语义哈希锁定。manifold 与 Tiger 均默认不切换，下一步是六个基础动作的全时段反面、自交、内外层 clearance/seam 门禁。
+- 🔄 **EVA foundation review Phase F**（2026-08-31）：最终实机 batch `20260831-211450` 含 6 动作、3 视角、912 framebuffer 帧；walk/run/跳跃/攻击均走正式输入路径。升级后的 0.12 格 manifold 为 23 骨、19 primitive、4652 顶点、9300 面，单组件、0 非流形边、Euler=2；304 个动作时刻反面/塌面为 0，83 个非局部自交采样通过，接缝接触带与 inner/armor clearance 门禁通过。冻结 land 的手—胫穿透已形成仅 8 骨的受限候选，`jump_landing=CANDIDATE_HASH_CHANGED`，等待用户审核三视角红色时序编号 MP4；自动结果仅为 `ELIGIBLE_FOR_HUMAN_REVIEW_ONLY`。
 - 🔄 **本地三机/量产机资源管线**：零号机、二号机与量产机已有各自 Tiger 网格、统一骨骼合同、离线预览与启动前 validator；三机的站立/步行/单膝/四足卧姿/朗枪/入栓和量产机五状态最新离线矩阵通过。游戏内三机截图、量产机仪式构图与正式发布授权仍未通过。
 - ⚠️ **屋岛作战和后期演出**：发射井已有背部高位门禁、连续梯井、11×11 实体随动载台、载台签名恢复与中断清场；正式第三次冲击已有 schema-v2 `SavedData`、事件/节点实体归属、有限区块票、冻结终态和协议 v4 重进同步。生命树保持 EoE 整图 180° 倒置，无独立左上标题，124 个更小、更密的希伯来标签/符号、22 路径与圈内微缩刻字离线构图通过，但井内碰撞/镜头、存档重进以及九机/初号机十字实机画面仍是未验收原型，不作为发布质量证据。
 - 🔄 **本机连续战区重建**（2026-07-22）：`SEELE_TOKYO3_REBUILT` 使用普通 Overworld 噪声地形与地图 schema v18；416×416 可移动城区位于地表，640 格宽 GeoFront 椭球完全埋在地下，三井从 Y=-443 连续通往 Y=79（实体行程 522 格）。66 栋内城装甲楼、29 栋外环楼与三座本机私有高楼会从地表真正下降，并沿球体曲率在 GeoFront 顶部形成悬挂都市；生成楼宇最大行程 312 层、20t/层，下降与复位均持久化且有防夹门禁。真实 LCL、自然湖/森林、直坡 NERV 金字塔、环境反射光、五屏动态遥测、三块驾驶视频面板、七键作战台、Central/Terminal Dogma、MAGI 深层实验室、屋岛作战与实体发射井均保留自动契约。编译、东京-3 下沉、GeoFront 与发射井静态门禁已通过；完整十分钟升降循环、多人驾驶视频、整体美术和第三方发布授权仍需人工验收。
@@ -84,7 +86,7 @@
 | 2.4 🟨 | EVA 武器 | 三台机体固有空手/粒子刀，零号机额外固有 N²；帕雷特步枪改为三座发射笼实体升降塔交付，严格装载默认开启并跨重启保存。阳电子炮与朗基努斯保留代码/模型但不再作为默认轮盘装备；后续分别接入专用战略流程与莉莉丝剧情。朗枪以 Terminal Dogma 中插在莉莉丝身上的权威模型为源，另做取枪事件与持握尺度归一化。升降塔机械比例、多人争用与回收仍待实机验收 |
 | 2.5 🟨 | 暴走 | Unit-01 专属服务端状态机已实现：生命 ≤15%、电力 0、持久同步率 ≥60% 且非发射/十字束缚时触发；安全弹出驾驶员，断缆关闭力场，仅在 128 格内锁定使徒，以 ×2.5 交替爪击自主战斗 45 秒，红眼粒子与全上身咆哮后强制停机 5 分钟。活动/恢复倒计时跨重启保存并显示于指挥室；寻路、红眼位置、咆哮姿态与多人重启待实机验收 |
 | 2.6 🟨 | A.T. Field（EVA 版） | G 键展开、权威能量池/恢复延迟、脐带或内置电池持续供电、六边形受击波纹、普通远程零伤害、使徒与 EVA 近战消耗并溢出入血均已实现；零号机单膝举盾具备额外效率。多人平衡与扇形视觉覆盖待实机验收 |
-| 2.7 🟨 | 模型管线 | Tigerar1/SmOd 本机来源仍可重建 mesh；当前 70 骨 Tiger 合同只作为刚性模型观察基线。Phase C 已落地四权重格式，Phase D 验证 after-recursion renderer，Phase E 已生成单组件 manifold inner body 并锁定 43 个 Tiger 单骨 shell；所有研究层仍默认关闭。下一门槛是六基础动作的 evaluated inversion/self-intersection/clearance/seam 审计，之后才可讨论 Unit-01 canonical hybrid rig 视觉候选。现有动画 JSON 均为未获视觉批准的冻结基线；第三方发布授权与来源 manifest 仍未关闭 |
+| 2.7 🟨 | 模型管线 | Tigerar1/SmOd 本机来源仍可重建 mesh；当前 70 骨 Tiger 合同只作为刚性模型观察基线。Phase C 已落地四权重格式，Phase D 验证 after-recursion renderer，Phase E 建立 manifold + 43 个 Tiger 单骨 shell；Phase F 已完成六基础动作 912 帧实机捕获及 inversion/nonlocal-self-intersection/clearance/seam 自动审计，并生成三视角 MP4 人工验收包。研究层仍默认关闭；`jump_landing` 仅为待人工接受的候选，未视觉批准前不得晋升 live lock。第三方发布授权与来源 manifest 仍未关闭 |
 | 2.8 🟨 | 网络层 | `SimpleChannel` 已承载驾驶控制、A.T. 波纹、战略爆炸、第三次冲击与驾驶视频帧，协议版本和服务端权威校验已接线；双客户端长时间压力、掉线重连和带宽门禁仍待专服验收 |
 | 2.9 🟨 | HUD | NERV 橙色驾驶 HUD 已显示机体血量、A.T. 池、电力/脐带、持久同步率、姿态、武器、蓄能与屋岛光学瞄准；指挥室共享权威读数并接收驾驶画面。分辨率缩放和多人视频墙仍待实机验收 |
 

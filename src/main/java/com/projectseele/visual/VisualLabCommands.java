@@ -14,6 +14,7 @@ import com.projectseele.fx.TreeOfLifeLayout;
 import com.projectseele.network.ClientboundVisualCapturePacket;
 import com.projectseele.network.SeeleNetwork;
 import com.projectseele.registry.ModEntities;
+import com.projectseele.world.EvaMotionLabDirector;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
@@ -111,9 +112,15 @@ public final class VisualLabCommands
         level.setDayTime(6000L);
         level.setWeatherParameters(6000, 0, false, false);
 
-        for (int x = -45; x <= 45; x++)
+        boolean foundationVideo = Boolean.getBoolean(
+                "projectseele.foundationVideoCapture");
+        int minimumX = foundationVideo ? -60 : -45;
+        int maximumX = foundationVideo ? 180 : 45;
+        int minimumZ = foundationVideo ? -300 : -45;
+        int maximumZ = foundationVideo ? 60 : 45;
+        for (int x = minimumX; x <= maximumX; x++)
         {
-            for (int z = -45; z <= 45; z++)
+            for (int z = minimumZ; z <= maximumZ; z++)
             {
                 boolean major = x % 10 == 0 || z % 10 == 0;
                 level.setBlock(centre.offset(x, 0, z),
@@ -208,6 +215,8 @@ public final class VisualLabCommands
         unit.clearFire();
         unit.setDeltaMovement(Vec3.ZERO);
         unit.setPersistenceRequired();
+        unit.addTag(EvaMotionLabDirector.ENTITY_TAG);
+        unit.prepareForMotionLab();
         unit.setVisualPose(EvaUnit01Entity.VISUAL_IDLE);
         level.addFreshEntity(unit);
         return unit;
@@ -399,8 +408,25 @@ public final class VisualLabCommands
         player.setYRot(0.0F);
         player.setYHeadRot(0.0F);
         player.setXRot(0.0F);
+        int requestedPose = unit.getVisualPose();
         SeeleNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
-                new ClientboundVisualCapturePacket(unit.getId(), unit.getVisualPose()));
+                new ClientboundVisualCapturePacket(unit.getId(), requestedPose));
+        if (Boolean.getBoolean("projectseele.foundationVideoCapture")
+                && (requestedPose == EvaUnit01Entity.VISUAL_IDLE
+                    || requestedPose == EvaUnit01Entity.VISUAL_WALK_CONTACT
+                    || requestedPose == EvaUnit01Entity.VISUAL_RUN_CONTACT
+                    || requestedPose == EvaUnit01Entity.VISUAL_LIVE_MELEE
+                    || requestedPose == EvaUnit01Entity.VISUAL_LIVE_KNIFE
+                    || requestedPose == EvaUnit01Entity.VISUAL_LIVE_JUMP))
+        {
+            unit.selectMotionLabWeapon(
+                    requestedPose == EvaUnit01Entity.VISUAL_LIVE_KNIFE
+                            ? EvaUnit01Entity.WEAPON_KNIFE
+                            : EvaUnit01Entity.WEAPON_FISTS);
+            // The packet retains the requested review label, while the actual
+            // entity returns to normal gameplay authority before input fires.
+            unit.setVisualPose(EvaUnit01Entity.VISUAL_NORMAL);
+        }
         source.sendSuccess(() -> Component.literal(
                 "Visual capture queued for " + unitName(unit)), false);
         return 1;

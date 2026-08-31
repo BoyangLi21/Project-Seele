@@ -38,6 +38,9 @@ import net.minecraftforge.network.PacketDistributor;
 public final class VisualLabAutomation
 {
     private static final boolean ENABLED = Boolean.getBoolean("projectseele.visualCapture");
+    private static final boolean FOUNDATION_VIDEO =
+            Boolean.getBoolean("projectseele.foundationVideoCapture");
+    private static final int POSE_INTERVAL = FOUNDATION_VIDEO ? 460 : 140;
     private static final String[] ALL_POSES = {
             "idle", "walk_contact", "run_contact", "jump", "fall",
             "crouch", "crouch_walk", "prone", "crawl", "prone_cannon",
@@ -810,7 +813,8 @@ public final class VisualLabAutomation
                 }
                 return;
             }
-            if (ticks >= 100 && nextPose < POSES.length && ticks == 100 + nextPose * 140)
+            if (ticks >= 100 && nextPose < POSES.length
+                    && ticks == 100 + nextPose * POSE_INTERVAL)
             {
                 String pose = POSES[nextPose++];
                 if (subjectId == null)
@@ -823,7 +827,7 @@ public final class VisualLabAutomation
                         subjectId, CAPTURE_UNIT);
                 ProjectSeele.LOGGER.info("Visual Lab queued pose {} ({}/{})", pose, nextPose, POSES.length);
             }
-            if (ticks == 100 + POSES.length * 140)
+            if (ticks == 100 + POSES.length * POSE_INTERVAL)
             {
                 ProjectSeele.LOGGER.info("Visual Lab automation finished; screenshots are ready for review");
                 playerId = null;

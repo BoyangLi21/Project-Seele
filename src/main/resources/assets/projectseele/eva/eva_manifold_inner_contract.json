@@ -8,9 +8,9 @@
   "previewProperty": "projectseele.manifoldInnerPreview",
   "expected": {
     "paletteBones": 23,
-    "primitives": 20,
-    "vertices": 3278,
-    "triangles": 6552,
+    "primitives": 19,
+    "vertices": 4652,
+    "triangles": 9300,
     "components": 1,
     "nonManifoldEdges": 0,
     "eulerCharacteristic": 2,

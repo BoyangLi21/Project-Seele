@@ -6,11 +6,11 @@ from __future__ import annotations
 import hashlib
 import json
 import math
-from collections import Counter, defaultdict, deque
+from collections import Counter, deque
 from pathlib import Path
 
 import numpy as np
-from scipy import ndimage
+from scipy import ndimage, sparse
 
 from build_eva_weighted_inner_proxy import SEGMENTS, model_position
 
@@ -24,11 +24,21 @@ TIGER = REPO / (
 BODY = EVA / "eva_unit01_manifold_inner.skinned.json"
 MASKS = EVA / "eva_unit01_rigid_shell_masks.json"
 CONTRACT = EVA / "eva_manifold_inner_contract.json"
-VOXEL = 0.20
+VOXEL = 0.12
 PADDING = 0.42
 SMOOTH_ITERATIONS = 3
 SMOOTH_FACTOR = 0.24
 STRIDE = 16
+SHOULDER_RADIUS_SCALE = 0.45
+UPPER_ARM_RADIUS_SCALE = 0.30
+FOREARM_RADIUS_SCALE = 0.25
+LEG_RADIUS_SCALE = 0.30
+WEIGHT_TRANSITION_START = 0.88
+WEIGHT_SMOOTH_ITERATIONS = 160
+WEIGHT_SMOOTH_ALPHA = 0.55
+ORIENTATION_CORRECTION_SWEEPS = 48
+ORIENTATION_TARGET_DOT = 1.0e-5
+ORIENTATION_MAX_VERTEX_DELTA = 0.10
 
 
 def canonical_sha256(value: object) -> str:
@@ -70,12 +80,12 @@ def terminal_capsules(positions: dict[str, np.ndarray]) -> list[dict]:
         hand_axis = normalize(wrist - forearm)
         result.append(capsule(
             f"hand_terminal_{side}", f"wrist_{side}", f"hand_{side}",
-            wrist, wrist + hand_axis * 0.68, 0.28, 0.40))
+            wrist, wrist + hand_axis * 0.68, 0.10, 0.14))
         ankle = positions[f"ankle_{side}"]
         foot_end = ankle + np.array([0.0, -0.14, -0.90])
         result.append(capsule(
             f"foot_terminal_{side}", f"ankle_{side}", f"foot_{side}",
-            ankle, foot_end, 0.34, 0.46))
+            ankle, foot_end, 0.22, 0.30))
     return result
 
 
@@ -110,9 +120,9 @@ def occupancy(primitives: list[dict]) -> tuple[np.ndarray, np.ndarray]:
     # Remove diagonal one-voxel saddles before extracting a cubical boundary;
     # they are one connected volume but create four-face non-manifold edges.
     inside = ndimage.binary_closing(
-        inside, structure=ndimage.generate_binary_structure(3, 2),
+        inside, structure=ndimage.generate_binary_structure(3, 1),
         iterations=1)
-    inside = ndimage.binary_fill_holes(inside)
+    inside = repair_diagonal_saddles(inside)
     labels, components = ndimage.label(
         inside, structure=ndimage.generate_binary_structure(3, 1))
     if components != 1:
@@ -120,6 +130,56 @@ def occupancy(primitives: list[dict]) -> tuple[np.ndarray, np.ndarray]:
         raise RuntimeError(
             f"manifold voxel union has {components} components: {sizes}")
     return inside, origin
+
+
+def repair_diagonal_saddles(source: np.ndarray) -> np.ndarray:
+    """Fill the locally best voxel when two solids touch along one edge."""
+    inside = source.copy()
+    structure = ndimage.generate_binary_structure(3, 1).astype(np.int8)
+    structure[1, 1, 1] = 0
+    for _ in range(256):
+        neighbours = ndimage.convolve(
+            inside.astype(np.int8), structure, mode="constant", cval=0)
+        candidates: list[tuple[int, int, int]] = []
+
+        def collect(a: np.ndarray, b: np.ndarray, c: np.ndarray,
+                    d: np.ndarray, coordinates) -> None:
+            diagonal_ad = a & d & ~b & ~c
+            diagonal_bc = ~a & ~d & b & c
+            for index in np.argwhere(diagonal_ad):
+                candidates.extend(coordinates(tuple(index), True))
+            for index in np.argwhere(diagonal_bc):
+                candidates.extend(coordinates(tuple(index), False))
+
+        collect(inside[:, :-1, :-1], inside[:, 1:, :-1],
+                inside[:, :-1, 1:], inside[:, 1:, 1:],
+                lambda value, ad: [
+                    (value[0], value[1] + 1, value[2]) if ad
+                    else (value[0], value[1], value[2]),
+                    (value[0], value[1], value[2] + 1) if ad
+                    else (value[0], value[1] + 1, value[2] + 1)])
+        collect(inside[:-1, :, :-1], inside[1:, :, :-1],
+                inside[:-1, :, 1:], inside[1:, :, 1:],
+                lambda value, ad: [
+                    (value[0] + 1, value[1], value[2]) if ad
+                    else (value[0], value[1], value[2]),
+                    (value[0], value[1], value[2] + 1) if ad
+                    else (value[0] + 1, value[1], value[2] + 1)])
+        collect(inside[:-1, :-1, :], inside[1:, :-1, :],
+                inside[:-1, 1:, :], inside[1:, 1:, :],
+                lambda value, ad: [
+                    (value[0] + 1, value[1], value[2]) if ad
+                    else (value[0], value[1], value[2]),
+                    (value[0], value[1] + 1, value[2]) if ad
+                    else (value[0] + 1, value[1] + 1, value[2])])
+        candidates = sorted(set(candidate for candidate in candidates
+                                if not inside[candidate]),
+                            key=lambda candidate: (
+                                -int(neighbours[candidate]), candidate))
+        if not candidates:
+            return inside
+        inside[candidates[0]] = True
+    raise RuntimeError("diagonal saddle repair did not converge")
 
 
 FACE_CORNERS = (
@@ -236,31 +296,54 @@ def signed_volume(vertices: np.ndarray, triangles: np.ndarray) -> float:
                      for a, b, c in triangles) / 6.0)
 
 
-def weights(point: np.ndarray, primitives: list[dict],
-            palette_index: dict[str, int]) -> tuple[list[int], list[float]]:
-    scores = defaultdict(float)
-    for primitive in primitives:
-        start = primitive["start"]
-        delta = primitive["end"] - start
-        t = float(np.clip(np.dot(point - start, delta)
-                          / np.dot(delta, delta), 0.0, 1.0))
-        closest = start + t * delta
-        radius = primitive["radiusStart"] + t * (
-            primitive["radiusEnd"] - primitive["radiusStart"])
-        radial = float(np.linalg.norm(point - closest)) / radius
-        proximity = math.exp(-2.0 * radial * radial)
-        scores[primitive["parent"]] += proximity * (1.05 - t)
-        scores[primitive["child"]] += proximity * (0.05 + t)
-    ranked = sorted(scores.items(), key=lambda item: item[1], reverse=True)[:4]
-    total = sum(value for _, value in ranked)
-    if total <= 1.0e-12:
-        raise RuntimeError("manifold vertex has no weight source")
-    joints = [palette_index[name] for name, _ in ranked]
-    values = [value / total for _, value in ranked]
-    while len(joints) < 4:
-        joints.append(0)
-        values.append(0.0)
-    return joints, values
+def smooth_skin_weights(vertices: np.ndarray, triangles: np.ndarray,
+                        primitives: list[dict], palette: list[str]
+                        ) -> tuple[np.ndarray, np.ndarray]:
+    palette_index = {name: index for index, name in enumerate(palette)}
+    dense = np.zeros((len(vertices), len(palette)), dtype=np.float64)
+    for vertex_index, point in enumerate(vertices):
+        candidates = []
+        for primitive in primitives:
+            start = primitive["start"]
+            delta = primitive["end"] - start
+            t = float(np.clip(np.dot(point - start, delta)
+                              / np.dot(delta, delta), 0.0, 1.0))
+            closest = start + t * delta
+            radius = primitive["radiusStart"] + t * (
+                primitive["radiusEnd"] - primitive["radiusStart"])
+            surface_error = abs(
+                float(np.linalg.norm(point - closest)) - radius)
+            candidates.append((surface_error / max(radius, 1.0e-9),
+                               primitive["name"], primitive, t))
+        _, _, source, t = min(candidates,
+                              key=lambda item: (item[0], item[1]))
+        transition = float(np.clip(
+            (t - WEIGHT_TRANSITION_START)
+            / (1.0 - WEIGHT_TRANSITION_START), 0.0, 1.0))
+        child = transition * transition * (3.0 - 2.0 * transition)
+        dense[vertex_index, palette_index[source["parent"]]] = 1.0 - child
+        dense[vertex_index, palette_index[source["child"]]] = child
+
+    rows = np.concatenate((triangles[:, 0], triangles[:, 1],
+                           triangles[:, 1], triangles[:, 2],
+                           triangles[:, 2], triangles[:, 0]))
+    columns = np.concatenate((triangles[:, 1], triangles[:, 0],
+                              triangles[:, 2], triangles[:, 1],
+                              triangles[:, 0], triangles[:, 2]))
+    adjacency = sparse.coo_matrix(
+        (np.ones(len(rows)), (rows, columns)),
+        shape=(len(vertices), len(vertices))).tocsr()
+    adjacency.data[:] = 1.0
+    degree = np.asarray(adjacency.sum(axis=1)).reshape(-1)
+    average = sparse.diags(1.0 / degree) @ adjacency
+    for _ in range(WEIGHT_SMOOTH_ITERATIONS):
+        dense = ((1.0 - WEIGHT_SMOOTH_ALPHA) * dense
+                 + WEIGHT_SMOOTH_ALPHA * (average @ dense))
+
+    order = np.argsort(-dense, axis=1, kind="stable")[:, :4]
+    selected = np.take_along_axis(dense, order, axis=1)
+    selected /= selected.sum(axis=1)[:, None]
+    return order.astype(np.int32), selected
 
 
 def inverse_translation(position: np.ndarray) -> list[float]:
@@ -304,11 +387,26 @@ def main() -> None:
         bone["name"] for bone in rig["bones"]].index(name))
     positions = {name: np.asarray(model_position(bones[name]["pivot"]),
                                   dtype=float) for name in palette}
-    primitives = [
-        capsule(f"{parent}_to_{child}", parent, child,
-                positions[parent], positions[child], radius_start, radius_end)
-        for parent, child, radius_start, radius_end in SEGMENTS
-    ]
+    primitives = []
+    for parent, child, radius_start, radius_end in SEGMENTS:
+        if parent == "root":
+            # The Gecko root is a transform origin near the feet, not an
+            # anatomical body segment. A visible root-to-pelvis capsule ran
+            # through both legs and created two non-physical topology handles.
+            continue
+        if parent == "torso_lower" and child == "torso_upper":
+            radius_start, radius_end = 0.62, 0.72
+        scale = (SHOULDER_RADIUS_SCALE if parent.startswith("clavicle_")
+                 else UPPER_ARM_RADIUS_SCALE if parent.startswith("arm_")
+                 else FOREARM_RADIUS_SCALE if parent.startswith("forearm_")
+                 else LEG_RADIUS_SCALE if any(
+                     token in parent or token in child
+                     for token in ("leg_", "shin_", "ankle_"))
+                 else 1.0)
+        primitives.append(capsule(
+            f"{parent}_to_{child}", parent, child,
+            positions[parent], positions[child],
+            radius_start * scale, radius_end * scale))
     primitives.extend(terminal_capsules(positions))
     inside, origin = occupancy(primitives)
     vertices, triangles = extract_surface(inside, origin)
@@ -322,13 +420,17 @@ def main() -> None:
     if volume <= 0.0:
         raise RuntimeError(f"manifold orientation/volume invalid: {volume}")
     audited_topology = topology(vertices, triangles)
-    palette_index = {name: index for index, name in enumerate(palette)}
+    joint_field, weight_field = smooth_skin_weights(
+        vertices, triangles, primitives, palette)
     packed = []
     influence_histogram = Counter()
-    for point, normal in zip(vertices, vertex_normals):
-        joints, skin_weights = weights(point, primitives, palette_index)
+    for vertex_index, (point, normal) in enumerate(
+            zip(vertices, vertex_normals)):
+        joints = joint_field[vertex_index].tolist()
+        skin_weights = weight_field[vertex_index].tolist()
         rounded_weights = [round(float(value), 7)
                            for value in skin_weights]
+        rounded_weights[-1] = round(1.0 - sum(rounded_weights[:-1]), 7)
         influence_histogram[sum(value > 1.0e-6
                                 for value in rounded_weights)] += 1
         u = (math.atan2(float(point[2]), float(point[0]))
@@ -361,6 +463,13 @@ def main() -> None:
             "occupiedCells": int(np.count_nonzero(inside)),
             "smoothingIterations": SMOOTH_ITERATIONS,
             "smoothingFactor": SMOOTH_FACTOR,
+            "weightTransitionStart": WEIGHT_TRANSITION_START,
+            "weightSmoothingIterations": WEIGHT_SMOOTH_ITERATIONS,
+            "weightSmoothingAlpha": WEIGHT_SMOOTH_ALPHA,
+            "orientationCorrectionSweeps": ORIENTATION_CORRECTION_SWEEPS,
+            "orientationTargetDot": ORIENTATION_TARGET_DOT,
+            "orientationMaximumVertexDelta":
+                ORIENTATION_MAX_VERTEX_DELTA,
             "primitiveCount": len(primitives),
             "signedVolume": volume,
             **audited_topology,

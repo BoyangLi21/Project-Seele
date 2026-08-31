@@ -112,6 +112,11 @@ minecraft {
             if (project.hasProperty('visualCapture')) {
                 property 'projectseele.visualCapture', 'true'
             }
+            if (project.hasProperty('foundationVideoCapture')) {
+                property 'projectseele.visualCapture', 'true'
+                property 'projectseele.foundationVideoCapture', 'true'
+                property 'projectseele.manifoldInnerAuditOnly', 'true'
+            }
             if (project.hasProperty('strictHighDetail')) {
                 property 'projectseele.strictHighDetail', 'true'
                 args '--width', '1280', '--height', '720'

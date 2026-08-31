@@ -45,15 +45,15 @@
       "humanReviewRequired": true
     },
     "jump_landing": {
-      "status": "FROZEN_BASELINE_NOT_VISUALLY_APPROVED",
+      "status": "CANDIDATE_HASH_CHANGED",
       "animationKeys": [
         "animation.eva_unit01.takeoff",
         "animation.eva_unit01.jump",
         "animation.eva_unit01.land"
       ],
       "baselineSemanticSha256": "ad5ebce5a97553a86db2fe88d3badc92586229f4edeb370083bd146a977ace38",
-      "observedSemanticSha256": "ad5ebce5a97553a86db2fe88d3badc92586229f4edeb370083bd146a977ace38",
-      "candidateReason": null,
+      "observedSemanticSha256": "12b830de1069fd14513dce661323fa3f18003affb6d28f2a05c47fec968a5ba7",
+      "candidateReason": "ANIMATION_HASH_CHANGED",
       "approvedBy": null,
       "humanReviewRequired": true
     },
