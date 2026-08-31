@@ -88,4 +88,6 @@ No human action review is required for Phase D because the overlay is an
 engineering proxy, not an animation or candidate production body. Promotion
 still requires a welded weighted inner mesh, rigid armor-shell masks,
 evaluated seam gates across the six foundation actions and human acceptance of
-the resulting silhouette.
+the resulting silhouette. Phase E now supplies the manifold inner surface and
+rigid masks (`docs/EVA_MANIFOLD_INNER_PHASE_E.md`); action-wide deformation
+gates remain pending.

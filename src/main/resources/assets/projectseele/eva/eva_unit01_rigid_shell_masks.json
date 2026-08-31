@@ -1,0 +1,267 @@
+{
+  "schema": 1,
+  "status": "TIGER_SINGLE_OWNER_SHELL_MASK",
+  "sourceMeshSemanticSha256": "c5dd363bdbfc9f3c14be3a19c2e28cca6ecef8c77e95eec88a4255dfcf7d06e3",
+  "sourceTriangleCount": 6044,
+  "sourcePartCount": 43,
+  "parts": {
+    "arm_l": {
+      "ownerBone": "arm_l",
+      "triangleCount": 229,
+      "maxInfluences": 1,
+      "role": "RIGID_ARMOR_SHELL"
+    },
+    "arm_r": {
+      "ownerBone": "arm_r",
+      "triangleCount": 229,
+      "maxInfluences": 1,
+      "role": "RIGID_ARMOR_SHELL"
+    },
+    "finger_index_distal_l": {
+      "ownerBone": "finger_index_distal_l",
+      "triangleCount": 92,
+      "maxInfluences": 1,
+      "role": "RIGID_DIGIT_SHELL"
+    },
+    "finger_index_distal_r": {
+      "ownerBone": "finger_index_distal_r",
+      "triangleCount": 92,
+      "maxInfluences": 1,
+      "role": "RIGID_DIGIT_SHELL"
+    },
+    "finger_index_l": {
+      "ownerBone": "finger_index_l",
+      "triangleCount": 92,
+      "maxInfluences": 1,
+      "role": "RIGID_DIGIT_SHELL"
+    },
+    "finger_index_r": {
+      "ownerBone": "finger_index_r",
+      "triangleCount": 92,
+      "maxInfluences": 1,
+      "role": "RIGID_DIGIT_SHELL"
+    },
+    "finger_index_tip_l": {
+      "ownerBone": "finger_index_tip_l",
+      "triangleCount": 92,
+      "maxInfluences": 1,
+      "role": "RIGID_DIGIT_SHELL"
+    },
+    "finger_index_tip_r": {
+      "ownerBone": "finger_index_tip_r",
+      "triangleCount": 92,
+      "maxInfluences": 1,
+      "role": "RIGID_DIGIT_SHELL"
+    },
+    "finger_little_distal_l": {
+      "ownerBone": "finger_little_distal_l",
+      "triangleCount": 92,
+      "maxInfluences": 1,
+      "role": "RIGID_DIGIT_SHELL"
+    },
+    "finger_little_distal_r": {
+      "ownerBone": "finger_little_distal_r",
+      "triangleCount": 92,
+      "maxInfluences": 1,
+      "role": "RIGID_DIGIT_SHELL"
+    },
+    "finger_little_l": {
+      "ownerBone": "finger_little_l",
+      "triangleCount": 92,
+      "maxInfluences": 1,
+      "role": "RIGID_DIGIT_SHELL"
+    },
+    "finger_little_r": {
+      "ownerBone": "finger_little_r",
+      "triangleCount": 92,
+      "maxInfluences": 1,
+      "role": "RIGID_DIGIT_SHELL"
+    },
+    "finger_little_tip_l": {
+      "ownerBone": "finger_little_tip_l",
+      "triangleCount": 92,
+      "maxInfluences": 1,
+      "role": "RIGID_DIGIT_SHELL"
+    },
+    "finger_little_tip_r": {
+      "ownerBone": "finger_little_tip_r",
+      "triangleCount": 92,
+      "maxInfluences": 1,
+      "role": "RIGID_DIGIT_SHELL"
+    },
+    "finger_middle_distal_l": {
+      "ownerBone": "finger_middle_distal_l",
+      "triangleCount": 92,
+      "maxInfluences": 1,
+      "role": "RIGID_DIGIT_SHELL"
+    },
+    "finger_middle_distal_r": {
+      "ownerBone": "finger_middle_distal_r",
+      "triangleCount": 92,
+      "maxInfluences": 1,
+      "role": "RIGID_DIGIT_SHELL"
+    },
+    "finger_middle_l": {
+      "ownerBone": "finger_middle_l",
+      "triangleCount": 92,
+      "maxInfluences": 1,
+      "role": "RIGID_DIGIT_SHELL"
+    },
+    "finger_middle_r": {
+      "ownerBone": "finger_middle_r",
+      "triangleCount": 92,
+      "maxInfluences": 1,
+      "role": "RIGID_DIGIT_SHELL"
+    },
+    "finger_middle_tip_l": {
+      "ownerBone": "finger_middle_tip_l",
+      "triangleCount": 92,
+      "maxInfluences": 1,
+      "role": "RIGID_DIGIT_SHELL"
+    },
+    "finger_middle_tip_r": {
+      "ownerBone": "finger_middle_tip_r",
+      "triangleCount": 92,
+      "maxInfluences": 1,
+      "role": "RIGID_DIGIT_SHELL"
+    },
+    "finger_ring_distal_l": {
+      "ownerBone": "finger_ring_distal_l",
+      "triangleCount": 92,
+      "maxInfluences": 1,
+      "role": "RIGID_DIGIT_SHELL"
+    },
+    "finger_ring_distal_r": {
+      "ownerBone": "finger_ring_distal_r",
+      "triangleCount": 92,
+      "maxInfluences": 1,
+      "role": "RIGID_DIGIT_SHELL"
+    },
+    "finger_ring_l": {
+      "ownerBone": "finger_ring_l",
+      "triangleCount": 92,
+      "maxInfluences": 1,
+      "role": "RIGID_DIGIT_SHELL"
+    },
+    "finger_ring_r": {
+      "ownerBone": "finger_ring_r",
+      "triangleCount": 92,
+      "maxInfluences": 1,
+      "role": "RIGID_DIGIT_SHELL"
+    },
+    "finger_ring_tip_l": {
+      "ownerBone": "finger_ring_tip_l",
+      "triangleCount": 92,
+      "maxInfluences": 1,
+      "role": "RIGID_DIGIT_SHELL"
+    },
+    "finger_ring_tip_r": {
+      "ownerBone": "finger_ring_tip_r",
+      "triangleCount": 92,
+      "maxInfluences": 1,
+      "role": "RIGID_DIGIT_SHELL"
+    },
+    "finger_thumb_l": {
+      "ownerBone": "finger_thumb_l",
+      "triangleCount": 15,
+      "maxInfluences": 1,
+      "role": "RIGID_DIGIT_SHELL"
+    },
+    "finger_thumb_r": {
+      "ownerBone": "finger_thumb_r",
+      "triangleCount": 15,
+      "maxInfluences": 1,
+      "role": "RIGID_DIGIT_SHELL"
+    },
+    "foot_l": {
+      "ownerBone": "foot_l",
+      "triangleCount": 183,
+      "maxInfluences": 1,
+      "role": "RIGID_ARMOR_SHELL"
+    },
+    "foot_r": {
+      "ownerBone": "foot_r",
+      "triangleCount": 183,
+      "maxInfluences": 1,
+      "role": "RIGID_ARMOR_SHELL"
+    },
+    "forearm_l": {
+      "ownerBone": "forearm_l",
+      "triangleCount": 105,
+      "maxInfluences": 1,
+      "role": "RIGID_ARMOR_SHELL"
+    },
+    "forearm_r": {
+      "ownerBone": "forearm_r",
+      "triangleCount": 105,
+      "maxInfluences": 1,
+      "role": "RIGID_ARMOR_SHELL"
+    },
+    "hand_l": {
+      "ownerBone": "hand_l",
+      "triangleCount": 39,
+      "maxInfluences": 1,
+      "role": "RIGID_ARMOR_SHELL"
+    },
+    "hand_r": {
+      "ownerBone": "hand_r",
+      "triangleCount": 39,
+      "maxInfluences": 1,
+      "role": "RIGID_ARMOR_SHELL"
+    },
+    "head": {
+      "ownerBone": "head",
+      "triangleCount": 948,
+      "maxInfluences": 1,
+      "role": "RIGID_ARMOR_SHELL"
+    },
+    "leg_l": {
+      "ownerBone": "leg_l",
+      "triangleCount": 160,
+      "maxInfluences": 1,
+      "role": "RIGID_ARMOR_SHELL"
+    },
+    "leg_r": {
+      "ownerBone": "leg_r",
+      "triangleCount": 162,
+      "maxInfluences": 1,
+      "role": "RIGID_ARMOR_SHELL"
+    },
+    "pylon_l": {
+      "ownerBone": "pylon_l",
+      "triangleCount": 134,
+      "maxInfluences": 1,
+      "role": "RIGID_ARMOR_SHELL"
+    },
+    "pylon_r": {
+      "ownerBone": "pylon_r",
+      "triangleCount": 134,
+      "maxInfluences": 1,
+      "role": "RIGID_ARMOR_SHELL"
+    },
+    "shin_l": {
+      "ownerBone": "shin_l",
+      "triangleCount": 176,
+      "maxInfluences": 1,
+      "role": "RIGID_ARMOR_SHELL"
+    },
+    "shin_r": {
+      "ownerBone": "shin_r",
+      "triangleCount": 176,
+      "maxInfluences": 1,
+      "role": "RIGID_ARMOR_SHELL"
+    },
+    "torso_lower": {
+      "ownerBone": "torso_lower",
+      "triangleCount": 212,
+      "maxInfluences": 1,
+      "role": "RIGID_ARMOR_SHELL"
+    },
+    "torso_upper": {
+      "ownerBone": "torso_upper",
+      "triangleCount": 592,
+      "maxInfluences": 1,
+      "role": "RIGID_ARMOR_SHELL"
+    }
+  }
+}

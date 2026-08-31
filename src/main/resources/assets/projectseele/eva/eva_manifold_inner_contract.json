@@ -1,0 +1,26 @@
+{
+  "schema": 1,
+  "phase": "E",
+  "status": "MANIFOLD_INNER_AND_RIGID_MASK_RESEARCH",
+  "migrationBaselineCommit": "c9864e1a1a3862a128da897114ae82af48ac75b4",
+  "innerBodyResource": "projectseele:eva/eva_unit01_manifold_inner.skinned.json",
+  "rigidMaskResource": "projectseele:eva/eva_unit01_rigid_shell_masks.json",
+  "previewProperty": "projectseele.manifoldInnerPreview",
+  "expected": {
+    "paletteBones": 23,
+    "primitives": 20,
+    "vertices": 3278,
+    "triangles": 6552,
+    "components": 1,
+    "nonManifoldEdges": 0,
+    "eulerCharacteristic": 2,
+    "rigidParts": 43,
+    "rigidTriangles": 6044
+  },
+  "runtimeActivation": {
+    "defaultEnabled": false,
+    "replacesTigerBody": false,
+    "productionReady": false,
+    "humanReviewRequiredBeforePromotion": true
+  }
+}

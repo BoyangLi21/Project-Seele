@@ -311,6 +311,7 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
             }
         });
         EvaWeightedInnerProxy.prepare(model);
+        EvaManifoldInnerBody.prepare(model);
         if (this.pilotView)
         {
             forEachBone(model, bone ->
@@ -374,6 +375,9 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
         if (!isReRender && bone.getParent() == null)
         {
             EvaWeightedInnerProxy.renderAfterRoot(
+                    poseStack, animatable, bone, bufferSource,
+                    packedLight, packedOverlay);
+            EvaManifoldInnerBody.renderAfterRoot(
                     poseStack, animatable, bone, bufferSource,
                     packedLight, packedOverlay);
         }

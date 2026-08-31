@@ -122,6 +122,9 @@ minecraft {
             if (project.hasProperty('skinnedProxyPreview')) {
                 property 'projectseele.skinnedProxyPreview', 'true'
             }
+            if (project.hasProperty('manifoldInnerPreview')) {
+                property 'projectseele.manifoldInnerPreview', 'true'
+            }
             // The 784-block-tall connected Tokyo-3 / GeoFront dimension
             // contains roughly twice vanilla's section count. Both manual
             // high-detail play and fresh-map capture need more than the

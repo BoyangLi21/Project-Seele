@@ -4,6 +4,7 @@ import com.projectseele.ProjectSeele;
 import com.projectseele.client.render.EntryPlugCarrierRenderer;
 import com.projectseele.client.render.EvaUnit01Renderer;
 import com.projectseele.client.render.EvaMotionEngineV2;
+import com.projectseele.client.render.EvaManifoldInnerBody;
 import com.projectseele.client.render.EvaPoseGraph;
 import com.projectseele.client.render.EvaSkinnedMeshRuntime;
 import com.projectseele.client.render.EvaWeightedInnerProxy;
@@ -154,6 +155,7 @@ public class ClientEvents
             EvaPoseGraph.reload(resourceManager);
             EvaSkinnedMeshRuntime.reload(resourceManager);
             EvaWeightedInnerProxy.reload(resourceManager);
+            EvaManifoldInnerBody.reload(resourceManager);
             EvaMotionEngineV2.reload(resourceManager);
             EvaUnit01Renderer.prewarmLocalBodyMeshes(resourceManager);
         });

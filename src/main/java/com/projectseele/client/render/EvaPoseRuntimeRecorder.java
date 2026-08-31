@@ -61,8 +61,11 @@ public final class EvaPoseRuntimeRecorder
             return;
         }
         smokeStarted = true;
-        start(entity.getId(), EvaWeightedInnerProxy.previewEnabled()
-                ? "phase_d_smoke" : "phase_c_smoke");
+        String label = EvaManifoldInnerBody.previewEnabled()
+                ? "phase_e_smoke"
+                : EvaWeightedInnerProxy.previewEnabled()
+                        ? "phase_d_smoke" : "phase_c_smoke";
+        start(entity.getId(), label);
     }
 
     public static void start(int entityId, String rawLabel)
@@ -229,6 +232,7 @@ public final class EvaPoseRuntimeRecorder
         root.add("poseGraph", poseJson(frame.pose));
         root.add("contacts", contactsJson(entity));
         root.add("weightedProxy", weightedProxyJson());
+        root.add("manifoldInner", manifoldInnerJson());
 
         LocalVisualAssetFingerprint.Fingerprint fingerprint =
                 EvaUnit01Renderer.visualFingerprintForVariant(
@@ -372,6 +376,19 @@ public final class EvaPoseRuntimeRecorder
         return json;
     }
 
+    private static JsonObject manifoldInnerJson()
+    {
+        EvaManifoldInnerBody.Status body = EvaManifoldInnerBody.status();
+        JsonObject json = new JsonObject();
+        json.addProperty("ready", body.ready());
+        json.addProperty("previewEnabled", body.previewEnabled());
+        json.addProperty("renderedFrames", body.renderedFrames());
+        json.addProperty("lastEntityId", body.lastEntityId());
+        json.addProperty("lastBindDelta", body.lastBindDelta());
+        json.addProperty("failure", body.failure());
+        return json;
+    }
+
     private static JsonObject socketJson(EvaUnit01Entity entity,
                                          FrameCapture frame)
     {
@@ -452,6 +469,32 @@ public final class EvaPoseRuntimeRecorder
         header.addProperty("weightedProxyResourceSha256",
                 proxy.proxySha256());
         header.addProperty("weightedProxyReplacesTiger", false);
+        EvaManifoldInnerBody.Status manifold =
+                EvaManifoldInnerBody.status();
+        header.addProperty("manifoldInnerReady", manifold.ready());
+        header.addProperty("manifoldInnerPreviewEnabled",
+                manifold.previewEnabled());
+        header.addProperty("manifoldInnerPaletteBones",
+                manifold.paletteBones());
+        header.addProperty("manifoldInnerPrimitives",
+                manifold.primitives());
+        header.addProperty("manifoldInnerVertices", manifold.vertices());
+        header.addProperty("manifoldInnerTriangles",
+                manifold.triangles());
+        header.addProperty("manifoldInnerComponents",
+                manifold.components());
+        header.addProperty("manifoldInnerNonManifoldEdges",
+                manifold.nonManifoldEdges());
+        header.addProperty("manifoldInnerEuler",
+                manifold.eulerCharacteristic());
+        header.addProperty("manifoldRigidParts", manifold.rigidParts());
+        header.addProperty("manifoldRigidTriangles",
+                manifold.rigidTriangles());
+        header.addProperty("manifoldContractSha256",
+                manifold.contractSha256());
+        header.addProperty("manifoldBodySha256", manifold.bodySha256());
+        header.addProperty("manifoldMaskSha256", manifold.maskSha256());
+        header.addProperty("manifoldReplacesTiger", false);
         header.addProperty("automaticVisualApproval", false);
         header.add("resultVocabulary", strings(List.of(
                 "FAIL", "ELIGIBLE_FOR_HUMAN_REVIEW")));

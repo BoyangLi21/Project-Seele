@@ -19,6 +19,9 @@ SKIN_CONTRACT = CONTRACT_DIR / "eva_skinned_mesh_contract.json"
 SKIN_PROBE = CONTRACT_DIR / "skinning_probe_v1.json"
 WEIGHTED_PROXY_CONTRACT = CONTRACT_DIR / "eva_weighted_proxy_contract.json"
 WEIGHTED_PROXY = CONTRACT_DIR / "eva_unit01_inner_proxy.skinned.json"
+MANIFOLD_CONTRACT = CONTRACT_DIR / "eva_manifold_inner_contract.json"
+MANIFOLD_BODY = CONTRACT_DIR / "eva_unit01_manifold_inner.skinned.json"
+MANIFOLD_MASKS = CONTRACT_DIR / "eva_unit01_rigid_shell_masks.json"
 CAPTURE_DIR = REPO / "run/pose-captures"
 
 
@@ -142,6 +145,26 @@ def main() -> None:
             "capture weighted proxy hashes differ")
     require(header.get("weightedProxyReplacesTiger") is False,
             "weighted proxy unexpectedly replaced Tiger")
+    require(header.get("manifoldInnerReady") is True
+            and header.get("manifoldInnerPaletteBones") == 23
+            and header.get("manifoldInnerPrimitives") == 20
+            and header.get("manifoldInnerVertices") == 3278
+            and header.get("manifoldInnerTriangles") == 6552
+            and header.get("manifoldInnerComponents") == 1
+            and header.get("manifoldInnerNonManifoldEdges") == 0
+            and header.get("manifoldInnerEuler") == 2
+            and header.get("manifoldRigidParts") == 43
+            and header.get("manifoldRigidTriangles") == 6044,
+            "capture manifold metrics differ")
+    require(header.get("manifoldContractSha256") ==
+            raw_sha256(MANIFOLD_CONTRACT)
+            and header.get("manifoldBodySha256") ==
+            raw_sha256(MANIFOLD_BODY)
+            and header.get("manifoldMaskSha256") ==
+            raw_sha256(MANIFOLD_MASKS),
+            "capture manifold resource hashes differ")
+    require(header.get("manifoldReplacesTiger") is False,
+            "manifold body unexpectedly replaced Tiger")
     require(header.get("resultVocabulary") ==
             ["FAIL", "ELIGIBLE_FOR_HUMAN_REVIEW"],
             "capture result vocabulary drifted")
@@ -219,6 +242,20 @@ def main() -> None:
                     and math.isfinite(weighted_proxy["lastBindDelta"])
                     and weighted_proxy["lastBindDelta"] <= 1.0e-5,
                     f"frame {expected_index} did not render weighted proxy")
+        manifold_inner = frame.get("manifoldInner")
+        require(isinstance(manifold_inner, dict)
+                and manifold_inner.get("ready") is True
+                and manifold_inner.get("failure") == "none",
+                f"frame {expected_index} manifold body failed")
+        if header.get("manifoldInnerPreviewEnabled") is True:
+            require(manifold_inner.get("previewEnabled") is True
+                    and manifold_inner.get("renderedFrames", 0) > 0
+                    and manifold_inner.get("lastEntityId") == entity.get("id")
+                    and isinstance(manifold_inner.get("lastBindDelta"),
+                                   (int, float))
+                    and math.isfinite(manifold_inner["lastBindDelta"])
+                    and manifold_inner["lastBindDelta"] <= 2.0e-5,
+                    f"frame {expected_index} did not render manifold body")
         missing = frame.get("missingCanonicalBones")
         require(missing == [],
                 f"frame {expected_index} misses canonical bones: {missing}")
