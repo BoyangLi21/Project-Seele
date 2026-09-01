@@ -27,6 +27,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--minimum-blender-z", type=float, default=-0.10)
     parser.add_argument("--window", type=int, default=2,
                         help="symmetric maximum-filter radius")
+    parser.add_argument(
+        "--per-clip-constant", action="store_true",
+        help="use one maximum lift for the whole clip to preserve foot locks",
+    )
     return parser.parse_args(sys.argv[sys.argv.index("--") + 1 :])
 
 
@@ -75,6 +79,8 @@ def main() -> None:
                          min(len(required), index + radius + 1)])
             for index in range(len(required))
         ]
+        if args.per_clip_constant:
+            filtered = [max(filtered, default=0.0)] * len(filtered)
         frames = output["clips"][clip_name]["frames"]
         for frame, lift_m in zip(frames, filtered):
             if lift_m > 1.0e-9:
@@ -89,9 +95,14 @@ def main() -> None:
         }
 
     output["exact_grounding"] = {
-        "authority": "exact_body_mesh_root_only_minimum_clearance",
+        "authority": (
+            "exact_body_mesh_per_clip_constant_root_clearance"
+            if args.per_clip_constant
+            else "exact_body_mesh_root_only_minimum_clearance"
+        ),
         "minimum_blender_z": args.minimum_blender_z,
         "maximum_filter_radius": args.window,
+        "per_clip_constant": args.per_clip_constant,
         "maximum_lift_m": round(maximum_lift_m, 7),
         "lifted_frames": lifted_frames,
         "clips": per_clip,

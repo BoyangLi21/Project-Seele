@@ -27,9 +27,8 @@ import software.bernie.geckolib.cache.object.BakedGeoModel;
  * Phase-B single commit point for every post-Gecko EVA bone write.
  *
  * <p>Gecko's base/arms/strike controller stack remains one explicitly named
- * upstream composite. MotionEngine previews and the two renderer-era aim
- * adapters are applied only here, in contract order. No action resource or
- * gameplay state is changed by this migration.</p>
+ * upstream composite. MotionEngine preview/live owners and the two
+ * renderer-era aim adapters are applied only here, in contract order.</p>
  */
 public final class EvaPoseGraph
 {
@@ -165,20 +164,24 @@ public final class EvaPoseGraph
         EvaMotionEngineV2.BoneWrites motionWrites = EvaMotionEngineV2.apply(
                 entity, model, partialTick);
 
-        model.getBone("aim_pitch").ifPresent(aimPitch ->
+        if (!motionWrites.rotationBones().contains("aim_pitch"))
         {
-            float pitch = entity.getWeapon() == EvaUnit01Entity.WEAPON_CANNON
-                    || entity.getWeapon() == EvaUnit01Entity.WEAPON_RIFLE
-                    ? (float)Math.toRadians(entity.getCannonAimPitch()) : 0.0F;
-            // Minecraft positive X looks down; the Bedrock parent uses the
-            // opposite sign. This is the exact pre-Phase-B renderer formula.
-            aimPitch.setRotX(-pitch);
-            // Re-commit unchanged channels so one node owns the final
-            // absolute rotation without changing the pre-Phase-B result.
-            aimPitch.setRotY(aimPitch.getRotY());
-            aimPitch.setRotZ(aimPitch.getRotZ());
-        });
-        if (entity.getPilotEntity() != null)
+            model.getBone("aim_pitch").ifPresent(aimPitch ->
+            {
+                float pitch = entity.getWeapon()
+                        == EvaUnit01Entity.WEAPON_CANNON
+                        || entity.getWeapon() == EvaUnit01Entity.WEAPON_RIFLE
+                        ? (float)Math.toRadians(entity.getCannonAimPitch())
+                        : 0.0F;
+                // Minecraft positive X looks down; the Bedrock parent uses
+                // the opposite sign.
+                aimPitch.setRotX(-pitch);
+                aimPitch.setRotY(aimPitch.getRotY());
+                aimPitch.setRotZ(aimPitch.getRotZ());
+            });
+        }
+        if (entity.getPilotEntity() != null
+                && !motionWrites.rotationBones().contains("head"))
         {
             model.getBone("head").ifPresent(head ->
             {
@@ -228,14 +231,22 @@ public final class EvaPoseGraph
         }
         String actionToken = actionToken(entity, partialTick);
         float phase = phase(entity, partialTick);
+        String motionOwner = motionWrites.owner();
+        boolean weaponAimActive = !motionWrites.rotationBones()
+                .contains("aim_pitch");
+        boolean pilotAimActive = entity.getPilotEntity() != null
+                && !motionWrites.rotationBones().contains("head");
         LinkedHashSet<String> activeLayers = new LinkedHashSet<>();
         activeLayers.add("GECKO_COMPOSITE");
         if (!motionWrites.isEmpty())
         {
-            activeLayers.add("MOTION_ENGINE_PREVIEW");
+            activeLayers.add(motionOwner);
         }
-        activeLayers.add("POSE_GRAPH_WEAPON_AIM");
-        if (entity.getPilotEntity() != null)
+        if (weaponAimActive)
+        {
+            activeLayers.add("POSE_GRAPH_WEAPON_AIM");
+        }
+        if (pilotAimActive)
         {
             activeLayers.add("POSE_GRAPH_PILOT_AIM");
         }
@@ -253,21 +264,21 @@ public final class EvaPoseGraph
         {
             if (rotationOwners.containsKey(bone))
             {
-                rotationOwners.put(bone, "MOTION_ENGINE_PREVIEW");
+                rotationOwners.put(bone, motionOwner);
             }
         }
         for (String bone : motionWrites.positionBones())
         {
             if (positionOwners.containsKey(bone))
             {
-                positionOwners.put(bone, "MOTION_ENGINE_PREVIEW");
+                positionOwners.put(bone, motionOwner);
             }
         }
-        if (rotationOwners.containsKey("aim_pitch"))
+        if (weaponAimActive && rotationOwners.containsKey("aim_pitch"))
         {
             rotationOwners.put("aim_pitch", "POSE_GRAPH_WEAPON_AIM");
         }
-        if (entity.getPilotEntity() != null
+        if (pilotAimActive
                 && rotationOwners.containsKey("head"))
         {
             rotationOwners.put("head", "POSE_GRAPH_PILOT_AIM");
@@ -387,9 +398,11 @@ public final class EvaPoseGraph
         if (entity.isCrucified()) return "crucified";
         if (entity.isBerserk()) return "berserk";
         if (entity.getActivationTicks() > 0) return "activation";
+        if (entity.getOrdinaryAttackStage() >= 0)
+            return "unarmed_attack";
         if (entity.getCockpitSmashAnim(partialTick) > 0.0F)
             return entity.getWeapon() == EvaUnit01Entity.WEAPON_KNIFE
-                    ? "progressive_knife" : "unarmed_attack";
+                    ? "progressive_knife" : "unarmed_smash";
         if (entity.getCockpitAttackAnim(partialTick) > 0.0F)
             return entity.getWeapon() == EvaUnit01Entity.WEAPON_KNIFE
                     ? "progressive_knife" : "unarmed_attack";
@@ -403,6 +416,10 @@ public final class EvaPoseGraph
 
     private static float phase(EvaUnit01Entity entity, float partialTick)
     {
+        if (entity.getOrdinaryAttackStage() >= 0)
+        {
+            return entity.getOrdinaryAttackProgress(partialTick);
+        }
         return Math.max(entity.getCockpitAttackAnim(partialTick),
                 entity.getCockpitSmashAnim(partialTick));
     }

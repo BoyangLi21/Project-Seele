@@ -1,0 +1,66 @@
+# EVA 普通攻击四组选片 Phase T
+
+状态：**HUMAN_SELECTED_GROUP_C_LIVE_2X**。项目负责人选择 C 组作为正式普通
+攻击，并明确要求播放速度再提高一倍；A/B/D 保留为未选研究证据，不得混入
+正式连招。
+
+## 选择边界
+
+- Phase P 拨砸／Lariat 与 Phase R 体育投掷改造均已人工判退，不得重用；
+- Phase Q 推移／钳制已锁定为可选命中互动，不属于普通攻击；
+- 本包只比较攻击者本体，不显示红色受击代理，避免同一目标效果影响选择；
+- 人工结论：选择 C；正式资源只包含 C 的三个阶段，移除隐藏 `knife` 通道后为
+  `3 clips / 50 bones / 141 frames`。
+
+## 四组真人动捕
+
+全部来源为 G1 Moves 的 MOVIN TRACIN 实际捕捉，CC BY 4.0。源动作本来就是
+Karate／近战攻击，不含体育投掷、拳击包、掌击、Lariat 或推动。
+
+| 组 | 三击顺序 | 侧重 | 两轮采样／时长 |
+|---|---|---|---:|
+| A | 右下砸 → 左横扫 → 右前冲击 | 混合三个系列，幅度与方向差异最大 | 223 / 3.70s |
+| B | 右爆发 → 左上击 → 右回扫 | 同一 Power Burst 系列，最快最紧凑 | 203 / 3.37s |
+| C（已选） | 右前冲 → 左长双击 → 右短下砸 | Double Strike 系列，第二击较长 | 281 / 4.67s |
+| D | 右前压 → 左爆发 → 右下击 | AttackKarate 系列，前进距离最大 | 235 / 3.90s |
+
+每组都显示两轮持续左键；每一击只在输入缓冲收到下一次左键时推进，阶段间和
+循环边界均不经过站姿。
+
+## 自动门禁
+
+- 12 个源阶段均通过旋转、支撑、下肢活动与收尾策略门禁；
+- 四组连击合成均 `0 failures`；
+- 精确 Tiger 全身：`4 clips / 0 failures`；
+- 精确 Tiger 通用 3D：`4 clips / 0 failures`；
+- 组间最大边界旋转步长：A `3.61°`、B `4.09°`、C `2.81°`、D `4.18°`；
+- 各组无支撑占比：A `0.02691`、B `0.05911`、C `0.0`、D `0.05532`，
+  均低于 `0.10`。
+
+自动结果不判断 Karate 味是否过强，也不构成 EVA 审美批准。
+
+## 正式运行时晋升
+
+- 正式资源：`assets/projectseele/motion/eva_ordinary_attack_group_c_v1.json`；
+- 姿势仍为 60 Hz 原始采样，不重采样；Java 运行时按 `2.0×` 推进；
+- 三段基准时长为 `0.3667s / 0.5167s / 0.2667s`，完整三击约 `1.15s`；
+- 服务端接触延迟为约 `3 / 8 / 3 tick`，伤害不再在按键瞬间结算；
+- 连续左键通过既有输入缓冲推进 `0 → 1 → 2 → 0`；中断时从当前最终姿势
+  惯性回收到 Gecko 基础姿势，不经过强制站姿闪回；
+- `aim_pitch`、`head` 和手指在动作期间归
+  `MOTION_ENGINE_LIVE_ACTION`，玩家瞄准层不得重复覆盖；
+- `GROUP_C_LIVE_RUNTIME_GATE_R02.json` 为 `PASS`，三段边界最大旋转步长
+  `2.80796°`；该门禁验证实现一致性，不重新替代人工审美结论。
+
+## 人工选片包
+
+```text
+D:\eva\artifacts\motion_research\eva_mocap_ordinary_combo_phase_t_selection\20260901-230215
+D:\eva\artifacts\motion_research\eva_mocap_ordinary_combo_phase_t_selection\20260901-230215.zip
+```
+
+合并视频：`00_EVA_ORDINARY_PHASE_T_ALL.mp4`，三视图、30 FPS、473 帧、
+15.77 秒，顺序为 A→B→C→D。右下红色编号格式为 `组号-帧号`。
+
+该包是历史选片证据。新的速度确认与踹击选片包见 Phase U 文档；Phase Q
+互动仍只保留为未来命中分支，没有被普通攻击按键直接播放。

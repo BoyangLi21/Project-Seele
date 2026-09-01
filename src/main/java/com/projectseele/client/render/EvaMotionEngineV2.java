@@ -38,6 +38,9 @@ import software.bernie.geckolib.cache.object.GeoBone;
  */
 public final class EvaMotionEngineV2
 {
+    public static final String OWNER_PREVIEW = "MOTION_ENGINE_PREVIEW";
+    public static final String OWNER_LIVE_ACTION =
+            "MOTION_ENGINE_LIVE_ACTION";
     private static final ResourceLocation DATABASE = new ResourceLocation(
             ProjectSeele.MODID, "motion/eva_humanoid_v2.json");
     private static final ResourceLocation PHYSICS_DATABASE = new ResourceLocation(
@@ -47,10 +50,14 @@ public final class EvaMotionEngineV2
     private static final ResourceLocation ORDINARY_ATTACK_DATABASE =
             new ResourceLocation(ProjectSeele.MODID,
                     "motion/eva_ordinary_attack_v1.json");
+    private static final ResourceLocation LIVE_ORDINARY_ATTACK_DATABASE =
+            new ResourceLocation(ProjectSeele.MODID,
+                    "motion/eva_ordinary_attack_group_c_v1.json");
     private static final double WALK_STRIDE_BLOCKS = 25.8334D;
     private static final double RUN_STRIDE_BLOCKS = 31.3944D;
     private static final double CROUCH_STRIDE_BLOCKS = 9.2990D;
     private static final float MODEL_UNITS_PER_SOURCE_METRE = 112.0F;
+    private static final double LIVE_ATTACK_RECOVERY_SECONDS = 0.16D;
     // The first live pass proved that Gecko's reflected render matrix cannot
     // share the same world conversion as the offline Bedrock skeleton. Keep
     // the bad layer fail-closed until it is rebuilt from tracked model-space
@@ -67,6 +74,8 @@ public final class EvaMotionEngineV2
             MotionDatabase.empty();
     private static volatile MotionDatabase ordinaryAttackDatabase =
             MotionDatabase.empty();
+    private static volatile MotionDatabase liveOrdinaryAttackDatabase =
+            MotionDatabase.empty();
 
     private EvaMotionEngineV2() {}
 
@@ -81,6 +90,9 @@ public final class EvaMotionEngineV2
         ordinaryAttackDatabase = load(resourceManager,
                 ORDINARY_ATTACK_DATABASE,
                 "EVA ordinary attack runtime");
+        liveOrdinaryAttackDatabase = load(resourceManager,
+                LIVE_ORDINARY_ATTACK_DATABASE,
+                "EVA group-C ordinary attack runtime");
     }
 
     private static MotionDatabase load(ResourceManager resourceManager,
@@ -122,12 +134,25 @@ public final class EvaMotionEngineV2
         boolean ordinaryAttackReview = previewMode >= 6 && previewMode <= 9;
         boolean labPreview = replayPreview || groundedPreview
                 || ordinaryAttackReview;
-        // The three-stage capture remains useful as an isolated comparison,
-        // but its full-body runtime composition failed human in-game review.
-        boolean gameplayOrdinaryAttack = false;
-        boolean motionDriven = labPreview || gameplayOrdinaryAttack;
-        MotionDatabase db = ordinaryAttackReview || gameplayOrdinaryAttack
-                ? ordinaryAttackDatabase
+        boolean gameplayOrdinaryAttack = entity.getWeapon()
+                == EvaUnit01Entity.WEAPON_FISTS
+                && entity.getOrdinaryAttackStage() >= 0
+                && !entity.isPilotProne() && !entity.isPilotCrouching();
+        RuntimeState existingRuntime = STATES.get(entity.getId());
+        boolean gameplayOrdinaryRecovery = !gameplayOrdinaryAttack
+                && previewMode == 0
+                && entity.getWeapon() == EvaUnit01Entity.WEAPON_FISTS
+                && !entity.isPilotProne() && !entity.isPilotCrouching()
+                && existingRuntime != null
+                && existingRuntime.liveAttackActive
+                && existingRuntime.liveAttackRecoveryAge
+                        < LIVE_ATTACK_RECOVERY_SECONDS;
+        boolean motionDriven = labPreview || gameplayOrdinaryAttack
+                || gameplayOrdinaryRecovery;
+        MotionDatabase db = gameplayOrdinaryAttack
+                || gameplayOrdinaryRecovery
+                ? liveOrdinaryAttackDatabase
+                : ordinaryAttackReview ? ordinaryAttackDatabase
                 : groundedPreview ? groundedDatabase
                 : replayPreview ? physicsDatabase : database;
         if (!motionDriven || db.bones.length == 0
@@ -172,6 +197,17 @@ public final class EvaMotionEngineV2
                     1.0D / 360.0D, 0.05D);
         }
         runtime.lastNanos = now;
+        if (gameplayOrdinaryAttack)
+        {
+            runtime.liveAttackActive = true;
+            runtime.liveAttackRecoveryAge = 0.0D;
+            runtime.lastLiveAttackStage = Mth.clamp(
+                    entity.getOrdinaryAttackStage(), 0, 2);
+        }
+        else if (gameplayOrdinaryRecovery)
+        {
+            runtime.liveAttackRecoveryAge += dt;
+        }
 
         boolean airborneNow = entity.isVisuallyAirborneForRender()
                 || entity.getVisualPose() == EvaUnit01Entity.VISUAL_JUMP
@@ -257,11 +293,23 @@ public final class EvaMotionEngineV2
         {
             String clipName = switch (entity.getOrdinaryAttackStage())
             {
-                case 0 -> "ordinary_attack_jab_left";
-                case 1 -> "ordinary_attack_cross_right";
-                default -> "ordinary_attack_hook_right";
+                case 0 -> "ordinary_attack_group_c_stage_1";
+                case 1 -> "ordinary_attack_group_c_stage_2";
+                default -> "ordinary_attack_group_c_stage_3";
             };
             selection = Selection.single(db.clip(clipName), clipName);
+            runtime.landingActive = false;
+        }
+        else if (gameplayOrdinaryRecovery)
+        {
+            String clipName = switch (runtime.lastLiveAttackStage)
+            {
+                case 0 -> "ordinary_attack_group_c_stage_1";
+                case 1 -> "ordinary_attack_group_c_stage_2";
+                default -> "ordinary_attack_group_c_stage_3";
+            };
+            selection = Selection.single(db.clip(clipName),
+                    clipName + "_recovery");
             runtime.landingActive = false;
         }
         else if (groundedPreview)
@@ -315,6 +363,10 @@ public final class EvaMotionEngineV2
         if (gameplayOrdinaryAttack)
         {
             runtime.phase = entity.getOrdinaryAttackProgress(partialTick);
+        }
+        else if (gameplayOrdinaryRecovery)
+        {
+            runtime.phase = 1.0D;
         }
         else if (replayPreview || ordinaryAttackReview)
         {
@@ -413,6 +465,19 @@ public final class EvaMotionEngineV2
         Set<String> rotationBones = new LinkedHashSet<>();
         Vector3f rootOffset = new Vector3f(target.rootMeters)
                 .mul(MODEL_UNITS_PER_SOURCE_METRE);
+        if (gameplayOrdinaryAttack)
+        {
+            runtime.liveAttackRootYOffset = rootOffset.y;
+        }
+        else if (gameplayOrdinaryRecovery)
+        {
+            float remaining = (float)(1.0D - Mth.clamp(
+                    runtime.liveAttackRecoveryAge
+                            / LIVE_ATTACK_RECOVERY_SECONDS,
+                    0.0D, 1.0D));
+            rootOffset.set(0.0F,
+                    runtime.liveAttackRootYOffset * remaining, 0.0F);
+        }
         model.getBone("root").ifPresent(root ->
         {
             if (groundedPreview || ordinaryAttackReview)
@@ -430,6 +495,7 @@ public final class EvaMotionEngineV2
         boolean meleeActive = entity.getCockpitAttackAnim(partialTick) > 0.0F
                 || entity.getCockpitSmashAnim(partialTick) > 0.0F;
         boolean fullBody = ordinaryAttackReview || gameplayOrdinaryAttack
+                || gameplayOrdinaryRecovery
                 || entity.getWeapon() == EvaUnit01Entity.WEAPON_FISTS
                 && !meleeActive;
         float inertialAlpha;
@@ -440,10 +506,17 @@ public final class EvaMotionEngineV2
         else
         {
             double halfLife = gameplayOrdinaryAttack ? 0.025D
+                    : gameplayOrdinaryRecovery ? 0.035D
                     : groundedPreview ? 0.035D
                     : selection.locomotion() ? 0.050D : 0.075D;
             inertialAlpha = (float)(1.0D - Math.exp(
                     -Math.log(2.0D) * dt / halfLife));
+            if (gameplayOrdinaryRecovery
+                    && runtime.liveAttackRecoveryAge
+                            >= LIVE_ATTACK_RECOVERY_SECONDS)
+            {
+                inertialAlpha = 1.0F;
+            }
         }
 
         for (int index = 0; index < db.bones.length; index++)
@@ -454,7 +527,8 @@ public final class EvaMotionEngineV2
             // the promoted body clip cannot silently show an open hand. The
             // retained native thumb already carries its per-side opposition.
             if (name.startsWith("finger_")
-                    && !ordinaryAttackReview && !gameplayOrdinaryAttack)
+                    && !ordinaryAttackReview && !gameplayOrdinaryAttack
+                    && !gameplayOrdinaryRecovery)
             {
                 continue;
             }
@@ -463,6 +537,15 @@ public final class EvaMotionEngineV2
                 continue;
             }
             Quaternionf wanted = target.rotations[index];
+            if (gameplayOrdinaryRecovery)
+            {
+                GeoBone geckoBone = model.getBone(name).orElse(null);
+                if (geckoBone == null)
+                {
+                    continue;
+                }
+                wanted = geckoRotationAsMotionQuaternion(geckoBone);
+            }
             Quaternionf current = runtime.rotations[index];
             if (!runtime.initialized[index])
             {
@@ -486,8 +569,24 @@ public final class EvaMotionEngineV2
                 rotationBones.add(name);
             });
         }
+        if (gameplayOrdinaryRecovery
+                && runtime.liveAttackRecoveryAge
+                        >= LIVE_ATTACK_RECOVERY_SECONDS)
+        {
+            runtime.liveAttackActive = false;
+            runtime.liveAttackRootYOffset = 0.0F;
+        }
         return new BoneWrites(Set.copyOf(rotationBones),
-                Set.copyOf(positionBones));
+                Set.copyOf(positionBones),
+                gameplayOrdinaryAttack || gameplayOrdinaryRecovery
+                        ? OWNER_LIVE_ACTION : OWNER_PREVIEW);
+    }
+
+    private static Quaternionf geckoRotationAsMotionQuaternion(GeoBone bone)
+    {
+        return new Quaternionf().rotationXYZ(
+                -bone.getRotX(), -bone.getRotY(), bone.getRotZ())
+                .normalize();
     }
 
     private static BoneWrites applyLivePhysics(BakedGeoModel model)
@@ -527,7 +626,7 @@ public final class EvaMotionEngineV2
             });
         }
         return new BoneWrites(Set.copyOf(rotationBones),
-                Set.copyOf(positionBones));
+                Set.copyOf(positionBones), OWNER_PREVIEW);
     }
 
     private static Selection select(EvaUnit01Entity entity,
@@ -853,11 +952,12 @@ public final class EvaMotionEngineV2
     }
 
     public record BoneWrites(Set<String> rotationBones,
-                             Set<String> positionBones)
+                             Set<String> positionBones,
+                             String owner)
     {
         public static BoneWrites empty()
         {
-            return new BoneWrites(Set.of(), Set.of());
+            return new BoneWrites(Set.of(), Set.of(), "NONE");
         }
 
         public boolean isEmpty()
@@ -911,6 +1011,10 @@ public final class EvaMotionEngineV2
         private boolean distanceInitialized;
         private double lastRenderX;
         private double lastRenderZ;
+        private boolean liveAttackActive;
+        private double liveAttackRecoveryAge;
+        private int lastLiveAttackStage;
+        private float liveAttackRootYOffset;
         private final FootLock leftFoot = new FootLock();
         private final FootLock rightFoot = new FootLock();
 

@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "poseGraphVersion": "eva_pose_graph_enforced_r02",
+  "poseGraphVersion": "eva_pose_graph_enforced_r03",
   "rigVersion": "eva_tiger_canonical_r01",
   "phase": "B",
   "mode": "ENFORCE_POST_GECKO_SINGLE_COMMIT",
@@ -10,6 +10,7 @@
     "IK and limits are final constraints inside the owning pose node",
     "render layers may hide geometry but may not claim body rotation",
     "official captures reject Motion Lab preview/demo pose authority",
+    "human-selected live-test actions may own their declared bone mask",
     "Gecko controllers are one upstream composite at the Phase-B boundary",
     "all post-Gecko writes are orchestrated by EvaPoseGraph.commit"
   ],
@@ -25,6 +26,7 @@
   "commitOrder": [
     "GECKO_COMPOSITE",
     "MOTION_ENGINE_PREVIEW",
+    "MOTION_ENGINE_LIVE_ACTION",
     "POSE_GRAPH_WEAPON_AIM",
     "POSE_GRAPH_PILOT_AIM"
   ],
@@ -34,9 +36,10 @@
     "scale"
   ],
   "ownerPriority": [
+    "MOTION_ENGINE_LIVE_ACTION",
+    "MOTION_ENGINE_PREVIEW",
     "POSE_GRAPH_PILOT_AIM",
     "POSE_GRAPH_WEAPON_AIM",
-    "MOTION_ENGINE_PREVIEW",
     "GECKO_COMPOSITE"
   ],
   "boneMasks": {
@@ -125,10 +128,15 @@
   },
   "lowLevelWriters": {
     "EvaMotionEngineV2": {
-      "owner": "MOTION_ENGINE_PREVIEW",
+      "owners": [
+        "MOTION_ENGINE_PREVIEW",
+        "MOTION_ENGINE_LIVE_ACTION"
+      ],
       "invokedOnlyBy": "EvaPoseGraph.commit",
       "reportsChannelsSeparately": true,
-      "officialCaptureAllowed": false
+      "officialCaptureAllowedOwners": [
+        "MOTION_ENGINE_LIVE_ACTION"
+      ]
     },
     "EvaPoseGraph.weaponAim": {
       "owner": "POSE_GRAPH_WEAPON_AIM",
@@ -171,6 +179,7 @@
   "officialCapture": {
     "motionLabPhysicsPreviewMustBe": 0,
     "visualPoseMustBe": 0,
+    "allowedMotionOwner": "MOTION_ENGINE_LIVE_ACTION",
     "recordFinalPostControllerMatrices": true,
     "finalOwnerConflictsMustBeEmptyFor": [
       "rotation",

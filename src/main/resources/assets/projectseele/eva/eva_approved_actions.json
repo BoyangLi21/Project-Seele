@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "rigVersion": "eva_tiger_canonical_r01",
-  "poseGraphVersion": "eva_pose_graph_enforced_r02",
+  "poseGraphVersion": "eva_pose_graph_enforced_r03",
   "baselineCommit": "a910890b2d16741e72843cfa534a74def6113078",
   "baselineDecision": "user_requested_pre_mocap_rollback",
   "policy": {
@@ -66,14 +66,35 @@
       "humanReviewRequired": false
     },
     "unarmed_attack": {
-      "status": "FROZEN_BASELINE_NOT_VISUALLY_APPROVED",
+      "status": "HUMAN_SELECTED_LIVE_CANDIDATE",
       "animationKeys": [
         "animation.eva_unit01.melee",
-        "animation.eva_unit01.melee_left",
+        "animation.eva_unit01.melee_left"
+      ],
+      "baselineSemanticSha256": "d4cffcdb4fd7e136bb4104da1b299a1b437be2f6376d350018cfea90733980cb",
+      "observedSemanticSha256": "bb5a2c2ff4d3a41a8c9994dc85fdb56c50610dafade569cc93d10724fb9d94ab",
+      "approvedSemanticSha256": null,
+      "candidateReason": "RUNTIME_GAME_REVIEW_REQUIRED",
+      "approvedBy": null,
+      "approvedAt": null,
+      "humanReviewRequired": true,
+      "runtimeMotionResource": "src/main/resources/assets/projectseele/motion/eva_ordinary_attack_group_c_v1.json",
+      "runtimeMotionSemanticSha256": "5c11d77e1fb1adbdb453a85c106fbab87b49ad88cb196eb9066b9ff8b4fef844",
+      "selectedGroup": "ordinary_group_c",
+      "playbackSpeedMultiplier": 2.0,
+      "geckoFallbackPolicy": "standing_fists_only_uses_runtime",
+      "selectedSemanticSha256": "bb5a2c2ff4d3a41a8c9994dc85fdb56c50610dafade569cc93d10724fb9d94ab",
+      "selectedBy": "project_owner",
+      "selectedAt": "2026-09-01",
+      "runtimeGameReviewRequired": true
+    },
+    "unarmed_smash": {
+      "status": "FROZEN_BASELINE_NOT_VISUALLY_APPROVED",
+      "animationKeys": [
         "animation.eva_unit01.smash"
       ],
-      "baselineSemanticSha256": "d5e85e939d39da1bc8b6a321b68d75dd2c4f2dce05c393d08ebea713c2787ac5",
-      "observedSemanticSha256": "d5e85e939d39da1bc8b6a321b68d75dd2c4f2dce05c393d08ebea713c2787ac5",
+      "baselineSemanticSha256": "0c835c5d527c526d33da445a0c5ac55c7d23bcfa4be57f73ad9b0f1319878810",
+      "observedSemanticSha256": "0c835c5d527c526d33da445a0c5ac55c7d23bcfa4be57f73ad9b0f1319878810",
       "approvedSemanticSha256": null,
       "candidateReason": null,
       "approvedBy": null,

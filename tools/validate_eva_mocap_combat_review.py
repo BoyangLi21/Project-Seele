@@ -52,6 +52,11 @@ def main() -> None:
             "resource is not explicitly preview-only")
     require(not document["live_gameplay_replacement"],
             "candidate falsely declares a live replacement")
+    require(document["human_review"] == {
+        "status": "HUMAN_REJECTED",
+        "rejectedAt": "2026-09-01",
+        "reason": "project_owner_rejected_all_four_candidates",
+    }, "rejected review decision is missing")
     require(document["sample_rate"] == 60.0,
             "candidate sample rate differs")
     require(len(document["bones"]) == 50
@@ -137,6 +142,8 @@ def main() -> None:
     require(manifest["constraints"]["supportMode"] ==
             "LOCKED_READY_LOWER_BODY",
             "manifest support mode differs")
+    require(manifest["humanDecision"] == document["human_review"],
+            "manifest/resource human decision differs")
     locks = json.loads(LOCKS.read_text(encoding="utf-8"))["actions"]
     require({name for name, value in locks.items()
              if value["status"] == "VISUALLY_APPROVED"} == {

@@ -83,7 +83,8 @@ def validate_body_texture_dimensions(geo_path: Path,
 
 def build_parts(path: Path, master: bpy.types.Object,
                 collection: bpy.types.Collection,
-                material: bpy.types.Material) -> dict[str, bpy.types.Object]:
+                material: bpy.types.Material,
+                name_prefix: str = "") -> dict[str, bpy.types.Object]:
     payload = json.loads(path.read_text(encoding="utf-8"))
     stride = int(payload["stride"])
     if stride != 8:
@@ -101,7 +102,7 @@ def build_parts(path: Path, master: bpy.types.Object,
             uvs.append((values[offset + 3], 1.0 - values[offset + 4]))
         faces = [tuple(range(index, index + 3))
                  for index in range(0, len(vertices), 3)]
-        mesh = bpy.data.meshes.new(f"EXACT::{bone_name}")
+        mesh = bpy.data.meshes.new(f"{name_prefix}EXACT::{bone_name}")
         mesh.from_pydata(vertices, [], faces)
         mesh.update()
         uv_layer = mesh.uv_layers.new(name="UVMap")
@@ -109,7 +110,7 @@ def build_parts(path: Path, master: bpy.types.Object,
             polygon.use_smooth = False
             for loop_index in polygon.loop_indices:
                 uv_layer.data[loop_index].uv = uvs[mesh.loops[loop_index].vertex_index]
-        obj = bpy.data.objects.new(f"PART::{bone_name}", mesh)
+        obj = bpy.data.objects.new(f"{name_prefix}PART::{bone_name}", mesh)
         collection.objects.link(obj)
         obj.parent = master
         obj.rotation_mode = "QUATERNION"
@@ -119,8 +120,9 @@ def build_parts(path: Path, master: bpy.types.Object,
 
 
 def make_joint(name: str, pivot: Vector, master: bpy.types.Object,
-               collection: bpy.types.Collection) -> bpy.types.Object:
-    joint = bpy.data.objects.new(f"JOINT::{name}", None)
+               collection: bpy.types.Collection,
+               name_prefix: str = "") -> bpy.types.Object:
+    joint = bpy.data.objects.new(f"{name_prefix}JOINT::{name}", None)
     joint.empty_display_type = "ARROWS"
     joint.empty_display_size = 2.2
     joint.location = target_to_blender(pivot)

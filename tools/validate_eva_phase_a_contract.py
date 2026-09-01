@@ -22,6 +22,9 @@ ANIMATION_REPO_PATH = (
     "src/main/resources/assets/projectseele/animations/"
     "eva_unit01.animation.json")
 ROLLBACK = REPO / "tools/eva_pre_mocap_gameplay_rollback.json"
+LIVE_ORDINARY = REPO / (
+    "src/main/resources/assets/projectseele/motion/"
+    "eva_ordinary_attack_group_c_v1.json")
 
 
 def read_json(path: Path) -> dict:
@@ -59,6 +62,7 @@ def main() -> None:
     actions = read_json(ACTIONS)
     animation = read_json(ANIMATION)["animations"]
     rollback = read_json(ROLLBACK)
+    live_ordinary = read_json(LIVE_ORDINARY)
     baseline_animation = read_json_at_commit(
         rollback["source_commit"], ANIMATION_REPO_PATH)["animations"]
 
@@ -122,7 +126,7 @@ def main() -> None:
     require(authority.get("rigVersion") == rig["rigVersion"],
             "authority rig version differs")
     require(authority.get("poseGraphVersion") ==
-            "eva_pose_graph_enforced_r02", "unexpected pose graph version")
+            "eva_pose_graph_enforced_r03", "unexpected pose graph version")
     require(authority.get("phase") == "B"
             and authority.get("mode") ==
             "ENFORCE_POST_GECKO_SINGLE_COMMIT",
@@ -132,6 +136,7 @@ def main() -> None:
             "Phase-B migration baseline differs")
     require(authority.get("commitOrder") == [
         "GECKO_COMPOSITE", "MOTION_ENGINE_PREVIEW",
+        "MOTION_ENGINE_LIVE_ACTION",
         "POSE_GRAPH_WEAPON_AIM", "POSE_GRAPH_PILOT_AIM"],
         "Phase-B commit order differs")
     require(authority.get("ownedChannels") ==
@@ -146,6 +151,9 @@ def main() -> None:
     require(capture["motionLabPhysicsPreviewMustBe"] == 0
             and capture["visualPoseMustBe"] == 0,
             "official capture must reject preview authority")
+    require(capture["allowedMotionOwner"] ==
+            "MOTION_ENGINE_LIVE_ACTION",
+            "official capture does not declare the approved live owner")
     require(capture["finalOwnerConflictsMustBeEmptyFor"] ==
             ["rotation", "position", "scale"],
             "official capture permits final owner conflicts")
@@ -168,14 +176,27 @@ def main() -> None:
             canonical_sha256(rollback), "rollback patch hash differs")
     candidate_actions = []
     approved_actions = []
+    selected_live_actions = []
     for action, contract in actions["actions"].items():
-        baseline_payload = {
+        baseline_gecko = {
             key: baseline_animation[key]
             for key in contract["animationKeys"]
         }
-        observed_payload = {
+        observed_gecko = {
             key: animation[key] for key in contract["animationKeys"]
         }
+        if action == "unarmed_attack":
+            baseline_payload = {
+                "geckoFallback": baseline_gecko,
+                "runtimeMotion": None,
+            }
+            observed_payload = {
+                "geckoFallback": observed_gecko,
+                "runtimeMotion": live_ordinary,
+            }
+        else:
+            baseline_payload = baseline_gecko
+            observed_payload = observed_gecko
         baseline_hash = canonical_sha256(baseline_payload)
         observed_hash = canonical_sha256(observed_payload)
         require(contract["baselineSemanticSha256"] == baseline_hash,
@@ -183,6 +204,8 @@ def main() -> None:
         require(contract["observedSemanticSha256"] == observed_hash,
                 f"{action} observed hash differs from live animation")
         approved = contract["status"] == "VISUALLY_APPROVED"
+        selected_live = (
+            contract["status"] == "HUMAN_SELECTED_LIVE_CANDIDATE")
         if approved:
             require(contract["approvedSemanticSha256"] == observed_hash
                     and contract["approvedBy"] == "project_owner"
@@ -197,22 +220,41 @@ def main() -> None:
                     and contract["approvedAt"] is None
                     and contract["humanReviewRequired"],
                     f"{action} bypasses human review")
+        if selected_live:
+            require(action == "unarmed_attack"
+                    and contract["runtimeMotionResource"] ==
+                    "src/main/resources/assets/projectseele/motion/"
+                    "eva_ordinary_attack_group_c_v1.json"
+                    and contract["runtimeMotionSemanticSha256"] ==
+                    canonical_sha256(live_ordinary)
+                    and contract["selectedGroup"] == "ordinary_group_c"
+                    and contract["playbackSpeedMultiplier"] == 2.0
+                    and contract["selectedSemanticSha256"] == observed_hash
+                    and contract["selectedBy"] == "project_owner"
+                    and contract["selectedAt"] == "2026-09-01"
+                    and contract["runtimeGameReviewRequired"]
+                    and contract["candidateReason"] ==
+                    "RUNTIME_GAME_REVIEW_REQUIRED",
+                    "ordinary attack live-selection receipt is incomplete")
+            selected_live_actions.append(action)
         if observed_hash == baseline_hash:
             require((approved or contract["status"] ==
                      "FROZEN_BASELINE_NOT_VISUALLY_APPROVED")
                     and contract["candidateReason"] is None,
                     f"{action} has a false baseline status")
         else:
-            require(approved or (
+            require(approved or selected_live or (
                     contract["status"] == "CANDIDATE_HASH_CHANGED"
                     and contract["candidateReason"] ==
                     "ANIMATION_HASH_CHANGED"),
                     f"{action} drift did not return to candidate status")
-            if not approved:
+            if not approved and not selected_live:
                 candidate_actions.append(action)
     require(set(approved_actions) == {
         "idle", "walk", "run", "jump_landing",
-    }, "recorded Phase-F human approvals differ")
+    }, "recorded human action approvals differ")
+    require(selected_live_actions == ["unarmed_attack"],
+            "standing-fists live-test selection differs")
     require(not candidate_actions,
             "frozen action drift requires human review: "
             + ", ".join(candidate_actions))
@@ -237,7 +279,8 @@ def main() -> None:
             and "EvaMotionEngineV2.apply(" in graph_source,
             "enforcing PoseGraph commit is missing")
     require("POSE_GRAPH_WEAPON_AIM" in graph_source
-            and "POSE_GRAPH_PILOT_AIM" in graph_source,
+            and "POSE_GRAPH_PILOT_AIM" in graph_source
+            and "MOTION_ENGINE_LIVE_ACTION" in motion_source,
             "Phase-B aim owners are missing")
     require("positionOwners" in graph_source
             and "scaleOwners" in graph_source
@@ -245,7 +288,8 @@ def main() -> None:
             "Phase-B channel ownership ledger is missing")
     require("record BoneWrites" in motion_source
             and "rotationBones" in motion_source
-            and "positionBones" in motion_source,
+            and "positionBones" in motion_source
+            and "String owner" in motion_source,
             "MotionEngine does not report channel-specific writes")
     for forbidden in (".setRotX(", ".setRotY(", ".setRotZ(",
                       ".setPosX(", ".setPosY(", ".setPosZ(",

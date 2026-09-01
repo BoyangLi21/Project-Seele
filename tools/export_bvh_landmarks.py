@@ -1,4 +1,4 @@
-"""Export normalized world-space landmarks from a BVH review window."""
+"""Export normalized world-space landmarks from a BVH or FBX review window."""
 
 from __future__ import annotations
 
@@ -14,6 +14,56 @@ from mathutils import Vector
 
 
 LANDMARK_PROFILES = {
+    "tuffles": [
+        ("pelvis", "Hip", False),
+        ("abdomen", "LowerSpine", False),
+        ("thorax", "Chest", False),
+        ("neck", "Neck", False),
+        ("head", "Head", False),
+        ("clavicle_l", "LClavicle", False),
+        ("shoulder_l", "LShoulder", False),
+        ("elbow_l", "LForearm", False),
+        ("wrist_l", "LHand", False),
+        ("hand_l", "LHand", True),
+        ("clavicle_r", "RClavicle", False),
+        ("shoulder_r", "RShoulder", False),
+        ("elbow_r", "RForearm", False),
+        ("wrist_r", "RHand", False),
+        ("hand_r", "RHand", True),
+        ("hip_l", "LThigh", False),
+        ("knee_l", "LShin", False),
+        ("ankle_l", "LFoot", False),
+        ("toe_l", "LToe", False),
+        ("hip_r", "RThigh", False),
+        ("knee_r", "RShin", False),
+        ("ankle_r", "RFoot", False),
+        ("toe_r", "RToe", False),
+    ],
+    "rokoko_mixamo": [
+        ("pelvis", "mixamorig:Hips", False),
+        ("abdomen", "mixamorig:Spine", False),
+        ("thorax", "mixamorig:Spine2", False),
+        ("neck", "mixamorig:Neck", False),
+        ("head", "mixamorig:Head", False),
+        ("clavicle_l", "mixamorig:LeftShoulder", False),
+        ("shoulder_l", "mixamorig:LeftArm", False),
+        ("elbow_l", "mixamorig:LeftForeArm", False),
+        ("wrist_l", "mixamorig:LeftHand", False),
+        ("hand_l", "mixamorig:LeftHand", True),
+        ("clavicle_r", "mixamorig:RightShoulder", False),
+        ("shoulder_r", "mixamorig:RightArm", False),
+        ("elbow_r", "mixamorig:RightForeArm", False),
+        ("wrist_r", "mixamorig:RightHand", False),
+        ("hand_r", "mixamorig:RightHand", True),
+        ("hip_l", "mixamorig:LeftUpLeg", False),
+        ("knee_l", "mixamorig:LeftLeg", False),
+        ("ankle_l", "mixamorig:LeftFoot", False),
+        ("toe_l", "mixamorig:LeftToeBase", False),
+        ("hip_r", "mixamorig:RightUpLeg", False),
+        ("knee_r", "mixamorig:RightLeg", False),
+        ("ankle_r", "mixamorig:RightFoot", False),
+        ("toe_r", "mixamorig:RightToeBase", False),
+    ],
     "cmu_accad": [
         ("pelvis", "Hips", False),
         ("abdomen", "Spine", False),
@@ -64,6 +114,56 @@ LANDMARK_PROFILES = {
         ("ankle_r", "Foot_R", False),
         ("toe_r", "Toes_R", False),
     ],
+    "eyes_japan_takiguchi": [
+        ("pelvis", "Hips", False),
+        ("abdomen", "Chest", False),
+        ("thorax", "Chest2", False),
+        ("neck", "Neck", False),
+        ("head", "Head", False),
+        ("clavicle_l", "LeftCollar", False),
+        ("shoulder_l", "LeftShoulder", False),
+        ("elbow_l", "LeftElbow", False),
+        ("wrist_l", "LeftWrist", False),
+        ("hand_l", "LeftWrist", True),
+        ("clavicle_r", "RightCollar", False),
+        ("shoulder_r", "RightShoulder", False),
+        ("elbow_r", "RightElbow", False),
+        ("wrist_r", "RightWrist", False),
+        ("hand_r", "RightWrist", True),
+        ("hip_l", "LeftHip", False),
+        ("knee_l", "LeftKnee", False),
+        ("ankle_l", "LeftAnkle", False),
+        ("toe_l", "LeftAnkle", True),
+        ("hip_r", "RightHip", False),
+        ("knee_r", "RightKnee", False),
+        ("ankle_r", "RightAnkle", False),
+        ("toe_r", "RightAnkle", True),
+    ],
+    "eyes_japan_yokoyama": [
+        ("pelvis", "Hips", False),
+        ("abdomen", "Chest", False),
+        ("thorax", "Chest", True),
+        ("neck", "Neck", False),
+        ("head", "Head", True),
+        ("clavicle_l", "LeftCollar", False),
+        ("shoulder_l", "LeftUpArm", False),
+        ("elbow_l", "LeftLowArm", False),
+        ("wrist_l", "LeftHand", False),
+        ("hand_l", "LeftHand", True),
+        ("clavicle_r", "RightCollar", False),
+        ("shoulder_r", "RightUpArm", False),
+        ("elbow_r", "RightLowArm", False),
+        ("wrist_r", "RightHand", False),
+        ("hand_r", "RightHand", True),
+        ("hip_l", "LeftUpLeg", False),
+        ("knee_l", "LeftLowLeg", False),
+        ("ankle_l", "LeftFoot", False),
+        ("toe_l", "LeftFoot", True),
+        ("hip_r", "RightUpLeg", False),
+        ("knee_r", "RightLowLeg", False),
+        ("ankle_r", "RightFoot", False),
+        ("toe_r", "RightFoot", True),
+    ],
 }
 
 
@@ -84,13 +184,35 @@ args = parser.parse_args(sys.argv[sys.argv.index("--") + 1:])
 
 bpy.ops.object.select_all(action="SELECT")
 bpy.ops.object.delete(use_global=False)
-bpy.ops.import_anim.bvh(
-    filepath=str(args.source.resolve()), target="ARMATURE", global_scale=0.01,
-    frame_start=1, use_fps_scale=False, update_scene_fps=True,
-    update_scene_duration=True, rotate_mode="NATIVE",
-    axis_forward="-Z", axis_up="Y",
-)
-rig = bpy.context.object
+source = args.source.resolve()
+if source.suffix.lower() == ".bvh":
+    header = source.read_text(encoding="utf-8", errors="ignore")[:4096]
+    if "ROOT Hip\n" in header or "ROOT Hip\r\n" in header:
+        axis_forward, axis_up = "-Y", "Z"
+    else:
+        axis_forward, axis_up = "-Z", "Y"
+    bpy.ops.import_anim.bvh(
+        filepath=str(source), target="ARMATURE", global_scale=0.01,
+        frame_start=1, use_fps_scale=False, update_scene_fps=True,
+        update_scene_duration=True, rotate_mode="NATIVE",
+        axis_forward=axis_forward, axis_up=axis_up,
+    )
+elif source.suffix.lower() == ".fbx":
+    bpy.ops.import_scene.fbx(
+        filepath=str(source), automatic_bone_orientation=False,
+    )
+else:
+    raise SystemExit(f"unsupported motion source: {source}")
+armatures = [
+    obj for obj in bpy.context.scene.objects if obj.type == "ARMATURE"
+]
+if len(armatures) != 1:
+    raise RuntimeError(
+        f"expected one source armature, found {len(armatures)}"
+    )
+rig = armatures[0]
+if rig.animation_data is None or rig.animation_data.action is None:
+    raise RuntimeError("source armature has no active animation action")
 action = rig.animation_data.action
 available_bones = set(rig.pose.bones.keys())
 matches = [
@@ -228,6 +350,9 @@ floor_values = np.minimum.reduce([
 floor = float(np.percentile(floor_values, 2.0))
 contacts = np.zeros((len(frames), 2), dtype=np.bool_)
 dt = 1.0 / fps
+contact_height = (0.055 if source_profile.startswith("eyes_japan") else 0.03)
+contact_speed = (0.55 if source_profile.startswith("eyes_japan") else 0.30)
+contact_patch_heights = []
 for side_index, side in enumerate(("l", "r")):
     ankle = normalized[:, index[f"ankle_{side}"]]
     toe = normalized[:, index[f"toe_{side}"]]
@@ -238,8 +363,18 @@ for side_index, side in enumerate(("l", "r")):
         speed[1:] = step_speed
         speed[0] = step_speed[0]
     contacts[:, side_index] = (
-        (patch_z <= floor + 0.03) & (speed <= 0.30)
+        (patch_z <= floor + contact_height) & (speed <= contact_speed)
     )
+    contact_patch_heights.append(patch_z)
+if source_profile.startswith("eyes_japan"):
+    contact_patch_heights = np.column_stack(contact_patch_heights)
+    for frame_index in range(len(frames)):
+        if contacts[frame_index].any():
+            continue
+        side_index = int(np.argmin(contact_patch_heights[frame_index]))
+        if (contact_patch_heights[frame_index, side_index]
+                <= floor + contact_height):
+            contacts[frame_index, side_index] = True
 
 args.output.parent.mkdir(parents=True, exist_ok=True)
 np.savez_compressed(
@@ -276,6 +411,10 @@ metadata = {
         "foot_forward_alignment": toe_alignment
     },
     "status": "source_landmarks_not_an_accepted_EVA_motion"
+}
+metadata["contact_thresholds_H"] = {
+    "height": contact_height,
+    "horizontal_speed_per_second": contact_speed,
 }
 args.metadata.parent.mkdir(parents=True, exist_ok=True)
 args.metadata.write_text(

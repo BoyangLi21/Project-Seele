@@ -19,7 +19,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--source", required=True, type=Path)
     parser.add_argument("--output-json", required=True, type=Path)
     parser.add_argument("--output-blend", type=Path)
-    parser.add_argument("--profile", choices=("cmu", "accad"), default="cmu")
+    parser.add_argument("--profile", choices=("cmu", "accad", "eyes_japan"),
+                        default="cmu")
     parser.add_argument("--merge-gap-seconds", type=float, default=0.42)
     parser.add_argument("--expand-seconds", type=float, default=0.22)
     return parser.parse_args(sys.argv[sys.argv.index("--") + 1 :])
@@ -85,6 +86,10 @@ def main() -> None:
     available_bones = set(armature.pose.bones.keys())
     if {"LeftHand", "RightHand", "Hips"}.issubset(available_bones):
         names = {"left": "LeftHand", "right": "RightHand", "root": "Hips"}
+    elif {"LeftWrist", "RightWrist", "Hips"}.issubset(available_bones):
+        names = {"left": "LeftWrist", "right": "RightWrist", "root": "Hips"}
+    elif {"Hand_L", "Hand_R", "Hips"}.issubset(available_bones):
+        names = {"left": "Hand_L", "right": "Hand_R", "root": "Hips"}
     elif {"lwrist", "rwrist", "root"}.issubset(available_bones):
         names = {"left": "lwrist", "right": "rwrist", "root": "root"}
     else:

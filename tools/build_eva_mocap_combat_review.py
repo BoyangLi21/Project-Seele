@@ -343,6 +343,7 @@ def main() -> None:
         "sample_rate": rate,
         "preview_only": True,
         "live_gameplay_replacement": False,
+        "human_review": manifest["humanDecision"],
         "authority": "constrained_human_mocap_candidate_review_only",
         "sources": sources,
         "bones": target_bones,

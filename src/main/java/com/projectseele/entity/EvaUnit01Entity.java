@@ -156,7 +156,15 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     private static final float MELEE_LANCE_DAMAGE = 120.0F;
     private static final int MELEE_COOLDOWN_TICKS = 12;
     private static final int MELEE_INPUT_BUFFER_TICKS = 16;
-    private static final int ORDINARY_ATTACK_VISUAL_TICKS = 14;
+    private static final float ORDINARY_ATTACK_SOURCE_FPS = 60.0F;
+    private static final float ORDINARY_ATTACK_PLAYBACK_SPEED = 2.0F;
+    // Inclusive live clip ranges are 0..44, 45..107 and 108..140.
+    // Store intervals rather than sample counts so phase 1.0 reaches the
+    // exact final authored sample at the requested 2x playback speed.
+    private static final int[] ORDINARY_ATTACK_FRAME_INTERVALS =
+            {44, 62, 32};
+    private static final int[] ORDINARY_ATTACK_CONTACT_FRAMES =
+            {20, 48, 17};
     // Reach geometry follows the shared 60-block frame.
     private static final double MELEE_REACH = EvaScale.fromLegacy(10.0D);
     private static final double MELEE_RADIUS = EvaScale.fromLegacy(7.5D);
@@ -486,6 +494,10 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     private int meleeCooldown;
     private int meleeInputBufferTicks;
     private int ordinaryAttackVisualTicks;
+    private int ordinaryAttackComboStage = -1;
+    private int ordinaryAttackComboGraceTicks;
+    private int pendingOrdinaryContactTicks;
+    private int pendingOrdinaryContactStage = -1;
     private int smashCooldown;
     private int stompCooldown;
     private int rifleCooldown;
@@ -818,6 +830,10 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         }
         this.chargingHeld = false;
         this.meleeInputBufferTicks = 0;
+        if (safeWeapon != WEAPON_FISTS)
+        {
+            this.cancelOrdinaryGroupCAttack();
+        }
     }
 
     public int getPowerTicks()
@@ -1992,14 +2008,44 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
 
     public float getOrdinaryAttackProgress(float partialTick)
     {
-        if (this.getOrdinaryAttackStage() < 0)
+        int stage = this.getOrdinaryAttackStage();
+        if (stage < 0)
         {
             return 0.0F;
         }
         float elapsed = this.tickCount - this.clientMeleeStartTick
                 + partialTick;
-        return Mth.clamp(elapsed / ORDINARY_ATTACK_VISUAL_TICKS,
+        return Mth.clamp(elapsed / this.ordinaryAttackDurationTicks(stage),
                 0.0F, 1.0F);
+    }
+
+    private float ordinaryAttackDurationTicks(int stage)
+    {
+        int safeStage = Mth.clamp(stage, 0,
+                ORDINARY_ATTACK_FRAME_INTERVALS.length - 1);
+        float authoredTicks = ORDINARY_ATTACK_FRAME_INTERVALS[safeStage]
+                * 20.0F / ORDINARY_ATTACK_SOURCE_FPS
+                / ORDINARY_ATTACK_PLAYBACK_SPEED;
+        return authoredTicks / EvaPilotCapability.attackSpeedMultiplier(
+                this.getPilotSynchronization());
+    }
+
+    private int ordinaryAttackVisualTicks(int stage)
+    {
+        return Math.max(1, Mth.ceil(this.ordinaryAttackDurationTicks(stage)));
+    }
+
+    private int ordinaryAttackContactTicks(int stage)
+    {
+        int safeStage = Mth.clamp(stage, 0,
+                ORDINARY_ATTACK_CONTACT_FRAMES.length - 1);
+        float authoredTicks = ORDINARY_ATTACK_CONTACT_FRAMES[safeStage]
+                * 20.0F / ORDINARY_ATTACK_SOURCE_FPS
+                / ORDINARY_ATTACK_PLAYBACK_SPEED;
+        float synchronizedTicks = authoredTicks
+                / EvaPilotCapability.attackSpeedMultiplier(
+                        this.getPilotSynchronization());
+        return Math.max(1, Math.round(synchronizedTicks));
     }
 
     public float getCockpitSmashAnim(float partialTick)
@@ -2082,6 +2128,10 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         {
             return;
         }
+        boolean prone = this.isPilotProne();
+        boolean crouching = this.isPilotCrouching();
+        boolean liveOrdinaryAttack = this.getWeapon() == WEAPON_FISTS
+                && !prone && !crouching;
         if (this.meleeCooldown > 0)
         {
             this.meleeInputBufferTicks = MELEE_INPUT_BUFFER_TICKS;
@@ -2095,23 +2145,21 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             return;
         }
         this.meleeInputBufferTicks = 0;
+        if (liveOrdinaryAttack)
+        {
+            this.beginOrdinaryGroupCAttack();
+            return;
+        }
         this.meleeCooldown = this.synchronizedCooldown(MELEE_COOLDOWN_TICKS);
         boolean lance = this.getWeapon() == WEAPON_LANCE;
         boolean knife = this.getWeapon() == WEAPON_KNIFE;
         boolean fixedRightHandWeapon = lance || knife;
-        // The promoted three-clip runtime layer remains available only in the
-        // isolated demo. In live play it produced a folded two-arm silhouette;
-        // use the Tiger-reviewed alternating strikes until a replacement is
-        // accepted in game.
-        this.ordinaryAttackVisualTicks = 0;
-        this.entityData.set(DATA_ORDINARY_ATTACK_STAGE, -1);
+        this.cancelOrdinaryGroupCAttack();
         this.leftSwing = fixedRightHandWeapon ? false : !this.leftSwing;
         this.entityData.set(DATA_MELEE_LEFT, this.leftSwing);
         this.entityData.set(DATA_MELEE_SEQUENCE,
                 (this.entityData.get(DATA_MELEE_SEQUENCE) + 1) & Integer.MAX_VALUE);
         this.swing(this.leftSwing ? InteractionHand.OFF_HAND : InteractionHand.MAIN_HAND, true);
-        boolean prone = this.isPilotProne();
-        boolean crouching = this.isPilotCrouching();
         String animation = prone
                 ? lance ? "prone_lance_thrust"
                     : knife ? "prone_knife"
@@ -2143,6 +2191,70 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
                 lance ? 0.48F : knife ? 0.7F : 0.8F);
     }
 
+    private void beginOrdinaryGroupCAttack()
+    {
+        int stage = this.ordinaryAttackComboGraceTicks > 0
+                ? Math.floorMod(this.ordinaryAttackComboStage + 1,
+                        ORDINARY_ATTACK_FRAME_INTERVALS.length)
+                : 0;
+        int visualTicks = this.ordinaryAttackVisualTicks(stage);
+        this.ordinaryAttackComboStage = stage;
+        this.ordinaryAttackComboGraceTicks = Math.max(
+                MELEE_INPUT_BUFFER_TICKS, visualTicks + 4);
+        this.ordinaryAttackVisualTicks = visualTicks;
+        this.pendingOrdinaryContactTicks =
+                this.ordinaryAttackContactTicks(stage);
+        this.pendingOrdinaryContactStage = stage;
+        this.meleeCooldown = visualTicks;
+        this.leftSwing = stage == 1;
+        this.entityData.set(DATA_MELEE_LEFT, this.leftSwing);
+        this.entityData.set(DATA_ORDINARY_ATTACK_STAGE, stage);
+        this.entityData.set(DATA_MELEE_SEQUENCE,
+                (this.entityData.get(DATA_MELEE_SEQUENCE) + 1)
+                        & Integer.MAX_VALUE);
+        this.swing(this.leftSwing ? InteractionHand.OFF_HAND
+                : InteractionHand.MAIN_HAND, true);
+        if (this.getTags().contains("seele_motion_lab"))
+        {
+            ProjectSeele.LOGGER.info(
+                    "EVA motion-lab group-C melee accepted: eva={} stage={} "
+                            + "visualTicks={} contactTicks={} speed={}x",
+                    this.getStringUUID(), stage, visualTicks,
+                    this.pendingOrdinaryContactTicks,
+                    ORDINARY_ATTACK_PLAYBACK_SPEED);
+        }
+    }
+
+    private void resolveOrdinaryGroupCContact(ServerPlayer pilot, int stage)
+    {
+        float damage = MELEE_FIST_DAMAGE * this.getMeleeMultiplier();
+        Vec3 forward = this.getForward().multiply(1.0D, 0.0D, 1.0D)
+                .normalize();
+        Vec3 center = this.position().add(forward.scale(MELEE_REACH))
+                .add(0.0D, 14.0D, 0.0D);
+        AABB zone = new AABB(center, center).inflate(
+                MELEE_RADIUS, 10.0D, MELEE_RADIUS);
+        this.strikeZone(pilot, zone, damage, 1.1D, center);
+        this.playSound(SoundEvents.PLAYER_ATTACK_STRONG, 2.5F,
+                stage == 1 ? 0.74F : stage == 2 ? 0.68F : 0.8F);
+        if (this.getTags().contains("seele_motion_lab"))
+        {
+            ProjectSeele.LOGGER.info(
+                    "EVA motion-lab group-C melee contact: eva={} stage={}",
+                    this.getStringUUID(), stage);
+        }
+    }
+
+    private void cancelOrdinaryGroupCAttack()
+    {
+        this.ordinaryAttackVisualTicks = 0;
+        this.ordinaryAttackComboStage = -1;
+        this.ordinaryAttackComboGraceTicks = 0;
+        this.pendingOrdinaryContactTicks = 0;
+        this.pendingOrdinaryContactStage = -1;
+        this.entityData.set(DATA_ORDINARY_ATTACK_STAGE, -1);
+    }
+
     /** Crouch + attack: a slow two-handed slam that flattens the area ahead. */
     public void smashAttack(ServerPlayer pilot)
     {
@@ -2151,8 +2263,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         {
             return;
         }
-        this.ordinaryAttackVisualTicks = 0;
-        this.entityData.set(DATA_ORDINARY_ATTACK_STAGE, -1);
+        this.cancelOrdinaryGroupCAttack();
         this.smashCooldown = this.synchronizedCooldown(SMASH_COOLDOWN_TICKS);
         this.entityData.set(DATA_SMASH_SEQUENCE,
                 (this.entityData.get(DATA_SMASH_SEQUENCE) + 1) & Integer.MAX_VALUE);
@@ -2194,8 +2305,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         {
             return;
         }
-        this.ordinaryAttackVisualTicks = 0;
-        this.entityData.set(DATA_ORDINARY_ATTACK_STAGE, -1);
+        this.cancelOrdinaryGroupCAttack();
         this.stompCooldown = this.synchronizedCooldown(STOMP_COOLDOWN_TICKS);
         this.triggerAnim("strike", "stomp");
 
@@ -2944,8 +3054,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
 
     private void berserkClaw(LivingEntity target, ServerLevel server)
     {
-        this.ordinaryAttackVisualTicks = 0;
-        this.entityData.set(DATA_ORDINARY_ATTACK_STAGE, -1);
+        this.cancelOrdinaryGroupCAttack();
         this.leftSwing = !this.leftSwing;
         this.entityData.set(DATA_MELEE_LEFT, this.leftSwing);
         this.entityData.set(DATA_MELEE_SEQUENCE,
@@ -3166,6 +3275,32 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         {
             sealedPilot.setInvisible(true);
         }
+        if (this.ordinaryAttackComboGraceTicks > 0)
+        {
+            this.ordinaryAttackComboGraceTicks--;
+        }
+        if (this.pendingOrdinaryContactTicks > 0)
+        {
+            this.pendingOrdinaryContactTicks--;
+            if (this.pendingOrdinaryContactTicks == 0)
+            {
+                int contactStage = this.pendingOrdinaryContactStage;
+                this.pendingOrdinaryContactStage = -1;
+                if (this.getControllingPassenger() instanceof ServerPlayer pilot
+                        && !this.isPilotControlLocked())
+                {
+                    this.resolveOrdinaryGroupCContact(pilot, contactStage);
+                }
+            }
+        }
+        if (this.ordinaryAttackVisualTicks > 0)
+        {
+            this.ordinaryAttackVisualTicks--;
+            if (this.ordinaryAttackVisualTicks == 0)
+            {
+                this.entityData.set(DATA_ORDINARY_ATTACK_STAGE, -1);
+            }
+        }
         if (this.meleeCooldown > 0)
         {
             this.meleeCooldown--;
@@ -3178,14 +3313,6 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
                     && !this.isPilotControlLocked() && this.isMeleeWeapon())
             {
                 this.meleeAttack(pilot);
-            }
-        }
-        if (this.ordinaryAttackVisualTicks > 0)
-        {
-            this.ordinaryAttackVisualTicks--;
-            if (this.ordinaryAttackVisualTicks == 0)
-            {
-                this.entityData.set(DATA_ORDINARY_ATTACK_STAGE, -1);
             }
         }
         if (this.smashCooldown > 0)
@@ -4853,6 +4980,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         }
         this.clearJumpRequestState();
         this.meleeInputBufferTicks = 0;
+        this.cancelOrdinaryGroupCAttack();
         this.chargingHeld = false;
         this.entityData.set(DATA_CANNON_CHARGE, 0);
         this.entityData.set(DATA_N2_ARM_TICKS, 0);
@@ -4877,6 +5005,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     /** Stop input-driven motion without making a prone Unit pop upright. */
     private void clearPilotMotion()
     {
+        this.cancelOrdinaryGroupCAttack();
         this.entityData.set(DATA_CROUCHING, false);
         this.entityData.set(DATA_SPRINTING, false);
         this.updatePoseDimensions();

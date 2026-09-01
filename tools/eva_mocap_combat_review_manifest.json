@@ -1,5 +1,10 @@
 {
   "schema": 1,
+  "humanDecision": {
+    "status": "HUMAN_REJECTED",
+    "rejectedAt": "2026-09-01",
+    "reason": "project_owner_rejected_all_four_candidates"
+  },
   "sampleRate": 60.0,
   "targetGeo": "run/resourcepacks/eva_real_model/assets/projectseele/geo/eva_unit01.geo.json",
   "approvedFoundationProfile": "src/main/resources/assets/projectseele/motion/eva_humanoid_v2.json",
