@@ -15,6 +15,7 @@ import com.projectseele.network.ServerboundUltramanTogglePacket;
 import com.projectseele.world.EntryPlugKinematics;
 import com.projectseele.world.EvaPilotResolver;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.sounds.SoundEvent;
@@ -34,6 +35,7 @@ import net.minecraftforge.client.event.InputEvent;
 import net.minecraftforge.client.event.RenderHandEvent;
 import net.minecraftforge.client.event.RenderGuiOverlayEvent;
 import net.minecraftforge.client.event.RenderPlayerEvent;
+import net.minecraftforge.client.event.ScreenEvent;
 import net.minecraftforge.event.entity.EntityEvent;
 import net.minecraft.client.model.PlayerModel;
 import net.minecraft.world.InteractionHand;
@@ -166,6 +168,11 @@ public final class ClientForgeEvents
             if (eva != null)
             {
                 minecraft.options.keyShift.setDown(false);
+                minecraft.options.keyInventory.setDown(false);
+                while (minecraft.options.keyInventory.consumeClick())
+                {
+                    // The entry plug owns input while the pilot is sealed in.
+                }
                 player.setShiftKeyDown(false);
             }
             return;
@@ -375,6 +382,23 @@ public final class ClientForgeEvents
         {
             minecraft.level.playLocalSound(minecraft.player.getX(), minecraft.player.getY(), minecraft.player.getZ(),
                     sound, SoundSource.PLAYERS, volume, pitch, false);
+        }
+    }
+
+    /** Personal inventories and mod backpacks are unavailable in the plug. */
+    @SubscribeEvent
+    public static void onScreenOpening(ScreenEvent.Opening event)
+    {
+        Minecraft minecraft = Minecraft.getInstance();
+        LocalPlayer player = minecraft.player;
+        if (ridden(player) != null
+                && event.getNewScreen() instanceof AbstractContainerScreen<?>)
+        {
+            event.setCanceled(true);
+            if (player != null)
+            {
+                player.closeContainer();
+            }
         }
     }
 

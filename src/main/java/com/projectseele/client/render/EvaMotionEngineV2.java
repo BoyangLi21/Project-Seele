@@ -56,6 +56,9 @@ public final class EvaMotionEngineV2
     private static final ResourceLocation LIVE_KICK_DATABASE =
             new ResourceLocation(ProjectSeele.MODID,
                     "motion/eva_kick_side_left_v1.json");
+    private static final ResourceLocation LIVE_KNIFE_DATABASE =
+            new ResourceLocation(ProjectSeele.MODID,
+                    "motion/eva_knife_attacks_phase_m_v1.json");
     private static final double WALK_STRIDE_BLOCKS = 25.8334D;
     private static final double RUN_STRIDE_BLOCKS = 31.3944D;
     private static final double CROUCH_STRIDE_BLOCKS = 9.2990D;
@@ -82,6 +85,8 @@ public final class EvaMotionEngineV2
             MotionDatabase.empty();
     private static volatile MotionDatabase liveKickDatabase =
             MotionDatabase.empty();
+    private static volatile MotionDatabase liveKnifeDatabase =
+            MotionDatabase.empty();
 
     private EvaMotionEngineV2() {}
 
@@ -101,6 +106,8 @@ public final class EvaMotionEngineV2
                 "EVA group-C ordinary attack runtime");
         liveKickDatabase = load(resourceManager, LIVE_KICK_DATABASE,
                 "EVA K1 side-kick runtime");
+        liveKnifeDatabase = load(resourceManager, LIVE_KNIFE_DATABASE,
+                "EVA approved Phase-M knife runtime");
     }
 
     private static MotionDatabase load(ResourceManager resourceManager,
@@ -148,7 +155,11 @@ public final class EvaMotionEngineV2
                 && !entity.isPilotProne() && !entity.isPilotCrouching();
         boolean gameplayKick = !gameplayOrdinaryAttack
                 && entity.isKickMotionActive(partialTick);
-        boolean gameplayLiveAction = gameplayOrdinaryAttack || gameplayKick;
+        int gameplayKnifeType = entity.getKnifeMotionType(partialTick);
+        boolean gameplayKnife = !gameplayOrdinaryAttack && !gameplayKick
+                && gameplayKnifeType >= 0;
+        boolean gameplayLiveAction = gameplayOrdinaryAttack || gameplayKick
+                || gameplayKnife;
         RuntimeState existingRuntime = STATES.get(entity.getId());
         boolean gameplayRecovery = !gameplayLiveAction
                 && previewMode == 0
@@ -159,10 +170,11 @@ public final class EvaMotionEngineV2
                 && existingRuntime.liveAttackRecoveryAge
                         < LIVE_ATTACK_RECOVERY_SECONDS;
         boolean motionDriven = labPreview || gameplayOrdinaryAttack
-                || gameplayKick || gameplayRecovery;
+                || gameplayKick || gameplayKnife || gameplayRecovery;
         MotionDatabase db = gameplayOrdinaryAttack
                 ? liveOrdinaryAttackDatabase
                 : gameplayKick ? liveKickDatabase
+                : gameplayKnife ? liveKnifeDatabase
                 : gameplayRecovery && existingRuntime != null
                         && "kick".equals(existingRuntime.liveActionFamily)
                 ? liveKickDatabase
@@ -216,7 +228,10 @@ public final class EvaMotionEngineV2
         {
             runtime.liveAttackActive = true;
             runtime.liveAttackRecoveryAge = 0.0D;
-            String family = gameplayKick ? "kick" : "ordinary";
+            String family = gameplayKick ? "kick"
+                    : gameplayKnife ? gameplayKnifeType == 1
+                            ? "knife_reverse" : "knife_forward"
+                    : "ordinary";
             if (!family.equals(runtime.liveActionFamily))
             {
                 runtime.liveActionFamily = family;
@@ -335,6 +350,14 @@ public final class EvaMotionEngineV2
                     "kick_side_left");
             runtime.landingActive = false;
         }
+        else if (gameplayKnife)
+        {
+            String clipName = gameplayKnifeType == 1
+                    ? "eva_short_knife_stab_twist_reverse"
+                    : "eva_locked_knife_stab_twist_forward";
+            selection = Selection.single(db.clip(clipName), clipName);
+            runtime.landingActive = false;
+        }
         else if (gameplayRecovery)
         {
             String clipName;
@@ -399,7 +422,10 @@ public final class EvaMotionEngineV2
                 ProjectSeele.LOGGER.info(
                         "EVA post-Gecko live pose selected: entity={} family={} "
                                 + "clip={} stage={} bones={}",
-                        entity.getId(), gameplayKick ? "kick" : "ordinary",
+                        entity.getId(), gameplayKick ? "kick"
+                                : gameplayKnife ? gameplayKnifeType == 1
+                                        ? "knife_reverse" : "knife_forward"
+                                : "ordinary",
                         selection.key(), entity.getOrdinaryAttackStage(),
                         db.bones.length);
             }
@@ -420,6 +446,11 @@ public final class EvaMotionEngineV2
         else if (gameplayKick)
         {
             runtime.phase = entity.getKickAttackProgress(partialTick);
+        }
+        else if (gameplayKnife)
+        {
+            runtime.phase = entity.getKnifeMotionProgress(
+                    gameplayKnifeType, partialTick);
         }
         else if (gameplayRecovery)
         {
@@ -572,7 +603,7 @@ public final class EvaMotionEngineV2
         boolean meleeActive = entity.getCockpitAttackAnim(partialTick) > 0.0F
                 || entity.getCockpitSmashAnim(partialTick) > 0.0F;
         boolean fullBody = ordinaryAttackReview || gameplayOrdinaryAttack
-                || gameplayKick || gameplayRecovery
+                || gameplayKick || gameplayKnife || gameplayRecovery
                 || entity.getWeapon() == EvaUnit01Entity.WEAPON_FISTS
                 && !meleeActive;
         float inertialAlpha;
@@ -606,7 +637,7 @@ public final class EvaMotionEngineV2
             // retained native thumb already carries its per-side opposition.
             if (name.startsWith("finger_")
                     && !ordinaryAttackReview && !gameplayOrdinaryAttack
-                    && !gameplayKick && !gameplayRecovery)
+                    && !gameplayKick && !gameplayKnife && !gameplayRecovery)
             {
                 continue;
             }
@@ -644,7 +675,7 @@ public final class EvaMotionEngineV2
             }
             model.getBone(name).ifPresent(bone ->
             {
-                Vector3f euler = current.getEulerAnglesXYZ(new Vector3f());
+                Vector3f euler = motionQuaternionToAuthoredEuler(current);
                 // Gecko's Builtin BakedModelFactory converts authored
                 // Bedrock rotations as (-X, -Y, +Z). This runtime path must
                 // perform the same basis change or an offline-correct pose is
@@ -654,6 +685,19 @@ public final class EvaMotionEngineV2
                 bone.setRotZ(euler.z);
                 rotationBones.add(name);
             });
+            if (target.positionAuthored[index])
+            {
+                Vector3f position = target.positions[index];
+                model.getBone(name).ifPresent(bone ->
+                {
+                    // GeoBone/RenderUtils applies the Bedrock X reflection;
+                    // these are the exact authored offsets used by Blender.
+                    bone.setPosX(position.x);
+                    bone.setPosY(position.y);
+                    bone.setPosZ(position.z);
+                    positionBones.add(name);
+                });
+            }
         }
         if (gameplayRecovery
                 && runtime.liveAttackRecoveryAge
@@ -672,9 +716,37 @@ public final class EvaMotionEngineV2
 
     private static Quaternionf geckoRotationAsMotionQuaternion(GeoBone bone)
     {
-        return new Quaternionf().rotationXYZ(
-                -bone.getRotX(), -bone.getRotY(), bone.getRotZ())
-                .normalize();
+        double x = -bone.getRotX();
+        double y = -bone.getRotY();
+        double z = bone.getRotZ();
+        double cx = Math.cos(x * 0.5D);
+        double sx = Math.sin(x * 0.5D);
+        double cy = Math.cos(y * 0.5D);
+        double sy = Math.sin(y * 0.5D);
+        double cz = Math.cos(z * 0.5D);
+        double sz = Math.sin(z * 0.5D);
+        return new Quaternionf(
+                (float)(sx * cy * cz - cx * sy * sz),
+                (float)(cx * sy * cz + sx * cy * sz),
+                (float)(cx * cy * sz - sx * sy * cz),
+                (float)(cx * cy * cz + sx * sy * sz)).normalize();
+    }
+
+    /** Matches Blender mathutils Quaternion.to_euler("XYZ") exactly. */
+    private static Vector3f motionQuaternionToAuthoredEuler(
+            Quaternionf rotation)
+    {
+        double x = rotation.x;
+        double y = rotation.y;
+        double z = rotation.z;
+        double w = rotation.w;
+        double eulerX = Math.atan2(2.0D * (w * x + y * z),
+                1.0D - 2.0D * (x * x + y * y));
+        double sinY = 2.0D * (w * y - z * x);
+        double eulerY = Math.asin(Mth.clamp(sinY, -1.0D, 1.0D));
+        double eulerZ = Math.atan2(2.0D * (w * z + x * y),
+                1.0D - 2.0D * (y * y + z * z));
+        return new Vector3f((float)eulerX, (float)eulerY, (float)eulerZ);
     }
 
     private static double liveActionHalfLife(boolean kick,
@@ -716,7 +788,7 @@ public final class EvaMotionEngineV2
             Quaternionf rotation = rotations[index];
             model.getBone(name).ifPresent(bone ->
             {
-                Vector3f euler = rotation.getEulerAnglesXYZ(new Vector3f());
+            Vector3f euler = motionQuaternionToAuthoredEuler(rotation);
                 bone.setRotX(-euler.x);
                 bone.setRotY(-euler.y);
                 bone.setRotZ(euler.z);
@@ -1149,6 +1221,8 @@ public final class EvaMotionEngineV2
     private static final class PoseBuffer
     {
         private final Quaternionf[] rotations;
+        private final Vector3f[] positions;
+        private final boolean[] positionAuthored;
         private final Vector3f rootMeters = new Vector3f();
         private boolean leftContact;
         private boolean rightContact;
@@ -1156,9 +1230,12 @@ public final class EvaMotionEngineV2
         private PoseBuffer(int bones)
         {
             this.rotations = new Quaternionf[bones];
+            this.positions = new Vector3f[bones];
+            this.positionAuthored = new boolean[bones];
             for (int index = 0; index < bones; index++)
             {
                 this.rotations[index] = new Quaternionf();
+                this.positions[index] = new Vector3f();
             }
         }
 
@@ -1167,6 +1244,9 @@ public final class EvaMotionEngineV2
             for (int index = 0; index < this.rotations.length; index++)
             {
                 this.rotations[index].set(source.rotations[index]);
+                this.positions[index].set(source.positions[index]);
+                this.positionAuthored[index] =
+                        source.positionAuthored[index];
             }
             this.rootMeters.set(source.rootMeters);
             this.leftContact = source.leftContact;
@@ -1180,6 +1260,11 @@ public final class EvaMotionEngineV2
             {
                 output.rotations[index].set(first.rotations[index])
                         .slerp(second.rotations[index], amount).normalize();
+                output.positions[index].set(first.positions[index])
+                        .lerp(second.positions[index], amount);
+                output.positionAuthored[index] =
+                        first.positionAuthored[index]
+                                || second.positionAuthored[index];
             }
             output.rootMeters.set(first.rootMeters)
                     .lerp(second.rootMeters, amount);
@@ -1235,6 +1320,11 @@ public final class EvaMotionEngineV2
             {
                 output.rotations[index].set(first.rotations[index])
                         .slerp(second.rotations[index], alpha).normalize();
+                output.positions[index].set(first.positions[index])
+                        .lerp(second.positions[index], alpha);
+                output.positionAuthored[index] =
+                        first.positionAuthored[index]
+                                || second.positionAuthored[index];
             }
             output.rootMeters.set(first.rootMeters)
                     .lerp(second.rootMeters, alpha);
@@ -1245,7 +1335,8 @@ public final class EvaMotionEngineV2
         }
     }
 
-    private record Frame(Quaternionf[] rotations, Vector3f rootMeters,
+    private record Frame(Quaternionf[] rotations, Vector3f[] positions,
+                         boolean[] positionAuthored, Vector3f rootMeters,
                          boolean leftContact, boolean rightContact) {}
 
     private static final class MotionDatabase
@@ -1333,6 +1424,12 @@ public final class EvaMotionEngineV2
                                 "bone/frame mismatch in " + entry.getKey());
                     }
                     Quaternionf[] rotations = new Quaternionf[bones.length];
+                    Vector3f[] positions = new Vector3f[bones.length];
+                    boolean[] positionAuthored = new boolean[bones.length];
+                    JsonObject positionsJson = frameJson.has(
+                            "bone_position_xyz")
+                            ? frameJson.getAsJsonObject("bone_position_xyz")
+                            : null;
                     for (int boneIndex = 0; boneIndex < bones.length;
                             boneIndex++)
                     {
@@ -1342,12 +1439,31 @@ public final class EvaMotionEngineV2
                                 q.get(1).getAsFloat(), q.get(2).getAsFloat(),
                                 q.get(3).getAsFloat(), q.get(0).getAsFloat())
                                 .normalize();
+                        positions[boneIndex] = new Vector3f();
+                        if (positionsJson != null
+                                && positionsJson.has(bones[boneIndex]))
+                        {
+                            JsonArray value = positionsJson.getAsJsonArray(
+                                    bones[boneIndex]);
+                            if (value.size() != 3)
+                            {
+                                throw new IllegalArgumentException(
+                                        "bone_position_xyz must have three "
+                                                + "components");
+                            }
+                            positions[boneIndex].set(
+                                    value.get(0).getAsFloat(),
+                                    value.get(1).getAsFloat(),
+                                    value.get(2).getAsFloat());
+                            positionAuthored[boneIndex] = true;
+                        }
                     }
                     JsonArray contact = frameJson
                             .getAsJsonArray("foot_contact");
                     JsonArray rootPosition = frameJson
                             .getAsJsonArray("root_m");
-                    frames[frameIndex] = new Frame(rotations,
+                    frames[frameIndex] = new Frame(rotations, positions,
+                            positionAuthored,
                             new Vector3f(rootPosition.get(0).getAsFloat(),
                                     rootPosition.get(1).getAsFloat(),
                                     rootPosition.get(2).getAsFloat()),

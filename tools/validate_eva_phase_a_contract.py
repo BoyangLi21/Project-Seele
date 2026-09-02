@@ -29,6 +29,9 @@ LIVE_ORDINARY = REPO / (
 LIVE_KICK = REPO / (
     "src/main/resources/assets/projectseele/motion/"
     "eva_kick_side_left_v1.json")
+LIVE_KNIFE = REPO / (
+    "src/main/resources/assets/projectseele/motion/"
+    "eva_knife_attacks_phase_m_v1.json")
 
 
 def read_json(path: Path) -> dict:
@@ -78,6 +81,7 @@ def main() -> None:
     rollback = read_json(ROLLBACK)
     live_ordinary = read_json(LIVE_ORDINARY)
     live_kick = read_json(LIVE_KICK)
+    live_knife = read_json(LIVE_KNIFE)
     baseline_animation = read_json_at_commit(
         rollback["source_commit"], ANIMATION_REPO_PATH)["animations"]
 
@@ -214,6 +218,15 @@ def main() -> None:
         elif action == "kick_attack":
             baseline_payload = {"runtimeMotion": None}
             observed_payload = {"runtimeMotion": live_kick}
+        elif action in {"knife_attack_forward", "knife_attack_reverse"}:
+            baseline_payload = {
+                "geckoFallback": baseline_gecko,
+                "runtimeMotion": None,
+            }
+            observed_payload = {
+                "geckoFallback": observed_gecko,
+                "runtimeMotion": live_knife,
+            }
         else:
             baseline_payload = baseline_gecko
             observed_payload = observed_gecko
@@ -243,25 +256,42 @@ def main() -> None:
         if selected_live:
             selected_resource = (
                 live_ordinary if action == "unarmed_attack"
-                else live_kick if action == "kick_attack" else None)
-            expected_path = (
-                "src/main/resources/assets/projectseele/motion/"
-                "eva_ordinary_attack_group_c_v1.json"
-                if action == "unarmed_attack"
-                else "src/main/resources/assets/projectseele/motion/"
-                "eva_kick_side_left_v1.json")
-            expected_group = (
-                "ordinary_group_c" if action == "unarmed_attack"
-                else "K1_SIDE_LEFT")
+                else live_kick if action == "kick_attack"
+                else live_knife)
+            expected_path = {
+                "unarmed_attack": (
+                    "src/main/resources/assets/projectseele/motion/"
+                    "eva_ordinary_attack_group_c_v1.json"),
+                "kick_attack": (
+                    "src/main/resources/assets/projectseele/motion/"
+                    "eva_kick_side_left_v1.json"),
+                "knife_attack_forward": (
+                    "src/main/resources/assets/projectseele/motion/"
+                    "eva_knife_attacks_phase_m_v1.json"),
+                "knife_attack_reverse": (
+                    "src/main/resources/assets/projectseele/motion/"
+                    "eva_knife_attacks_phase_m_v1.json"),
+            }[action]
+            expected_group = {
+                "unarmed_attack": "ordinary_group_c",
+                "kick_attack": "K1_SIDE_LEFT",
+                "knife_attack_forward": (
+                    "eva_locked_knife_stab_twist_forward"),
+                "knife_attack_reverse": (
+                    "eva_short_knife_stab_twist_reverse"),
+            }[action]
             expected_date = (
-                "2026-09-01" if action == "unarmed_attack"
-                else "2026-09-02")
-            require(action in {"unarmed_attack", "kick_attack"}
+                "2026-09-02" if action == "kick_attack" else "2026-09-01")
+            expected_speed = 1.5 if action in {
+                "unarmed_attack", "kick_attack"} else 1.0
+            require(action in {"unarmed_attack", "kick_attack",
+                               "knife_attack_forward",
+                               "knife_attack_reverse"}
                     and contract["runtimeMotionResource"] == expected_path
                     and contract["runtimeMotionSemanticSha256"] ==
                     canonical_sha256(selected_resource)
                     and contract["selectedGroup"] == expected_group
-                    and contract["playbackSpeedMultiplier"] == 1.5
+                    and contract["playbackSpeedMultiplier"] == expected_speed
                     and contract["selectedSemanticSha256"] == observed_hash
                     and contract["selectedBy"] == "project_owner"
                     and contract["selectedAt"] == expected_date
@@ -287,7 +317,8 @@ def main() -> None:
         "idle", "walk", "run", "jump_landing",
     }, "recorded human action approvals differ")
     require(set(selected_live_actions) == {
-        "unarmed_attack", "kick_attack",
+        "unarmed_attack", "kick_attack", "knife_attack_forward",
+        "knife_attack_reverse",
     }, "live-test combat selections differ")
     require(not candidate_actions,
             "frozen action drift requires human review: "

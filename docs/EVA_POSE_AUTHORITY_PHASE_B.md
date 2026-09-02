@@ -1,6 +1,6 @@
 # EVA Pose Authority Phase B
 
-Status: **post-Gecko single commit authority active; r03 admits two
+Status: **post-Gecko single commit authority active; r03 admits four
 human-selected live-test MotionEngine actions**.
 
 Phase B promotes the Phase-A observer into the only orchestrator allowed to
@@ -21,7 +21,8 @@ The runtime order is:
    captures continue to reject this owner.
 3. `MOTION_ENGINE_LIVE_ACTION` may own only an explicitly human-selected live
    action mask. r03 currently admits the selected standing-fists Group C
-   ordinary attack and K1 side kick; it does not admit K2/K3 or research previews.
+   ordinary attack, K1 side kick, approved forward-grip knife LMB and approved
+   reverse-grip knife RMB; it does not admit K2/K3 or rejected research previews.
 4. `POSE_GRAPH_WEAPON_AIM` writes `aim_pitch` only when the active motion owner
    has not already written it.
 5. `POSE_GRAPH_PILOT_AIM` writes `head` only when a pilot exists and the active
@@ -41,6 +42,9 @@ final-owner conflict.
   in `preRender`, then executes it at the first root recursion: GeckoLib 4.8.4
   calls `handleAnimations` between those hooks, so the commit is genuinely
   post-Gecko and cannot be overwritten by the upstream controller stack.
+- Motion quaternions use the same explicit XYZ decomposition as Blender's
+  `Quaternion.to_euler("XYZ")`; JOML `getEulerAnglesXYZ()` is forbidden because
+  its convention changes shoulder and hip signs for the reviewed captures.
 - The only Java call to `EvaMotionEngineV2.apply` is inside
   `EvaPoseGraph.commit`.
 - MotionEngine reports separate rotation-bone and position-bone write sets plus

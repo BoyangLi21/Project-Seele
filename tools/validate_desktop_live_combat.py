@@ -18,6 +18,7 @@ OUTPUT = REPO / "run/projectseele-desktop-build.json"
 FILES = (
     "eva_ordinary_attack_group_c_v1.json",
     "eva_kick_side_left_v1.json",
+    "eva_knife_attacks_phase_m_v1.json",
 )
 
 
@@ -44,6 +45,7 @@ def main() -> None:
         resources[name] = source_hash
     ordinary = json.loads((MOTION / FILES[0]).read_text(encoding="utf-8"))
     kick = json.loads((MOTION / FILES[1]).read_text(encoding="utf-8"))
+    knife = json.loads((MOTION / FILES[2]).read_text(encoding="utf-8"))
     require(ordinary["gameplay_contract"]["playback_speed_multiplier"] == 1.5,
             "ordinary attack is not 1.5x")
     require(len(ordinary["clips"]) == 4
@@ -53,6 +55,11 @@ def main() -> None:
             "side kick is not 1.5x")
     require(len(kick["clips"]) == 1 and len(kick["bones"]) == 50,
             "side kick must be 1 clip / 50 bones")
+    require(len(knife["clips"]) == 2 and len(knife["bones"]) == 51,
+            "approved knife runtime must be 2 clips / 51 bones")
+    require(knife["human_review"]["status"] ==
+            "HUMAN_APPROVED_FOR_LIVE_GAMEPLAY",
+            "approved Phase-M knife receipt is missing")
     classes = (
         CLASS_ROOT / "entity/EvaUnit01Entity.class",
         CLASS_ROOT / "entity/EvaLiveCombatMotion.class",
@@ -72,6 +79,8 @@ def main() -> None:
         "ordinary": {"speed": 1.5, "clips": 4, "bones": 50},
         "kick": {"speed": 1.5, "clips": 1, "bones": 50,
                  "input": "B"},
+        "knife": {"speed": 1.0, "clips": 2, "bones": 51,
+                  "inputs": ["left_click", "right_click"]},
         "resourceSha256": resources,
         "compiledClasses": [str(path) for path in classes],
     }
@@ -82,7 +91,8 @@ def main() -> None:
     )
     print(
         "[PASS] Desktop live combat is current: "
-        f"commit={commit} ordinary=1.5x/4/50 kick=1.5x/1/50 key=B"
+        f"commit={commit} ordinary=1.5x/4/50 kick=1.5x/1/50 key=B "
+        "knife=1.0x/2/51 inputs=LMB+RMB"
     )
 
 

@@ -163,6 +163,50 @@
       "approvedBy": null,
       "approvedAt": null,
       "humanReviewRequired": true
+    },
+    "knife_attack_forward": {
+      "status": "HUMAN_SELECTED_LIVE_CANDIDATE",
+      "animationKeys": [
+        "animation.eva_unit01.knife"
+      ],
+      "baselineSemanticSha256": "ee1db34d5f642767592bb915964728228c708d7c8254b93f57a48a60ae9293b9",
+      "observedSemanticSha256": "fcc9f8244ec349d1543f602c98624b48c176e47a003d07c79f578cea098f6ead",
+      "approvedSemanticSha256": null,
+      "candidateReason": "RUNTIME_GAME_REVIEW_REQUIRED",
+      "approvedBy": null,
+      "approvedAt": null,
+      "humanReviewRequired": true,
+      "runtimeMotionResource": "src/main/resources/assets/projectseele/motion/eva_knife_attacks_phase_m_v1.json",
+      "runtimeMotionSemanticSha256": "4a9a3fdce11180924668d4bf4a60cd9433efd78b10ee8cf361b661474bf8bbcd",
+      "selectedGroup": "eva_locked_knife_stab_twist_forward",
+      "playbackSpeedMultiplier": 1.0,
+      "geckoFallbackPolicy": "standing_knife_left_click_uses_runtime",
+      "selectedSemanticSha256": "fcc9f8244ec349d1543f602c98624b48c176e47a003d07c79f578cea098f6ead",
+      "selectedBy": "project_owner",
+      "selectedAt": "2026-09-01",
+      "runtimeGameReviewRequired": true
+    },
+    "knife_attack_reverse": {
+      "status": "HUMAN_SELECTED_LIVE_CANDIDATE",
+      "animationKeys": [
+        "animation.eva_unit01.knife_heavy"
+      ],
+      "baselineSemanticSha256": "b071196935353aa59ca6b764b91f532e8925ac66f11b487cc38c19619289313e",
+      "observedSemanticSha256": "08d360b9f9c684904e6e4d6a425f84f4eff9f84e91613f90057d805f3543fcb1",
+      "approvedSemanticSha256": null,
+      "candidateReason": "RUNTIME_GAME_REVIEW_REQUIRED",
+      "approvedBy": null,
+      "approvedAt": null,
+      "humanReviewRequired": true,
+      "runtimeMotionResource": "src/main/resources/assets/projectseele/motion/eva_knife_attacks_phase_m_v1.json",
+      "runtimeMotionSemanticSha256": "4a9a3fdce11180924668d4bf4a60cd9433efd78b10ee8cf361b661474bf8bbcd",
+      "selectedGroup": "eva_short_knife_stab_twist_reverse",
+      "playbackSpeedMultiplier": 1.0,
+      "geckoFallbackPolicy": "standing_knife_right_click_uses_runtime",
+      "selectedSemanticSha256": "08d360b9f9c684904e6e4d6a425f84f4eff9f84e91613f90057d805f3543fcb1",
+      "selectedBy": "project_owner",
+      "selectedAt": "2026-09-01",
+      "runtimeGameReviewRequired": true
     }
   }
 }

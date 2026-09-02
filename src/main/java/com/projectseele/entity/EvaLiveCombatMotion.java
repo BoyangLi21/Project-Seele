@@ -14,17 +14,21 @@ import com.projectseele.ProjectSeele;
 import net.minecraft.util.Mth;
 import net.minecraft.world.phys.Vec3;
 
-/** Common-side root curves for the two human-selected live combat actions. */
+/** Common-side root curves for project-owner-selected live combat actions. */
 public final class EvaLiveCombatMotion
 {
     private static final String ORDINARY_RESOURCE =
             "/assets/projectseele/motion/eva_ordinary_attack_group_c_v1.json";
     private static final String KICK_RESOURCE =
             "/assets/projectseele/motion/eva_kick_side_left_v1.json";
+    private static final String KNIFE_RESOURCE =
+            "/assets/projectseele/motion/eva_knife_attacks_phase_m_v1.json";
     private static final Map<String, RootClip> ORDINARY = load(
             ORDINARY_RESOURCE, "EVA ordinary combat root");
     private static final Map<String, RootClip> KICK = load(
             KICK_RESOURCE, "EVA side-kick root");
+    private static final Map<String, RootClip> KNIFE = load(
+            KNIFE_RESOURCE, "EVA approved knife root");
 
     private EvaLiveCombatMotion() {}
 
@@ -51,6 +55,13 @@ public final class EvaLiveCombatMotion
     public static Vec3 kick(float progress)
     {
         return sample(KICK.get("kick_side_left"), progress);
+    }
+
+    public static Vec3 knife(boolean reverse, float progress)
+    {
+        return sample(KNIFE.get(reverse
+                ? "eva_short_knife_stab_twist_reverse"
+                : "eva_locked_knife_stab_twist_forward"), progress);
     }
 
     private static Map<String, RootClip> load(String path, String label)
