@@ -4,6 +4,7 @@ title Project SEELE - local test client
 set "SEELE_MANUAL_PLAY=0"
 set "SEELE_MOTION_LAB=0"
 set "SEELE_LIVE_POLICY=0"
+if not defined SEELE_FORCE_CURRENT_BUILD set "SEELE_FORCE_CURRENT_BUILD=0"
 if /i "%~1"=="play" set "SEELE_MANUAL_PLAY=1"
 if /i "%~1"=="motion" set "SEELE_MANUAL_PLAY=1"
 if /i "%~1"=="motion" set "SEELE_MOTION_LAB=1"
@@ -517,6 +518,22 @@ echo   5. The S20 physical personnel lift is at x=108 z=192 with real landing an
 echo   6. Do not run /seele facility_v2 bootstrap, setup, rebuild or rescue commands in S20.
 echo.
 :SEELE_INSTRUCTIONS_DONE
+if "!SEELE_FORCE_CURRENT_BUILD!"=="1" (
+    echo.
+    echo Synchronizing the current Project SEELE code and live combat resources...
+    call gradlew.bat classes --rerun-tasks
+    if errorlevel 1 (
+        echo Current Project SEELE classes could not be rebuilt.
+        pause
+        exit /b 1
+    )
+    python tools\validate_desktop_live_combat.py
+    if errorlevel 1 (
+        echo Desktop live-combat synchronization failed.
+        pause
+        exit /b 1
+    )
+)
 if "!SEELE_LIVE_POLICY!"=="1" (
     "%SEELE_POWERSHELL%" -NoProfile -ExecutionPolicy Bypass -File "tools\start_eva_live_physics.ps1" -Mode Start
     if errorlevel 1 (
