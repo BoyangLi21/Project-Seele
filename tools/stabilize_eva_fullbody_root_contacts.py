@@ -41,6 +41,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--maximum-redundant-contact-run-frames",
                         type=int, default=45)
     parser.add_argument("--allow-split-airborne", action="store_true")
+    parser.add_argument("--clip", action="append",
+                        help="limit stabilization to named clips")
     return parser.parse_args(sys.argv[sys.argv.index("--") + 1:])
 
 
@@ -81,6 +83,8 @@ def main() -> None:
     maximum = args.maximum_correction_height_fraction * height
     reports = {}
     for clip_name, clip in document["clips"].items():
+        if args.clip and clip_name not in args.clip:
+            continue
         frames = clip["frames"]
         evaluated = [
             deformation_matrices(

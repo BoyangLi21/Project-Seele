@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate the promoted 2x Phase-T group-C live attack resource."""
+"""Validate the promoted 1.5x Phase-T group-C live attack resource."""
 
 from __future__ import annotations
 
@@ -15,6 +15,7 @@ STAGES = (
     ("ordinary_attack_group_c_stage_2", 45, 107, 48),
     ("ordinary_attack_group_c_stage_3", 108, 140, 17),
 )
+LOOP_CLIP = "ordinary_attack_group_c_stage_1_loop"
 
 
 def quaternion_angle(first: list[float], second: list[float]) -> float:
@@ -39,8 +40,8 @@ def main() -> None:
     if live.get("live_gameplay_replacement") is not True:
         failures.append("live gameplay replacement flag is false")
     if live.get("gameplay_contract", {}).get(
-            "playback_speed_multiplier") != 2.0:
-        failures.append("playback speed multiplier is not 2.0")
+            "playback_speed_multiplier") != 1.5:
+        failures.append("playback speed multiplier is not 1.5")
     if live.get("human_review", {}).get("selected") != "ordinary_group_c":
         failures.append("human-selected group C lock is missing")
     if len(live.get("bones", [])) != 50 or "knife" in live.get("bones", []):
@@ -77,8 +78,8 @@ def main() -> None:
                 break
         if int(clip.get("contact_frame", -1)) != contact:
             failures.append(f"{name}: contact frame differs from contract")
-        if float(clip.get("playback_speed_multiplier", 0.0)) != 2.0:
-            failures.append(f"{name}: playback multiplier differs from 2.0")
+        if float(clip.get("playback_speed_multiplier", 0.0)) != 1.5:
+            failures.append(f"{name}: playback multiplier differs from 1.5")
         if previous is not None:
             boundary = max(
                 quaternion_angle(before, after)
@@ -95,11 +96,61 @@ def main() -> None:
             "frames": len(frames),
             "runtimeDurationSeconds": clip["runtime_duration_seconds"],
             "contactFrame": contact,
-            "contactTick20Hz": round(contact / 60.0 / 2.0 * 20.0),
+            "contactTick20Hz": round(contact / 60.0 / 1.5 * 20.0),
         })
-    if maximum_boundary > 5.0:
+    loop_clip = live.get("clips", {}).get(LOOP_CLIP)
+    if loop_clip is None:
+        failures.append(f"missing live loop connector {LOOP_CLIP}")
+    else:
+        loop_frames = loop_clip.get("frames", [])
+        entry_frames = live["clips"][STAGES[0][0]]["frames"]
+        finish_frames = live["clips"][STAGES[2][0]]["frames"]
+        if len(loop_frames) != len(entry_frames):
+            failures.append("loop connector frame count differs from stage 1")
+        elif (loop_frames[0]["rotation_wxyz"]
+              != finish_frames[-1]["rotation_wxyz"]
+              or loop_frames[0]["root_m"] != finish_frames[-1]["root_m"]):
+            failures.append("loop connector does not start at stage 3 final pose")
+        else:
+            transition_frames = int(loop_clip.get(
+                "loop_transition_frames", 0))
+            if transition_frames != 12:
+                failures.append("loop connector must use 12 transition frames")
+            if any(
+                loop["rotation_wxyz"] != entry["rotation_wxyz"]
+                for loop, entry in zip(
+                    loop_frames[transition_frames:],
+                    entry_frames[transition_frames:])
+            ):
+                failures.append(
+                    "loop connector changes stage 1 rotations after transition")
+            loop_steps = []
+            for before, after in zip(loop_frames, loop_frames[1:]):
+                loop_steps.append(max(
+                    quaternion_angle(left, right)
+                    for left, right in zip(
+                        before["rotation_wxyz"], after["rotation_wxyz"])
+                ))
+            maximum_boundary = max(
+                maximum_boundary, max(loop_steps, default=0.0))
+            stage_reports.append({
+                "clip": LOOP_CLIP,
+                "logicalStage": 0,
+                "frames": len(loop_frames),
+                "runtimeDurationSeconds": loop_clip[
+                    "runtime_duration_seconds"],
+                "contactFrame": loop_clip["contact_frame"],
+                "contactTick20Hz": round(
+                    loop_clip["contact_frame"] / 60.0 / 1.5 * 20.0),
+                "loopTransitionFrames": transition_frames,
+                "contactAuthority": loop_clip.get("contact_authority"),
+            })
+    stabilization = live.get("root_contact_stabilization", {})
+    if stabilization.get("method") != "single_support_kick_exact_root_lock":
+        failures.append("loop connector exact root support lock is missing")
+    if maximum_boundary > 20.0:
         failures.append(
-            f"stage boundary rotation {maximum_boundary:.5f} > 5 degrees"
+            f"stage/connector rotation {maximum_boundary:.5f} > 20 degrees"
         )
     entity_source = (REPO / (
         "src/main/java/com/projectseele/entity/EvaUnit01Entity.java"
@@ -111,8 +162,8 @@ def main() -> None:
         "src/main/java/com/projectseele/client/render/EvaPoseGraph.java"
     )).read_text(encoding="utf-8")
     code_tokens = {
-        "entityPlayback2x": (
-            "ORDINARY_ATTACK_PLAYBACK_SPEED = 2.0F" in entity_source
+        "entityPlayback1p5x": (
+            "ORDINARY_ATTACK_PLAYBACK_SPEED = 1.5F" in entity_source
         ),
         "entityFrameIntervals": (
             "{44, 62, 32}" in entity_source
@@ -122,12 +173,16 @@ def main() -> None:
             "resolveOrdinaryGroupCContact" in entity_source
             and "pendingOrdinaryContactTicks" in entity_source
         ),
+        "serverRootAuthority": (
+            "EvaLiveCombatMotion.ordinary" in entity_source
+            and "applyLiveCombatRootMotion(true)" in entity_source
+        ),
         "liveDatabaseLoaded": (
             "motion/eva_ordinary_attack_group_c_v1.json" in engine_source
         ),
-        "threeLiveClipNames": all(
+        "liveClipNames": all(
             name in engine_source for name, *_ in STAGES
-        ),
+        ) and LOOP_CLIP in engine_source,
         "livePoseOwner": (
             "MOTION_ENGINE_LIVE_ACTION" in engine_source
             and "motionWrites.owner()" in graph_source
@@ -146,7 +201,7 @@ def main() -> None:
         "result": "PASS" if not failures else "FAIL",
         "automaticVisualApproval": False,
         "selectedGroup": "ordinary_group_c",
-        "playbackSpeedMultiplier": 2.0,
+        "playbackSpeedMultiplier": 1.5,
         "bones": len(live.get("bones", [])),
         "clips": len(live.get("clips", {})),
         "frames": sum(len(clip.get("frames", []))

@@ -400,6 +400,8 @@ public final class EvaPoseGraph
         if (entity.getActivationTicks() > 0) return "activation";
         if (entity.getOrdinaryAttackStage() >= 0)
             return "unarmed_attack";
+        if (entity.isKickMotionActive(partialTick))
+            return "kick_attack";
         if (entity.getCockpitSmashAnim(partialTick) > 0.0F)
             return entity.getWeapon() == EvaUnit01Entity.WEAPON_KNIFE
                     ? "progressive_knife" : "unarmed_smash";
@@ -419,6 +421,10 @@ public final class EvaPoseGraph
         if (entity.getOrdinaryAttackStage() >= 0)
         {
             return entity.getOrdinaryAttackProgress(partialTick);
+        }
+        if (entity.isKickMotionActive(partialTick))
+        {
+            return entity.getKickAttackProgress(partialTick);
         }
         return Math.max(entity.getCockpitAttackAnim(partialTick),
                 entity.getCockpitSmashAnim(partialTick));

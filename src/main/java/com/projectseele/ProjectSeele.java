@@ -2,6 +2,7 @@ package com.projectseele;
 
 import com.mojang.logging.LogUtils;
 import com.projectseele.config.SeeleConfig;
+import com.projectseele.entity.EvaLiveCombatMotion;
 import com.projectseele.network.SeeleNetwork;
 import com.projectseele.registry.ModCreativeTabs;
 import com.projectseele.registry.ModBlocks;
@@ -54,6 +55,7 @@ public class ProjectSeele
         event.enqueueWork(() ->
         {
             SeeleNetwork.register();
+            EvaLiveCombatMotion.preload();
             ForgeChunkManager.setForcedChunkLoadingCallback(MODID,
                     NervRuntimeMaintenance::validateForcedChunkTickets);
         });

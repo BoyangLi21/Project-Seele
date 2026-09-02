@@ -53,11 +53,15 @@ public final class EvaMotionEngineV2
     private static final ResourceLocation LIVE_ORDINARY_ATTACK_DATABASE =
             new ResourceLocation(ProjectSeele.MODID,
                     "motion/eva_ordinary_attack_group_c_v1.json");
+    private static final ResourceLocation LIVE_KICK_DATABASE =
+            new ResourceLocation(ProjectSeele.MODID,
+                    "motion/eva_kick_side_left_v1.json");
     private static final double WALK_STRIDE_BLOCKS = 25.8334D;
     private static final double RUN_STRIDE_BLOCKS = 31.3944D;
     private static final double CROUCH_STRIDE_BLOCKS = 9.2990D;
     private static final float MODEL_UNITS_PER_SOURCE_METRE = 112.0F;
     private static final double LIVE_ATTACK_RECOVERY_SECONDS = 0.16D;
+    private static final float MAX_LIVE_ROOT_STEP_METRES = 0.0055F;
     // The first live pass proved that Gecko's reflected render matrix cannot
     // share the same world conversion as the offline Bedrock skeleton. Keep
     // the bad layer fail-closed until it is rebuilt from tracked model-space
@@ -76,6 +80,8 @@ public final class EvaMotionEngineV2
             MotionDatabase.empty();
     private static volatile MotionDatabase liveOrdinaryAttackDatabase =
             MotionDatabase.empty();
+    private static volatile MotionDatabase liveKickDatabase =
+            MotionDatabase.empty();
 
     private EvaMotionEngineV2() {}
 
@@ -93,6 +99,8 @@ public final class EvaMotionEngineV2
         liveOrdinaryAttackDatabase = load(resourceManager,
                 LIVE_ORDINARY_ATTACK_DATABASE,
                 "EVA group-C ordinary attack runtime");
+        liveKickDatabase = load(resourceManager, LIVE_KICK_DATABASE,
+                "EVA K1 side-kick runtime");
     }
 
     private static MotionDatabase load(ResourceManager resourceManager,
@@ -138,8 +146,11 @@ public final class EvaMotionEngineV2
                 == EvaUnit01Entity.WEAPON_FISTS
                 && entity.getOrdinaryAttackStage() >= 0
                 && !entity.isPilotProne() && !entity.isPilotCrouching();
+        boolean gameplayKick = !gameplayOrdinaryAttack
+                && entity.isKickMotionActive(partialTick);
+        boolean gameplayLiveAction = gameplayOrdinaryAttack || gameplayKick;
         RuntimeState existingRuntime = STATES.get(entity.getId());
-        boolean gameplayOrdinaryRecovery = !gameplayOrdinaryAttack
+        boolean gameplayRecovery = !gameplayLiveAction
                 && previewMode == 0
                 && entity.getWeapon() == EvaUnit01Entity.WEAPON_FISTS
                 && !entity.isPilotProne() && !entity.isPilotCrouching()
@@ -148,10 +159,14 @@ public final class EvaMotionEngineV2
                 && existingRuntime.liveAttackRecoveryAge
                         < LIVE_ATTACK_RECOVERY_SECONDS;
         boolean motionDriven = labPreview || gameplayOrdinaryAttack
-                || gameplayOrdinaryRecovery;
+                || gameplayKick || gameplayRecovery;
         MotionDatabase db = gameplayOrdinaryAttack
-                || gameplayOrdinaryRecovery
                 ? liveOrdinaryAttackDatabase
+                : gameplayKick ? liveKickDatabase
+                : gameplayRecovery && existingRuntime != null
+                        && "kick".equals(existingRuntime.liveActionFamily)
+                ? liveKickDatabase
+                : gameplayRecovery ? liveOrdinaryAttackDatabase
                 : ordinaryAttackReview ? ordinaryAttackDatabase
                 : groundedPreview ? groundedDatabase
                 : replayPreview ? physicsDatabase : database;
@@ -197,14 +212,27 @@ public final class EvaMotionEngineV2
                     1.0D / 360.0D, 0.05D);
         }
         runtime.lastNanos = now;
-        if (gameplayOrdinaryAttack)
+        if (gameplayLiveAction)
         {
             runtime.liveAttackActive = true;
             runtime.liveAttackRecoveryAge = 0.0D;
-            runtime.lastLiveAttackStage = Mth.clamp(
-                    entity.getOrdinaryAttackStage(), 0, 2);
+            String family = gameplayKick ? "kick" : "ordinary";
+            if (!family.equals(runtime.liveActionFamily))
+            {
+                runtime.liveActionFamily = family;
+                runtime.liveTransitionAge = 0.0D;
+            }
+            else
+            {
+                runtime.liveTransitionAge += dt;
+            }
+            if (gameplayOrdinaryAttack)
+            {
+                runtime.lastLiveAttackStage = Mth.clamp(
+                        entity.getOrdinaryAttackStage(), 0, 3);
+            }
         }
-        else if (gameplayOrdinaryRecovery)
+        else if (gameplayRecovery)
         {
             runtime.liveAttackRecoveryAge += dt;
         }
@@ -295,19 +323,35 @@ public final class EvaMotionEngineV2
             {
                 case 0 -> "ordinary_attack_group_c_stage_1";
                 case 1 -> "ordinary_attack_group_c_stage_2";
-                default -> "ordinary_attack_group_c_stage_3";
+                case 2 -> "ordinary_attack_group_c_stage_3";
+                default -> "ordinary_attack_group_c_stage_1_loop";
             };
             selection = Selection.single(db.clip(clipName), clipName);
             runtime.landingActive = false;
         }
-        else if (gameplayOrdinaryRecovery)
+        else if (gameplayKick)
         {
-            String clipName = switch (runtime.lastLiveAttackStage)
+            selection = Selection.single(db.clip("kick_side_left"),
+                    "kick_side_left");
+            runtime.landingActive = false;
+        }
+        else if (gameplayRecovery)
+        {
+            String clipName;
+            if ("kick".equals(runtime.liveActionFamily))
             {
-                case 0 -> "ordinary_attack_group_c_stage_1";
-                case 1 -> "ordinary_attack_group_c_stage_2";
-                default -> "ordinary_attack_group_c_stage_3";
-            };
+                clipName = "kick_side_left";
+            }
+            else
+            {
+                clipName = switch (runtime.lastLiveAttackStage)
+                {
+                    case 0 -> "ordinary_attack_group_c_stage_1";
+                    case 1 -> "ordinary_attack_group_c_stage_2";
+                    case 2 -> "ordinary_attack_group_c_stage_3";
+                    default -> "ordinary_attack_group_c_stage_1_loop";
+                };
+            }
             selection = Selection.single(db.clip(clipName),
                     clipName + "_recovery");
             runtime.landingActive = false;
@@ -364,7 +408,11 @@ public final class EvaMotionEngineV2
         {
             runtime.phase = entity.getOrdinaryAttackProgress(partialTick);
         }
-        else if (gameplayOrdinaryRecovery)
+        else if (gameplayKick)
+        {
+            runtime.phase = entity.getKickAttackProgress(partialTick);
+        }
+        else if (gameplayRecovery)
         {
             runtime.phase = 1.0D;
         }
@@ -465,18 +513,38 @@ public final class EvaMotionEngineV2
         Set<String> rotationBones = new LinkedHashSet<>();
         Vector3f rootOffset = new Vector3f(target.rootMeters)
                 .mul(MODEL_UNITS_PER_SOURCE_METRE);
-        if (gameplayOrdinaryAttack)
+        if (gameplayLiveAction)
         {
-            runtime.liveAttackRootYOffset = rootOffset.y;
+            float rootAlpha = (float)(1.0D - Math.exp(
+                    -Math.log(2.0D) * dt
+                            / liveActionHalfLife(gameplayKick, runtime)));
+            if (!runtime.liveRootInitialized)
+            {
+                runtime.currentLiveRootYOffset = 0.0F;
+                runtime.liveRootInitialized = true;
+            }
+            float rootStep = (rootOffset.y
+                    - runtime.currentLiveRootYOffset) * rootAlpha;
+            float maximumRootStep = MAX_LIVE_ROOT_STEP_METRES
+                    * MODEL_UNITS_PER_SOURCE_METRE;
+            runtime.currentLiveRootYOffset += Mth.clamp(
+                    rootStep, -maximumRootStep, maximumRootStep);
+            runtime.liveAttackRootYOffset =
+                    runtime.currentLiveRootYOffset;
+            rootOffset.y = runtime.currentLiveRootYOffset;
         }
-        else if (gameplayOrdinaryRecovery)
+        else if (gameplayRecovery)
         {
-            float remaining = (float)(1.0D - Mth.clamp(
-                    runtime.liveAttackRecoveryAge
-                            / LIVE_ATTACK_RECOVERY_SECONDS,
-                    0.0D, 1.0D));
-            rootOffset.set(0.0F,
-                    runtime.liveAttackRootYOffset * remaining, 0.0F);
+            float rootAlpha = (float)(1.0D - Math.exp(
+                    -Math.log(2.0D) * dt / 0.035D));
+            float maximumRootStep = MAX_LIVE_ROOT_STEP_METRES
+                    * MODEL_UNITS_PER_SOURCE_METRE;
+            float rootStep = -runtime.currentLiveRootYOffset * rootAlpha;
+            runtime.currentLiveRootYOffset += Mth.clamp(
+                    rootStep, -maximumRootStep, maximumRootStep);
+            runtime.liveAttackRootYOffset =
+                    runtime.currentLiveRootYOffset;
+            rootOffset.set(0.0F, runtime.currentLiveRootYOffset, 0.0F);
         }
         model.getBone("root").ifPresent(root ->
         {
@@ -495,7 +563,7 @@ public final class EvaMotionEngineV2
         boolean meleeActive = entity.getCockpitAttackAnim(partialTick) > 0.0F
                 || entity.getCockpitSmashAnim(partialTick) > 0.0F;
         boolean fullBody = ordinaryAttackReview || gameplayOrdinaryAttack
-                || gameplayOrdinaryRecovery
+                || gameplayKick || gameplayRecovery
                 || entity.getWeapon() == EvaUnit01Entity.WEAPON_FISTS
                 && !meleeActive;
         float inertialAlpha;
@@ -505,13 +573,14 @@ public final class EvaMotionEngineV2
         }
         else
         {
-            double halfLife = gameplayOrdinaryAttack ? 0.025D
-                    : gameplayOrdinaryRecovery ? 0.035D
+            double halfLife = gameplayLiveAction
+                    ? liveActionHalfLife(gameplayKick, runtime)
+                    : gameplayRecovery ? 0.035D
                     : groundedPreview ? 0.035D
                     : selection.locomotion() ? 0.050D : 0.075D;
             inertialAlpha = (float)(1.0D - Math.exp(
                     -Math.log(2.0D) * dt / halfLife));
-            if (gameplayOrdinaryRecovery
+            if (gameplayRecovery
                     && runtime.liveAttackRecoveryAge
                             >= LIVE_ATTACK_RECOVERY_SECONDS)
             {
@@ -528,7 +597,7 @@ public final class EvaMotionEngineV2
             // retained native thumb already carries its per-side opposition.
             if (name.startsWith("finger_")
                     && !ordinaryAttackReview && !gameplayOrdinaryAttack
-                    && !gameplayOrdinaryRecovery)
+                    && !gameplayKick && !gameplayRecovery)
             {
                 continue;
             }
@@ -537,9 +606,9 @@ public final class EvaMotionEngineV2
                 continue;
             }
             Quaternionf wanted = target.rotations[index];
-            if (gameplayOrdinaryRecovery)
+            GeoBone geckoBone = model.getBone(name).orElse(null);
+            if (gameplayRecovery)
             {
-                GeoBone geckoBone = model.getBone(name).orElse(null);
                 if (geckoBone == null)
                 {
                     continue;
@@ -549,7 +618,15 @@ public final class EvaMotionEngineV2
             Quaternionf current = runtime.rotations[index];
             if (!runtime.initialized[index])
             {
-                current.set(wanted);
+                if (gameplayLiveAction && geckoBone != null)
+                {
+                    current.set(geckoRotationAsMotionQuaternion(geckoBone))
+                            .slerp(wanted, inertialAlpha).normalize();
+                }
+                else
+                {
+                    current.set(wanted);
+                }
                 runtime.initialized[index] = true;
             }
             else
@@ -569,16 +646,18 @@ public final class EvaMotionEngineV2
                 rotationBones.add(name);
             });
         }
-        if (gameplayOrdinaryRecovery
+        if (gameplayRecovery
                 && runtime.liveAttackRecoveryAge
                         >= LIVE_ATTACK_RECOVERY_SECONDS)
         {
             runtime.liveAttackActive = false;
             runtime.liveAttackRootYOffset = 0.0F;
+            runtime.currentLiveRootYOffset = 0.0F;
+            runtime.liveRootInitialized = false;
         }
         return new BoneWrites(Set.copyOf(rotationBones),
                 Set.copyOf(positionBones),
-                gameplayOrdinaryAttack || gameplayOrdinaryRecovery
+                gameplayLiveAction || gameplayRecovery
                         ? OWNER_LIVE_ACTION : OWNER_PREVIEW);
     }
 
@@ -587,6 +666,16 @@ public final class EvaMotionEngineV2
         return new Quaternionf().rotationXYZ(
                 -bone.getRotX(), -bone.getRotY(), bone.getRotZ())
                 .normalize();
+    }
+
+    private static double liveActionHalfLife(boolean kick,
+                                             RuntimeState runtime)
+    {
+        if (runtime.liveTransitionAge < 0.14D)
+        {
+            return 0.060D;
+        }
+        return kick ? 0.030D : 0.025D;
     }
 
     private static BoneWrites applyLivePhysics(BakedGeoModel model)
@@ -1013,8 +1102,12 @@ public final class EvaMotionEngineV2
         private double lastRenderZ;
         private boolean liveAttackActive;
         private double liveAttackRecoveryAge;
+        private String liveActionFamily = "";
+        private double liveTransitionAge;
         private int lastLiveAttackStage;
         private float liveAttackRootYOffset;
+        private boolean liveRootInitialized;
+        private float currentLiveRootYOffset;
         private final FootLock leftFoot = new FootLock();
         private final FootLock rightFoot = new FootLock();
 

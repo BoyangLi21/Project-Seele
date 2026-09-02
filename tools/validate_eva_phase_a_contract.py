@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import argparse
 import hashlib
 import json
 import subprocess
@@ -25,6 +26,9 @@ ROLLBACK = REPO / "tools/eva_pre_mocap_gameplay_rollback.json"
 LIVE_ORDINARY = REPO / (
     "src/main/resources/assets/projectseele/motion/"
     "eva_ordinary_attack_group_c_v1.json")
+LIVE_KICK = REPO / (
+    "src/main/resources/assets/projectseele/motion/"
+    "eva_kick_side_left_v1.json")
 
 
 def read_json(path: Path) -> dict:
@@ -57,12 +61,23 @@ def require(condition: bool, message: str) -> None:
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--committed-animation", action="store_true",
+        help="validate combat locks against HEAD while preserving dirty actions",
+    )
+    args = parser.parse_args()
     rig = read_json(RIG)
     authority = read_json(AUTHORITY)
     actions = read_json(ACTIONS)
-    animation = read_json(ANIMATION)["animations"]
+    animation = (
+        read_json_at_commit("HEAD", ANIMATION_REPO_PATH)["animations"]
+        if args.committed_animation
+        else read_json(ANIMATION)["animations"]
+    )
     rollback = read_json(ROLLBACK)
     live_ordinary = read_json(LIVE_ORDINARY)
+    live_kick = read_json(LIVE_KICK)
     baseline_animation = read_json_at_commit(
         rollback["source_commit"], ANIMATION_REPO_PATH)["animations"]
 
@@ -97,29 +112,31 @@ def main() -> None:
                  else "GECKO_COMPOSITE") for bone in bones),
             "canonical default owners do not match Phase-B boundary")
     canonical_names = set(names)
-    for variant in ("eva_unit00", "eva_unit01", "eva_unit02"):
-        geometry = read_json(RUNTIME / "geo" / f"{variant}.geo.json")
-        require(rig["variantGeometrySemanticSha256"][variant] ==
-                canonical_sha256(geometry),
-                f"{variant} geometry hash differs from canonical rig")
-        rows = geometry["minecraft:geometry"][0]["bones"]
-        variant_names = [row["name"] for row in rows]
-        require([name for name in variant_names
-                 if name in canonical_names] == names,
-                f"{variant} canonical bone order differs")
-        require(sorted(set(variant_names) - canonical_names) ==
-                rig["variantExtraBones"][variant],
-                f"{variant} extra bone declaration differs")
-        variant_parents = {row["name"]: row.get("parent") for row in rows}
-        require(all(variant_parents[name] == by_name[name].get("parent")
-                    for name in names),
-                f"{variant} canonical parent map differs")
+    if not args.committed_animation:
+        for variant in ("eva_unit00", "eva_unit01", "eva_unit02"):
+            geometry = read_json(RUNTIME / "geo" / f"{variant}.geo.json")
+            require(rig["variantGeometrySemanticSha256"][variant] ==
+                    canonical_sha256(geometry),
+                    f"{variant} geometry hash differs from canonical rig")
+            rows = geometry["minecraft:geometry"][0]["bones"]
+            variant_names = [row["name"] for row in rows]
+            require([name for name in variant_names
+                     if name in canonical_names] == names,
+                    f"{variant} canonical bone order differs")
+            require(sorted(set(variant_names) - canonical_names) ==
+                    rig["variantExtraBones"][variant],
+                    f"{variant} extra bone declaration differs")
+            variant_parents = {row["name"]: row.get("parent") for row in rows}
+            require(all(variant_parents[name] == by_name[name].get("parent")
+                        for name in names),
+                    f"{variant} canonical parent map differs")
 
-    runtime_animation = read_json(
-        RUNTIME / "animations/eva_unit01.animation.json")
-    require(canonical_sha256(runtime_animation) ==
-            canonical_sha256(read_json(ANIMATION)),
-            "active eva_real_model animation differs from source baseline")
+    if not args.committed_animation:
+        runtime_animation = read_json(
+            RUNTIME / "animations/eva_unit01.animation.json")
+        require(canonical_sha256(runtime_animation) ==
+                canonical_sha256(read_json(ANIMATION)),
+                "active eva_real_model animation differs from source baseline")
 
     require(authority.get("schema") == 1,
             "authority schema is not 1")
@@ -194,6 +211,9 @@ def main() -> None:
                 "geckoFallback": observed_gecko,
                 "runtimeMotion": live_ordinary,
             }
+        elif action == "kick_attack":
+            baseline_payload = {"runtimeMotion": None}
+            observed_payload = {"runtimeMotion": live_kick}
         else:
             baseline_payload = baseline_gecko
             observed_payload = observed_gecko
@@ -221,17 +241,30 @@ def main() -> None:
                     and contract["humanReviewRequired"],
                     f"{action} bypasses human review")
         if selected_live:
-            require(action == "unarmed_attack"
-                    and contract["runtimeMotionResource"] ==
-                    "src/main/resources/assets/projectseele/motion/"
-                    "eva_ordinary_attack_group_c_v1.json"
+            selected_resource = (
+                live_ordinary if action == "unarmed_attack"
+                else live_kick if action == "kick_attack" else None)
+            expected_path = (
+                "src/main/resources/assets/projectseele/motion/"
+                "eva_ordinary_attack_group_c_v1.json"
+                if action == "unarmed_attack"
+                else "src/main/resources/assets/projectseele/motion/"
+                "eva_kick_side_left_v1.json")
+            expected_group = (
+                "ordinary_group_c" if action == "unarmed_attack"
+                else "K1_SIDE_LEFT")
+            expected_date = (
+                "2026-09-01" if action == "unarmed_attack"
+                else "2026-09-02")
+            require(action in {"unarmed_attack", "kick_attack"}
+                    and contract["runtimeMotionResource"] == expected_path
                     and contract["runtimeMotionSemanticSha256"] ==
-                    canonical_sha256(live_ordinary)
-                    and contract["selectedGroup"] == "ordinary_group_c"
-                    and contract["playbackSpeedMultiplier"] == 2.0
+                    canonical_sha256(selected_resource)
+                    and contract["selectedGroup"] == expected_group
+                    and contract["playbackSpeedMultiplier"] == 1.5
                     and contract["selectedSemanticSha256"] == observed_hash
                     and contract["selectedBy"] == "project_owner"
-                    and contract["selectedAt"] == "2026-09-01"
+                    and contract["selectedAt"] == expected_date
                     and contract["runtimeGameReviewRequired"]
                     and contract["candidateReason"] ==
                     "RUNTIME_GAME_REVIEW_REQUIRED",
@@ -253,8 +286,9 @@ def main() -> None:
     require(set(approved_actions) == {
         "idle", "walk", "run", "jump_landing",
     }, "recorded human action approvals differ")
-    require(selected_live_actions == ["unarmed_attack"],
-            "standing-fists live-test selection differs")
+    require(set(selected_live_actions) == {
+        "unarmed_attack", "kick_attack",
+    }, "live-test combat selections differ")
     require(not candidate_actions,
             "frozen action drift requires human review: "
             + ", ".join(candidate_actions))

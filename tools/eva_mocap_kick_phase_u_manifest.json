@@ -1,12 +1,20 @@
 {
   "schema": 1,
   "sampleRate": 60.0,
-  "status": "KICK_GROUP_REQUIRES_HUMAN_REVIEW",
-  "authority": "g1_moves_native_karate_kick_group_review",
+  "status": "K1_SIDE_LEFT_SELECTED_LIVE_1P5X",
+  "authority": "g1_moves_k1_human_selected_live_runtime",
   "unarmedVocabulary": "NON_SPIN_SIDE_FRONT_AND_SNAP_KICKS",
   "knifeGrip": "NOT_APPLICABLE",
   "rootAuthority": "REVIEW_LOCAL_ONLY_LIVE_REQUIRES_SERVER_ROOT_MOTION",
   "fistProfile": "src/main/resources/assets/projectseele/motion/eva_ordinary_attack_v1.json",
+  "selectionReceipt": {
+    "selectedKick": "K1_SIDE_LEFT",
+    "playbackSpeedMultiplier": 1.5,
+    "selectedBy": "project_owner",
+    "selectedAt": "2026-09-02",
+    "liveResource": "src/main/resources/assets/projectseele/motion/eva_kick_side_left_v1.json",
+    "unselectedKicks": ["K2_FRONT_RIGHT", "K3_SNAP_RIGHT"]
+  },
   "sourceFiles": [
     {
       "id": "g1_moves_m10_frames_1468_1552",

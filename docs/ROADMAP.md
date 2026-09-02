@@ -1,8 +1,8 @@
 # Project SEELE 完整路线图
 
 > 更新：2026-09-02。EVA Gecko 基础动作仍冻结到 `a910890b` 回滚基线；
-> 项目负责人选择的普通攻击 C 现作为独立 live MotionEngine 动作覆盖 standing-fists
-> 左键。Pose Authority Phase B/r03 已把所有 post-Gecko 写骨收口到唯一提交点，Phase C
+> 项目负责人选择的普通攻击 C 与 K1 左侧踹现作为独立 live MotionEngine 动作覆盖
+> standing-fists 左键与 B 键。Pose Authority Phase B/r03 已把所有 post-Gecko 写骨收口到唯一提交点，Phase C
 > 已建立隔离的四权重网格格式与运行时 skinning 探针，Phase D 已验证真实
 > after-recursion palette 渲染，Phase E 已生成单组件 manifold 内层与 Tiger
 > 单骨刚性 mask。MuJoCo/G1 保留为隔离的长期研究，未通过接触、足滑和
@@ -26,7 +26,7 @@
 - ✅ Phase 0：项目骨架、开源仓库（MIT + khara 合规声明）、首次构建、冒烟测试
 - ✅ Phase 1 MVP：Ramiel Boss（八面体直连渲染 + 悬浮 AI + 蓄力光束 + Boss 血条 + 掉落）、阳电子步枪、使徒核心碎片、创造标签页、刷怪蛋、中英双语、战利品表
 - ✅ Phase 1 收尾（2026-07-06，代码完成待目视验收）：警报系统、真·光束渲染、十字爆炸、二阶段钻头、Config、九连原创合成音效、进度树、32x 贴图；地基设施三件套落地（SimpleChannel 网络层 / RibbonRenderer 特效库 / gen_sounds.ps1 音效管线）
-- 🔄 **EVA Pose Authority Phase B/r03**（2026-09-02）：`a910890b` Tiger/Gecko 仍是基础与回退；idle、walk、run 与当前 jump + landing 保持视觉批准，standing-fists 普通攻击 C 已写入“人工选中、允许 live 测试”的独立语义哈希锁，但在实机验收前不冒充 `VISUALLY_APPROVED`；右键重砸、粒子刀、蹲与卧仍未批准。70 骨合同与最终矩阵记录器保留；`MOTION_ENGINE_LIVE_ACTION`、隔离 preview、武器俯仰和驾驶员头部瞄准统一由 `EvaPoseGraph.commit` 提交，每骨每帧只有一个最终 owner；live 全身动作拥有 `aim_pitch/head/fingers` 时，后两层不得重复覆盖。Gecko 的 base/arms/strike 仍作为显式上游 composite，内部重叠另行记录；G1 物理控制器继续隔离。
+- 🔄 **EVA Pose Authority Phase B/r03**（2026-09-02）：`a910890b` Tiger/Gecko 仍是基础与回退；idle、walk、run 与当前 jump + landing 保持视觉批准，standing-fists 普通攻击 C 和 K1 左侧踹已写入“人工选中、允许 live 测试”的独立语义哈希锁，但在实机验收前不冒充 `VISUALLY_APPROVED`；右键重砸、粒子刀、蹲与卧仍未批准。70 骨合同与最终矩阵记录器保留；`MOTION_ENGINE_LIVE_ACTION`、隔离 preview、武器俯仰和驾驶员头部瞄准统一由 `EvaPoseGraph.commit` 提交，每骨每帧只有一个最终 owner；live 全身动作拥有 `aim_pitch/head/fingers` 时，后两层不得重复覆盖。Gecko 的 base/arms/strike 仍作为显式上游 composite，内部重叠另行记录；G1 物理控制器继续隔离。
 - 🔄 **EVA weighted-mesh Phase C**（2026-08-31）：新增 `projectseele:skinned_mesh_v1`，明确 Gecko model-space、inverse-bind palette、四索引/四权重、位置和法线求值合同；项目自有双骨探针在 Java 和独立 Python 门禁中均为零误差。正式 Tiger body 仍明确使用 stride-8 单骨刚性 layer，`skinnedBodyEnabled=false`，没有生产加权资产，也没有视觉批准。下一步才是 Unit-01 weighted inner body、刚性装甲 shell 和 after-recursion palette renderer。
 - 🔄 **EVA weighted proxy Phase D**（2026-08-31）：项目自有 Unit-01 内层代理含 18 骨 palette、15 个封闭关节段、390 顶点、720 三角面和 120 个双权重点；真实 Gecko root recursion 完成后可由显式 userdev 开关渲染，idle bind delta 约 `1.43e-6`，Tiger 不被隐藏或替换，骨姿态保持不变。该代理的管段彼此重叠但未焊接，仍不是生产级连续皮肤；下一步是 manifold inner body、刚性装甲 mask 与六动作 evaluated seam gate。
 - 🔄 **EVA manifold inner Phase E**（2026-08-31）：项目自有体素并集内层含 23 骨、20 primitive、3278 顶点和 6552 三角面；拓扑为单组件、0 非流形边、Euler=2、正体积，运行时 bind delta 约 `2.86e-6`。当前 Tiger 43 个 part / 6044 面全部纳入单骨刚性 shell mask，并由本地 mesh 语义哈希锁定。manifold 与 Tiger 均默认不切换，下一步是六个基础动作的全时段反面、自交、内外层 clearance/seam 门禁。
@@ -42,8 +42,8 @@
 - ❌ **EVA buffered ordinary combo Phase P**（2026-09-01）：`右短拨砸 → 左镜像短拨砸 → 右重横砸` 虽以 12 帧当前姿势惯性衰减消除了站姿闪回，且双重精确门禁均 `1 clip / 0 failures`，仍被项目负责人判退：动作语言像普通人格斗游戏招式，与 EVA 的长肢体压迫、大步压入、肩躯干撞入、巨大惯性和暴力失衡回收相距太远。整套禁止换名、调速或重排后重用；正式游戏未接入。
 - ✅ **EVA paired interaction Phase Q**（2026-09-01）：CMU `22_05/23_05` 同步双人真人动捕的大步压入、双手钳肩和推移随动获项目负责人认可为有趣的交互效果；攻击者、目标、双体同步精确门禁分别为 `0/0/0 failures`，手—肩接触覆盖率 `100%`。但它没有清晰击打，明确不得作为普通攻击；锁定用途为重击命中、肩撞、抓取、撞墙或大型目标失衡分支。正式游戏尚未接入。
 - ❌ **EVA ordinary combo Phase R**（2026-09-01）：Rokoko 体育动捕三段单臂过顶斜砸虽达到攻击者/目标/双体 `0 failures` 和六次命中距离覆盖 `100%`，仍被项目负责人判定整体很奇怪。根因是棒球投手的投掷意图残留在肩胯时序、手臂释放与随动路径中；删除球、改手型和加入目标反应无法把体育动作变成 EVA 近战。整套禁止调速、镜像或改名重用；正式游戏未接入。
-- ✅ **EVA ordinary combo selection Phase T**（2026-09-01）：项目负责人从 G1 Moves/MOVIN TRACIN 四组原生近战真人捕捉中选择 C（右前冲 → 左长双击 → 右短下砸），并要求速度提高一倍。正式 standing-fists 左键现读取独立 `3 clips / 50 bones / 141 frames` 资源，以运行时 `2.0×` 推进；三段伤害按约 `3/8/3 tick` 接触时刻由服务端结算，连续输入缓冲循环，松开后从当前姿势惯性回收。PoseGraph r03 新增 `MOTION_ENGINE_LIVE_ACTION` 唯一骨骼 owner，动作期间玩家头部／aim 层不得重复覆盖。逐帧来源、代码合同与边界门禁 `PASS`，最大阶段边界 `2.80796°`；当前状态是人工选中并接入 live 候选，仍待游戏内视觉验收，A/B/D 未选，Phase Q 仍只保留为未来命中互动分支。
-- 🔄 **EVA kick review Phase U**（2026-09-02）：从同一 CC BY 4.0 的 MOVIN TRACIN Karate 原捕捉筛出左侧踹、右前踹、右弹踢，未使用旋转踢、拳击或视频估计。三条保留全身曲线，按非踢腿脚／准备脚切换建立单支撑 root 合同；Tiger 构建、支撑锁、精确全身和通用 3D 均 `0 failures`，最大恒定接地抬升 `0.0144395m`。人工包 `20260902-001238` 同时展示已选 C 的 `2.0×` 节奏和 K1/K2/K3；踹击尚未接入按键、伤害或批准锁，等待项目负责人选择或全部拒绝。
+- ✅ **EVA ordinary combo selection Phase T**（2026-09-02）：项目负责人从 G1 Moves/MOVIN TRACIN 四组原生近战真人捕捉中选择 C（右前冲 → 左长双击 → 右短下砸），最终速度由 `2.0×` 调整为 `1.5×`。正式 standing-fists 左键读取 `4 clips / 50 bones / 186 frames`：三个原始阶段加一个 12 帧循环连接变体；完整三击约 `1.53s`，伤害按约 `4/11/4 tick` 接触时刻由服务端结算。第三击→循环第一击边界近零，连接段最大单帧 `15.7702°`，精确全身与通用 3D 均 `0 failures`；当前仍是待实机视觉验收的 live 候选，A/B/D 未选。
+- 🔄 **EVA kick review Phase U**（2026-09-02）：项目负责人选择 K1 左侧踹并要求 `1.5×`，K2/K3 保持未选。K1 以 `1 clip / 50 bones / 84 frames` 接入 standing-fists B 键；原踩踏伤害 `50`、冷却 `50 tick`、范围和击退不变，接触改在约第 `11 tick` 结算。普通攻击↔侧踹具备双向 30 tick 输入缓冲、`0.060s` 跨动作惯性半衰期和 `0.0055m/frame` root 限幅；五个跨动作边界最大渲染旋转步长 `18.0063°`。K1 资源、精确 Tiger 全身、通用 3D 与过渡门禁均 `0 failures`，等待游戏内视觉验收。
 - 🔄 **本地三机/量产机资源管线**：零号机、二号机与量产机已有各自 Tiger 网格、统一骨骼合同、离线预览与启动前 validator；三机的站立/步行/单膝/四足卧姿/朗枪/入栓和量产机五状态最新离线矩阵通过。游戏内三机截图、量产机仪式构图与正式发布授权仍未通过。
 - ⚠️ **屋岛作战和后期演出**：发射井已有背部高位门禁、连续梯井、11×11 实体随动载台、载台签名恢复与中断清场；正式第三次冲击已有 schema-v2 `SavedData`、事件/节点实体归属、有限区块票、冻结终态和协议 v4 重进同步。生命树保持 EoE 整图 180° 倒置，无独立左上标题，124 个更小、更密的希伯来标签/符号、22 路径与圈内微缩刻字离线构图通过，但井内碰撞/镜头、存档重进以及九机/初号机十字实机画面仍是未验收原型，不作为发布质量证据。
 - 🔄 **本机连续战区重建**（2026-07-22）：`SEELE_TOKYO3_REBUILT` 使用普通 Overworld 噪声地形与地图 schema v18；416×416 可移动城区位于地表，640 格宽 GeoFront 椭球完全埋在地下，三井从 Y=-443 连续通往 Y=79（实体行程 522 格）。66 栋内城装甲楼、29 栋外环楼与三座本机私有高楼会从地表真正下降，并沿球体曲率在 GeoFront 顶部形成悬挂都市；生成楼宇最大行程 312 层、20t/层，下降与复位均持久化且有防夹门禁。真实 LCL、自然湖/森林、直坡 NERV 金字塔、环境反射光、五屏动态遥测、三块驾驶视频面板、七键作战台、Central/Terminal Dogma、MAGI 深层实验室、屋岛作战与实体发射井均保留自动契约。编译、东京-3 下沉、GeoFront 与发射井静态门禁已通过；完整十分钟升降循环、多人驾驶视频、整体美术和第三方发布授权仍需人工验收。

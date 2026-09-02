@@ -30,6 +30,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--maximum-correction-height-fraction", type=float, default=0.30
     )
+    parser.add_argument("--clip", action="append",
+                        help="limit support locking to named clips")
     return parser.parse_args(sys.argv[sys.argv.index("--") + 1 :])
 
 
@@ -107,6 +109,8 @@ def main() -> None:
     canonical_support_z = None
 
     for name, clip in output["clips"].items():
+        if args.clip and name not in args.clip:
+            continue
         frames = clip["frames"]
         declared_runs = contact_runs(frames)
         feet = evaluate(

@@ -30,6 +30,12 @@ LIVE_ORDINARY = REPO / (
 LIVE_ORDINARY_REPO_PATH = (
     "src/main/resources/assets/projectseele/motion/"
     "eva_ordinary_attack_group_c_v1.json")
+LIVE_KICK = REPO / (
+    "src/main/resources/assets/projectseele/motion/"
+    "eva_kick_side_left_v1.json")
+LIVE_KICK_REPO_PATH = (
+    "src/main/resources/assets/projectseele/motion/"
+    "eva_kick_side_left_v1.json")
 VARIANTS = ("eva_unit00", "eva_unit01", "eva_unit02")
 RIG_VERSION = "eva_tiger_canonical_r01"
 POSE_GRAPH_VERSION = "eva_pose_graph_enforced_r03"
@@ -230,7 +236,7 @@ def build_pose_authority(rig: dict) -> dict:
 
 
 def build_action_lock(animation: dict, baseline_animation: dict,
-                      rollback: dict, live_ordinary: dict,
+                      rollback: dict, live_ordinary: dict, live_kick: dict,
                       existing: dict | None = None) -> dict:
     animations = animation["animations"]
     baseline_animations = baseline_animation["animations"]
@@ -240,6 +246,7 @@ def build_action_lock(animation: dict, baseline_animation: dict,
         "run": ["run"],
         "jump_landing": ["takeoff", "jump", "land"],
         "unarmed_attack": ["melee", "melee_left"],
+        "kick_attack": [],
         "unarmed_smash": ["smash"],
         "progressive_knife": ["knife_ready", "knife", "knife_heavy"],
         "crouch": ["crouch", "crouch_walk"],
@@ -260,6 +267,9 @@ def build_action_lock(animation: dict, baseline_animation: dict,
                 "geckoFallback": observed_gecko,
                 "runtimeMotion": live_ordinary,
             }
+        elif action == "kick_attack":
+            baseline_payload = {"runtimeMotion": None}
+            observed_payload = {"runtimeMotion": live_kick}
         else:
             baseline_payload = baseline_gecko
             observed_payload = observed_gecko
@@ -267,13 +277,18 @@ def build_action_lock(animation: dict, baseline_animation: dict,
         observed_hash = canonical_sha256(observed_payload)
         matches = baseline_hash == observed_hash
         previous = existing_actions.get(action, {})
-        live_receipt = action == "unarmed_attack" and (
-            live_ordinary.get("human_review", {}).get("status")
+        live_resource = (live_ordinary if action == "unarmed_attack"
+                         else live_kick if action == "kick_attack" else None)
+        expected_selection = (
+            "ordinary_group_c" if action == "unarmed_attack"
+            else "K1_SIDE_LEFT" if action == "kick_attack" else None)
+        live_receipt = live_resource is not None and (
+            live_resource.get("human_review", {}).get("status")
             == "HUMAN_SELECTED_FOR_LIVE_GAMEPLAY"
-            and live_ordinary.get("human_review", {}).get("selected")
-            == "ordinary_group_c"
-            and live_ordinary.get("gameplay_contract", {}).get(
-                "playback_speed_multiplier") == 2.0
+            and live_resource.get("human_review", {}).get("selected")
+            == expected_selection
+            and live_resource.get("gameplay_contract", {}).get(
+                "playback_speed_multiplier") == 1.5
         )
         approval_matches = not live_receipt and (
             previous.get("status") == "VISUALLY_APPROVED"
@@ -300,17 +315,23 @@ def build_action_lock(animation: dict, baseline_animation: dict,
                 else None),
             "humanReviewRequired": not approval_matches,
         }
-        if action == "unarmed_attack":
+        if action in {"unarmed_attack", "kick_attack"}:
+            resource_path = (LIVE_ORDINARY_REPO_PATH
+                             if action == "unarmed_attack"
+                             else LIVE_KICK_REPO_PATH)
             actions[action].update({
-                "runtimeMotionResource": LIVE_ORDINARY_REPO_PATH,
+                "runtimeMotionResource": resource_path,
                 "runtimeMotionSemanticSha256": canonical_sha256(
-                    live_ordinary),
-                "selectedGroup": "ordinary_group_c",
-                "playbackSpeedMultiplier": 2.0,
-                "geckoFallbackPolicy": "standing_fists_only_uses_runtime",
+                    live_resource),
+                "selectedGroup": expected_selection,
+                "playbackSpeedMultiplier": 1.5,
+                "geckoFallbackPolicy": (
+                    "standing_fists_only_uses_runtime"
+                    if action == "unarmed_attack"
+                    else "standing_fists_key_b_uses_runtime"),
                 "selectedSemanticSha256": observed_hash,
                 "selectedBy": "project_owner",
-                "selectedAt": live_ordinary["human_review"]["date"],
+                "selectedAt": live_resource["human_review"]["date"],
                 "runtimeGameReviewRequired": True,
             })
     return {
@@ -348,9 +369,10 @@ def main() -> None:
         rollback["source_commit"], ANIMATION_REPO_PATH)
     existing_actions = read_json(ACTION_LOCKS) if ACTION_LOCKS.is_file() else None
     live_ordinary = read_json(LIVE_ORDINARY)
+    live_kick = read_json(LIVE_KICK)
     actions = build_action_lock(
         source_animation, baseline_animation, rollback, live_ordinary,
-        existing_actions)
+        live_kick, existing_actions)
     write_json(OUTPUT / "eva_rig_schema.json", rig)
     write_json(OUTPUT / "eva_pose_authority_contract.json", authority)
     write_json(OUTPUT / "eva_approved_actions.json", actions)

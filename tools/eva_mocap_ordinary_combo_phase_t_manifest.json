@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "sampleRate": 60.0,
-  "status": "HUMAN_SELECTED_GROUP_C_LIVE_2X",
+  "status": "HUMAN_SELECTED_GROUP_C_LIVE_1P5X",
   "authority": "g1_moves_group_c_human_selected_live_runtime",
   "unarmedVocabulary": "FOUR_DISTINCT_NATIVE_COMBAT_GROUPS_NO_SPORTS_NO_BOXING_NO_PUSH",
   "knifeGrip": "NOT_APPLICABLE",
@@ -10,7 +10,7 @@
   "fistProfile": "src/main/resources/assets/projectseele/motion/eva_ordinary_attack_v1.json",
   "selectionReceipt": {
     "selectedGroup": "ordinary_group_c",
-    "playbackSpeedMultiplier": 2.0,
+    "playbackSpeedMultiplier": 1.5,
     "approvedBy": "project_owner",
     "approvedAt": "2026-09-01",
     "liveResource": "src/main/resources/assets/projectseele/motion/eva_ordinary_attack_group_c_v1.json",

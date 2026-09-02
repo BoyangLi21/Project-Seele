@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 from pathlib import Path
 
 
@@ -18,7 +19,8 @@ DEFAULT_OUTPUT = REPO_ROOT / (
     "src/main/resources/assets/projectseele/motion/"
     "eva_ordinary_attack_group_c_v1.json"
 )
-PLAYBACK_SPEED = 2.0
+PLAYBACK_SPEED = 1.5
+LOOP_TRANSITION_FRAMES = 12
 STAGES = (
     {
         "name": "ordinary_attack_group_c_stage_1",
@@ -53,6 +55,33 @@ def compact_bytes(value: object) -> bytes:
     return json.dumps(
         value, ensure_ascii=False, sort_keys=True, separators=(",", ":")
     ).encode("utf-8")
+
+
+def smoothstep(value: float) -> float:
+    return value * value * (3.0 - 2.0 * value)
+
+
+def slerp(first: list[float], second: list[float], amount: float) -> list[float]:
+    left = [float(value) for value in first]
+    right = [float(value) for value in second]
+    dot = sum(a * b for a, b in zip(left, right))
+    if dot < 0.0:
+        right = [-value for value in right]
+        dot = -dot
+    dot = max(-1.0, min(1.0, dot))
+    if dot > 0.9995:
+        result = [a + (b - a) * amount for a, b in zip(left, right)]
+    else:
+        angle = math.acos(dot)
+        sine = math.sin(angle)
+        first_weight = math.sin((1.0 - amount) * angle) / sine
+        second_weight = math.sin(amount * angle) / sine
+        result = [
+            a * first_weight + b * second_weight
+            for a, b in zip(left, right)
+        ]
+    length = math.sqrt(sum(value * value for value in result))
+    return [round(value / length, 7) for value in result]
 
 
 def parse_args() -> argparse.Namespace:
@@ -139,6 +168,63 @@ def main() -> None:
         )
         total_frames += len(frames)
 
+    entry_name = "ordinary_attack_group_c_stage_1"
+    finish_name = "ordinary_attack_group_c_stage_3"
+    loop_name = "ordinary_attack_group_c_stage_1_loop"
+    loop_frames = json.loads(json.dumps(live_clips[entry_name]["frames"]))
+    previous = live_clips[finish_name]["frames"][-1]
+    for frame_index in range(min(LOOP_TRANSITION_FRAMES, len(loop_frames))):
+        if frame_index == 0:
+            loop_frames[frame_index] = json.loads(json.dumps(previous))
+            continue
+        amount = smoothstep(frame_index / max(1, LOOP_TRANSITION_FRAMES - 1))
+        original = loop_frames[frame_index]
+        original["rotation_wxyz"] = [
+            slerp(before, after, amount)
+            for before, after in zip(
+                previous["rotation_wxyz"], original["rotation_wxyz"]
+            )
+        ]
+        original["root_m"] = [
+            round(before + (after - before) * amount, 7)
+            for before, after in zip(previous["root_m"], original["root_m"])
+        ]
+        original["foot_contact"] = list(
+            previous["foot_contact"] if amount < 0.5
+            else original["foot_contact"]
+        )
+    for frame_index, frame in enumerate(loop_frames):
+        frame["foot_contact"] = (
+            [False, False]
+            if frame_index < 2 or frame_index >= len(loop_frames) - 2
+            else [False, True]
+        )
+    entry_clip = live_clips[entry_name]
+    live_clips[loop_name] = {
+        **{key: value for key, value in entry_clip.items() if key != "frames"},
+        "role": "live_buffered_left_click_combo_loop_connector",
+        "loop_transition_frames": LOOP_TRANSITION_FRAMES,
+        "contact_authority": "RIGHT_FOOT_SINGLE_SUPPORT_CONNECTOR",
+        "frame_sha256": hashlib.sha256(compact_bytes(loop_frames)).hexdigest(),
+        "frames": loop_frames,
+    }
+    stage_contracts.append({
+        "stage": 3,
+        "logical_stage": 0,
+        "clip": loop_name,
+        "frames": len(loop_frames),
+        "runtime_duration_seconds": entry_clip["runtime_duration_seconds"],
+        "contact_frame": entry_clip["contact_frame"],
+        "contact_seconds": round(
+            entry_clip["contact_frame"] / sample_rate / PLAYBACK_SPEED, 7),
+        "contact_tick_20hz": max(1, round(
+            entry_clip["contact_frame"] / sample_rate
+            / PLAYBACK_SPEED * 20.0)),
+        "buffer_window": entry_clip["buffer_window"],
+        "loop_transition_frames": LOOP_TRANSITION_FRAMES,
+    })
+    total_frames += len(loop_frames)
+
     selected_sources = [
         source
         for source in selection.get("sources", [])
@@ -167,6 +253,8 @@ def main() -> None:
         "gameplay_contract": {
             "input": "repeated_left_click",
             "stage_order": [stage["clip"] for stage in stage_contracts],
+            "logical_stage_order": [0, 1, 2],
+            "loop_entry_stage": 3,
             "advance_rule": "server_buffered_next_click",
             "playback_speed_multiplier": PLAYBACK_SPEED,
             "damage_authority": "server_contact_tick",

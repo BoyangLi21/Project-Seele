@@ -1,7 +1,7 @@
 # EVA Pose Authority Phase B
 
-Status: **post-Gecko single commit authority active; r03 admits one
-human-selected live-test MotionEngine action**.
+Status: **post-Gecko single commit authority active; r03 admits two
+human-selected live-test MotionEngine actions**.
 
 Phase B promotes the Phase-A observer into the only orchestrator allowed to
 write EVA bones after Gecko has evaluated its controllers. Preview/live motion,
@@ -21,7 +21,7 @@ The runtime order is:
    captures continue to reject this owner.
 3. `MOTION_ENGINE_LIVE_ACTION` may own only an explicitly human-selected live
    action mask. r03 currently admits the selected standing-fists Group C
-   ordinary attack; it does not admit Phase U kicks or research previews.
+   ordinary attack and K1 side kick; it does not admit K2/K3 or research previews.
 4. `POSE_GRAPH_WEAPON_AIM` writes `aim_pitch` only when the active motion owner
    has not already written it.
 5. `POSE_GRAPH_PILOT_AIM` writes `head` only when a pilot exists and the active
@@ -34,8 +34,8 @@ final-owner conflict.
 
 ## Migration guarantees
 
-- Gecko fallback families remain anchored to commit `a910890b`; the selected
-  ordinary attack is locked separately by its live motion-resource hash.
+- Gecko fallback families remain anchored to commit `a910890b`; ordinary C and
+  K1 are locked separately by their live motion-resource hashes.
 - `EvaUnit01Renderer` contains no rotation, position or scale write and does
   not invoke MotionEngine directly.
 - The only Java call to `EvaMotionEngineV2.apply` is inside
