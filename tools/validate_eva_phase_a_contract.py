@@ -330,6 +330,12 @@ def main() -> None:
                       ".setScaleX(", ".setScaleY(", ".setScaleZ("):
         require(forbidden not in renderer_source,
                 "renderer still writes runtime bones: " + forbidden)
+    require("pendingPoseCommit" in renderer_source
+            and "bone.getParent() == null" in renderer_source
+            and renderer_source.index("EvaPoseGraph.commit(")
+            < renderer_source.index("super.renderRecursively("),
+            "PoseGraph commit must run after Gecko animation evaluation "
+            "and before root recursion")
     require("EvaMotionEngineV2.apply(" not in renderer_source,
             "renderer still invokes MotionEngine directly")
     java_sources = "\n".join(

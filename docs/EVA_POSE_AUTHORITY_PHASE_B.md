@@ -37,7 +37,10 @@ final-owner conflict.
 - Gecko fallback families remain anchored to commit `a910890b`; ordinary C and
   K1 are locked separately by their live motion-resource hashes.
 - `EvaUnit01Renderer` contains no rotation, position or scale write and does
-  not invoke MotionEngine directly.
+  not invoke MotionEngine directly. It schedules the single PoseGraph commit
+  in `preRender`, then executes it at the first root recursion: GeckoLib 4.8.4
+  calls `handleAnimations` between those hooks, so the commit is genuinely
+  post-Gecko and cannot be overwritten by the upstream controller stack.
 - The only Java call to `EvaMotionEngineV2.apply` is inside
   `EvaPoseGraph.commit`.
 - MotionEngine reports separate rotation-bone and position-bone write sets plus

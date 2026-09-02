@@ -52,7 +52,7 @@ visual_automation = read(
 require("aim.bedrock_sign",
         'setRotX(-pitch)' in pose_graph
         and 'setRotX(pitch)' not in pose_graph
-        and "EvaPoseGraph.commit(animatable, model, partialTick)" in renderer
+        and "EvaPoseGraph.commit(animatable, poseModel," in renderer
         and not any(token in renderer for token in
                     (".setRotX(", ".setRotY(", ".setRotZ(")),
         "visible Bedrock pitch negates Minecraft XRot")

@@ -96,6 +96,10 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
     private static final Set<String> PILOT_CAMERA_MESH_COVER = Set.of(
             "torso_lower", "torso_upper", "pylon_l", "pylon_r");
     private boolean pilotView;
+    private BakedGeoModel pendingPoseModel;
+    private EvaUnit01Entity pendingPoseEntity;
+    private float pendingPosePartialTick;
+    private boolean pendingPoseCommit;
     private boolean strictFailureReported;
 
     public static void rememberRifleMuzzle(int entityId, Vec3 position)
@@ -332,12 +336,16 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
                 model.getBone("aim_pitch").ifPresent(EvaUnit01Renderer::hideSubtree);
             }
         }
-        // Phase B gives all post-Gecko writes one ordered commit point. The
-        // graph preserves the exact former MotionEngine and aim formulas; this
-        // renderer now owns visibility only.
+        // GeoEntityRenderer evaluates Gecko controllers inside actuallyRender,
+        // after this preRender hook. Defer the PoseGraph commit until the root
+        // recursion begins so live motion is the final pose that reaches the
+        // vertex path instead of being overwritten by handleAnimations.
         if (!isReRender)
         {
-            EvaPoseGraph.commit(animatable, model, partialTick);
+            this.pendingPoseModel = model;
+            this.pendingPoseEntity = animatable;
+            this.pendingPosePartialTick = partialTick;
+            this.pendingPoseCommit = true;
         }
         // Weapon visibility applies on top in every view.
         setWeaponVisibility(model, "knife", animatable.getWeapon() == EvaUnit01Entity.WEAPON_KNIFE);
@@ -368,6 +376,18 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
                                   int packedOverlay, float red, float green,
                                   float blue, float alpha)
     {
+        if (!isReRender && bone.getParent() == null
+                && this.pendingPoseCommit
+                && this.pendingPoseEntity == animatable
+                && this.pendingPoseModel != null)
+        {
+            BakedGeoModel poseModel = this.pendingPoseModel;
+            this.pendingPoseCommit = false;
+            this.pendingPoseModel = null;
+            this.pendingPoseEntity = null;
+            EvaPoseGraph.commit(animatable, poseModel,
+                    this.pendingPosePartialTick);
+        }
         super.renderRecursively(poseStack, animatable, bone, renderType,
                 bufferSource, buffer, isReRender, partialTick, packedLight,
                 packedOverlay, red, green, blue, alpha);

@@ -394,6 +394,15 @@ public final class EvaMotionEngineV2
         {
             boolean enteringLocomotion = selection.locomotion()
                     && !runtime.lastLocomotion;
+            if (gameplayLiveAction)
+            {
+                ProjectSeele.LOGGER.info(
+                        "EVA post-Gecko live pose selected: entity={} family={} "
+                                + "clip={} stage={} bones={}",
+                        entity.getId(), gameplayKick ? "kick" : "ordinary",
+                        selection.key(), entity.getOrdinaryAttackStage(),
+                        db.bones.length);
+            }
             runtime.selectionKey = selection.key();
             runtime.actionTime = 0.0D;
             if (enteringLocomotion || !selection.locomotion())
