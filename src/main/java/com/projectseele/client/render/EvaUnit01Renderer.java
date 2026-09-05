@@ -303,6 +303,10 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
                           boolean isReRender, float partialTick, int packedLight, int packedOverlay,
                           float red, float green, float blue, float alpha)
     {
+        if (!isReRender)
+        {
+            EvaPoseTransition.restoreGecko(model);
+        }
         super.preRender(poseStack, animatable, model, bufferSource, buffer, isReRender,
                 partialTick, packedLight, packedOverlay, red, green, blue, alpha);
         forEachBone(model, bone ->

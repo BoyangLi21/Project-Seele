@@ -19,6 +19,7 @@ FILES = (
     "eva_ordinary_attack_group_c_v1.json",
     "eva_kick_side_left_v1.json",
     "eva_knife_attacks_phase_m_v1.json",
+    "eva_connected_locomotion_v1.json",
 )
 
 
@@ -64,6 +65,7 @@ def main() -> None:
         CLASS_ROOT / "entity/EvaUnit01Entity.class",
         CLASS_ROOT / "entity/EvaLiveCombatMotion.class",
         CLASS_ROOT / "client/render/EvaMotionEngineV2.class",
+        CLASS_ROOT / "client/render/EvaPoseTransition.class",
     )
     for path in classes:
         require(path.is_file(), f"missing compiled class {path.name}")

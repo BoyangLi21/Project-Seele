@@ -186,6 +186,9 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     private static final int KNIFE_FORWARD_FRAME_INTERVALS = 172;
     private static final int KNIFE_REVERSE_FRAME_INTERVALS = 125;
     private static final int CROSS_ACTION_BUFFER_TICKS = 30;
+    // First arrested thrust, before the held twist/retraction, in the 60 Hz clips.
+    private static final int KNIFE_FORWARD_CONTACT_FRAME = 44;
+    private static final int KNIFE_REVERSE_CONTACT_FRAME = 24;
     private static final float AT_FIELD_MAX = 200.0F;
     private static final float AT_FIELD_REGEN = 0.4F;
     private static final int AT_FIELD_REGEN_DELAY = 100;
@@ -356,6 +359,12 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             SynchedEntityData.defineId(EvaUnit01Entity.class, EntityDataSerializers.INT);
     private static final EntityDataAccessor<Integer> DATA_KICK_SEQUENCE =
             SynchedEntityData.defineId(EvaUnit01Entity.class, EntityDataSerializers.INT);
+    private static final EntityDataAccessor<Boolean> DATA_KICK_ACTIVE =
+            SynchedEntityData.defineId(EvaUnit01Entity.class, EntityDataSerializers.BOOLEAN);
+    private static final EntityDataAccessor<Integer> DATA_KNIFE_TYPE =
+            SynchedEntityData.defineId(EvaUnit01Entity.class, EntityDataSerializers.INT);
+    private static final EntityDataAccessor<Float> DATA_LIVE_ACTION_PHASE =
+            SynchedEntityData.defineId(EvaUnit01Entity.class, EntityDataSerializers.FLOAT);
     private static final EntityDataAccessor<Integer> DATA_JUMP_SEQUENCE =
             SynchedEntityData.defineId(EvaUnit01Entity.class, EntityDataSerializers.INT);
     private static final EntityDataAccessor<Integer> DATA_ACTIVATION_TICKS =
@@ -522,6 +531,8 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     private int ordinaryAfterKickBufferTicks;
     private int kickAfterOrdinaryBufferTicks;
     private int knifeVisualTicks;
+    private int pendingKnifeContactTicks;
+    private int queuedKnifeInput = -1;
     private int knifeElapsedTicks;
     private float knifeDurationAtStart;
     private boolean knifeReverseMotion;
@@ -550,6 +561,12 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     private int clientSmashWeapon = -1;
     private int clientKickSequence;
     private int clientKickStartTick = -1000;
+    private float clientActionPhasePrevious;
+    private float clientActionPhase;
+    private int clientActionPhaseTick;
+    private int clientRootFamily = -1;
+    private int clientRootSequence = -1;
+    private Vec3 clientRootPrevious = Vec3.ZERO;
     private int clientJumpSequence;
     private boolean clientJumpImpulsePending;
     private boolean clientExplicitJumpInProgress;
@@ -628,6 +645,9 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         this.entityData.define(DATA_ORDINARY_ATTACK_STAGE, -1);
         this.entityData.define(DATA_SMASH_SEQUENCE, 0);
         this.entityData.define(DATA_KICK_SEQUENCE, 0);
+        this.entityData.define(DATA_KICK_ACTIVE, false);
+        this.entityData.define(DATA_KNIFE_TYPE, -1);
+        this.entityData.define(DATA_LIVE_ACTION_PHASE, 0.0F);
         this.entityData.define(DATA_JUMP_SEQUENCE, 0);
         this.entityData.define(DATA_ACTIVATION_TICKS, 0);
         this.entityData.define(DATA_ENTRY_PLUG_INSERTED, false);
@@ -2048,10 +2068,16 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         {
             return 0.0F;
         }
-        float elapsed = this.tickCount - this.clientMeleeStartTick
-                + partialTick;
-        return Mth.clamp(elapsed / this.ordinaryAttackDurationTicks(stage),
-                0.0F, 1.0F);
+        return this.liveActionProgress(partialTick);
+    }
+
+    /** Never let a client clock outrun the authoritative contact/root timeline. */
+    private float liveActionProgress(float partialTick)
+    {
+        if (!this.level().isClientSide) return this.entityData.get(DATA_LIVE_ACTION_PHASE);
+        float interpolation = Mth.clamp(this.tickCount - this.clientActionPhaseTick
+                + partialTick, 0.0F, 1.0F);
+        return Mth.lerp(interpolation, this.clientActionPhasePrevious, this.clientActionPhase);
     }
 
     private float ordinaryAttackDurationTicks(int stage)
@@ -2095,34 +2121,50 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     public int getKnifeMotionType(float partialTick)
     {
         if (this.getWeapon() != WEAPON_KNIFE || this.isPilotProne()
-                || this.isPilotCrouching())
+                || this.isPilotCrouching() || this.entityData.get(DATA_KNIFE_TYPE) < 0)
         {
             return -1;
         }
-        float lightElapsed = this.tickCount - this.clientMeleeStartTick
-                + partialTick;
-        float heavyElapsed = this.tickCount - this.clientSmashStartTick
-                + partialTick;
-        boolean light = lightElapsed >= 0.0F
-                && this.clientMeleeWeapon == WEAPON_KNIFE
-                && lightElapsed < this.knifeDurationTicks(false);
-        boolean heavy = heavyElapsed >= 0.0F
-                && this.clientSmashWeapon == WEAPON_KNIFE
-                && heavyElapsed < this.knifeDurationTicks(true);
-        if (light && heavy)
-        {
-            return this.clientSmashStartTick > this.clientMeleeStartTick ? 1 : 0;
-        }
-        return heavy ? 1 : light ? 0 : -1;
+        return this.entityData.get(DATA_KNIFE_TYPE);
     }
 
     public float getKnifeMotionProgress(int type, float partialTick)
     {
-        int start = type == 1 ? this.clientSmashStartTick
-                : this.clientMeleeStartTick;
-        float elapsed = this.tickCount - start + partialTick;
-        return Mth.clamp(elapsed / this.knifeDurationTicks(type == 1),
-                0.0F, 1.0F);
+        return this.liveActionProgress(partialTick);
+    }
+
+    public boolean hasLiveActionForRender(float partialTick)
+    {
+        return this.getOrdinaryAttackStage() >= 0
+                || this.isKickMotionActive(partialTick)
+                || this.getKnifeMotionType(partialTick) >= 0;
+    }
+
+    public String poseTransitionKey(float partialTick)
+    {
+        String pose;
+        if (this.getOrdinaryAttackStage() >= 0)
+            pose = "ordinary:" + this.clientMeleeStartTick;
+        else if (this.isKickMotionActive(partialTick))
+            pose = "kick:" + this.clientKickStartTick;
+        else if (this.getKnifeMotionType(partialTick) >= 0)
+            pose = "knife:" + this.getKnifeMotionType(partialTick) + ":"
+                    + (this.getKnifeMotionType(partialTick) == 1
+                    ? this.clientSmashStartTick : this.clientMeleeStartTick);
+        else if (this.getCockpitSmashAnim(partialTick) > 0.0F)
+            pose = "smash:" + this.clientSmashStartTick;
+        else if (this.getCockpitAttackAnim(partialTick) > 0.0F)
+            pose = "melee:" + this.clientMeleeStartTick;
+        else if (this.isPilotProne())
+            pose = "prone:" + this.isVisuallyMovingForRender();
+        else if (this.isPilotCrouching())
+            pose = "crouch:" + this.isVisuallyMovingForRender();
+        else if (this.isVisuallyAirborneForRender())
+            pose = "airborne";
+        else
+            pose = this.isVisuallyMovingForRender()
+                    ? this.isVisualRunRequested() ? "run" : "walk" : "idle";
+        return this.getWeapon() + ":" + pose;
     }
 
     private float knifeDurationTicks(boolean reverse)
@@ -2217,6 +2259,13 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         boolean crouching = this.isPilotCrouching();
         boolean liveOrdinaryAttack = this.getWeapon() == WEAPON_FISTS
                 && !prone && !crouching;
+        if (this.getWeapon() == WEAPON_KNIFE && !prone && !crouching
+                && this.knifeVisualTicks > 0)
+        {
+            // Holding LMB cannot overwrite an explicitly buffered RMB.
+            if (this.queuedKnifeInput != 1) this.queuedKnifeInput = 0;
+            return;
+        }
         if (liveOrdinaryAttack && this.kickVisualTicks > 0)
         {
             this.ordinaryAfterKickBufferTicks = CROSS_ACTION_BUFFER_TICKS;
@@ -2269,13 +2318,14 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
                 : lance ? "lance_thrust"
                     : knife ? "knife"
                     : (this.leftSwing ? "melee_left" : "melee");
-        this.triggerAnim("strike", animation);
+        if (!liveKnife) this.triggerAnim("strike", animation);
         if (this.getTags().contains("seele_motion_lab"))
         {
             ProjectSeele.LOGGER.info(
                     "EVA motion-lab melee accepted: eva={} weapon={} animation={}",
                     this.getStringUUID(), this.getWeapon(), animation);
         }
+        if (liveKnife) return;
         float baseDamage = lance ? MELEE_LANCE_DAMAGE : knife ? MELEE_KNIFE_DAMAGE : MELEE_FIST_DAMAGE;
         float damage = baseDamage * this.getMeleeMultiplier();
         Vec3 forward = this.getForward().multiply(1.0D, 0.0D, 1.0D).normalize();
@@ -2291,19 +2341,14 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
 
     public boolean isKickMotionActive(float partialTick)
     {
-        float elapsed = this.tickCount - this.clientKickStartTick
-                + partialTick;
-        return elapsed >= 0.0F
-                && elapsed < this.kickDurationTicks()
+        return this.entityData.get(DATA_KICK_ACTIVE)
                 && this.getWeapon() == WEAPON_FISTS
                 && !this.isPilotProne() && !this.isPilotCrouching();
     }
 
     public float getKickAttackProgress(float partialTick)
     {
-        float elapsed = this.tickCount - this.clientKickStartTick
-                + partialTick;
-        return Mth.clamp(elapsed / this.kickDurationTicks(), 0.0F, 1.0F);
+        return this.liveActionProgress(partialTick);
     }
 
     private float kickDurationTicks()
@@ -2342,6 +2387,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         this.ordinaryAttackComboGraceTicks = Math.max(
                 MELEE_INPUT_BUFFER_TICKS, visualTicks + 4);
         this.ordinaryAttackVisualTicks = visualTicks;
+        this.entityData.set(DATA_LIVE_ACTION_PHASE, 0.0F);
         this.ordinaryAttackElapsedTicks = 0;
         this.ordinaryAttackDurationAtStart =
                 this.ordinaryAttackDurationTicks(visualStage);
@@ -2407,6 +2453,13 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     /** Crouch + attack: a slow two-handed slam that flattens the area ahead. */
     public void smashAttack(ServerPlayer pilot)
     {
+        if (!this.isPilotControlLocked() && this.getWeapon() == WEAPON_KNIFE
+                && !this.isPilotCrouching() && !this.isPilotProne()
+                && this.knifeVisualTicks > 0)
+        {
+            this.queuedKnifeInput = 1;
+            return;
+        }
         if (this.isPilotControlLocked() || this.smashCooldown > 0
                 || !this.isMeleeWeapon() || this.kickVisualTicks > 0)
         {
@@ -2421,7 +2474,8 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
 
         boolean knife = this.getWeapon() == WEAPON_KNIFE;
         boolean lance = this.getWeapon() == WEAPON_LANCE;
-        if (knife && !this.isPilotProne() && !this.isPilotCrouching())
+        boolean liveKnife = knife && !this.isPilotProne() && !this.isPilotCrouching();
+        if (liveKnife)
         {
             this.beginKnifeMotion(true);
         }
@@ -2433,6 +2487,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
                         : this.isPilotCrouching() ? "crouch_lance_thrust" : "lance_thrust"
                     : this.isPilotProne() ? "prone_smash"
                         : this.isPilotCrouching() ? "crouch_smash" : "smash";
+        if (liveKnife) return;
         this.triggerAnim("strike", animation);
         float baseDamage = lance ? SMASH_LANCE_DAMAGE : knife ? SMASH_KNIFE_DAMAGE : SMASH_FIST_DAMAGE;
         float damage = baseDamage * this.getMeleeMultiplier();
@@ -2495,6 +2550,8 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         this.kickAfterOrdinaryBufferTicks = 0;
         this.meleeInputBufferTicks = 0;
         this.kickVisualTicks = this.kickVisualTicks();
+        this.entityData.set(DATA_LIVE_ACTION_PHASE, 0.0F);
+        this.entityData.set(DATA_KICK_ACTIVE, true);
         this.kickElapsedTicks = 0;
         this.kickDurationAtStart = this.kickDurationTicks();
         this.liveCombatRootPrevious = EvaLiveCombatMotion.kick(0.0F);
@@ -2543,6 +2600,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
 
     private void cancelSideKick()
     {
+        this.entityData.set(DATA_KICK_ACTIVE, false);
         this.kickVisualTicks = 0;
         this.kickElapsedTicks = 0;
         this.kickDurationAtStart = 0.0F;
@@ -2552,18 +2610,61 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
 
     private void beginKnifeMotion(boolean reverse)
     {
+        this.entityData.set(DATA_KNIFE_TYPE, reverse ? 1 : 0);
+        this.entityData.set(DATA_LIVE_ACTION_PHASE, 0.0F);
+        this.queuedKnifeInput = -1;
         this.knifeReverseMotion = reverse;
         this.knifeVisualTicks = this.knifeVisualTicks(reverse);
         this.knifeElapsedTicks = 0;
         this.knifeDurationAtStart = this.knifeDurationTicks(reverse);
+        this.pendingKnifeContactTicks = Math.max(1, Math.round(
+                (reverse ? KNIFE_REVERSE_CONTACT_FRAME : KNIFE_FORWARD_CONTACT_FRAME)
+                        * 20.0F / KNIFE_SOURCE_FPS
+                        / EvaPilotCapability.attackSpeedMultiplier(this.getPilotSynchronization())));
         this.liveCombatRootPrevious = EvaLiveCombatMotion.knife(reverse, 0.0F);
     }
 
     private void cancelKnifeMotion()
     {
+        this.entityData.set(DATA_KNIFE_TYPE, -1);
+        this.pendingKnifeContactTicks = 0;
+        this.queuedKnifeInput = -1;
         this.knifeVisualTicks = 0;
         this.knifeElapsedTicks = 0;
         this.knifeDurationAtStart = 0.0F;
+    }
+
+    private void resolveKnifeContact(ServerPlayer pilot)
+    {
+        boolean reverse = this.knifeReverseMotion;
+        // Evaluated blade-tip model coordinates at frames 44 / 24. World X/Z
+        // use the same 180-degree facing conversion as the rendered Tiger rig.
+        Vec3 point = reverse ? new Vec3(42.8D, 167.2D, -68.5D)
+                : new Vec3(6.6D, 149.6D, -57.4D);
+        double scale = EvaScale.RENDER_SCALE / 16.0D;
+        Vec3 forward = this.getForward().multiply(1.0D, 0.0D, 1.0D).normalize();
+        Vec3 right = new Vec3(forward.z, 0.0D, -forward.x);
+        Vec3 center = this.position().add(right.scale(-point.x * scale))
+                .add(forward.scale(-point.z * scale)).add(0.0D, point.y * scale, 0.0D);
+        double radius = reverse ? SMASH_RADIUS : MELEE_RADIUS;
+        AABB zone = new AABB(center, center).inflate(radius,
+                reverse ? EvaScale.fromLegacy(8.5D) : 10.0D, radius);
+        this.strikeZone(pilot, zone,
+                (reverse ? SMASH_KNIFE_DAMAGE : MELEE_KNIFE_DAMAGE) * this.getMeleeMultiplier(),
+                reverse ? 2.0D : 1.1D, center);
+        this.playSound(SoundEvents.PLAYER_ATTACK_SWEEP, reverse ? 3.0F : 2.5F,
+                reverse ? 0.68F : 0.7F);
+        ProjectSeele.LOGGER.debug("EVA knife contact: entity={} reverse={} elapsed={}",
+                this.getId(), reverse, this.knifeElapsedTicks);
+    }
+
+    private void cancelLiveActionsForStanceChange()
+    {
+        this.cancelOrdinaryGroupCAttack();
+        this.cancelSideKick();
+        this.cancelKnifeMotion();
+        this.meleeInputBufferTicks = 0;
+        this.kickAfterOrdinaryBufferTicks = 0;
     }
 
     private void applyKnifeRootMotion()
@@ -2573,6 +2674,8 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             return;
         }
         this.knifeElapsedTicks++;
+        this.entityData.set(DATA_LIVE_ACTION_PHASE, Mth.clamp(
+                this.knifeElapsedTicks / this.knifeDurationAtStart, 0.0F, 1.0F));
         Vec3 authored = EvaLiveCombatMotion.knife(this.knifeReverseMotion,
                 Mth.clamp(this.knifeElapsedTicks / this.knifeDurationAtStart,
                         0.0F, 1.0F));
@@ -2604,6 +2707,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             authored = EvaLiveCombatMotion.kick(
                     Mth.clamp(elapsed / duration, 0.0F, 1.0F));
         }
+        this.entityData.set(DATA_LIVE_ACTION_PHASE, Mth.clamp(elapsed / duration, 0.0F, 1.0F));
         this.applyAuthoredRootDelta(authored);
     }
 
@@ -2611,6 +2715,11 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     {
         Vec3 local = authored.subtract(this.liveCombatRootPrevious);
         this.liveCombatRootPrevious = authored;
+        this.moveAuthoredRootDelta(local);
+    }
+
+    private void moveAuthoredRootDelta(Vec3 local)
+    {
         double blocksPerMetre = 112.0D * EvaScale.RENDER_SCALE / 16.0D;
         Vec3 forward = this.getForward().multiply(1.0D, 0.0D, 1.0D);
         if (forward.lengthSqr() < 1.0e-8D)
@@ -2626,6 +2735,46 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         {
             this.move(MoverType.SELF, movement);
         }
+    }
+
+    private static Vec3 actionRootSample(int family, float phase)
+    {
+        return family < 4 ? EvaLiveCombatMotion.ordinary(family, phase)
+                : family == 4 ? EvaLiveCombatMotion.kick(phase)
+                : EvaLiveCombatMotion.knife(family == 6, phase);
+    }
+
+    private void predictAuthoritativeActionRoot()
+    {
+        int stage = this.getOrdinaryAttackStage();
+        int knife = this.getKnifeMotionType(0.0F);
+        int family = stage >= 0 ? stage : this.isKickMotionActive(0.0F) ? 4
+                : knife >= 0 ? 5 + knife : -1;
+        int sequence = family == 4 ? this.entityData.get(DATA_KICK_SEQUENCE)
+                : family == 6 ? this.entityData.get(DATA_SMASH_SEQUENCE)
+                : this.entityData.get(DATA_MELEE_SEQUENCE);
+        float phase = this.entityData.get(DATA_LIVE_ACTION_PHASE);
+        if (family < 0)
+        {
+            if (this.clientRootFamily >= 0)
+            {
+                // Consume the final synchronized sample, including a partial
+                // sample when the server cancelled the attack before contact.
+                Vec3 finalRoot = actionRootSample(this.clientRootFamily, phase);
+                this.moveAuthoredRootDelta(finalRoot.subtract(this.clientRootPrevious));
+                this.clientRootFamily = -1;
+            }
+            return;
+        }
+        if (family != this.clientRootFamily || sequence != this.clientRootSequence)
+        {
+            this.clientRootPrevious = actionRootSample(family, 0.0F);
+            this.clientRootFamily = family;
+            this.clientRootSequence = sequence;
+        }
+        Vec3 root = actionRootSample(family, phase);
+        this.moveAuthoredRootDelta(root.subtract(this.clientRootPrevious));
+        this.clientRootPrevious = root;
     }
 
     private void strikeZone(ServerPlayer pilot, AABB zone, float damage, double knockback, Vec3 fxCenter)
@@ -2735,6 +2884,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         {
             this.entityData.set(DATA_PRONE, false);
         }
+        this.cancelLiveActionsForStanceChange();
         this.entityData.set(DATA_CROUCHING, crouching);
         this.entityData.set(DATA_SPRINTING, false);
         this.updatePoseDimensions();
@@ -2756,6 +2906,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             pilot.displayClientMessage(Component.translatable("msg.projectseele.cannot_stand"), true);
             return;
         }
+        this.cancelLiveActionsForStanceChange();
         this.entityData.set(DATA_PRONE, prone);
         this.entityData.set(DATA_CROUCHING, false);
         this.entityData.set(DATA_SPRINTING, false);
@@ -3631,6 +3782,14 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             }
         }
         boolean ordinaryEnded = false;
+        if (this.pendingKnifeContactTicks > 0 && --this.pendingKnifeContactTicks == 0
+                && this.getWeapon() == WEAPON_KNIFE && this.knifeVisualTicks > 0
+                && !this.isPilotCrouching() && !this.isPilotProne()
+                && !this.isPilotControlLocked()
+                && this.getControllingPassenger() instanceof ServerPlayer contactPilot)
+        {
+            this.resolveKnifeContact(contactPilot);
+        }
         if (this.ordinaryAttackVisualTicks > 0)
         {
             this.ordinaryAttackVisualTicks--;
@@ -3645,10 +3804,12 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         {
             this.kickVisualTicks--;
             kickEnded = this.kickVisualTicks == 0;
+            if (kickEnded) this.entityData.set(DATA_KICK_ACTIVE, false);
         }
         if (this.knifeVisualTicks > 0)
         {
             this.knifeVisualTicks--;
+            if (this.knifeVisualTicks == 0) this.entityData.set(DATA_KNIFE_TYPE, -1);
         }
         if (this.meleeCooldown > 0)
         {
@@ -3669,7 +3830,16 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         if (this.getControllingPassenger() instanceof ServerPlayer pilot
                 && !this.isPilotControlLocked() && this.isMeleeWeapon())
         {
-            if (ordinaryEnded && this.kickAfterOrdinaryBufferTicks > 0)
+            if (this.queuedKnifeInput >= 0 && this.knifeVisualTicks == 0
+                    && this.getWeapon() == WEAPON_KNIFE
+                    && (this.queuedKnifeInput == 1 ? this.smashCooldown == 0 : this.meleeCooldown == 0))
+            {
+                int queued = this.queuedKnifeInput;
+                this.queuedKnifeInput = -1;
+                if (queued == 1) this.smashAttack(pilot);
+                else this.meleeAttack(pilot);
+            }
+            else if (ordinaryEnded && this.kickAfterOrdinaryBufferTicks > 0)
             {
                 this.stompAttack(pilot);
             }
@@ -5366,8 +5536,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     /** Stop input-driven motion without making a prone Unit pop upright. */
     private void clearPilotMotion()
     {
-        this.cancelOrdinaryGroupCAttack();
-        this.cancelSideKick();
+        this.cancelLiveActionsForStanceChange();
         this.entityData.set(DATA_CROUCHING, false);
         this.entityData.set(DATA_SPRINTING, false);
         this.updatePoseDimensions();
@@ -5429,6 +5598,20 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             return;
         }
         super.travel(input);
+        if (this.level().isClientSide)
+        {
+            if (this.isControlledByLocalInstance())
+            {
+                // Ridden vehicles report their local position to the server.
+                // Predict only the server-authorized action phase, otherwise
+                // vanilla reports a stationary vehicle over the server root.
+                this.predictAuthoritativeActionRoot();
+            }
+            else
+            {
+                this.clientRootFamily = -1;
+            }
+        }
         // LivingEntity calls this only after it has selected the local pilot
         // as vehicle authority. Applying the synchronized impulse here avoids
         // both the pre-travel friction pass and the non-authoritative branch
@@ -5459,6 +5642,13 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         }
         this.pilotMovementRequested = Math.abs(player.xxa) > 0.01F
                 || Math.abs(player.zza) > 0.01F;
+        if (this.hasLiveActionForRender(0.0F))
+        {
+            // Captured planted feet travel with the authoritative action root.
+            // Held movement resumes when the action finishes; it is not added
+            // on top of the capture as a second, sliding trajectory.
+            return Vec3.ZERO;
+        }
         double strafe = this.isPilotProne() ? 0.28D
                 : this.isPilotCrouching() ? 0.45D : 0.7D;
         return new Vec3(player.xxa * strafe, 0.0D,
@@ -5511,9 +5701,26 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     public void onSyncedDataUpdated(EntityDataAccessor<?> key)
     {
         super.onSyncedDataUpdated(key);
+        if (DATA_LIVE_ACTION_PHASE.equals(key))
+        {
+            float phase = this.entityData.get(DATA_LIVE_ACTION_PHASE);
+            this.clientActionPhasePrevious = phase < this.clientActionPhase
+                    ? phase : this.clientActionPhase;
+            this.clientActionPhase = phase;
+            this.clientActionPhaseTick = this.tickCount;
+        }
         if (DATA_CROUCHING.equals(key) || DATA_PRONE.equals(key))
         {
             this.updatePoseDimensions();
+            this.clientMeleeStartTick = -1000;
+            this.clientSmashStartTick = -1000;
+            this.clientKickStartTick = -1000;
+        }
+        if (DATA_KNIFE_TYPE.equals(key) && this.entityData.get(DATA_KNIFE_TYPE) < 0
+                && this.getWeapon() == WEAPON_KNIFE)
+        {
+            this.clientMeleeStartTick = -1000;
+            this.clientSmashStartTick = -1000;
         }
         if (DATA_MELEE_SEQUENCE.equals(key))
         {

@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "poseGraphVersion": "eva_pose_graph_enforced_r03",
+  "poseGraphVersion": "eva_pose_graph_connected_r04",
   "rigVersion": "eva_tiger_canonical_r01",
   "phase": "B",
   "mode": "ENFORCE_POST_GECKO_SINGLE_COMMIT",
@@ -28,7 +28,8 @@
     "MOTION_ENGINE_PREVIEW",
     "MOTION_ENGINE_LIVE_ACTION",
     "POSE_GRAPH_WEAPON_AIM",
-    "POSE_GRAPH_PILOT_AIM"
+    "POSE_GRAPH_PILOT_AIM",
+    "POSE_GRAPH_TRANSITION"
   ],
   "ownedChannels": [
     "rotation",
@@ -36,6 +37,7 @@
     "scale"
   ],
   "ownerPriority": [
+    "POSE_GRAPH_TRANSITION",
     "MOTION_ENGINE_LIVE_ACTION",
     "MOTION_ENGINE_PREVIEW",
     "POSE_GRAPH_PILOT_AIM",
@@ -149,12 +151,19 @@
       "bones": [
         "head"
       ]
+    },
+    "EvaPoseTransition": {
+      "owner": "POSE_GRAPH_TRANSITION",
+      "invokedOnlyBy": "EvaPoseGraph.commit",
+      "reportsChannelsSeparately": true,
+      "purpose": "Finite transitions of the composed pose, including the weapon socket; raw Gecko input restored before its next evaluation"
     }
   },
   "rendererPolicy": {
     "may": [
       "invoke EvaPoseGraph.commit",
-      "change visibility"
+      "change visibility",
+      "restore the saved upstream Gecko pose before animation evaluation"
     ],
     "mayNot": [
       "write bone transforms",

@@ -47,6 +47,7 @@ public final class EvaPoseGraph
 
     public static void reload(ResourceManager resources)
     {
+        EvaPoseTransition.clear();
         LAST_COMMITS.clear();
         commitSerial = 0L;
         firstCommitLogged = false;
@@ -150,6 +151,7 @@ public final class EvaPoseGraph
     public static Snapshot observe(EvaUnit01Entity entity, float partialTick)
     {
         return snapshot(entity, partialTick,
+                EvaMotionEngineV2.BoneWrites.empty(),
                 EvaMotionEngineV2.BoneWrites.empty(), false);
     }
 
@@ -161,6 +163,7 @@ public final class EvaPoseGraph
         {
             return Snapshot.empty();
         }
+        EvaPoseTransition.rememberGecko(model);
         EvaMotionEngineV2.BoneWrites motionWrites = EvaMotionEngineV2.apply(
                 entity, model, partialTick);
 
@@ -192,8 +195,11 @@ public final class EvaPoseGraph
                 head.setRotZ(head.getRotZ());
             });
         }
+        EvaMotionEngineV2.BoneWrites transitions = EvaPoseTransition.apply(
+                entity, model, partialTick);
         Snapshot committed = snapshot(
-                entity, partialTick, motionWrites, true);
+                entity, partialTick, motionWrites, transitions, true);
+        com.projectseele.client.visual.EvaConnectedActionReview.recordPose(entity, model, partialTick);
         if (LAST_COMMITS.size() > 48)
         {
             LAST_COMMITS.clear();
@@ -222,6 +228,7 @@ public final class EvaPoseGraph
     private static Snapshot snapshot(EvaUnit01Entity entity,
                                      float partialTick,
                                      EvaMotionEngineV2.BoneWrites motionWrites,
+                                     EvaMotionEngineV2.BoneWrites transitions,
                                      boolean committed)
     {
         Contract current = contract;
@@ -282,6 +289,16 @@ public final class EvaPoseGraph
                 && rotationOwners.containsKey("head"))
         {
             rotationOwners.put("head", "POSE_GRAPH_PILOT_AIM");
+        }
+        if (!transitions.isEmpty())
+        {
+            activeLayers.add(EvaPoseTransition.OWNER);
+            transitions.rotationBones().forEach(bone ->
+                    rotationOwners.put(bone, EvaPoseTransition.OWNER));
+            transitions.positionBones().forEach(bone ->
+                    positionOwners.put(bone, EvaPoseTransition.OWNER));
+            transitions.rotationBones().forEach(bone ->
+                    scaleOwners.put(bone, EvaPoseTransition.OWNER));
         }
 
         List<String> upstreamSources = upstreamSources(entity, partialTick);

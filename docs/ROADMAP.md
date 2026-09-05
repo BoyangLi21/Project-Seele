@@ -1,6 +1,6 @@
 # Project SEELE 完整路线图
 
-> 更新：2026-09-02。EVA Gecko 基础动作仍冻结到 `a910890b` 回滚基线；
+> 更新：2026-09-05。项目负责人授权以真人动捕结合修改推进连续动作；站立/走跑/蹲起已进入统一运行时，Gecko `a910890b` 保留为回退基线。
 > 项目负责人选择的普通攻击 C 与 K1 左侧踹现作为独立 live MotionEngine 动作覆盖
 > standing-fists 左键与 B 键。Pose Authority Phase B/r03 已把所有 post-Gecko 写骨收口到唯一提交点，Phase C
 > 已建立隔离的四权重网格格式与运行时 skinning 探针，Phase D 已验证真实
@@ -23,6 +23,7 @@
 **环境**：Forge 1.20.1-47.4.10 · JDK 17 (Temurin) · Gradle 8.8（腾讯镜像）· IDEA · GitHub 仓库正常推送（SSH，账号 BoyangLi21）
 
 **已交付**：
+- 🔄 **EVA 连续动作运行时**（2026-09-05）：已选 Group C、K1 与 Phase M 刀动作接入统一姿态过渡；新增 7 clips / 52 bones / 593 frames 的基础步态与真人蹲起资源。ACCAD 下蹲/起身与 CMU 蹲行经过 EVA 膝部、脚底及身高适配；走跑共享距离相位。刀输入缓冲、服务端接触时刻、取消和逐 tick 动作进度同步已接线，协议为 24；初号机连续实机回放与关键帧已检查，最终观感仍待负责人评价。见 `docs/EVA_CONNECTED_ACTIONS.md`。
 - ✅ Phase 0：项目骨架、开源仓库（MIT + khara 合规声明）、首次构建、冒烟测试
 - ✅ Phase 1 MVP：Ramiel Boss（八面体直连渲染 + 悬浮 AI + 蓄力光束 + Boss 血条 + 掉落）、阳电子步枪、使徒核心碎片、创造标签页、刷怪蛋、中英双语、战利品表
 - ✅ Phase 1 收尾（2026-07-06，代码完成待目视验收）：警报系统、真·光束渲染、十字爆炸、二阶段钻头、Config、九连原创合成音效、进度树、32x 贴图；地基设施三件套落地（SimpleChannel 网络层 / RibbonRenderer 特效库 / gen_sounds.ps1 音效管线）

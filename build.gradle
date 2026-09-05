@@ -124,6 +124,9 @@ minecraft {
             if (project.hasProperty('poseCaptureSmoke')) {
                 property 'projectseele.poseCaptureSmoke', 'true'
             }
+            if (project.hasProperty('connectedActionReview')) {
+                property 'projectseele.connectedActionReview', 'true'
+            }
             if (project.hasProperty('skinnedProxyPreview')) {
                 property 'projectseele.skinnedProxyPreview', 'true'
             }
@@ -322,4 +325,13 @@ publishing {
 
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8' // Use the UTF-8 charset for Java compilation
+}
+
+tasks.register('verifyEvaPoseTransition', JavaExec) {
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.projectseele.client.render.EvaPoseTransitionTest'
+}
+tasks.named('check').configure {
+    dependsOn 'verifyEvaPoseTransition'
 }

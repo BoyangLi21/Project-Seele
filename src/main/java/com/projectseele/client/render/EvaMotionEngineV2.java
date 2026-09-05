@@ -6,6 +6,7 @@ import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.WeakHashMap;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
@@ -59,6 +60,11 @@ public final class EvaMotionEngineV2
     private static final ResourceLocation LIVE_KNIFE_DATABASE =
             new ResourceLocation(ProjectSeele.MODID,
                     "motion/eva_knife_attacks_phase_m_v1.json");
+    private static final ResourceLocation CONNECTED_LOCOMOTION_DATABASE =
+            new ResourceLocation(ProjectSeele.MODID,
+                    "motion/eva_connected_locomotion_v1.json");
+    private static final Map<EvaUnit01Entity, GameplayState> GAMEPLAY = new WeakHashMap<>();
+    private static volatile MotionDatabase connectedLocomotion = MotionDatabase.empty();
     private static final double WALK_STRIDE_BLOCKS = 25.8334D;
     private static final double RUN_STRIDE_BLOCKS = 31.3944D;
     private static final double CROUCH_STRIDE_BLOCKS = 9.2990D;
@@ -93,6 +99,9 @@ public final class EvaMotionEngineV2
     public static void reload(ResourceManager resourceManager)
     {
         STATES.clear();
+        GAMEPLAY.clear();
+        connectedLocomotion = load(resourceManager, CONNECTED_LOCOMOTION_DATABASE,
+                "EVA connected locomotion");
         database = load(resourceManager, DATABASE, "EVA Motion Engine V2");
         physicsDatabase = load(resourceManager, PHYSICS_DATABASE,
                 "EVA physics preview");
@@ -140,6 +149,10 @@ public final class EvaMotionEngineV2
                                    BakedGeoModel model, float partialTick)
     {
         int previewMode = entity.getMotionLabPhysicsPreview();
+        if (previewMode == 0)
+        {
+            return applyGameplay(entity, model, partialTick);
+        }
         if (previewMode == 3)
         {
             return applyLivePhysics(model);
@@ -714,6 +727,165 @@ public final class EvaMotionEngineV2
                         ? OWNER_LIVE_ACTION : OWNER_PREVIEW);
     }
 
+    private static BoneWrites applyGameplay(EvaUnit01Entity entity,
+                                           BakedGeoModel model, float partialTick)
+    {
+        if (!entity.isPoweredOn() || entity.isNervLogisticsLocked()
+                || entity.isCrucified() || entity.isBerserk()
+                || entity.getActivationTicks() > 0 || entity.isPilotProne()
+                || entity.isShieldBraced())
+        {
+            GAMEPLAY.remove(entity);
+            return BoneWrites.empty();
+        }
+        int ordinary = entity.getOrdinaryAttackStage();
+        boolean kick = entity.isKickMotionActive(partialTick);
+        int knife = entity.getKnifeMotionType(partialTick);
+        boolean action = ordinary >= 0 || kick || knife >= 0;
+        boolean base = !action && entity.getVisualPose() == 0
+                && !entity.isVisuallyAirborneForRender()
+                && (entity.getWeapon() == EvaUnit01Entity.WEAPON_FISTS
+                    || entity.getWeapon() == EvaUnit01Entity.WEAPON_KNIFE)
+                && !(entity.getWeapon() == EvaUnit01Entity.WEAPON_FISTS
+                    && entity.getCockpitSmashAnim(partialTick) > 0.0F)
+                && !(entity.isPilotCrouching()
+                    && (entity.getCockpitAttackAnim(partialTick) > 0.0F
+                        || entity.getCockpitSmashAnim(partialTick) > 0.0F));
+        if (!action && !base) return BoneWrites.empty();
+        MotionDatabase db = ordinary >= 0 ? liveOrdinaryAttackDatabase
+                : kick ? liveKickDatabase : knife >= 0 ? liveKnifeDatabase : connectedLocomotion;
+        if (db.bones.length == 0) return BoneWrites.empty();
+        GameplayState state = GAMEPLAY.computeIfAbsent(entity, ignored -> new GameplayState());
+        double time = (entity.tickCount + (double)partialTick) / 20.0D;
+        double dt = Math.max(0.0D, Math.min(0.1D, time - state.time));
+        double x = Mth.lerp((double)partialTick, entity.xOld, entity.getX());
+        double z = Mth.lerp((double)partialTick, entity.zOld, entity.getZ());
+        double distance = state.initialized ? Math.hypot(x - state.x, z - state.z) : 0.0D;
+        state.time = time;
+        state.x = x;
+        state.z = z;
+        state.initialized = true;
+        PoseBuffer target = state.buffers.computeIfAbsent(db, ignored -> new PoseBuffer(db.bones.length));
+        String clip;
+        double phase;
+        if (ordinary >= 0)
+        {
+            clip = ordinary == 3 ? "ordinary_attack_group_c_stage_1_loop"
+                    : "ordinary_attack_group_c_stage_" + (ordinary + 1);
+            phase = entity.getOrdinaryAttackProgress(partialTick);
+        }
+        else if (kick)
+        {
+            clip = "kick_side_left";
+            phase = entity.getKickAttackProgress(partialTick);
+        }
+        else if (knife >= 0)
+        {
+            clip = knife == 1 ? "eva_short_knife_stab_twist_reverse"
+                    : "eva_locked_knife_stab_twist_forward";
+            phase = entity.getKnifeMotionProgress(knife, partialTick);
+        }
+        else
+        {
+            boolean moving = entity.isVisuallyMovingForRender();
+            boolean crouch = entity.isPilotCrouching();
+            if (!state.stanceInitialized)
+            {
+                state.stanceInitialized = true;
+                state.crouched = crouch;
+                state.stanceStart = Double.NEGATIVE_INFINITY;
+            }
+            else if (state.crouched != crouch)
+            {
+                state.crouched = crouch;
+                state.stanceStart = time;
+            }
+            float runTarget = entity.isPilotSprinting() && moving && !crouch ? 1.0F : 0.0F;
+            state.run += (runTarget - state.run) * (float)(1.0D - Math.exp(-dt / 0.08D));
+            clip = crouch ? moving ? "crouch_walk" : "crouch_idle" : moving ? "walk" : "idle";
+            double stride = crouch ? db.clip("crouch_walk").strideBlocks(CROUCH_STRIDE_BLOCKS)
+                    : Mth.lerp(state.run, WALK_STRIDE_BLOCKS, RUN_STRIDE_BLOCKS);
+            if (moving && distance < 8.0D)
+            {
+                double yaw = Math.toRadians(entity.getYRot());
+                Vec3 velocity = entity.getDeltaMovement();
+                double forward = velocity.x * -Math.sin(yaw) + velocity.z * Math.cos(yaw);
+                state.gaitPhase = wrap01(state.gaitPhase + (forward < -0.001D ? -1 : 1)
+                        * distance / stride);
+            }
+            phase = moving ? state.gaitPhase : wrap01(time / db.clip(clip).durationSeconds);
+            String stanceClip = crouch ? "stand_to_crouch" : "crouch_to_stand";
+            if (moving) state.stanceStart = Double.NEGATIVE_INFINITY;
+            double stanceAge = time - state.stanceStart;
+            if (!moving && stanceAge < db.clip(stanceClip).durationSeconds)
+            {
+                clip = stanceClip;
+                phase = Math.max(0.0D, stanceAge / db.clip(clip).durationSeconds);
+            }
+        }
+        db.clip(clip).sample(phase, target);
+        if (base && clip.equals("walk") && state.run > 0.0001F)
+        {
+            if (state.runPose == null) state.runPose = new PoseBuffer(db.bones.length);
+            db.clip("run").sample(phase, state.runPose);
+            PoseBuffer.blend(target, state.runPose, state.run, target);
+        }
+        if (base && entity.isVisuallyMovingForRender())
+        {
+            applyDirectionalWarp(entity, target, db);
+        }
+        Set<String> rotations = new LinkedHashSet<>();
+        Set<String> positions = new LinkedHashSet<>();
+        model.getBone("root").ifPresent(root ->
+        {
+            root.setPosY(root.getInitialSnapshot().getOffsetY() + target.rootMeters.y * MODEL_UNITS_PER_SOURCE_METRE);
+            if (base)
+            {
+                root.setPosX(root.getInitialSnapshot().getOffsetX() + target.rootMeters.x * MODEL_UNITS_PER_SOURCE_METRE);
+                root.setPosZ(root.getInitialSnapshot().getOffsetZ() + target.rootMeters.z * MODEL_UNITS_PER_SOURCE_METRE);
+            }
+            positions.add("root");
+        });
+        for (int i = 0; i < db.bones.length; i++)
+        {
+            String name = db.bones[i];
+            if (base && (name.equals("head") || entity.getWeapon() == EvaUnit01Entity.WEAPON_KNIFE
+                    && (name.startsWith("finger_") || name.equals("arm_r")
+                        || name.equals("forearm_r") || name.equals("hand_r")))) continue;
+            GeoBone bone = model.getBone(name).orElse(null);
+            if (bone == null) continue;
+            Vector3f euler = motionQuaternionToAuthoredEuler(target.rotations[i]);
+            bone.setRotX(-euler.x);
+            bone.setRotY(-euler.y);
+            bone.setRotZ(euler.z);
+            rotations.add(name);
+            if (target.positionAuthored[i])
+            {
+                Vector3f p = target.positions[i];
+                bone.setPosX(p.x);
+                bone.setPosY(p.y);
+                bone.setPosZ(p.z);
+                positions.add(name);
+            }
+        }
+        return new BoneWrites(Set.copyOf(rotations), Set.copyOf(positions), OWNER_LIVE_ACTION);
+    }
+
+    private static final class GameplayState
+    {
+        private final Map<MotionDatabase, PoseBuffer> buffers = new HashMap<>();
+        private PoseBuffer runPose;
+        private double time;
+        private double x;
+        private double z;
+        private double gaitPhase;
+        private float run;
+        private boolean initialized;
+        private boolean stanceInitialized;
+        private boolean crouched;
+        private double stanceStart;
+    }
+
     private static Quaternionf geckoRotationAsMotionQuaternion(GeoBone bone)
     {
         double x = -bone.getRotX();
@@ -890,6 +1062,10 @@ public final class EvaMotionEngineV2
         Vec3 right = new Vec3(Math.cos(yaw), 0.0D, Math.sin(yaw));
         double relative = Math.atan2(velocity.dot(right),
                 velocity.dot(forward));
+        // Backward travel reverses the gait phase; do not twist the pelvis
+        // towards 180 degrees while the chest still faces the pilot's aim.
+        if (relative > Math.PI * 0.5D) relative -= Math.PI;
+        if (relative < -Math.PI * 0.5D) relative += Math.PI;
         float lowerYaw = (float)Mth.clamp(relative,
                 -Math.toRadians(72.0D), Math.toRadians(72.0D));
         int lower = db.index("torso_lower");
