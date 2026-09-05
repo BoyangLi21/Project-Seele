@@ -130,6 +130,9 @@ minecraft {
             if (project.hasProperty('pyramidInteriorReview')) {
                 property 'projectseele.pyramidInteriorReview', 'true'
             }
+            if (project.hasProperty('commandLiftReview')) {
+                property 'projectseele.commandLiftReview', 'true'
+            }
             if (project.hasProperty('skinnedProxyPreview')) {
                 property 'projectseele.skinnedProxyPreview', 'true'
             }

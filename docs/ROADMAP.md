@@ -20,6 +20,8 @@
 
 ## §0 现状快照
 
+- 2026-09-06：暂停地图精修，修复指挥室电梯因相邻楼层捕获范围重叠而拆分轿厢的问题；预览按实测 84 格差异恢复，原 R28 使用运行时来源识别修复。验证与恢复方法见 `docs/COMMAND_LIFT_RECOVERY.md`；旧地下世界、Tokyo-3、S24 迁移的接班证据见 `docs/WORLD_RECOVERY_HANDOFF_20260906.md`。
+
 **环境**：Forge 1.20.1-47.4.10 · JDK 17 (Temurin) · Gradle 8.8（腾讯镜像）· IDEA · GitHub 仓库正常推送（SSH，账号 BoyangLi21）
 
 **已交付**：

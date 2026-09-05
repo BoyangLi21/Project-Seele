@@ -19,6 +19,7 @@ import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.DyeColor;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.ButtonBlock;
@@ -1270,6 +1271,49 @@ public final class S20MovingElevatorsAdapter
                 "Moving Elevators adopted persisted {} cage at {}; shaftWrites=0",
                 spec.id(), occupied.cabinCentre().toShortString());
         return true;
+    }
+
+    /**
+     * The bridge and rear-service stops are only four blocks apart, while
+     * the capture box is six high. Native availability accepts any movable
+     * block, so a call from below otherwise mistakes the bottom two layers
+     * of the service car for a second car at the bridge and tears it apart.
+     * Restrict only this authored group; other/player-built lifts retain the
+     * dependency's normal rules. Run inside its availability calculation so
+     * both the selected source and the synced floor indicators agree.
+     */
+    public static boolean validCommandCageSource(
+            Level level, ElevatorGroup group, BlockPos anchor)
+    {
+        S20PhysicalElevatorDirector.LiftSpec spec =
+                S20PhysicalElevatorDirector.commandRearLift();
+        BlockPos base = controllerPosition(spec, spec.lower());
+        if (!level.dimension().location().toString().equals("projectseele:geofront")
+                || group.x != base.getX() || group.z != base.getZ()
+                || group.facing != controllerFacing(spec))
+        {
+            return true;
+        }
+        for (S20PhysicalElevatorDirector.Landing landing : spec.stops())
+        {
+            if (!captureMatchesLanding(group, anchor, landing.cabinCentre()))
+            {
+                continue;
+            }
+            for (int dx = 0; dx < group.getCageSizeX(); dx++)
+            {
+                for (int dz = 0; dz < group.getCageSizeZ(); dz++)
+                {
+                    if (!level.getBlockState(anchor.offset(dx, 0, dz))
+                            .is(Blocks.POLISHED_DEEPSLATE))
+                    {
+                        return false;
+                    }
+                }
+            }
+            return true;
+        }
+        return false;
     }
 
     private static boolean captureMatchesLanding(
