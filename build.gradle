@@ -127,6 +127,9 @@ minecraft {
             if (project.hasProperty('connectedActionReview')) {
                 property 'projectseele.connectedActionReview', 'true'
             }
+            if (project.hasProperty('pyramidInteriorReview')) {
+                property 'projectseele.pyramidInteriorReview', 'true'
+            }
             if (project.hasProperty('skinnedProxyPreview')) {
                 property 'projectseele.skinnedProxyPreview', 'true'
             }

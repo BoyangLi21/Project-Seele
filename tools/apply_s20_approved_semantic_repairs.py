@@ -754,7 +754,8 @@ def apply_chunk(root: nbtlib.File, chunk_changes: list[Change],
 
 def rewrite_region(path: Path,
                    changes_by_chunk: dict[tuple[int, int], list[Change]],
-                   removable_block_entities: set[tuple[int, int, int]] | None = None
+                   removable_block_entities: set[tuple[int, int, int]] | None = None,
+                   block_entity_additions: dict[tuple[int, int, int], nbtlib.Compound] | None = None
                    ) -> bytes:
     source = path.read_bytes()
     if len(source) < HEADER_BYTES:
@@ -793,6 +794,19 @@ def rewrite_region(path: Path,
                     or int(root.get("zPos", chunk_z)) != chunk_z:
                 raise RuntimeError(f"chunk coordinate mismatch at {chunk_x},{chunk_z}")
             apply_chunk(root, selected, removable_block_entities)
+            additions = {pos: entry for pos, entry in (block_entity_additions or {}).items()
+                         if pos[0] >> 4 == chunk_x and pos[2] >> 4 == chunk_z}
+            if additions:
+                touched = {(c.x,c.y,c.z) for c in selected}
+                existing = list(root.get("block_entities", []))
+                occupied = {(int(e["x"]),int(e["y"]),int(e["z"])) for e in existing}
+                for pos, entry in additions.items():
+                    if pos not in touched or pos in occupied:
+                        raise RuntimeError(f"unowned or occupied block-entity addition: {pos}")
+                    if tuple(int(entry[a]) for a in ("x","y","z")) != pos:
+                        raise RuntimeError(f"block-entity position mismatch: {pos}")
+                    existing.append(entry)
+                root["block_entities"] = nbtlib.List[nbtlib.Compound](existing)
             chunks[index] = chunk_blob(root)
             seen_chunks.add((chunk_x, chunk_z))
         else:
