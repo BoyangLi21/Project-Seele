@@ -374,6 +374,12 @@ public final class TrainingPilotDirector
     public static TrainingPilotEntity resetToStandby(ServerLevel level,
                                                        int variant)
     {
+        BlockPos standby = requestedStandby(level, variant);
+        level.getChunkAt(standby);
+        if (!level.areEntitiesLoaded(net.minecraft.world.level.ChunkPos.asLong(standby)))
+        {
+            return null;
+        }
         clearRouteState(variant);
         TrainingPilotEntity keeper = null;
         for (TrainingPilotEntity pilot : pilots(level))
@@ -701,7 +707,7 @@ public final class TrainingPilotDirector
         return List.copyOf(route);
     }
 
-    private static BlockPos requestedStandby(ServerLevel level, int variant)
+    static BlockPos requestedStandby(ServerLevel level, int variant)
     {
         if (FacilityV2EvaRuntime.ready(level, variant))
         {

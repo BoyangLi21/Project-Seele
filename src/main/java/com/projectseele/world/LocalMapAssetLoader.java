@@ -416,7 +416,7 @@ public final class LocalMapAssetLoader
             SkyscraperPlacement placement = SKYSCRAPERS[index];
             Vec3i rotatedSize = template.getSize(placement.rotation());
             int drop = skyscraperDrop(placement, rotatedSize, retractionDepth,
-                    tokyo3Origin);
+                    tokyo3Origin, level);
             BlockPos surfaceBase = tokyo3Origin.offset(placement.offset());
             BlockPos base = surfaceBase.below(drop);
             BlockPos travelMarker = skyscraperMarker(base, index);
@@ -521,9 +521,9 @@ public final class LocalMapAssetLoader
         }
         Vec3i rotatedSize = template.getSize(placement.rotation());
         int oldDrop = skyscraperDrop(placement, rotatedSize, oldDepth,
-                tokyo3Origin);
+                tokyo3Origin, level);
         int newDrop = skyscraperDrop(placement, rotatedSize, newDepth,
-                tokyo3Origin);
+                tokyo3Origin, level);
         if (oldDrop == newDrop)
         {
             return new SkyscraperTravelStep(true, false, 0, 0);
@@ -801,9 +801,9 @@ public final class LocalMapAssetLoader
         SkyscraperPlacement placement = SKYSCRAPERS[index];
         Vec3i rotatedSize = template.getSize(placement.rotation());
         int oldDrop = skyscraperDrop(placement, rotatedSize, oldDepth,
-                tokyo3Origin);
+                tokyo3Origin, level);
         int newDrop = skyscraperDrop(placement, rotatedSize, newDepth,
-                tokyo3Origin);
+                tokyo3Origin, level);
         BlockPos surfaceBase = tokyo3Origin.offset(placement.offset());
         BlockPos oldBase = surfaceBase.below(oldDrop);
         BlockPos newBase = surfaceBase.below(newDrop);
@@ -1022,7 +1022,7 @@ public final class LocalMapAssetLoader
             SkyscraperPlacement placement = SKYSCRAPERS[index];
             Vec3i rotatedSize = rotatedSkyscraperSize(placement.rotation());
             int drop = skyscraperDrop(placement, rotatedSize, retractionDepth,
-                    tokyo3Origin);
+                    tokyo3Origin, level);
             BlockPos base = tokyo3Origin.offset(placement.offset()).below(drop);
             if (level.getBlockState(skyscraperStateMarker(tokyo3Origin, index))
                     .is(Blocks.LODESTONE)
@@ -1037,6 +1037,32 @@ public final class LocalMapAssetLoader
         return found;
     }
 
+    /** Complete cargo check, including fragile lights omitted by old marker probes. */
+    public static int inspectTokyo3CargoMismatches(ServerLevel level, BlockPos origin, int depth)
+    {
+        StructureTemplate template = load(level, TOKYO3_SKYSCRAPER);
+        if (template == null) return -1;
+        int mismatches = 0;
+        for (int i = 0; i < SKYSCRAPERS.length; i++)
+        {
+            SkyscraperPlacement placement = SKYSCRAPERS[i];
+            int drop = skyscraperDrop(placement, rotatedSkyscraperSize(placement.rotation()), depth, origin, level);
+            BlockPos base = origin.offset(placement.offset()).below(drop);
+            for (var block : skyscraperBlueprint(template, placement.rotation()).entrySet())
+            {
+                BlockPos position = base.offset(block.getKey());
+                if (position.equals(skyscraperMarker(base, i))) continue;
+                if (!level.getBlockState(position).equals(block.getValue()))
+                {
+                    if (mismatches < 8) ProjectSeele.LOGGER.warn("Private Tokyo-3 cargo mismatch: {} actual={} expected={}",
+                            position, level.getBlockState(position), block.getValue());
+                    mismatches++;
+                }
+            }
+        }
+        return mismatches;
+    }
+
     /** Repairs only the three private towers' abandoned vertical travel
      * shafts. This is safe for a hand-edited city because no road or block
      * outside the exact imported footprints is touched. */
@@ -1049,7 +1075,7 @@ public final class LocalMapAssetLoader
             SkyscraperPlacement placement = SKYSCRAPERS[index];
             Vec3i rotatedSize = rotatedSkyscraperSize(placement.rotation());
             int drop = skyscraperDrop(placement, rotatedSize,
-                    retractionDepth, tokyo3Origin);
+                    retractionDepth, tokyo3Origin, level);
             BlockPos surfaceBase = tokyo3Origin.offset(placement.offset());
             BlockPos expectedBase = surfaceBase.below(drop);
             SkyscraperBounds bounds = skyscraperBounds(placement.rotation());
@@ -1067,10 +1093,13 @@ public final class LocalMapAssetLoader
                 {
                     for (int z = bounds.minimumZ(); z <= bounds.maximumZ(); z++)
                     {
-                        setIfChanged(level, new BlockPos(
-                                surfaceBase.getX() + x, y,
-                                surfaceBase.getZ() + z),
-                                Blocks.AIR.defaultBlockState());
+                        BlockPos abandoned = new BlockPos(surfaceBase.getX() + x, y,
+                                surfaceBase.getZ() + z);
+                        // The current marker sits one block below the cargo.
+                        // Erasing it here forced a healthy tower to rebuild
+                        // at the first upward layer after every reversal.
+                        if (!abandoned.equals(skyscraperMarker(expectedBase, index)))
+                            setIfChanged(level, abandoned, Blocks.AIR.defaultBlockState());
                     }
                 }
             }
@@ -1180,9 +1209,9 @@ public final class LocalMapAssetLoader
         {
             Vec3i rotatedSize = rotatedSkyscraperSize(placement.rotation());
             int oldDrop = skyscraperDrop(placement, rotatedSize, oldDepth,
-                    tokyo3Origin);
+                    tokyo3Origin, level);
             int newDrop = skyscraperDrop(placement, rotatedSize, newDepth,
-                    tokyo3Origin);
+                    tokyo3Origin, level);
             SkyscraperBounds bounds = skyscraperBounds(placement.rotation());
             BlockPos surfaceBase = tokyo3Origin.offset(placement.offset());
             int minimumY = surfaceBase.getY() - Math.max(oldDrop, newDrop);
@@ -1253,7 +1282,7 @@ public final class LocalMapAssetLoader
         for (int depth = 0; depth <= maximumDepth; depth++)
         {
             int drop = skyscraperDrop(placement, rotatedSize, depth,
-                    tokyo3Origin);
+                    tokyo3Origin, level);
             if (drop == previousDrop)
             {
                 continue;
@@ -1312,7 +1341,7 @@ public final class LocalMapAssetLoader
                     BlockPos position = base.offset(x, y, z);
                     if (!level.getBlockState(position).isAir())
                     {
-                        set(level, position, Blocks.AIR.defaultBlockState());
+                        setIfChanged(level, position, Blocks.AIR.defaultBlockState());
                     }
                 }
             }
@@ -1321,7 +1350,7 @@ public final class LocalMapAssetLoader
 
     private static int skyscraperDrop(SkyscraperPlacement placement,
                                       Vec3i size, int depth,
-                                      BlockPos tokyo3Origin)
+                                      BlockPos tokyo3Origin, BlockGetter level)
     {
         SkyscraperBounds bounds = skyscraperBounds(placement.rotation());
         int minimumX = placement.offset().getX() + bounds.minimumX();
@@ -1329,10 +1358,12 @@ public final class LocalMapAssetLoader
         int minimumZ = placement.offset().getZ() + bounds.minimumZ();
         int maximumZ = placement.offset().getZ() + bounds.maximumZ();
         int topAtSurface = placement.offset().getY() + size.getY() - 1;
-        int targetDrop = Math.max(0, topAtSurface
-                - ThirdTokyoSurfaceBuilder.ceilingRoofRelativeYForBounds(
+        int ceiling = level instanceof ServerLevel serverLevel && TvWorldPreviewTerrain.active(serverLevel)
+                ? TvWorldPreviewTerrain.ROOF_Y - 4 - tokyo3Origin.getY()
+                : ThirdTokyoSurfaceBuilder.ceilingRoofRelativeYForBounds(
                         minimumX, maximumX, minimumZ, maximumZ,
-                        tokyo3Origin));
+                        tokyo3Origin);
+        int targetDrop = Math.max(0, topAtSurface - ceiling);
         int bounded = Math.max(0, Math.min(depth, targetDrop));
         if (bounded == targetDrop)
         {
@@ -1479,7 +1510,13 @@ public final class LocalMapAssetLoader
         {
             return 0;
         }
-        set(level, position, state);
+        // A translated template is temporarily unsupported while its next
+        // rows are written. Shape updates here popped every wall torch into
+        // an item on every layer, producing tens of thousands of drops.
+        if (level.setBlock(position, state, Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE | Block.UPDATE_SUPPRESS_DROPS))
+        {
+            PerformanceCounters.recordWorldBlockWrites(1);
+        }
         return 1;
     }
 

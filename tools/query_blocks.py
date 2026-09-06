@@ -50,11 +50,17 @@ def read_box(world: Path, dimension: str,
 
 def iter_box_cells(world: Path, dimension: str,
                    lo: tuple[int, int, int], hi: tuple[int, int, int],
-                   namespace: str | None = None):
-    """Yield exact loaded cells without materializing a large world box."""
+                   namespace: str | None = None, *,
+                   step: tuple[int, int, int] = (1, 1, 1),
+                   include_air: bool = True, full_chunks_only: bool = False):
+    """Yield measured cells; optional strides sample from lo, never interpolate."""
+    if any(value < 1 for value in step):
+        raise ValueError("Sampling steps must be positive")
     root = dimension_dir(world, dimension)
     bounds = (lo[0] >> 4, hi[0] >> 4, lo[2] >> 4, hi[2] >> 4)
     for chunk_x, chunk_z, chunk in iter_chunks(root, bounds):
+        if full_chunks_only and str(chunk.get('Status', '')).removeprefix('minecraft:') != 'full':
+            continue
         base_x, base_z = chunk_x * 16, chunk_z * 16
         for section in chunk.get("sections", []):
             section_y = int(section.get("Y", 0))
@@ -71,19 +77,20 @@ def iter_box_cells(world: Path, dimension: str,
             }
             if accepted is not None and not accepted:
                 continue
-            for offset in range(4096):
-                y = base_y + (offset >> 8)
-                if not lo[1] <= y <= hi[1]:
-                    continue
-                z = base_z + ((offset >> 4) & 15)
-                if not lo[2] <= z <= hi[2]:
-                    continue
-                x = base_x + (offset & 15)
-                if not lo[0] <= x <= hi[0]:
-                    continue
-                if accepted is not None and indices[offset] not in accepted:
-                    continue
-                yield (x, y, z), names[indices[offset]]
+            if not include_air and all(name in AIR for name in names):
+                continue
+            starts = tuple(max(a, b) + (a - max(a, b)) % stride
+                           for a, b, stride in zip(lo, (base_x, base_y, base_z), step))
+            for y in range(starts[1], min(hi[1], base_y + 15) + 1, step[1]):
+                for z in range(starts[2], min(hi[2], base_z + 15) + 1, step[2]):
+                    for x in range(starts[0], min(hi[0], base_x + 15) + 1, step[0]):
+                        offset = ((y - base_y) << 8) | ((z - base_z) << 4) | (x - base_x)
+                        index = indices[offset]
+                        if accepted is not None and index not in accepted:
+                            continue
+                        state = names[index]
+                        if include_air or state not in AIR:
+                            yield (x, y, z), state
 
 
 def iter_block_entities(world: Path, dimension: str,

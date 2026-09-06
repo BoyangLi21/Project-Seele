@@ -85,6 +85,11 @@ public final class Tokyo3RetractionDirector
         }
         updateCoreStates(level, origin,
                 district.depth() > 0 || district.targetDepth() > 0);
+        // During a journalled layer some roofs have already moved while the
+        // shared depth still describes the preceding frame. They are cargo,
+        // not stale caps that startup maintenance may erase.
+        if (district.depth() != district.targetDepth()
+                || district.cursor() != 0 || district.voxelCursor() != 0) return;
         // Self-heal the lightning-rod pillars a pre-fix ascent left behind,
         // once per district per session, without waiting for a retract order.
         if (SWEPT_ORIGINS.add(origin.asLong()))
@@ -137,25 +142,12 @@ public final class Tokyo3RetractionDirector
                     "Tokyo-3 tower motion is inhibited by performance rescue mode.");
         }
         StoredDistrict current = ensure(level, origin);
-        // Repair artifacts from the retired partial-copy implementation before
-        // accepting another operator command. This remains strictly inside
-        // the three imported buildings' runtime-owned travel shafts.
-        LocalMapAssetLoader.repairTokyo3TravelArtifacts(level, origin,
-                current.depth());
         if (current.faulted())
         {
             return new RequestResult(false,
                     "Tokyo-3 travel is fail-closed: " + current.fault()
                             + " Use the explicit maintenance command after repairing the obstruction.");
         }
-        // Self-healing: districts that travelled before the ascent path
-        // cleared its masts still carry rod columns. Sweeping on every order
-        // costs one pass over four known columns per lot, so it needs no
-        // migration flag and cannot run twice on the same rods.
-        acquireTravelTickets(level, origin);
-        ThirdTokyoSurfaceBuilder.sweepLegacySurfaceCaps(level, origin,
-                current.depth());
-        ThirdTokyoSurfaceBuilder.sweepStrayMasts(level, origin, current.depth());
         int target = retract
                 ? ThirdTokyoSurfaceBuilder.maximumRetractionDepth(origin) : 0;
         boolean layerInFlight = current.cursor() > 0
@@ -195,6 +187,13 @@ public final class Tokyo3RetractionDirector
                     : "Tokyo-3 armour towers are already rising.");
         }
 
+        acquireTravelTickets(level, origin);
+        if (current.depth() == current.targetDepth())
+        {
+            LocalMapAssetLoader.repairTokyo3TravelArtifacts(level, origin, current.depth());
+            ThirdTokyoSurfaceBuilder.sweepLegacySurfaceCaps(level, origin, current.depth());
+            ThirdTokyoSurfaceBuilder.sweepStrayMasts(level, origin, current.depth());
+        }
         Tokyo3RetractionSavedData.get(level).put(new StoredDistrict(
                 origin, current.depth(), target, level.getGameTime() + TICKS_PER_LAYER));
         updateCoreStates(level, origin, retract);

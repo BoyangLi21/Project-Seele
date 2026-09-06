@@ -396,7 +396,7 @@ public final class IntegratedNervMapBuilder
                 && geoLandscape.lclLakeSamples() == 4
                 && geoLandscape.protectedSites()
                 && city.roads() == 8 && city.substations() == 2
-                && city.pylons() == 6 && city.battleBeacon()
+                && city.pylons() == 6
                 && city.sortieLane() && city.observationDeck()
                 && city.foundation()
                 && cityLandscape.retainingWall()

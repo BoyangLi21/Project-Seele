@@ -133,6 +133,9 @@ minecraft {
             if (project.hasProperty('commandLiftReview')) {
                 property 'projectseele.commandLiftReview', 'true'
             }
+            if (project.hasProperty('tvWorldPreviewReview')) {
+                property 'projectseele.tvWorldPreviewReview', project.property('tvWorldPreviewReview')
+            }
             if (project.hasProperty('skinnedProxyPreview')) {
                 property 'projectseele.skinnedProxyPreview', 'true'
             }
@@ -160,11 +163,18 @@ minecraft {
         server {
             property 'forge.enabledGameTestNamespaces', mod_id
             args '--nogui'
+            if (project.hasProperty('tvWorldPreviewReview')) {
+                workingDirectory project.file('.Codex/tv-world-preview/server')
+                property 'projectseele.tvWorldPreviewReview', project.property('tvWorldPreviewReview')
+                args '--universe', project.file('run/saves').absolutePath,
+                        '--world', 'SEELE_TV_WORLD_PREVIEW_20260906'
+            }
             // The private 1-3 player SEELE test server keeps the tall
             // connected dimension and its active EVA/Angel simulation away
             // from the rendering client. Eight gigabytes leaves headroom for
             // the enlarged Tokyo-3 and GeoFront chunk sets.
-            jvmArgs '-Xms2G', '-Xmx8G', '-XX:+UseG1GC',
+            jvmArgs project.hasProperty('tvWorldPreviewReview') ? '-Xms1G' : '-Xms2G',
+                    project.hasProperty('tvWorldPreviewReview') ? '-Xmx4G' : '-Xmx8G', '-XX:+UseG1GC',
                     '-XX:MaxGCPauseMillis=100'
         }
 

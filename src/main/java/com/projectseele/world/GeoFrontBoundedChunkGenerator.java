@@ -59,21 +59,37 @@ public final class GeoFrontBoundedChunkGenerator
                     Codec.INT.fieldOf("candidate_index")
                             .forGetter(generator -> generator.candidateIndex),
                     Codec.INT.fieldOf("surface_datum")
-                            .forGetter(generator -> generator.surfaceDatum)
+                            .forGetter(generator -> generator.surfaceDatum),
+                    Codec.BOOL.optionalFieldOf("tv_preview", false)
+                            .forGetter(generator -> generator.tvPreview)
             ).apply(instance, instance.stable(
                     GeoFrontBoundedChunkGenerator::new)));
 
     private final int candidateIndex;
     private final int surfaceDatum;
     private final boolean baselineEnabled;
+    private final boolean tvPreview;
     private final FacilitySchemaV2.ResolvedManifest activeManifest;
+
+    public boolean isTvPreview()
+    {
+        return this.tvPreview;
+    }
 
     public GeoFrontBoundedChunkGenerator(
             BiomeSource biomeSource,
             Holder<NoiseGeneratorSettings> settings,
             int candidateIndex, int surfaceDatum)
     {
+        this(biomeSource, settings, candidateIndex, surfaceDatum, false);
+    }
+
+    public GeoFrontBoundedChunkGenerator(
+            BiomeSource biomeSource, Holder<NoiseGeneratorSettings> settings,
+            int candidateIndex, int surfaceDatum, boolean tvPreview)
+    {
         super(biomeSource, settings);
+        this.tvPreview = tvPreview;
         this.candidateIndex = candidateIndex;
         this.surfaceDatum = surfaceDatum;
         this.baselineEnabled =
@@ -143,6 +159,10 @@ public final class GeoFrontBoundedChunkGenerator
             BiomeManager biomeManager, StructureManager structureManager,
             ChunkAccess chunk, GenerationStep.Carving step)
     {
+        if (this.tvPreview && TvWorldPreviewTerrain.insideDome(chunk.getPos()))
+        {
+            return;
+        }
         if (this.candidateFor(chunk.getPos()) == null)
         {
             super.applyCarvers(region, seed, randomState, biomeManager,
@@ -152,6 +172,11 @@ public final class GeoFrontBoundedChunkGenerator
 
     private void carveBoundedBaseline(ChunkAccess chunk)
     {
+        if (this.tvPreview)
+        {
+            TvWorldPreviewTerrain.shape(chunk);
+            return;
+        }
         FacilitySchemaV2.ResolvedManifest candidate =
                 this.candidateFor(chunk.getPos());
         if (candidate == null)

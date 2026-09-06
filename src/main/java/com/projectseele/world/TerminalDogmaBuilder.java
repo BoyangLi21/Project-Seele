@@ -171,13 +171,23 @@ public final class TerminalDogmaBuilder
         // producing severe FPS loss while the player merely stood in NERV.
         BlockPos expectedAnchor = specimenAnchor(level, facilityOrigin);
         level.getChunkAt(expectedAnchor);
+        if (!level.areEntitiesLoaded(net.minecraft.world.level.ChunkPos.asLong(expectedAnchor)))
+        {
+            // FULL block data can arrive before its saved entities. A block
+            // load alone must not be interpreted as an empty specimen slot.
+            return false;
+        }
         if (!FacilityWorldPolicy.isS22Coastal(level.getServer()))
         {
             // Load the retired north-cross anchor as well. Otherwise an old
             // Lilith can remain invisible to the AABB query, then reappear as
             // a second high-poly entity after the player approaches it.
-            level.getChunkAt(facilityOrigin.offset(
-                    0, LCL_SURFACE_Y, -22));
+            BlockPos retiredAnchor = facilityOrigin.offset(0, LCL_SURFACE_Y, -22);
+            level.getChunkAt(retiredAnchor);
+            if (!level.areEntitiesLoaded(net.minecraft.world.level.ChunkPos.asLong(retiredAnchor)))
+            {
+                return false;
+            }
         }
         AABB bounds = specimenBounds(facilityOrigin);
         var specimens = level.getEntitiesOfClass(LilithEntity.class, bounds);

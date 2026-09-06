@@ -56,6 +56,8 @@ public final class ThirdTokyoSurfaceBuilder
     private static final List<TowerSpec> ARMOURED_TOWERS = createArmouredTowers();
     private static final List<TowerSpec> OUTER_WARD_TOWERS = createOuterWardTowers();
     private static final List<TowerSpec> MOVABLE_BUILDINGS = createMovableBuildings();
+    private static final List<TowerSpec> TV_MOVABLE_BUILDINGS = MOVABLE_BUILDINGS.stream()
+            .map(TvTokyo3Architecture::spec).toList();
     private static final int EXPECTED_TOWERS = ARMOURED_TOWERS.size();
     private static final int EXPECTED_OUTER_WARDS = OUTER_WARD_TOWERS.size();
     private static final int MAX_RETRACTION_DEPTH = MOVABLE_BUILDINGS.stream()
@@ -226,7 +228,9 @@ public final class ThirdTokyoSurfaceBuilder
                 {
                     continue;
                 }
-                int visibleHeight = Math.max(0, towerHeight(x, z) - depth);
+                int visibleHeight = Math.max(0, (TvWorldPreviewTerrain.active(level)
+                        ? TvTokyo3Architecture.spec(new TowerSpec(x, z, towerHeight(x, z), LOT_HALF_SIZE, false)).height()
+                        : towerHeight(x, z)) - depth);
                 boolean signature = visibleHeight > 0
                         ? level.getBlockState(origin.offset(x, visibleHeight + 1, z))
                                 .is(Blocks.REDSTONE_LAMP)
@@ -250,7 +254,9 @@ public final class ThirdTokyoSurfaceBuilder
                 {
                     continue;
                 }
-                int height = outerWardHeight(x, z);
+                int height = TvWorldPreviewTerrain.active(level)
+                        ? TvTokyo3Architecture.spec(new TowerSpec(x, z, outerWardHeight(x, z), 9, true)).height()
+                        : outerWardHeight(x, z);
                 int visibleHeight = Math.max(0, height - depth);
                 boolean signature = visibleHeight > 0
                         ? level.getBlockState(origin.offset(x, visibleHeight + 1, z))
@@ -264,7 +270,7 @@ public final class ThirdTokyoSurfaceBuilder
         }
 
         int ceilingBuildings = 0;
-        for (TowerSpec tower : MOVABLE_BUILDINGS)
+        for (TowerSpec tower : movableBuildings(level))
         {
             if (ceilingStateMatches(level, origin, tower, depth))
             {
@@ -292,8 +298,8 @@ public final class ThirdTokyoSurfaceBuilder
             }
         }
 
-        boolean battleBeacon = level.getBlockState(origin.offset(0, 1, 80))
-                .is(Blocks.BEACON);
+        // The plaza builder no longer places a beacon, and played S20 worlds
+        // repurpose that footprint. It is not part of the moving-city contract.
         boolean sortieLane = isRoad(level.getBlockState(origin.offset(0, 0, 60)));
         boolean observationDeck = level.getBlockState(
                 origin.offset(0, OBSERVATION_Y, OBSERVATION_Z)).is(Blocks.LODESTONE);
@@ -304,11 +310,11 @@ public final class ThirdTokyoSurfaceBuilder
                 && outerWards == EXPECTED_OUTER_WARDS
                 && ceilingBuildings == MOVABLE_BUILDINGS.size()
                 && substations == 2
-                && pylons == PYLONS.length && battleBeacon
+                && pylons == PYLONS.length
                 && sortieLane && observationDeck && foundation;
         return new DistrictAudit(valid, roads, towers, outerWards,
                 ceilingBuildings, substations, pylons,
-                battleBeacon, sortieLane, observationDeck, foundation);
+                sortieLane, observationDeck, foundation);
     }
 
     public static List<TowerSpec> armouredTowers()
@@ -320,6 +326,49 @@ public final class ThirdTokyoSurfaceBuilder
     public static List<TowerSpec> movableBuildings()
     {
         return MOVABLE_BUILDINGS;
+    }
+
+    public static List<TowerSpec> movableBuildings(ServerLevel level)
+    {
+        return TvWorldPreviewTerrain.active(level) ? TV_MOVABLE_BUILDINGS : MOVABLE_BUILDINGS;
+    }
+
+    /** Explicit preview authoring: replace one old lot, preserving its controls. */
+    public static void refineTvLot(ServerLevel level, BlockPos origin, int index)
+    {
+        if (!TvWorldPreviewTerrain.active(level)) throw new IllegalArgumentException("TV preview only");
+        TowerSpec old = MOVABLE_BUILDINGS.get(index), tower = TV_MOVABLE_BUILDINGS.get(index);
+        BlockPos centre = origin.offset(tower.x(), 0, tower.z());
+        for (int y = 1; y <= Math.max(old.height(), tower.height()) + 3; y++)
+            fillSquare(level, centre, y, old.halfSize(), Blocks.AIR.defaultBlockState(), UPDATE_TRAVEL);
+        paintRetractedHatch(level, centre, tower.halfSize(), tower.outerWard());
+        for (int y = 1; y <= tower.height(); y++)
+            buildTowerWallLayer(level, centre, tower, y, y);
+        fillSquare(level, centre, tower.height() + 1, tower.halfSize(),
+                Blocks.SMOOTH_STONE.defaultBlockState(), UPDATE_TRAVEL);
+        set(level, centre.offset(0, tower.height() + 1, 0), Blocks.REDSTONE_LAMP.defaultBlockState(), UPDATE_TRAVEL);
+        if (!tower.outerWard())
+            set(level, centre.offset(0, tower.height(), 0), Blocks.REDSTONE_BLOCK.defaultBlockState(), UPDATE_TRAVEL);
+        setRoofMasts(level, centre, tower, tower.height() + 2, Blocks.LIGHTNING_ROD.defaultBlockState());
+        for (int x : new int[]{-tower.halfSize(), tower.halfSize()})
+            for (int z : new int[]{-tower.halfSize(), tower.halfSize()})
+                for (int y = TvWorldPreviewTerrain.ROOF_Y - 3; y <= TvWorldPreviewTerrain.ROOF_Y; y++)
+                    set(level, new BlockPos(centre.getX() + x, y, centre.getZ() + z),
+                            Blocks.IRON_BLOCK.defaultBlockState(), UPDATE_TRAVEL);
+    }
+
+    public static void refineTvFoundation(ServerLevel level, BlockPos origin)
+    {
+        if (!TvWorldPreviewTerrain.active(level)) throw new IllegalArgumentException("TV preview only");
+        for (int depth = 1; depth <= 6; depth++)
+            for (int span = -FOUNDATION_HALF_SIZE; span <= FOUNDATION_HALF_SIZE; span++)
+            {
+                var material = Blocks.DEEPSLATE_BRICKS.defaultBlockState();
+                set(level, origin.offset(-FOUNDATION_HALF_SIZE, -depth, span), material, UPDATE_TRAVEL);
+                set(level, origin.offset(FOUNDATION_HALF_SIZE, -depth, span), material, UPDATE_TRAVEL);
+                set(level, origin.offset(span, -depth, -FOUNDATION_HALF_SIZE), material, UPDATE_TRAVEL);
+                set(level, origin.offset(span, -depth, FOUNDATION_HALF_SIZE), material, UPDATE_TRAVEL);
+            }
     }
 
     public static int maximumRetractionDepth()
@@ -366,7 +415,7 @@ public final class ThirdTokyoSurfaceBuilder
             throw new IllegalArgumentException(
                     "Tokyo-3 retraction depth must move by one layer");
         }
-        TowerSpec tower = MOVABLE_BUILDINGS.get(towerIndex);
+        TowerSpec tower = movableBuildings(level).get(towerIndex);
         int oldVisible = Math.max(0, tower.height() - oldDepth);
         int newVisible = Math.max(0, tower.height() - newDepth);
         int oldCeilingVisible = ceilingVisibleHeight(tower, oldDepth, origin);
@@ -466,7 +515,7 @@ public final class ThirdTokyoSurfaceBuilder
                                        int currentDepth)
     {
         int removed = 0;
-        for (TowerSpec tower : MOVABLE_BUILDINGS)
+        for (TowerSpec tower : movableBuildings(level))
         {
             BlockPos centre = origin.offset(tower.x(), 0, tower.z());
             int keepAt = Math.max(0, tower.height() - currentDepth) + 2;
@@ -517,7 +566,7 @@ public final class ThirdTokyoSurfaceBuilder
         int removedPlanes = 0;
         int minimumY = origin.getY() + 1;
         int maximumY = origin.getY() + 90;
-        for (TowerSpec tower : MOVABLE_BUILDINGS)
+        for (TowerSpec tower : movableBuildings(level))
         {
             BlockPos centre = origin.offset(tower.x(), 0, tower.z());
             int half = tower.halfSize();
@@ -533,6 +582,9 @@ public final class ThirdTokyoSurfaceBuilder
                         centre.getX(), worldY, centre.getZ());
                 if (legacyRoofCap(level, planeCentre, half))
                 {
+                    if (TvWorldPreviewTerrain.active(level) && removedPlanes < 6)
+                        ProjectSeele.LOGGER.info("TV stale cap location={} activeRoofY={} depth={}",
+                                planeCentre, currentRoofY, currentDepth);
                     clearLegacyPlane(level, planeCentre, half);
                     removedPlanes++;
                     continue;
@@ -1064,7 +1116,7 @@ public final class ThirdTokyoSurfaceBuilder
         int half = tower.halfSize();
         for (int i = -half; i <= half; i++)
         {
-            BlockState state = tower.outerWard()
+            BlockState state = tower.tv() ? TvTokyo3Architecture.wall(sourceY, i, tower) : tower.outerWard()
                     ? outerWardWall(sourceY, i, tower)
                     : towerWall(sourceY, i, tower.x(), tower.z());
             set(level, centre.offset(-half, targetY, i), state, UPDATE_TRAVEL);
@@ -1072,7 +1124,12 @@ public final class ThirdTokyoSurfaceBuilder
             set(level, centre.offset(i, targetY, -half), state, UPDATE_TRAVEL);
             set(level, centre.offset(i, targetY, half), state, UPDATE_TRAVEL);
         }
-        if (!tower.outerWard() && targetY == sourceY)
+        if (tower.tv() && sourceY <= 3)
+        {
+            for (int span = -1; span <= 1; span++)
+                set(level, centre.offset(span, targetY, half), Blocks.AIR.defaultBlockState(), UPDATE_TRAVEL);
+        }
+        else if (!tower.tv() && !tower.outerWard() && targetY == sourceY)
         {
             cutInnerDoor(level, centre, tower.x(), tower.z());
         }
@@ -1609,6 +1666,7 @@ public final class ThirdTokyoSurfaceBuilder
 
     public static int ceilingRoofRelativeY(TowerSpec tower, BlockPos origin)
     {
+        if (tower.tv()) return TvWorldPreviewTerrain.ROOF_Y - CEILING_SHELL_CLEARANCE - origin.getY();
         return ceilingRoofRelativeYForBounds(
                 tower.x() - tower.halfSize(),
                 tower.x() + tower.halfSize(),
@@ -1768,12 +1826,17 @@ public final class ThirdTokyoSurfaceBuilder
     }
 
     public record TowerSpec(int x, int z, int height,
-                            int halfSize, boolean outerWard) {}
+                            int halfSize, boolean outerWard, boolean tv)
+    {
+        public TowerSpec(int x, int z, int height, int halfSize, boolean outerWard)
+        {
+            this(x, z, height, halfSize, outerWard, false);
+        }
+    }
 
     public record DistrictAudit(boolean valid, int roads, int towers,
                                 int outerWards, int ceilingBuildings,
                                 int substations, int pylons,
-                                boolean battleBeacon,
                                 boolean sortieLane, boolean observationDeck,
                                 boolean foundation)
     {
@@ -1781,7 +1844,7 @@ public final class ThirdTokyoSurfaceBuilder
         {
             return new DistrictAudit(true, 8, EXPECTED_TOWERS,
                     EXPECTED_OUTER_WARDS, MOVABLE_BUILDINGS.size(), 2, 6,
-                    true, true, true, true);
+                    true, true, true);
         }
 
         public String summary()
@@ -1789,13 +1852,13 @@ public final class ThirdTokyoSurfaceBuilder
             return String.format(Locale.ROOT,
                     "valid=%s roads=%d/8 towers=%d/%d outerWards=%d/%d "
                             + "ceilingBuildings=%d/%d substations=%d/2 "
-                            + "pylons=%d/6 battleBeacon=%s sortieLane=%s "
+                            + "pylons=%d/6 sortieLane=%s "
                             + "observationDeck=%s foundation=%s",
                     this.valid, this.roads, this.towers, EXPECTED_TOWERS,
                     this.outerWards, EXPECTED_OUTER_WARDS,
                     this.ceilingBuildings, MOVABLE_BUILDINGS.size(),
                     this.substations, this.pylons,
-                    this.battleBeacon, this.sortieLane,
+                    this.sortieLane,
                     this.observationDeck, this.foundation);
         }
     }

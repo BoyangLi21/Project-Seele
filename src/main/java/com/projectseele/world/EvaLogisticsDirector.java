@@ -23,11 +23,13 @@ import com.projectseele.world.EvaFleetSavedData.FleetEntry;
 import com.projectseele.world.EvaFleetSavedData.Phase;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.level.TicketType;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.Mth;
@@ -57,16 +59,9 @@ public final class EvaLogisticsDirector
     private static final double RECOVERY_MAX_SPEED_SQR = 0.0025D;
     private static final int MAP_RADIUS = 400;
     private static final int ROUTE_CHUNK_MARGIN = 16;
-    /**
-     * Entity-region IO completes after chunk terrain becomes available.  A
-     * tick-count deadline is not a real delay while the integrated server is
-     * catching up during login: forty startup ticks elapsed in roughly 1.3 s
-     * on the test machine, just before the persisted cage entities joined.
-     * Use monotonic wall time so a fast startup can never clone all three
-     * PARKED airframes and reject their real saved UUIDs a frame later.
-     */
-    private static final long FLEET_ENTITY_LOAD_GRACE_NANOS =
-            15_000_000_000L;
+    /** Keep station entity attachment alive until the readiness check completes. */
+    private static final TicketType<ChunkPos> STATION_LOAD_TICKET = TicketType.create(
+            "projectseele_station_attach", Comparator.comparingLong(ChunkPos::toLong), 100);
     private static final Map<UUID, Boolean> ROUTE_TICKET_STATE = new HashMap<>();
     private static final Map<UUID, Long> PHASE_STARTED_AT = new HashMap<>();
     private static final Map<UUID, Integer> LAST_ENTITY_TICK = new HashMap<>();
@@ -131,8 +126,8 @@ public final class EvaLogisticsDirector
              * Chunk futures complete before their entity sections attach.
              * Repairing a PARKED UUID in that short window creates a second
              * airframe, after which the real persisted EVA is rejected as a
-             * duplicate.  S20 uses the same fifteen-second attachment barrier as
-             * Facility-v2 before it is allowed to create or replace anything.
+             * duplicate. Both runtimes wait for actual entity-section attachment
+             * before they are allowed to create or replace anything.
              */
             return List.of();
         }
@@ -994,8 +989,8 @@ public final class EvaLogisticsDirector
             /*
              * These no-save visual gates must exist before the delayed fleet
              * reconciliation finishes.  Otherwise a freshly opened world
-             * shows only invisible barrier collision for up to fifteen
-             * seconds when viewed from inside a wet cage.
+             * shows only invisible barrier collision while the saved entity
+             * sections are still attaching inside a wet cage.
              */
             for (int variant = 0; variant < 3; variant++)
             {
@@ -2307,40 +2302,44 @@ public final class EvaLogisticsDirector
         }
     }
 
-    /**
-     * Chunk loading and persistent-entity attachment complete on different
-     * server tasks. Give the three wet-cage entity sections fifteen seconds to
-     * attach before a missing PARKED receipt is eligible for repair; otherwise
-     * startup can clone every canonical EVA and discover the originals one
-     * tick later.
-     */
+    /** Block chunks and saved entities attach on different server tasks. */
     private static boolean fleetStationEntitiesSettled(ServerLevel level)
     {
-        if (FLEET_STATIONS_SETTLED.contains(level))
+        if (FLEET_STATIONS_SETTLED.contains(level) && fleetStationEntityDataReady(level))
         {
             return true;
         }
-        Long deadline = FLEET_STATION_LOAD_DEADLINE.get(level);
-        if (deadline == null)
-        {
-            loadFleetStations(level);
-            FLEET_STATION_LOAD_DEADLINE.put(level,
-                    System.nanoTime() + FLEET_ENTITY_LOAD_GRACE_NANOS);
-            ProjectSeele.LOGGER.info(
-                    "NERV fleet reconciliation waiting 15 real seconds for wet-cage entities");
-            return false;
-        }
-        if (System.nanoTime() < deadline)
-        {
-            return false;
-        }
         loadFleetStations(level);
+        if (!fleetStationEntityDataReady(level))
+        {
+            if (!FLEET_STATION_LOAD_DEADLINE.containsKey(level))
+            {
+                FLEET_STATION_LOAD_DEADLINE.put(level, System.nanoTime());
+                ProjectSeele.LOGGER.info("NERV fleet reconciliation waiting for saved station entities");
+            }
+            return false;
+        }
         FLEET_STATION_LOAD_DEADLINE.remove(level);
         FLEET_STATIONS_SETTLED.add(level);
         return true;
     }
 
-    /** Loads only the three stations belonging to one requested EVA line. */
+    private static boolean fleetStationEntityDataReady(ServerLevel level)
+    {
+        for (int variant = 0; variant < 3; variant++)
+        {
+            if (!level.areEntitiesLoaded(ChunkPos.asLong(hangarBed(level, variant)))
+                    || !level.areEntitiesLoaded(ChunkPos.asLong(lowerLiftBed(level, variant)))
+                    || !level.areEntitiesLoaded(ChunkPos.asLong(surfaceLiftBed(level, variant)))
+                    || !level.areEntitiesLoaded(ChunkPos.asLong(TrainingPilotDirector.requestedStandby(level, variant))))
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** Loads one requested EVA line and its pilot waiting area. */
     public static void loadControlTarget(ServerLevel level, int variant)
     {
         if (variant < EvaUnit01Entity.UNIT_00
@@ -2373,13 +2372,18 @@ public final class EvaLogisticsDirector
         }
     }
 
-    /** Loads only the three stations belonging to one requested EVA line. */
+    /** Temporary tickets cover station terrain and the separately saved pilot. */
     private static void loadVariantStations(ServerLevel level, int variant)
     {
-        PerformanceCounters.recordSyncChunkLoads(3);
-        level.getChunkAt(hangarBed(level, variant));
-        level.getChunkAt(lowerLiftBed(level, variant));
-        level.getChunkAt(surfaceLiftBed(level, variant));
+        PerformanceCounters.recordSyncChunkLoads(4);
+        for (BlockPos station : List.of(hangarBed(level, variant),
+                lowerLiftBed(level, variant), surfaceLiftBed(level, variant),
+                TrainingPilotDirector.requestedStandby(level, variant)))
+        {
+            ChunkPos chunk = new ChunkPos(station);
+            level.getChunkSource().addRegionTicket(STATION_LOAD_TICKET, chunk, 2, chunk);
+            level.getChunkAt(station);
+        }
     }
 
     private static List<EvaUnit01Entity> loadedFleet(ServerLevel level)
