@@ -21,6 +21,12 @@ OUT=ROOT/'artifacts/world_expansion_20260907'
 DIM='projectseele:geofront'
 NATURAL={'stone','dirt','grass_block','gravel','sand','sandstone','bedrock','clay','coarse_dirt','rooted_dirt','podzol','mud','water'}
 
+def canonical_state(state):
+    """Use the same sorted property representation as query_blocks readback."""
+    if '[' not in state:return state
+    name,properties=state.split('[',1)
+    return name+'['+','.join(sorted(properties[:-1].split(',')))+']'
+
 
 def natural(state):
     name=state.split('[')[0]
@@ -44,6 +50,7 @@ class Painter:
         self.ops=[];self.by_chunk=defaultdict(list);self.block_entities={};self.keep_boxes=[]
         self.meta={'rooms':[],'landmarks':[],'doors':[],'walk_nodes':[]}
     def fill(self,x0,y0,z0,x1,y1,z1,state,owner,mode='new'):
+        state=canonical_state(state)
         x0,x1=sorted((int(x0),int(x1)));y0,y1=sorted((int(y0),int(y1)));z0,z1=sorted((int(z0),int(z1)))
         if y0<-672 or y1>=320:raise ValueError((owner,y0,y1))
         op=Op((x0,y0,z0,x1,y1,z1),state,owner,mode);i=len(self.ops);self.ops.append(op)
@@ -54,7 +61,7 @@ class Painter:
         self.keep_boxes.append(dict(box=tuple(box),owner=owner,modes=tuple(modes)))
     def match(self,box,before,after,owner):
         self.fill(*box,after,owner,'match')
-        self.ops[-1]=Op(self.ops[-1].box,after,owner,'match',(before,))
+        self.ops[-1]=Op(self.ops[-1].box,canonical_state(after),owner,'match',(canonical_state(before),))
     def heightfield(self,cx,cz,heights,active,owner,clear_vegetation=None):
         if clear_vegetation is None:clear_vegetation=np.ones((16,16),dtype=bool)
         op=Op((cx*16,32,cz*16,cx*16+15,255,cz*16+15),'minecraft:grass_block[snowy=false]',owner,'heightfield',

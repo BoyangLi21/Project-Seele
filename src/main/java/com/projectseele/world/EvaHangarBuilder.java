@@ -1317,8 +1317,7 @@ public final class EvaHangarBuilder
                     SIDE_CATWALK_X})
             {
                 set(level, bed.offset(x, y, z),
-                        Math.abs(x) == SIDE_CATWALK_X
-                        ? Blocks.IRON_BLOCK.defaultBlockState() : accent);
+                        personnelDeck(level,accent,Math.abs(x)!=SIDE_CATWALK_X));
             }
             // Inner guardrail only on the pure side-catwalk stretch. Across the
             // dorsal boarding deck (z >= boarding) the gantry floor reaches
@@ -1344,7 +1343,7 @@ public final class EvaHangarBuilder
             set(level, bed.offset(x, y, FRONT_CROSS_Z_FROM_BED),
                     Math.floorMod(x, 5) == 0
                     ? Blocks.SEA_LANTERN.defaultBlockState()
-                    : Blocks.IRON_BLOCK.defaultBlockState());
+                    : personnelDeck(level,accent,false));
             // Stop short of the two side runs: this rail guards the cross
             // walkway's inner edge, and carrying it the full width would
             // fence off the very lanes the pilot uses to reach the back.
@@ -1366,7 +1365,7 @@ public final class EvaHangarBuilder
     {
         int y = REAR_GANTRY_ABOVE_BED;
         int lastFloorZ = REAR_GANTRY_Z_FROM_BED - 1;
-        BlockState frame = Blocks.IRON_BLOCK.defaultBlockState();
+        BlockState frame = personnelDeck(level,accent,false);
         for (int z = REAR_BOARDING_Z_FROM_BED; z <= lastFloorZ; z++)
         {
             for (int side : new int[] {-1, 1})
@@ -1378,7 +1377,7 @@ public final class EvaHangarBuilder
                     set(level, bed.offset(x, y, z),
                             Math.floorMod(x + z, 6) == 0
                                     ? Blocks.SEA_LANTERN.defaultBlockState()
-                                    : offset == SIDE_CATWALK_X ? frame : accent);
+                                    : offset == SIDE_CATWALK_X ? frame : personnelDeck(level,accent,true));
                     for (int head = 1; head <= 4; head++)
                     {
                         clearExceptCrane(level, bed.offset(x, y + head, z));
@@ -2163,8 +2162,7 @@ public final class EvaHangarBuilder
                 for (int z = galleryStartZ; z <= catwalkStartZ; z++)
                 {
                     BlockPos floor = new BlockPos(x, floorY, z);
-                    set(level, floor, Math.floorMod(x + z, 5) == 0
-                            ? accent : Blocks.IRON_BLOCK.defaultBlockState());
+                    set(level, floor, personnelDeck(level,accent,Math.floorMod(x+z,5)==0));
                     for (int y = 1; y <= 4; y++)
                     {
                         clear(level, floor.above(y));
@@ -2237,8 +2235,7 @@ public final class EvaHangarBuilder
                     }
                     else
                     {
-                        set(level, floor, Math.floorMod(x + z, 5) == 0
-                                ? accent : Blocks.IRON_BLOCK.defaultBlockState());
+                        set(level, floor, personnelDeck(level,accent,Math.floorMod(x+z,5)==0));
                     }
                 }
                 else if (lane)
@@ -2485,6 +2482,15 @@ public final class EvaHangarBuilder
             return Blocks.POLISHED_BLACKSTONE.defaultBlockState();
         }
         return Blocks.POLISHED_DEEPSLATE.defaultBlockState();
+    }
+
+    private static BlockState personnelDeck(ServerLevel level,BlockState accent,boolean marked)
+    {
+        if(!RegionalFacilityLayout.migrated(level.getServer()))return marked?accent:Blocks.IRON_BLOCK.defaultBlockState();
+        // These decks are maintained on login and during bridge operation;
+        // an offline cosmetic patch alone would be overwritten immediately.
+        if(!marked)return Blocks.SMOOTH_STONE.defaultBlockState();
+        return (accent.is(Blocks.RED_CONCRETE)?Blocks.RED_TERRACOTTA:accent.is(Blocks.ORANGE_CONCRETE)?Blocks.ORANGE_TERRACOTTA:Blocks.PURPLE_TERRACOTTA).defaultBlockState();
     }
 
     private static BlockState accent(int variant)

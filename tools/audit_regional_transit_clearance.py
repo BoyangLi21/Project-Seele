@@ -22,7 +22,7 @@ def mark(masks,x0,y0,z0,x1,y1,z1):
 
 
 def main():
-    parser=argparse.ArgumentParser();parser.add_argument('--quality',action='store_true');parser.add_argument('--airborne',action='store_true');parser.add_argument('--airfield-profile',action='store_true');parser.add_argument('--samples');args=parser.parse_args()
+    parser=argparse.ArgumentParser();parser.add_argument('--quality',action='store_true');parser.add_argument('--airborne',action='store_true');parser.add_argument('--airfield-profile',action='store_true');parser.add_argument('--samples');parser.add_argument('--report-dir',type=Path);args=parser.parse_args()
     samples=json.loads((OUT/'transit2/track_samples.json').read_text(encoding='utf-8'))
     result_folder=ROOT/'artifacts/world_quality_r02' if args.quality else OUT
     if args.quality:
@@ -76,7 +76,8 @@ def main():
         envelope='AIRBORNE: native generated curves, +/-17, y+1..11' if args.airborne else 'TRAIN: centre +/-1, y+1..4; AIRPLANE: +/-17 square, y+2..10 sampled every 2m (overlapping conservative wing envelopes)')
     report['airfield_profile']=args.airfield_profile
     if args.airborne:report['sample_source']=str(source)
-    (result_folder/('flight_clearance.json' if args.airborne else 'transit_clearance_profile.json' if args.airfield_profile else 'transit_clearance.json')).write_text(json.dumps(report,indent=2),encoding='utf-8')
+    destination=args.report_dir or result_folder;destination.mkdir(parents=True,exist_ok=True)
+    (destination/('flight_clearance.json' if args.airborne else 'transit_clearance_profile.json' if args.airfield_profile else 'transit_clearance.json')).write_text(json.dumps(report,indent=2),encoding='utf-8')
     print('TRANSIT CLEARANCE',report['passed'],'/',len(result),flush=True)
 
 

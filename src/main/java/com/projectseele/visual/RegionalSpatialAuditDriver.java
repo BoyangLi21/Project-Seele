@@ -39,6 +39,8 @@ public final class RegionalSpatialAuditDriver
     private static int age,index,wait,steps,stalled,settled,stepLimit;
     private static boolean done,positioned;
     private static Vec3 start,end;
+    private static JsonArray route;
+    private static int waypoint;
     private static double distance,maxRise,fallSpeed;
     private static final JsonArray TRACE=new JsonArray();
     private static ServerLevel activeLevel;
@@ -113,19 +115,40 @@ public final class RegionalSpatialAuditDriver
             JsonObject test=cases.get(index).getAsJsonObject();
             if(wait==0)
             {
-                start=vector(test.getAsJsonArray("start"));end=vector(test.getAsJsonArray("end"));
-                for(int cx=(int)Math.floor(Math.min(start.x,end.x)-3)>>4;cx<=(int)Math.floor(Math.max(start.x,end.x)+3)>>4;cx++)
-                    for(int cz=(int)Math.floor(Math.min(start.z,end.z)-3)>>4;cz<=(int)Math.floor(Math.max(start.z,end.z)+3)>>4;cz++)
-                    {ChunkPos chunk=new ChunkPos(cx,cz);level.getChunkSource().addRegionTicket(TICKET,chunk,2,chunk);level.getChunk(cx,cz);}
-                wait=1;positioned=false;return;
+                route=test.has("path")?test.getAsJsonArray("path"):new JsonArray();
+                if(!test.has("path")){route.add(test.getAsJsonArray("start"));route.add(test.getAsJsonArray("end"));}
+                if(route.size()<2)throw new IllegalStateException("Route needs two points");
+                waypoint=1;start=vector(route.get(0).getAsJsonArray());end=vector(route.get(1).getAsJsonArray());
+                for(int segment=1;segment<route.size();segment++)
+                {
+                    Vec3 a=vector(route.get(segment-1).getAsJsonArray()),b=vector(route.get(segment).getAsJsonArray());
+                    for(int cx=(int)Math.floor(Math.min(a.x,b.x)-3)>>4;cx<=(int)Math.floor(Math.max(a.x,b.x)+3)>>4;cx++)
+                        for(int cz=(int)Math.floor(Math.min(a.z,b.z)-3)>>4;cz<=(int)Math.floor(Math.max(a.z,b.z)+3)>>4;cz++)
+                        {ChunkPos chunk=new ChunkPos(cx,cz);level.getChunkSource().addRegionTicket(TICKET,chunk,2,chunk);level.getChunk(cx,cz);}
+                }
+                // getChunk above is synchronous: the collision data is already
+                // FULL. Extra idle ticks here added half an hour to a whole-world
+                // audit without simulating any additional player movement.
+                wait=3;positioned=false;
             }
             if(wait++<3)return;
             if(!positioned)
             {
                 player.setPos(start);player.setOnGround(true);player.setDeltaMovement(Vec3.ZERO);steps=0;stalled=0;settled=0;maxRise=0;fallSpeed=0;
-                stepLimit=Math.max(2000,(int)Math.ceil(Math.hypot(end.x-start.x,end.z-start.z)/.12)+600);
+                double length=0;
+                for(int j=1;j<route.size();j++)length+=vector(route.get(j).getAsJsonArray()).distanceTo(vector(route.get(j-1).getAsJsonArray()));
+                stepLimit=Math.max(2000,(int)Math.ceil(length/.12)+route.size()*100);
                 TRACE.asList().clear();positioned=true;
                 activeLevel=level;RESTORE.clear();
+                if(test.has("useDoor"))
+                {
+                    JsonArray d=test.getAsJsonArray("door");BlockPos door=new BlockPos(d.get(0).getAsInt(),d.get(1).getAsInt(),d.get(2).getAsInt());
+                    for(BlockPos pos:List.of(door,door.above()))RESTORE.put(pos,level.getBlockState(pos));
+                    BlockState state=level.getBlockState(door);
+                    if(!(state.getBlock() instanceof net.minecraft.world.level.block.DoorBlock)){finish(test,"missing_entry_door");return;}
+                    if(!state.getValue(net.minecraft.world.level.block.DoorBlock.OPEN))state.use(level,player,net.minecraft.world.InteractionHand.MAIN_HAND,new net.minecraft.world.phys.BlockHitResult(Vec3.atCenterOf(door),net.minecraft.core.Direction.SOUTH,door,false));
+                    if(!level.getBlockState(door).getValue(net.minecraft.world.level.block.DoorBlock.OPEN)){finish(test,"door_did_not_open");return;}
+                }
                 if(test.has("button"))
                 {
                     JsonArray a=test.getAsJsonArray("button"),d=test.getAsJsonArray("door");
@@ -143,7 +166,14 @@ public final class RegionalSpatialAuditDriver
             for(int n=0;n<120;n++)
             {
                 Vec3 old=player.position();double dx=end.x-old.x,dz=end.z-old.z;distance=Math.hypot(dx,dz);
-                if(distance<.18 && player.onGround() && settled>=2){finish(test,Math.abs(old.y-end.y)<.16?"pass":"wrong_arrival_height");break;}
+                if(distance<.18 && player.onGround() && settled>=2)
+                {
+                    if(Math.abs(old.y-end.y)>=.16){finish(test,"wrong_arrival_height");break;}
+                    if(++waypoint==route.size()){finish(test,"pass");break;}
+                    // A route gets one initial placement. Turns continue from the actual
+                    // settled player position, so a disconnected seam cannot be skipped.
+                    start=end;end=vector(route.get(waypoint).getAsJsonArray());settled=0;stalled=0;continue;
+                }
                 if(old.y<Math.min(start.y,end.y)-.65){finish(test,"floor_gap");break;}
                 double amount=distance<.18?0:Math.min(.12,distance);
                 fallSpeed=(fallSpeed-.08)*.98;
@@ -160,6 +190,7 @@ public final class RegionalSpatialAuditDriver
         catch(Exception exception)
         {
             ProjectSeele.LOGGER.error("SPATIAL NATIVE AUDIT FAILED",exception);
+            if(activeLevel!=null){RESTORE.forEach((pos,state)->activeLevel.setBlock(pos,state,3));RESTORE.clear();}
             try{Files.writeString(world.resolve("quality_native_failure.txt"),exception.toString());}catch(Exception ignored){}
             done=true;server.halt(false);
         }
@@ -167,6 +198,7 @@ public final class RegionalSpatialAuditDriver
     private static void finish(JsonObject test,String status)
     {
         JsonObject result=test.deepCopy();result.addProperty("status",status);result.add("actual",position(player.position()));
+        result.addProperty("waypointsReached",waypoint);
         result.addProperty("maxRise",maxRise);result.addProperty("playerStep",player.maxUpStep());result.add("trace",TRACE.deepCopy());RESULTS.add(result);
         ProjectSeele.LOGGER.info("SPATIAL WALK {} {} actual={} target={}",test.get("id").getAsString(),status,player.position(),end);
         RESTORE.forEach((pos,state)->activeLevel.setBlock(pos,state,3));RESTORE.clear();

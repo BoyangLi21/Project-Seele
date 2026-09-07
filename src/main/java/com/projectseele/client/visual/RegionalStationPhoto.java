@@ -20,9 +20,9 @@ import java.nio.file.*;
 public final class RegionalStationPhoto
 {
     private static final String MODE=System.getProperty("projectseele.regionalBuild","");
-    private static final boolean ENABLED=MODE.equals("station-photo")||MODE.equals("quality-photos");
+    private static final boolean ENABLED=MODE.equals("station-photo")||MODE.equals("quality-photos")||MODE.equals("detail-photos");
     private record View(String file,Vec3 position,float yaw,float pitch) {}
-    private static final View[] VIEWS=MODE.equals("quality-photos")?new View[]{
+    private static View[] VIEWS=MODE.equals("quality-photos")?new View[]{
             new View("quality_kirisato_exterior.png",new Vec3(-2918.5,97,-1150.5),-60,8),
             new View("quality_kirisato_402.png",new Vec3(-2846.5,86,-1106.5),25,12),
             new View("quality_airport_current.png",new Vec3(737.5,84,1021.5),0,3),
@@ -50,8 +50,21 @@ public final class RegionalStationPhoto
             if(++age<80)return;
             if(!entered)
             {
+                if(MODE.equals("detail-photos"))
+                {
+                    var data=com.google.gson.JsonParser.parseString(Files.readString(world.resolve("regional_photo_views.json"))).getAsJsonArray();
+                    java.util.List<View> views=new java.util.ArrayList<>();
+                    for(var item:data)
+                    {
+                        var d=item.getAsJsonObject();var p=d.getAsJsonArray("position");String file=d.get("file").getAsString();
+                        if(!file.matches("[A-Za-z0-9_-]+\\.png"))throw new IllegalArgumentException("Invalid photo filename");
+                        views.add(new View(file,new Vec3(p.get(0).getAsDouble(),p.get(1).getAsDouble(),p.get(2).getAsDouble()),d.get("yaw").getAsFloat(),d.get("pitch").getAsFloat()));
+                    }
+                    if(views.isEmpty())throw new IllegalArgumentException("Empty photo itinerary");
+                    VIEWS=views.toArray(View[]::new);
+                }
                 entered=true;oldDistance=mc.options.renderDistance().get();oldGui=mc.options.hideGui;oldPause=mc.options.pauseOnLostFocus;oldCamera=mc.options.getCameraType();
-                mc.options.pauseOnLostFocus=false;mc.options.renderDistance().set(8);mc.options.hideGui=true;mc.options.setCameraType(net.minecraft.client.CameraType.FIRST_PERSON);mc.options.broadcastOptions();
+                mc.options.pauseOnLostFocus=false;mc.options.renderDistance().set(MODE.equals("detail-photos")?10:8);mc.options.hideGui=true;mc.options.setCameraType(net.minecraft.client.CameraType.FIRST_PERSON);mc.options.broadcastOptions();
                 server.execute(()->{
                     var p=server.getPlayerList().getPlayers().get(0);oldPos=p.position();oldDimension=p.level().dimension();oldMode=p.gameMode.getGameModeForPlayer();oldYaw=p.getYRot();oldPitch=p.getXRot();oldFlying=p.getAbilities().flying;
                     p.setGameMode(GameType.SPECTATOR);position(mc);
@@ -85,7 +98,7 @@ public final class RegionalStationPhoto
             {
                 view++;sceneAge=0;frames=0;ready=false;captured=false;server.execute(()->position(mc));
             }
-            if(Files.exists(world.resolve("regional_stop_requested"))||age>2400||(MODE.equals("quality-photos")&&captured&&view+1==VIEWS.length&&sceneAge>280))
+            if(Files.exists(world.resolve("regional_stop_requested"))||age>Math.max(2400,(VIEWS.length+1)*360)||(!MODE.equals("station-photo")&&captured&&view+1==VIEWS.length&&sceneAge>280))
             {
                 Files.deleteIfExists(world.resolve("regional_stop_requested"));finishing=true;
                 mc.options.hideGui=oldGui;mc.options.renderDistance().set(oldDistance);mc.options.pauseOnLostFocus=oldPause;mc.options.setCameraType(oldCamera);
@@ -109,6 +122,11 @@ public final class RegionalStationPhoto
     private static void position(Minecraft mc)
     {
         var server=mc.getSingleplayerServer();var p=server.getPlayerList().getPlayers().get(0);View camera=VIEWS[view];
-        p.teleportTo(server.getLevel(FacilitySchemaV2.DIMENSION),camera.position().x,camera.position().y,camera.position().z,camera.yaw(),camera.pitch());
+        var level=server.getLevel(FacilitySchemaV2.DIMENSION);
+        Vec3 eye=camera.position().add(0,1.62,0);var cell=net.minecraft.core.BlockPos.containing(eye);
+        var state=level.getBlockState(cell);
+        if(MODE.equals("detail-photos")&&state.getCollisionShape(level,cell).toAabbs().stream().anyMatch(b->b.move(cell).contains(eye)))
+            throw new IllegalStateException("Review camera intersects a solid block: "+camera.file()+" "+cell+" "+state);
+        p.teleportTo(level,camera.position().x,camera.position().y,camera.position().z,camera.yaw(),camera.pitch());
     }
 }

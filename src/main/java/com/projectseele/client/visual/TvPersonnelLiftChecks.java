@@ -32,8 +32,9 @@ import java.util.Map;
 public final class TvPersonnelLiftChecks
 {
     private static final String MODE=System.getProperty("projectseele.tvWorldPreviewReview", "");
-    private static final boolean ENABLED = MODE.equals("lifts")||MODE.equals("lifts-surface");
-    private static final int FIRST_LIFT=MODE.equals("lifts-surface")?3:0;
+    private static final boolean ENABLED = MODE.equals("lifts")||MODE.equals("lifts-surface")||MODE.equals("lifts-cages");
+    private static final int FIRST_LIFT=MODE.equals("lifts-cages")?1:MODE.equals("lifts-surface")?3:0;
+    private static final int LAST_LIFT=MODE.equals("lifts-cages")?3:Integer.MAX_VALUE;
     private static final List<String> TRACE = new ArrayList<>();
     private static final Map<BlockPos, BlockState> SHELL = new HashMap<>();
     private static final List<Integer> ROUTE = new ArrayList<>();
@@ -85,7 +86,7 @@ public final class TvPersonnelLiftChecks
             ServerLevel level = server.getLevel(FacilitySchemaV2.DIMENSION);
             ServerPlayer player = server.getPlayerList().getPlayers().get(0);
             var specs = S20PhysicalElevatorDirector.s20Lifts(level);
-            if (lift == specs.size())
+            if (lift == Math.min(specs.size(),LAST_LIFT))
             {
                 log("COMPLETE lifts=" + (lift-FIRST_LIFT) + " firstLift="+FIRST_LIFT+" passengerTrips=" + totalTrips + " maxStep=" + maxStep);
                 Files.writeString(world.resolve("tv_preview_lift_checks.txt"), String.join("\n", TRACE));

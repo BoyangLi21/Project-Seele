@@ -45,7 +45,7 @@ def iter_selected_sections(world: Path, dimension: str,
         return
     bounds=(min(x for x,z in selected),max(x for x,z in selected),
             min(z for x,z in selected),max(z for x,z in selected))
-    for cx,cz,chunk in iter_chunks(dimension_dir(world,dimension),bounds):
+    for cx,cz,chunk in iter_chunks(dimension_dir(world,dimension),bounds,selected):
         wanted=selected.get((cx,cz))
         if not wanted:continue
         if str(chunk.get('Status','')).removeprefix('minecraft:')!='full':
@@ -121,11 +121,11 @@ def iter_box_cells(world: Path, dimension: str,
 
 
 def iter_block_entities(world: Path, dimension: str,
-                        lo: tuple[int, int, int], hi: tuple[int, int, int]):
+                        lo: tuple[int, int, int], hi: tuple[int, int, int], *, selected_chunks=None):
     """Yield exact block-entity NBT entries inside a loaded world box."""
     root = dimension_dir(world, dimension)
     bounds = (lo[0] >> 4, hi[0] >> 4, lo[2] >> 4, hi[2] >> 4)
-    for _chunk_x, _chunk_z, chunk in iter_chunks(root, bounds):
+    for _chunk_x, _chunk_z, chunk in iter_chunks(root, bounds, selected_chunks):
         for entry in chunk.get("block_entities", []):
             if not all(key in entry for key in ("x", "y", "z")):
                 continue

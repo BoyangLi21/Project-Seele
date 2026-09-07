@@ -66,11 +66,13 @@ def read_level(world: Path) -> dict:
     }
 
 
-def region_chunks(region_path: Path, bounds: tuple[int, int, int, int]
+def region_chunks(region_path: Path, bounds: tuple[int, int, int, int], selected_chunks=None
                   ) -> Iterator[tuple[int, int, nbtlib.File]]:
     """Yield chunks inside inclusive chunk-coordinate bounds."""
     parts = region_path.stem.split(".")
     region_x, region_z = int(parts[1]), int(parts[2])
+    min_x, max_x, min_z, max_z = bounds
+    if region_x*32>max_x or region_x*32+31<min_x or region_z*32>max_z or region_z*32+31<min_z:return
     data = region_path.read_bytes()
     if len(data) < 8192:
         return
@@ -80,6 +82,7 @@ def region_chunks(region_path: Path, bounds: tuple[int, int, int, int]
         chunk_z = region_z * 32 + index // 32
         if not (min_x <= chunk_x <= max_x and min_z <= chunk_z <= max_z):
             continue
+        if selected_chunks is not None and (chunk_x,chunk_z) not in selected_chunks:continue
         location = struct.unpack_from(">I", data, index * 4)[0]
         sector = location >> 8
         if sector == 0:
@@ -104,11 +107,11 @@ def region_chunks(region_path: Path, bounds: tuple[int, int, int, int]
             continue
 
 
-def iter_chunks(world: Path, bounds: tuple[int, int, int, int]
+def iter_chunks(world: Path, bounds: tuple[int, int, int, int], selected_chunks=None
                 ) -> Iterator[tuple[int, int, nbtlib.File]]:
     region_dir = world / "region"
     for region_path in region_dir.glob("r.*.*.mca"):
-        yield from region_chunks(region_path, bounds)
+        yield from region_chunks(region_path, bounds, selected_chunks)
 
 
 def palette_name(entry) -> str:

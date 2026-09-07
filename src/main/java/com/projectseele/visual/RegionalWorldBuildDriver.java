@@ -36,7 +36,7 @@ public final class RegionalWorldBuildDriver
     @SubscribeEvent
     public static void tick(TickEvent.ServerTickEvent event)
     {
-        if (MODE.isEmpty() || MODE.equals("passengers") || MODE.equals("transit-riding") || MODE.equals("flight-riding") || MODE.equals("circle-riding") || MODE.equals("train-boarding") || MODE.equals("bay-boarding") || MODE.equals("collision-audit") || MODE.equals("station-photo") || MODE.equals("quality-photos") || done || event.phase != TickEvent.Phase.END) return;
+        if (MODE.isEmpty() || MODE.equals("passengers") || MODE.equals("transit-riding") || MODE.equals("flight-riding") || MODE.equals("circle-riding") || MODE.equals("train-boarding") || MODE.equals("bay-boarding") || MODE.equals("collision-audit") || MODE.equals("station-photo") || MODE.equals("quality-photos") || MODE.equals("detail-photos") || MODE.equals("wayfinding") || done || event.phase != TickEvent.Phase.END) return;
         MinecraftServer server=event.getServer();
         Path world=server.getWorldPath(LevelResource.ROOT).normalize();
         if (!world.getFileName().toString().equals("SEELE_TV_WORLD_PREVIEW_20260906"))
