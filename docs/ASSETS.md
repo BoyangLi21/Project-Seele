@@ -163,3 +163,10 @@ are built by `build_eva_cmu_motion_candidates.py`, then rejected unless both
 green.  `refine_eva_motion_database.py` performs velocity-aware contact
 annotation, fitted stride extraction, shared-root correction and two-leg IK;
 `promote_eva_motion_candidates.py` refuses promotion from a failed audit.
+
+
+## R04 CRT 工作终端（2026-09-08）
+
+`textures/block/nerv_workstation.png` 为内置 imagegen 生成的原创绿色单色屏幕 UI，搭配项目原创的 CRT 外壳、底座与键盘模型；它是装饰工作终端，不替代已实现的指挥室控制系统，也不显示实时遥测。提示围绕 1990 年代日本机房显示风格、MAGI 三子系统、波形与节点图；未复制官方标志或原画。SHA-256 与完整本机来源记录见 `artifacts/world_motion_r04/asset_manifest.json`。
+
+本轮清理的 NERV 叶片标志及 MoCap Online 持枪动捕重定向结果保留在本机资源目录，不进入仓库或发行物。

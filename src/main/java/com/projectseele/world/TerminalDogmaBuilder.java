@@ -85,6 +85,7 @@ public final class TerminalDogmaBuilder
     public static TerminalDogmaAudit ensureRevision(ServerLevel level,
                                                     BlockPos origin)
     {
+        if(TvDetailR04Layout.active(level))return inspect(level,origin);
         if (FacilityWorldPolicy.isS22Coastal(level.getServer()))
         {
             // S22 owns a separately audited vertical seal cathedral. Never
@@ -108,6 +109,7 @@ public final class TerminalDogmaBuilder
     public static TerminalDogmaAudit repairRuntimeAccess(ServerLevel level,
                                                           BlockPos origin)
     {
+        if(TvDetailR04Layout.active(level)){repairRuntimeSpecimen(level,origin);return inspect(level,origin);}
         if (FacilityWorldPolicy.isS22Coastal(level.getServer()))
         {
             repairRuntimeSpecimen(level, origin);
@@ -177,6 +179,12 @@ public final class TerminalDogmaBuilder
             // load alone must not be interpreted as an empty specimen slot.
             return false;
         }
+        if(TvDetailR04Layout.active(level))
+        {
+            BlockPos oldSouth=facilityOrigin.offset(0,LCL_SURFACE_Y,22);
+            level.getChunkAt(oldSouth);
+            if(!level.areEntitiesLoaded(net.minecraft.world.level.ChunkPos.asLong(oldSouth)))return false;
+        }
         if (!FacilityWorldPolicy.isS22Coastal(level.getServer()))
         {
             // Load the retired north-cross anchor as well. Otherwise an old
@@ -189,11 +197,12 @@ public final class TerminalDogmaBuilder
                 return false;
             }
         }
-        AABB bounds = specimenBounds(facilityOrigin);
+        AABB bounds = specimenBounds(level,facilityOrigin);
         var specimens = level.getEntitiesOfClass(LilithEntity.class, bounds);
         boolean missing = specimens.isEmpty();
         boolean misplaced = !missing
                 && (specimens.size() > 1
+                || TvDetailR04Layout.active(level) && Math.abs(specimens.get(0).getContainmentScale()-1.65F)>.001F
                 || specimens.get(0).distanceToSqr(
                 Vec3.atBottomCenterOf(expectedAnchor)) > 1.0D);
         if (FacilityWorldPolicy.isS22Coastal(level.getServer()))
@@ -235,6 +244,16 @@ public final class TerminalDogmaBuilder
     }
     public static TerminalDogmaAudit inspect(ServerLevel level, BlockPos origin)
     {
+        if(TvDetailR04Layout.active(level))
+        {
+            boolean entry=isWalkable(level,new BlockPos(12,-567,270));
+            boolean observation=isWalkable(level,new BlockPos(30,-567,290));
+            boolean lake=level.getFluidState(new BlockPos(30,-601,325)).getFluidType()==ModFluids.LCL_TYPE.get();
+            boolean cross=level.getBlockState(new BlockPos(30,-566,361)).is(Blocks.RED_CONCRETE);
+            boolean shell=level.getBlockState(new BlockPos(30,-532,332)).is(Blocks.BLACK_CONCRETE);
+            boolean specimen=!level.getEntitiesOfClass(LilithEntity.class,TvDetailR04Layout.specimenBounds()).isEmpty();
+            return new TerminalDogmaAudit(entry&&observation&&lake&&cross&&shell&&specimen,true,entry,0,true,entry,entry,shell,lake,cross,specimen,observation,entry);
+        }
         origin = origin.offset(0, FACILITY_Y_OFFSET, 0);
         boolean revision = level.getBlockState(origin.offset(REVISION_MARKER))
                 .is(Blocks.NETHERITE_BLOCK)
@@ -866,7 +885,7 @@ public final class TerminalDogmaBuilder
     {
         BlockPos anchor = specimenAnchor(level, origin);
         level.getChunkAt(anchor);
-        AABB bounds = specimenBounds(origin);
+        AABB bounds = specimenBounds(level,origin);
         var specimens = level.getEntitiesOfClass(LilithEntity.class, bounds);
         LilithEntity specimen;
         boolean created = specimens.isEmpty();
@@ -893,6 +912,7 @@ public final class TerminalDogmaBuilder
         specimen.setInvulnerable(true);
         specimen.setPersistenceRequired();
         specimen.addTag("projectseele.terminal_dogma_lilith");
+        specimen.setContainmentScale(TvDetailR04Layout.active(level)?1.65F:1F);
         specimen.setHealth(specimen.getMaxHealth());
         if (created)
         {
@@ -916,11 +936,13 @@ public final class TerminalDogmaBuilder
         specimen.setInvulnerable(true);
         specimen.setPersistenceRequired();
         specimen.addTag("projectseele.terminal_dogma_lilith");
+        specimen.setContainmentScale(TvDetailR04Layout.active(level)?1.65F:1F);
         specimen.setHealth(specimen.getMaxHealth());
     }
 
     private static BlockPos specimenAnchor(ServerLevel level, BlockPos origin)
     {
+        if(TvDetailR04Layout.active(level))return TvDetailR04Layout.specimenAnchor();
         // S22 remains frozen on its separately reviewed north-wall layout.
         // R28 uses the south wall so the B-158 arrival sees Lilith head-on.
         int z = FacilityWorldPolicy.isS22Coastal(level.getServer()) ? -22 : 22;
@@ -928,8 +950,9 @@ public final class TerminalDogmaBuilder
     }
 
 
-    private static AABB specimenBounds(BlockPos origin)
+    private static AABB specimenBounds(ServerLevel level,BlockPos origin)
     {
+        if(TvDetailR04Layout.active(level))return TvDetailR04Layout.specimenBounds();
         return AABB.ofSize(Vec3.atCenterOf(origin.offset(0, -59, 0)),
                 64.0D, 48.0D, 96.0D);
     }

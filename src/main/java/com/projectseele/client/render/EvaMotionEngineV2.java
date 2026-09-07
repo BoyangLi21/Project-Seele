@@ -98,6 +98,8 @@ public final class EvaMotionEngineV2
 
     public static void reload(ResourceManager resourceManager)
     {
+        EvaRifleMocap.reload(resourceManager);
+        EvaRifleProneBody.reload(resourceManager);
         STATES.clear();
         GAMEPLAY.clear();
         connectedLocomotion = load(resourceManager, CONNECTED_LOCOMOTION_DATABASE,
@@ -739,20 +741,22 @@ public final class EvaMotionEngineV2
             return BoneWrites.empty();
         }
         int ordinary = entity.getOrdinaryAttackStage();
+        boolean heavy = entity.isHeavyMotionActive();
         boolean kick = entity.isKickMotionActive(partialTick);
         int knife = entity.getKnifeMotionType(partialTick);
-        boolean action = ordinary >= 0 || kick || knife >= 0;
+        boolean action = heavy || ordinary >= 0 || kick || knife >= 0;
         boolean base = !action && entity.getVisualPose() == 0
                 && !entity.isVisuallyAirborneForRender()
                 && (entity.getWeapon() == EvaUnit01Entity.WEAPON_FISTS
-                    || entity.getWeapon() == EvaUnit01Entity.WEAPON_KNIFE)
+                    || entity.getWeapon() == EvaUnit01Entity.WEAPON_KNIFE
+                    || entity.getWeapon() == EvaUnit01Entity.WEAPON_RIFLE)
                 && !(entity.getWeapon() == EvaUnit01Entity.WEAPON_FISTS
                     && entity.getCockpitSmashAnim(partialTick) > 0.0F)
                 && !(entity.isPilotCrouching()
                     && (entity.getCockpitAttackAnim(partialTick) > 0.0F
                         || entity.getCockpitSmashAnim(partialTick) > 0.0F));
         if (!action && !base) return BoneWrites.empty();
-        MotionDatabase db = ordinary >= 0 ? liveOrdinaryAttackDatabase
+        MotionDatabase db = heavy || ordinary >= 0 ? liveOrdinaryAttackDatabase
                 : kick ? liveKickDatabase : knife >= 0 ? liveKnifeDatabase : connectedLocomotion;
         if (db.bones.length == 0) return BoneWrites.empty();
         GameplayState state = GAMEPLAY.computeIfAbsent(entity, ignored -> new GameplayState());
@@ -768,7 +772,12 @@ public final class EvaMotionEngineV2
         PoseBuffer target = state.buffers.computeIfAbsent(db, ignored -> new PoseBuffer(db.bones.length));
         String clip;
         double phase;
-        if (ordinary >= 0)
+        if (heavy)
+        {
+            clip = "ordinary_attack_group_c_stage_3";
+            phase = entity.heavyMotionProgress(partialTick);
+        }
+        else if (ordinary >= 0)
         {
             clip = ordinary == 3 ? "ordinary_attack_group_c_stage_1_loop"
                     : "ordinary_attack_group_c_stage_" + (ordinary + 1);
@@ -849,6 +858,7 @@ public final class EvaMotionEngineV2
         for (int i = 0; i < db.bones.length; i++)
         {
             String name = db.bones[i];
+            if(base&&entity.getWeapon()==EvaUnit01Entity.WEAPON_RIFLE&&(name.startsWith("finger_")||name.startsWith("arm_")||name.startsWith("forearm_")||name.startsWith("wrist_")||name.startsWith("hand_")||name.equals("cannon")||name.equals("aim_pitch")))continue;
             if (base && (name.equals("head") || entity.getWeapon() == EvaUnit01Entity.WEAPON_KNIFE
                     && (name.startsWith("finger_") || name.equals("arm_r")
                         || name.equals("forearm_r") || name.equals("hand_r")))) continue;
@@ -905,7 +915,13 @@ public final class EvaMotionEngineV2
     }
 
     /** Matches Blender mathutils Quaternion.to_euler("XYZ") exactly. */
-    private static Vector3f motionQuaternionToAuthoredEuler(
+    static double rifleGaitPhase(EvaUnit01Entity entity)
+    {
+        GameplayState state = GAMEPLAY.get(entity);
+        return state == null ? 0 : state.gaitPhase;
+    }
+
+    static Vector3f motionQuaternionToAuthoredEuler(
             Quaternionf rotation)
     {
         double x = rotation.x;

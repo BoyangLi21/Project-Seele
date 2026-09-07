@@ -338,6 +338,11 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             SynchedEntityData.defineId(EvaUnit01Entity.class, EntityDataSerializers.INT);
     private static final EntityDataAccessor<Float> DATA_CANNON_AIM_PITCH =
             SynchedEntityData.defineId(EvaUnit01Entity.class, EntityDataSerializers.FLOAT);
+    private static final EntityDataAccessor<Float> DATA_RIFLE_CROUCH=SynchedEntityData.defineId(EvaUnit01Entity.class,EntityDataSerializers.FLOAT);
+    private static final EntityDataAccessor<Float> DATA_RIFLE_PRONE=SynchedEntityData.defineId(EvaUnit01Entity.class,EntityDataSerializers.FLOAT);
+    private static final EntityDataAccessor<Float> DATA_RIFLE_READY=SynchedEntityData.defineId(EvaUnit01Entity.class,EntityDataSerializers.FLOAT);
+    private static final EntityDataAccessor<Float> DATA_RIFLE_RECOIL=SynchedEntityData.defineId(EvaUnit01Entity.class,EntityDataSerializers.FLOAT);
+    private float rifleCrouchPrevious,riflePronePrevious,rifleReadyPrevious,rifleRecoilPrevious;
     private static final EntityDataAccessor<Integer> DATA_N2_ARM_TICKS =
             SynchedEntityData.defineId(EvaUnit01Entity.class, EntityDataSerializers.INT);
     private static final EntityDataAccessor<Boolean> DATA_CROUCHING =
@@ -360,6 +365,8 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     private static final EntityDataAccessor<Integer> DATA_KICK_SEQUENCE =
             SynchedEntityData.defineId(EvaUnit01Entity.class, EntityDataSerializers.INT);
     private static final EntityDataAccessor<Boolean> DATA_KICK_ACTIVE =
+            SynchedEntityData.defineId(EvaUnit01Entity.class, EntityDataSerializers.BOOLEAN);
+    private static final EntityDataAccessor<Boolean> DATA_HEAVY_ACTIVE =
             SynchedEntityData.defineId(EvaUnit01Entity.class, EntityDataSerializers.BOOLEAN);
     private static final EntityDataAccessor<Integer> DATA_KNIFE_TYPE =
             SynchedEntityData.defineId(EvaUnit01Entity.class, EntityDataSerializers.INT);
@@ -522,6 +529,8 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     private int pendingOrdinaryContactTicks;
     private int pendingOrdinaryContactStage = -1;
     private int smashCooldown;
+    private int heavyTicks, heavyDuration, heavyElapsed;
+    private boolean heavyContact, queuedHeavy, queuedMeleeAfterHeavy, queuedKickAfterHeavy;
     private int stompCooldown;
     private int kickVisualTicks;
     private int kickElapsedTicks;
@@ -635,6 +644,8 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         this.entityData.define(DATA_CANNON_CHARGE, 0);
         this.entityData.define(DATA_CANNON_COOLDOWN, 0);
         this.entityData.define(DATA_CANNON_AIM_PITCH, 0.0F);
+        this.entityData.define(DATA_RIFLE_CROUCH,0F);this.entityData.define(DATA_RIFLE_PRONE,0F);
+        this.entityData.define(DATA_RIFLE_READY,0F);this.entityData.define(DATA_RIFLE_RECOIL,0F);
         this.entityData.define(DATA_N2_ARM_TICKS, 0);
         this.entityData.define(DATA_CROUCHING, false);
         this.entityData.define(DATA_SPRINTING, false);
@@ -646,6 +657,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         this.entityData.define(DATA_SMASH_SEQUENCE, 0);
         this.entityData.define(DATA_KICK_SEQUENCE, 0);
         this.entityData.define(DATA_KICK_ACTIVE, false);
+        this.entityData.define(DATA_HEAVY_ACTIVE, false);
         this.entityData.define(DATA_KNIFE_TYPE, -1);
         this.entityData.define(DATA_LIVE_ACTION_PHASE, 0.0F);
         this.entityData.define(DATA_JUMP_SEQUENCE, 0);
@@ -870,6 +882,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
 
     private void selectWeapon(int weapon)
     {
+        this.cancelHeavyMotion();
         int safeWeapon = Mth.clamp(weapon, WEAPON_FISTS, WEAPON_N2);
         this.entityData.set(DATA_WEAPON, safeWeapon);
         this.entityData.set(DATA_CANNON_CHARGE, 0);
@@ -1056,6 +1069,22 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     public float getCannonAimPitch()
     {
         return this.entityData.get(DATA_CANNON_AIM_PITCH);
+    }
+    public float rifleCrouchBlend(float p){return Mth.lerp(p,rifleCrouchPrevious,this.entityData.get(DATA_RIFLE_CROUCH));}
+    public float rifleProneBlend(float p){return Mth.lerp(p,riflePronePrevious,this.entityData.get(DATA_RIFLE_PRONE));}
+    public float rifleReadyBlend(float p){return Mth.lerp(p,rifleReadyPrevious,this.entityData.get(DATA_RIFLE_READY));}
+    public float rifleRecoilBlend(float p){return Mth.lerp(p,rifleRecoilPrevious,this.entityData.get(DATA_RIFLE_RECOIL));}
+    private void updateRiflePoseSignals()
+    {
+        rifleCrouchPrevious=this.entityData.get(DATA_RIFLE_CROUCH);riflePronePrevious=this.entityData.get(DATA_RIFLE_PRONE);
+        rifleReadyPrevious=this.entityData.get(DATA_RIFLE_READY);rifleRecoilPrevious=this.entityData.get(DATA_RIFLE_RECOIL);
+        if(!this.level().isClientSide)
+        {
+            this.entityData.set(DATA_RIFLE_CROUCH,Mth.approach(rifleCrouchPrevious,this.isPilotCrouching()?1F:0F,.12F));
+            this.entityData.set(DATA_RIFLE_PRONE,Mth.approach(riflePronePrevious,this.isPilotProne()?1F:0F,1F/6F));
+            this.entityData.set(DATA_RIFLE_READY,Mth.approach(rifleReadyPrevious,this.getWeapon()==WEAPON_RIFLE?1F:0F,.16F));
+            this.entityData.set(DATA_RIFLE_RECOIL,rifleRecoilPrevious<.005F?0F:rifleRecoilPrevious*.52F);
+        }
     }
 
     /** Read-only Phase-A export of the same aim used by weapon gameplay. */
@@ -2113,6 +2142,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
 
     public float getCockpitSmashAnim(float partialTick)
     {
+        if (this.isHeavyMotionActive()) return Math.max(.0001F, this.liveActionProgress(partialTick));
         float elapsed = this.tickCount - this.clientSmashStartTick + partialTick;
         return elapsed >= 0.0F && elapsed < 18.0F ? elapsed / 18.0F : 0.0F;
     }
@@ -2135,7 +2165,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
 
     public boolean hasLiveActionForRender(float partialTick)
     {
-        return this.getOrdinaryAttackStage() >= 0
+        return this.isHeavyMotionActive() || this.getOrdinaryAttackStage() >= 0
                 || this.isKickMotionActive(partialTick)
                 || this.getKnifeMotionType(partialTick) >= 0;
     }
@@ -2253,6 +2283,11 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     {
         if (this.isPilotControlLocked() || !this.isMeleeWeapon())
         {
+            return;
+        }
+        if (this.isHeavyMotionActive())
+        {
+            this.queuedMeleeAfterHeavy = true;
             return;
         }
         boolean prone = this.isPilotProne();
@@ -2453,6 +2488,13 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     /** Crouch + attack: a slow two-handed slam that flattens the area ahead. */
     public void smashAttack(ServerPlayer pilot)
     {
+        if (this.getWeapon() == WEAPON_FISTS && !this.isPilotProne() && !this.isPilotCrouching()
+                && !this.isPilotControlLocked() && this.smashCooldown == 0
+                && (this.ordinaryAttackVisualTicks > 0 || this.kickVisualTicks > 0))
+        {
+            this.queuedHeavy = true;
+            return;
+        }
         if (!this.isPilotControlLocked() && this.getWeapon() == WEAPON_KNIFE
                 && !this.isPilotCrouching() && !this.isPilotProne()
                 && this.knifeVisualTicks > 0)
@@ -2475,6 +2517,19 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         boolean knife = this.getWeapon() == WEAPON_KNIFE;
         boolean lance = this.getWeapon() == WEAPON_LANCE;
         boolean liveKnife = knife && !this.isPilotProne() && !this.isPilotCrouching();
+        if (this.getWeapon() == WEAPON_FISTS && !this.isPilotProne() && !this.isPilotCrouching())
+        {
+            this.heavyDuration = this.synchronizedCooldown(24);
+            this.heavyTicks = this.heavyDuration;
+            this.heavyElapsed = 0;
+            this.heavyContact = false;
+            this.queuedHeavy = false;
+            this.liveCombatRootPrevious = EvaLiveCombatMotion.ordinary(2, 0);
+            this.entityData.set(DATA_LIVE_ACTION_PHASE, 0F);
+            this.entityData.set(DATA_HEAVY_ACTIVE, true);
+            if (this.getTags().contains("seele_motion_lab")) ProjectSeele.LOGGER.info("EVA R04 heavy begin tick={} duration={}", this.tickCount, this.heavyDuration);
+            return;
+        }
         if (liveKnife)
         {
             this.beginKnifeMotion(true);
@@ -2489,12 +2544,35 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
                         : this.isPilotCrouching() ? "crouch_smash" : "smash";
         if (liveKnife) return;
         this.triggerAnim("strike", animation);
+        this.resolveHeavyContact(pilot);
+    }
+
+    public boolean isHeavyMotionActive() { return this.entityData.get(DATA_HEAVY_ACTIVE); }
+    public float heavyMotionProgress(float partial) { return this.liveActionProgress(partial); }
+    private void cancelHeavyMotion()
+    {
+        this.heavyTicks = 0;
+        this.queuedHeavy = false;
+        this.queuedMeleeAfterHeavy = false;
+        this.queuedKickAfterHeavy = false;
+        this.entityData.set(DATA_HEAVY_ACTIVE, false);
+    }
+    private void resolveHeavyContact(ServerPlayer pilot)
+    {
+        boolean knife = this.getWeapon() == WEAPON_KNIFE, lance = this.getWeapon() == WEAPON_LANCE;
         float baseDamage = lance ? SMASH_LANCE_DAMAGE : knife ? SMASH_KNIFE_DAMAGE : SMASH_FIST_DAMAGE;
         float damage = baseDamage * this.getMeleeMultiplier();
         Vec3 forward = this.getForward().multiply(1.0D, 0.0D, 1.0D).normalize();
         Vec3 center = this.position().add(forward.scale(
                 MELEE_REACH + EvaScale.fromLegacy(1.0D)))
                 .add(0.0D, EvaScale.fromLegacy(4.0D), 0.0D);
+        if(this.isHeavyMotionActive())
+        {
+            Vec3 hand=EvaLiveCombatMotion.heavyContact(this.liveActionProgress(1));
+            Vec3 lateral=new Vec3(forward.z,0,-forward.x);
+            center=this.position().add(lateral.scale(hand.x)).add(0,hand.y,0).add(forward.scale(hand.z));
+            if(this.getTags().contains("seele_motion_lab"))ProjectSeele.LOGGER.info("EVA R04 heavy impact centre={} damage={}",center,damage);
+        }
         AABB zone = new AABB(center, center).inflate(SMASH_RADIUS,
                 EvaScale.fromLegacy(8.5D), SMASH_RADIUS);
         this.strikeZone(pilot, zone, damage, 2.0D, center);
@@ -2510,6 +2588,11 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     /** B key: selected K1 side kick for standing fists, legacy stomp otherwise. */
     public void stompAttack(ServerPlayer pilot)
     {
+        if (this.isHeavyMotionActive())
+        {
+            this.queuedKickAfterHeavy = true;
+            return;
+        }
         if (this.isPilotControlLocked() || this.isPilotProne()
                 || !this.isMeleeWeapon())
         {
@@ -2739,7 +2822,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
 
     private static Vec3 actionRootSample(int family, float phase)
     {
-        return family < 4 ? EvaLiveCombatMotion.ordinary(family, phase)
+        return family == 7 ? EvaLiveCombatMotion.ordinary(2, phase) : family < 4 ? EvaLiveCombatMotion.ordinary(family, phase)
                 : family == 4 ? EvaLiveCombatMotion.kick(phase)
                 : EvaLiveCombatMotion.knife(family == 6, phase);
     }
@@ -2748,10 +2831,10 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     {
         int stage = this.getOrdinaryAttackStage();
         int knife = this.getKnifeMotionType(0.0F);
-        int family = stage >= 0 ? stage : this.isKickMotionActive(0.0F) ? 4
+        int family = this.isHeavyMotionActive() ? 7 : stage >= 0 ? stage : this.isKickMotionActive(0.0F) ? 4
                 : knife >= 0 ? 5 + knife : -1;
         int sequence = family == 4 ? this.entityData.get(DATA_KICK_SEQUENCE)
-                : family == 6 ? this.entityData.get(DATA_SMASH_SEQUENCE)
+                : family == 6 || family == 7 ? this.entityData.get(DATA_SMASH_SEQUENCE)
                 : this.entityData.get(DATA_MELEE_SEQUENCE);
         float phase = this.entityData.get(DATA_LIVE_ACTION_PHASE);
         if (family < 0)
@@ -3059,15 +3142,15 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     {
         if (this.isPilotControlLocked() || this.getWeapon() != WEAPON_RIFLE
                 || this.rifleCooldown > 0 || this.getControllingPassenger() != pilot
+                || this.rifleReadyBlend(1)<.9F
                 || !(this.level() instanceof ServerLevel level))
         {
             return;
         }
         this.rifleCooldown = this.synchronizedCooldown(SeeleConfig.EVA_RIFLE_INTERVAL_TICKS.get());
-        this.triggerAnim("strike", this.isPilotProne()
-                ? "prone_rifle_fire" : "rifle_fire");
         Vec3 look = this.pilotAimDirection(pilot);
         Vec3 muzzle = this.rifleMuzzlePosition(look);
+        this.entityData.set(DATA_RIFLE_RECOIL,1F);
         double range = SeeleConfig.EVA_RIFLE_RANGE.get();
 
         // First resolve the pilot's crosshair target, then converge the real
@@ -3134,27 +3217,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
 
     private Vec3 rifleMuzzlePosition(Vec3 aimDirection)
     {
-        Vec3 horizontal = aimDirection.multiply(1.0D, 0.0D, 1.0D).normalize();
-        Vec3 right = new Vec3(horizontal.z, 0.0D, -horizontal.x);
-        double horizontalLength = Math.sqrt(aimDirection.x * aimDirection.x
-                + aimDirection.z * aimDirection.z);
-        Vec3 pitchedUp = horizontal.scale(-aimDirection.y)
-                .add(0.0D, horizontalLength, 0.0D).normalize();
-        boolean prone = this.isPilotProne();
-        double pivotHeight = prone ? RIFLE_PRONE_PIVOT_HEIGHT
-                : RIFLE_STANDING_PIVOT_HEIGHT;
-        double pivotForward = prone ? RIFLE_PRONE_PIVOT_FORWARD
-                : RIFLE_STANDING_PIVOT_FORWARD;
-        double muzzleForward = prone ? RIFLE_PRONE_MUZZLE_FORWARD
-                : RIFLE_STANDING_MUZZLE_FORWARD;
-        double muzzleUp = prone ? RIFLE_PRONE_MUZZLE_UP
-                : RIFLE_STANDING_MUZZLE_UP;
-        double muzzleRight = prone ? RIFLE_PRONE_MUZZLE_RIGHT
-                : RIFLE_STANDING_MUZZLE_RIGHT;
-        Vec3 pivot = this.position().add(0.0D, pivotHeight, 0.0D)
-                .add(horizontal.scale(pivotForward));
-        return pivot.add(aimDirection.scale(muzzleForward + MUZZLE_SURFACE_CLEARANCE))
-                .add(pitchedUp.scale(muzzleUp)).add(right.scale(muzzleRight));
+        return EvaRifleKinematics.sample(this,1,aimDirection).muzzle();
     }
 
     private Vec3 cannonMuzzlePosition(Vec3 aimDirection)
@@ -3674,6 +3737,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     @Override
     public void aiStep()
     {
+        this.updateRiflePoseSignals();
         boolean preserveUnpilotedFacing = this.getPilotEntity() == null
                 && !this.isBerserk()
                 && !this.isNervLogisticsLocked()
@@ -3782,6 +3846,28 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             }
         }
         boolean ordinaryEnded = false;
+        boolean heavyEnded = false;
+        if (this.isPilotControlLocked() || !(this.getControllingPassenger() instanceof ServerPlayer))
+            this.cancelHeavyMotion();
+        if (this.heavyTicks > 0)
+        {
+            if (this.getWeapon() != WEAPON_FISTS || this.isPilotProne() || this.isPilotCrouching() || this.isPilotControlLocked())
+                this.cancelHeavyMotion();
+            else
+            {
+                float phase = Mth.clamp(++this.heavyElapsed / (float)this.heavyDuration, 0, 1);
+                this.entityData.set(DATA_LIVE_ACTION_PHASE, phase);
+                this.applyAuthoredRootDelta(EvaLiveCombatMotion.ordinary(2, phase));
+                if (!this.heavyContact && phase >= 17F / 32F && this.getControllingPassenger() instanceof ServerPlayer pilot)
+                {
+                    this.heavyContact = true;
+                    if (this.getTags().contains("seele_motion_lab")) ProjectSeele.LOGGER.info("EVA R04 heavy contact tick={} phase={}", this.tickCount, phase);
+                    this.resolveHeavyContact(pilot);
+                }
+                heavyEnded = --this.heavyTicks == 0;
+                if (heavyEnded) this.entityData.set(DATA_HEAVY_ACTIVE, false);
+            }
+        }
         if (this.pendingKnifeContactTicks > 0 && --this.pendingKnifeContactTicks == 0
                 && this.getWeapon() == WEAPON_KNIFE && this.knifeVisualTicks > 0
                 && !this.isPilotCrouching() && !this.isPilotProne()
@@ -3830,7 +3916,23 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         if (this.getControllingPassenger() instanceof ServerPlayer pilot
                 && !this.isPilotControlLocked() && this.isMeleeWeapon())
         {
-            if (this.queuedKnifeInput >= 0 && this.knifeVisualTicks == 0
+            if (this.queuedHeavy && this.ordinaryAttackVisualTicks == 0 && this.kickVisualTicks == 0 && !this.isHeavyMotionActive())
+            {
+                this.queuedHeavy = false;
+                this.smashAttack(pilot);
+            }
+            else if (heavyEnded && this.queuedKickAfterHeavy)
+            {
+                this.queuedKickAfterHeavy = false;
+                this.queuedMeleeAfterHeavy = false;
+                this.stompAttack(pilot);
+            }
+            else if (heavyEnded && this.queuedMeleeAfterHeavy)
+            {
+                this.queuedMeleeAfterHeavy = false;
+                this.meleeAttack(pilot);
+            }
+            else if (this.queuedKnifeInput >= 0 && this.knifeVisualTicks == 0
                     && this.getWeapon() == WEAPON_KNIFE
                     && (this.queuedKnifeInput == 1 ? this.smashCooldown == 0 : this.meleeCooldown == 0))
             {

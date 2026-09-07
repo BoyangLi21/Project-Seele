@@ -42,7 +42,7 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
 {
     private static final Map<Integer, MuzzleSample> RIFLE_MUZZLES =
             new HashMap<>();
-    private static final long MUZZLE_STALE_NANOS = 500_000_000L;
+    private static final long MUZZLE_STALE_NANOS = 100_000_000L;
     private static final ResourceLocation MESH_00 =
             new ResourceLocation(ProjectSeele.MODID, "mesh/eva_unit00.mesh.json");
     private static final ResourceLocation MESH_01 =
@@ -123,6 +123,16 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
             return fallback;
         }
         return sample.position();
+    }
+
+    public Vec3 renderedMeshPoint(org.joml.Matrix4f pose, org.joml.Vector3f point,
+                                  EvaUnit01Entity eva, float partial)
+    {
+        // Gecko 4.8.4's world-matrix helper adds whole identity matrices. Undoing
+        // the render origin directly preserves the actual vertex scale.
+        var world = software.bernie.geckolib.util.RenderUtils.invertAndMultiplyMatrices(
+                pose, this.entityRenderTranslations).transformPosition(point);
+        return eva.getPosition(partial).add(world.x, world.y, world.z);
     }
 
     public EvaUnit01Renderer(EntityRendererProvider.Context context)
@@ -389,15 +399,20 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
             this.pendingPoseCommit = false;
             this.pendingPoseModel = null;
             this.pendingPoseEntity = null;
-            EvaPoseGraph.commit(animatable, poseModel,
-                    this.pendingPosePartialTick);
+            org.joml.Matrix4f world=software.bernie.geckolib.util.RenderUtils.invertAndMultiplyMatrices(poseStack.last().pose(),this.entityRenderTranslations);
+            Vec3 origin=animatable.getPosition(partialTick);
+            world.m30(world.m30()+(float)origin.x).m31(world.m31()+(float)origin.y).m32(world.m32()+(float)origin.z);
+            EvaPoseGraph.commit(animatable, poseModel,this.pendingPosePartialTick,world);
         }
+        if("cannon".equals(bone.getName()))bone.setTrackingMatrices(true);
         super.renderRecursively(poseStack, animatable, bone, renderType,
                 bufferSource, buffer, isReRender, partialTick, packedLight,
                 packedOverlay, red, green, blue, alpha);
         EvaPoseRuntimeRecorder.captureBone(animatable, bone, isReRender);
         if (!isReRender && bone.getParent() == null)
         {
+            com.projectseele.client.visual.EvaConnectedActionReview.recordPose(animatable,
+                    this.getGeoModel().getBakedModel(this.getGeoModel().getModelResource(animatable)), partialTick);
             EvaWeightedInnerProxy.renderAfterRoot(
                     poseStack, animatable, bone, bufferSource,
                     packedLight, packedOverlay);

@@ -16,6 +16,12 @@ import software.bernie.geckolib.util.GeckoLibUtil;
 /** Immobile, invulnerable Terminal Dogma specimen and local mesh anchor. */
 public class LilithEntity extends PathfinderMob implements GeoEntity
 {
+    private static final net.minecraft.network.syncher.EntityDataAccessor<Float> CONTAINMENT_SCALE=net.minecraft.network.syncher.SynchedEntityData.defineId(LilithEntity.class,net.minecraft.network.syncher.EntityDataSerializers.FLOAT);
+    @Override protected void defineSynchedData(){super.defineSynchedData();this.entityData.define(CONTAINMENT_SCALE,1F);}
+    public float getContainmentScale(){return this.entityData.get(CONTAINMENT_SCALE);}
+    public void setContainmentScale(float value){this.entityData.set(CONTAINMENT_SCALE,net.minecraft.util.Mth.clamp(value,.5F,2F));}
+    @Override public void addAdditionalSaveData(net.minecraft.nbt.CompoundTag tag){super.addAdditionalSaveData(tag);tag.putFloat("ContainmentScale",getContainmentScale());}
+    @Override public void readAdditionalSaveData(net.minecraft.nbt.CompoundTag tag){super.readAdditionalSaveData(tag);setContainmentScale(tag.contains("ContainmentScale")?tag.getFloat("ContainmentScale"):1F);}
     private final AnimatableInstanceCache geoCache =
             GeckoLibUtil.createInstanceCache(this);
 

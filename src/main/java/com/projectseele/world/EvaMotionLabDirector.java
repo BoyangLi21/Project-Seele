@@ -278,6 +278,12 @@ public final class EvaMotionLabDirector
         }
         eva.ejectPassengers();
         eva.prepareForMotionLab();
+        // A remote mount can leave both rider and vehicle outside ticking range:
+        // the EVA cannot move the rider until its new chunk starts ticking.
+        // This command is restricted to the disposable lab; bring the player
+        // into that chunk before establishing the ordinary passenger relation.
+        player.teleportTo(level, eva.getX(), eva.getY()+2, eva.getZ()+20,
+                eva.getYRot(), 0);
         return eva.boardFromExternalPlug(player, 100);
     }
 

@@ -6,6 +6,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
+import java.util.ArrayList;
+import com.google.gson.JsonParser;
 
 import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.blaze3d.vertex.PoseStack;
@@ -46,6 +48,8 @@ public final class TreeOfLifeWallClient
             "projectseele-local-maps", "tree_of_life.png");
     private static final Path NERV_SOURCE = Paths.get(
             "projectseele-local-maps", "nerv_logo.png");
+    private static final Path NERV_REFINED = Paths.get("projectseele-local-maps", "nerv_logo_r04.png");
+    private static List<Plate> r04Plates;
     private static final ResourceLocation TREE_TEXTURE_ID = new ResourceLocation(
             ProjectSeele.MODID, "dynamic/tree_of_life_wall");
     private static final ResourceLocation NERV_TEXTURE_ID = new ResourceLocation(
@@ -108,6 +112,10 @@ public final class TreeOfLifeWallClient
         {
             renderPlates(minecraft, poseStack, buffers, camera,
                     NERV_TEXTURE_ID, NERV_PLATES, nervImageAspect);
+            if (minecraft.getSingleplayerServer() != null && minecraft.getSingleplayerServer()
+                    .getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT).normalize()
+                    .getFileName().toString().equals("SEELE_TV_WORLD_PREVIEW_20260906"))
+                renderPlates(minecraft, poseStack, buffers, camera, NERV_TEXTURE_ID, refinedPlates(), nervImageAspect);
         }
     }
 
@@ -155,6 +163,25 @@ public final class TreeOfLifeWallClient
             return;
         }
         buffers.endBatch(renderType);
+    }
+
+    private static List<Plate> refinedPlates()
+    {
+        if (r04Plates != null) return r04Plates;
+        r04Plates = new ArrayList<>();
+        Path path = Paths.get("projectseele-local-maps", "r04_wall_plates.json");
+        if (!Files.isRegularFile(path)) return r04Plates;
+        try (var reader = Files.newBufferedReader(path))
+        {
+            for (var row : JsonParser.parseReader(reader).getAsJsonArray())
+            {
+                var d = row.getAsJsonObject(); var p = d.getAsJsonArray("position");
+                r04Plates.add(new Plate(new Vec3(p.get(0).getAsDouble(),p.get(1).getAsDouble(),p.get(2).getAsDouble()),
+                        d.get("size").getAsFloat(),d.get("size").getAsFloat(),d.get("yaw").getAsFloat()));
+            }
+        }
+        catch (Exception error) { ProjectSeele.LOGGER.warn("R04 wall plaques unavailable", error); }
+        return r04Plates;
     }
 
     private static boolean ensureTreeTexture(Minecraft minecraft)
@@ -215,7 +242,7 @@ public final class TreeOfLifeWallClient
                     "NERV office wall idle: no image at {}", NERV_SOURCE);
             return false;
         }
-        try (InputStream stream = Files.newInputStream(NERV_SOURCE))
+        try (InputStream stream = Files.newInputStream(Files.isRegularFile(NERV_REFINED) ? NERV_REFINED : NERV_SOURCE))
         {
             NativeImage image = NativeImage.read(stream);
             removeBakedCheckerboard(image);

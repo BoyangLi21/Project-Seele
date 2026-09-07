@@ -175,5 +175,6 @@
   ,"msg.projectseele.armament_missing": "128 格内没有 NERV 兵装升降站"
   ,"msg.projectseele.armament_removed": "最近的兵装升降站已移除，地形未改变"
   ,"msg.projectseele.armament_rifle_acquired": "帕雷特步枪移交完成"
-  ,"msg.projectseele.armament_already_installed": "该 EVA 已装备帕雷特步枪"
+  ,"msg.projectseele.armament_already_installed": "该 EVA 已装备帕雷特步枪",
+  "block.projectseele.nerv_workstation": "NERV CRT 工作终端"
 }

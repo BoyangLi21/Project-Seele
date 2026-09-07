@@ -152,12 +152,16 @@ public final class EvaPoseGraph
     {
         return snapshot(entity, partialTick,
                 EvaMotionEngineV2.BoneWrites.empty(),
-                EvaMotionEngineV2.BoneWrites.empty(), false);
+                EvaMotionEngineV2.BoneWrites.empty(), EvaMotionEngineV2.BoneWrites.empty(), false);
     }
 
     /** Applies every post-Gecko writer once and records the exact final owner. */
     public static Snapshot commit(EvaUnit01Entity entity,
                                   BakedGeoModel model, float partialTick)
+    {
+        return commit(entity,model,partialTick,null);
+    }
+    public static Snapshot commit(EvaUnit01Entity entity,BakedGeoModel model,float partialTick,org.joml.Matrix4f modelToWorld)
     {
         if (!contract.ready())
         {
@@ -197,9 +201,15 @@ public final class EvaPoseGraph
         }
         EvaMotionEngineV2.BoneWrites transitions = EvaPoseTransition.apply(
                 entity, model, partialTick);
+        var firearm=EvaRifleContactRig.apply(entity,model,partialTick,modelToWorld);
+        if(!firearm.rotationBones().isEmpty())
+        {
+            Set<String> r=new LinkedHashSet<>(motionWrites.rotationBones());r.addAll(firearm.rotationBones());
+            Set<String> p=new LinkedHashSet<>(motionWrites.positionBones());p.addAll(firearm.positionBones());
+            motionWrites=new EvaMotionEngineV2.BoneWrites(Set.copyOf(r),Set.copyOf(p),"MOTION_ENGINE_LIVE_ACTION");
+        }
         Snapshot committed = snapshot(
-                entity, partialTick, motionWrites, transitions, true);
-        com.projectseele.client.visual.EvaConnectedActionReview.recordPose(entity, model, partialTick);
+                entity, partialTick, motionWrites, transitions, firearm, true);
         if (LAST_COMMITS.size() > 48)
         {
             LAST_COMMITS.clear();
@@ -229,6 +239,7 @@ public final class EvaPoseGraph
                                      float partialTick,
                                      EvaMotionEngineV2.BoneWrites motionWrites,
                                      EvaMotionEngineV2.BoneWrites transitions,
+                                     EvaMotionEngineV2.BoneWrites firearm,
                                      boolean committed)
     {
         Contract current = contract;
@@ -299,6 +310,18 @@ public final class EvaPoseGraph
                     positionOwners.put(bone, EvaPoseTransition.OWNER));
             transitions.rotationBones().forEach(bone ->
                     scaleOwners.put(bone, EvaPoseTransition.OWNER));
+        }
+
+        // Firearm contact is solved after transition blending, including weapon scale.
+        if (!firearm.isEmpty())
+        {
+            for (String bone : firearm.rotationBones())
+                rotationOwners.put(bone, motionOwner);
+            for (String bone : firearm.positionBones())
+            {
+                positionOwners.put(bone, motionOwner);
+                scaleOwners.put(bone, motionOwner);
+            }
         }
 
         List<String> upstreamSources = upstreamSources(entity, partialTick);
@@ -376,8 +399,8 @@ public final class EvaPoseGraph
     private static boolean strikeActive(EvaUnit01Entity entity,
                                         float partialTick)
     {
-        return entity.getCockpitAttackAnim(partialTick) > 0.0F
-                || entity.getCockpitSmashAnim(partialTick) > 0.0F;
+        return !entity.isHeavyMotionActive() && (entity.getCockpitAttackAnim(partialTick) > 0.0F
+                || entity.getCockpitSmashAnim(partialTick) > 0.0F);
     }
 
     private static boolean armsControllerActive(EvaUnit01Entity entity)

@@ -20,6 +20,10 @@ public final class ModBlocks
     public static final DeferredRegister<Block> BLOCKS = DeferredRegister.create(
             ForgeRegistries.BLOCKS, ProjectSeele.MODID);
 
+    public static final RegistryObject<Block> NERV_WORKSTATION = BLOCKS.register(
+            "nerv_workstation", () -> new com.projectseele.world.NervWorkstationBlock(
+                    BlockBehaviour.Properties.copy(Blocks.IRON_BLOCK).strength(1.5F).noOcclusion()));
+
     public static final RegistryObject<Block> RETRACTABLE_BUILDING_CORE = BLOCKS.register(
             "retractable_building_core",
             () -> new RetractableBuildingCoreBlock(BlockBehaviour.Properties.copy(

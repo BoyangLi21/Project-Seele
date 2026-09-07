@@ -20,6 +20,8 @@ public class ModItems
 
     public static final RegistryObject<Item> CORE_FRAGMENT = ITEMS.register("core_fragment",
             () -> new Item(new Item.Properties()));
+    public static final RegistryObject<Item> NERV_WORKSTATION = ITEMS.register("nerv_workstation",
+            () -> new BlockItem(ModBlocks.NERV_WORKSTATION.get(),new Item.Properties()));
     public static final RegistryObject<Item> S2_ENGINE_FRAGMENT = ITEMS.register("s2_engine_fragment",
             () -> new Item(new Item.Properties().fireResistant()));
     public static final RegistryObject<Item> RETRACTABLE_BUILDING_CORE = ITEMS.register(

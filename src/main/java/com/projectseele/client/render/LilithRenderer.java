@@ -56,7 +56,8 @@ public final class LilithRenderer extends GeoEntityRenderer<LilithEntity>
                           int packedLight, int packedOverlay,
                           float red, float green, float blue, float alpha)
     {
-        poseStack.scale(MODEL_SCALE, MODEL_SCALE, MODEL_SCALE);
+        float scale=MODEL_SCALE*animatable.getContainmentScale();
+        poseStack.scale(scale,scale,scale);
         super.preRender(poseStack, animatable, model, bufferSource, buffer,
                 isReRender, partialTick, packedLight, packedOverlay,
                 red, green, blue, alpha);
@@ -88,10 +89,11 @@ public final class LilithRenderer extends GeoEntityRenderer<LilithEntity>
         }
         // The local spear reaches the observation gallery while the crucified
         // wrists span almost the full 48-block containment chamber.
-        AABB visualBounds = new AABB(entity.getX() - 19.0D,
-                entity.getY() - 1.0D, entity.getZ() - 14.0D,
-                entity.getX() + 19.0D, entity.getY() + 29.0D,
-                entity.getZ() + 43.0D);
+        double s=entity.getContainmentScale();
+        AABB visualBounds = new AABB(entity.getX() - 20*s,
+                entity.getY() - s, entity.getZ() - 44*s,
+                entity.getX() + 20*s, entity.getY() + 30*s,
+                entity.getZ() + 44*s);
         return frustum.isVisible(visualBounds);
     }
 

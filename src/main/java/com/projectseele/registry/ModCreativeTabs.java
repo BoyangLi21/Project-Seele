@@ -26,6 +26,7 @@ public class ModCreativeTabs
                         output.accept(ModItems.ONE_WAY_GLASS.get());
                         output.accept(ModItems.TERMINAL_DOGMA_ACCESS_CARD.get());
                         output.accept(ModItems.NERV_EMPLOYEE_CARD.get());
+                        output.accept(ModItems.NERV_WORKSTATION.get());
                         output.accept(ModItems.BETA_CAPSULE.get());
                         output.accept(ModItems.COMMAND_SEAT_BACK.get());
                         output.accept(ModItems.EVA_PROGRESSIVE_KNIFE.get());

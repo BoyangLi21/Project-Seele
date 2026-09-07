@@ -35,6 +35,7 @@ import software.bernie.geckolib.cache.object.BakedGeoModel;
 public final class EvaConnectedActionReview
 {
     private static final boolean ENABLED = Boolean.getBoolean("projectseele.connectedActionReview");
+    private static final boolean RIFLE = Boolean.getBoolean("projectseele.rifleActionReview");
     private static final String BATCH = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
     private static int wait;
     private static int tick;
@@ -45,6 +46,7 @@ public final class EvaConnectedActionReview
     private static int serverStart = -1;
     private static int previousTick = -1;
     private static int warmupFrames;
+    private static int missingPilotTicks;
     private static boolean finished;
     private static Entity camera;
     private static BufferedWriter poses;
@@ -70,16 +72,17 @@ public final class EvaConnectedActionReview
         {
             mc.player.connection.sendCommand("seele motionlab reset");
             mc.player.connection.sendCommand("seele motionlab demo unit01 stop");
-            mc.player.connection.sendCommand("seele motionlab weapon unit01 fists");
             mc.player.connection.sendCommand("seele motionlab enter unit01");
+            mc.player.connection.sendCommand("seele motionlab weapon unit01 " + (RIFLE ? "rifle" : "fists"));
             return;
         }
         EvaUnit01Entity eva = EvaPilotResolver.controlTarget(mc.player);
         if (eva == null || eva.getActivationTicks() > 0 || !eva.isPoweredOn())
         {
-            if (wait > 700) finish(mc, "pilot_setup_timeout");
+            if (++missingPilotTicks > 400) finish(mc, "pilot_setup_timeout");
             return;
         }
+        missingPilotTicks = 0;
         entityId = eva.getId();
         if (serverStart < 0)
         {
@@ -102,6 +105,13 @@ public final class EvaConnectedActionReview
                 throw new IllegalStateException("Unable to create action review", exception);
             }
         }
+        if (RIFLE)
+        {
+            rifleControls(mc, eva);
+            previousTick = tick;
+            if (tick >= 1845) finish(mc, "complete");
+            return;
+        }
         boolean moving = tick >= 30 && tick < 110 || tick >= 200 && tick < 225
                 || tick >= 270 && tick < 362
                 || tick >= 590 && tick < 650;
@@ -119,6 +129,8 @@ public final class EvaConnectedActionReview
         mc.player.setXRot(0.0F);
         if (at(65)) send(ServerboundEvaControlPacket.ACTION_SPRINT_START);
         if (at(110)) send(ServerboundEvaControlPacket.ACTION_SPRINT_STOP);
+        if (at(115) || at(300)) send(ServerboundEvaControlPacket.ACTION_SMASH);
+        if (at(122)) send(ServerboundEvaControlPacket.ACTION_MELEE);
         if (at(160))
         {
             send(ServerboundEvaControlPacket.ACTION_SPRINT_STOP);
@@ -141,6 +153,45 @@ public final class EvaConnectedActionReview
         return previousTick < requested && tick >= requested;
     }
 
+    private static void rifleControls(Minecraft mc, EvaUnit01Entity eva)
+    {
+        if (tick >= 1670)
+        {
+            mc.options.keyUp.setDown(false);
+            mc.player.input.up=false;mc.player.input.forwardImpulse=0;mc.player.zza=0;mc.player.xxa=0;
+            if(at(1670))mc.player.connection.sendCommand("seele motionlab weapon unit02 knife");
+            if(at(1685))send(ServerboundEvaControlPacket.ACTION_MELEE);
+            if(at(1705))send(ServerboundEvaControlPacket.ACTION_SMASH);
+            if(at(1770))mc.player.connection.sendCommand("seele motionlab weapon unit02 fists");
+            if(at(1805))send(ServerboundEvaControlPacket.ACTION_SMASH);
+            positionCamera(mc,eva);
+            return;
+        }
+        if (at(560) || at(1120))
+        {
+            String unit = tick >= 1120 ? "unit02" : "unit00";
+            mc.player.connection.sendCommand("seele motionlab enter " + unit);
+            mc.player.connection.sendCommand("seele motionlab weapon " + unit + " rifle");
+        }
+        int local = tick % 560;
+        int offset = tick - local;
+        boolean move = local >= 60 && local < 125 || local >= 200 && local < 235 || local >= 435 && local < 470;
+        mc.options.keyUp.setDown(move);
+        mc.player.input.up = move;
+        mc.player.input.forwardImpulse = move ? 1 : 0;
+        mc.player.zza = move ? 1 : 0;
+        mc.player.xxa = 0;
+        mc.player.setYRot(local >= 370 ? 50 : 0);
+        mc.player.setXRot(local >= 495 ? 60 : local >= 475 ? -60 : local >= 370 && local < 435 ? -15 : local >= 435 ? 12 : 0);
+        if (at(offset+90)) send(ServerboundEvaControlPacket.ACTION_SPRINT_START);
+        if (at(offset+125)) send(ServerboundEvaControlPacket.ACTION_SPRINT_STOP);
+        if (at(offset+160)) send(ServerboundEvaControlPacket.ACTION_CROUCH_START);
+        if (at(offset+250)) send(ServerboundEvaControlPacket.ACTION_CROUCH_STOP);
+        if (at(offset+275) || at(offset+355)) send(ServerboundEvaControlPacket.ACTION_TOGGLE_PRONE);
+        if (local >= 30 && local < 510 && tick / 8 != previousTick / 8) send(ServerboundEvaControlPacket.ACTION_RIFLE_FIRE);
+        positionCamera(mc, eva);
+    }
+
     private static void send(int action)
     {
         SeeleNetwork.CHANNEL.sendToServer(new ServerboundEvaControlPacket(action));
@@ -156,7 +207,7 @@ public final class EvaConnectedActionReview
             camera.setNoGravity(true);
         }
         Vec3 target = eva.position().add(0, 28, 0);
-        Vec3 position = eva.position().add(60, 32, 48);
+        Vec3 position = eva.position().add(RIFLE && eva.getUnitVariant() == 0 ? -60 : 60, 32, 48);
         Vec3 delta = target.subtract(position);
         camera.setPos(position.x, position.y - camera.getEyeHeight(), position.z);
         camera.setYRot((float)(Mth.atan2(delta.z, delta.x) * Mth.RAD_TO_DEG) - 90.0F);
@@ -183,9 +234,13 @@ public final class EvaConnectedActionReview
         poseTick = tick;
         JsonObject row = new JsonObject();
         row.addProperty("tick", tick);
+        row.addProperty("variant", eva.getUnitVariant());
+        row.addProperty("yaw", eva.getYRot());
         row.addProperty("image", frame + 1);
         row.addProperty("entityTick", eva.tickCount + partialTick);
         row.addProperty("key", eva.poseTransitionKey(partialTick));
+        row.addProperty("heavyActive", eva.isHeavyMotionActive());
+        if (eva.isHeavyMotionActive()) row.addProperty("heavyPhase", eva.heavyMotionProgress(partialTick));
         JsonArray world = new JsonArray();
         world.add(eva.getX()); world.add(eva.getY()); world.add(eva.getZ());
         row.add("world", world);
@@ -201,6 +256,18 @@ public final class EvaConnectedActionReview
             });
         }
         row.add("bones", transforms);
+        if (RIFLE && eva.getWeapon() == EvaUnit01Entity.WEAPON_RIFLE)
+        {
+            var witness = com.projectseele.client.render.EvaRifleContactRig.LAST.get(eva.getId());
+            if (witness != null)
+            {
+                row.addProperty("rightHandError", witness.rightError());
+                row.addProperty("leftHandError", witness.leftError());
+                if(witness.footDrift()>=0)row.addProperty("rifleFootDrift",witness.footDrift());
+                Vec3 actual = com.projectseele.client.render.EvaUnit01Renderer.rifleMuzzleOrFallback(eva.getId(), witness.expectedMuzzle());
+                row.addProperty("muzzleError", actual.distanceTo(witness.expectedMuzzle()));
+            }
+        }
         try
         {
             poses.write(row.toString());

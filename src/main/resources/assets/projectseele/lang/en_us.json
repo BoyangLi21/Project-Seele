@@ -177,5 +177,6 @@
   ,"msg.projectseele.armament_missing": "No NERV armament station is within 128 blocks"
   ,"msg.projectseele.armament_removed": "Nearest armament station removed without changing terrain"
   ,"msg.projectseele.armament_rifle_acquired": "PALLET RIFLE TRANSFER COMPLETE"
-  ,"msg.projectseele.armament_already_installed": "This EVA already carries a Pallet Rifle"
+  ,"msg.projectseele.armament_already_installed": "This EVA already carries a Pallet Rifle",
+  "block.projectseele.nerv_workstation": "NERV CRT Workstation"
 }

@@ -29,6 +29,7 @@ public final class EvaLiveCombatMotion
             KICK_RESOURCE, "EVA side-kick root");
     private static final Map<String, RootClip> KNIFE = load(
             KNIFE_RESOURCE, "EVA approved knife root");
+    private static final RootClip HEAVY_CONTACT = loadHeavyContact();
 
     private EvaLiveCombatMotion() {}
 
@@ -62,6 +63,33 @@ public final class EvaLiveCombatMotion
         return sample(KNIFE.get(reverse
                 ? "eva_short_knife_stab_twist_reverse"
                 : "eva_locked_knife_stab_twist_forward"), progress);
+    }
+
+    public static Vec3 heavyContact(float progress)
+    {
+        return sample(HEAVY_CONTACT, progress);
+    }
+
+    private static RootClip loadHeavyContact()
+    {
+        try (InputStream stream=EvaLiveCombatMotion.class.getResourceAsStream(
+                "/assets/projectseele/motion/eva_heavy_contact_r04.json"))
+        {
+            if(stream==null)throw new IllegalStateException("missing heavy contact curve");
+            JsonArray rows=JsonParser.parseReader(new InputStreamReader(stream,StandardCharsets.UTF_8))
+                    .getAsJsonObject().getAsJsonArray("points_blocks");
+            Vec3[] points=new Vec3[rows.size()];
+            for(int i=0;i<points.length;i++)
+            {
+                var a=rows.get(i).getAsJsonArray();points[i]=new Vec3(a.get(0).getAsDouble(),a.get(1).getAsDouble(),a.get(2).getAsDouble());
+            }
+            return new RootClip(points);
+        }
+        catch(Exception failure)
+        {
+            ProjectSeele.LOGGER.error("Heavy contact curve rejected",failure);
+            return new RootClip(new Vec3[]{new Vec3(0,37,12)});
+        }
     }
 
     private static Map<String, RootClip> load(String path, String label)

@@ -38,6 +38,9 @@ public final class RegionalWayfindingAuthor
         {
             var level=server.getLevel(FacilitySchemaV2.DIMENSION);
             if(++age<80)return;
+            if (com.projectseele.world.TvDetailR04Layout.active(level))
+                com.projectseele.world.TerminalDogmaBuilder.repairRuntimeSpecimen(level,
+                        com.projectseele.world.IntegratedNervMapBuilder.GEOFRONT_ORIGIN);
             if(labels==null)
             {
                 labels=JsonParser.parseString(Files.readString(world.resolve("regional_wayfinding.json"))).getAsJsonArray();
@@ -49,6 +52,12 @@ public final class RegionalWayfindingAuthor
                 age=80;return;
             }
             if(age<120)return;
+            for(String retired:List.of("r04/airport/bay/departures","r04/airport/hakone/departures"))
+            {
+                UUID id=UUID.nameUUIDFromBytes(("SEELE_R03_SIGN/"+retired).getBytes(StandardCharsets.UTF_8));
+                var entity=level.getEntity(id);
+                if(entity!=null&&entity.getType()==EntityType.TEXT_DISPLAY)entity.discard();
+            }
             int count=0;
             for(var item:labels)
             {
@@ -71,6 +80,22 @@ public final class RegionalWayfindingAuthor
                 count++;
             }
             Files.writeString(world.resolve("regional_wayfinding_receipt.json"),"{\"labels\":"+count+",\"nativeTextDisplays\":true}");
+            if (com.projectseele.world.TvDetailR04Layout.active(level))
+            {
+                JsonObject proof=new JsonObject();JsonArray specimens=new JsonArray();
+                for(var entity:level.getEntitiesOfClass(com.projectseele.entity.LilithEntity.class,
+                        com.projectseele.world.TvDetailR04Layout.specimenBounds()))
+                {
+                    JsonObject d=new JsonObject();d.addProperty("uuid",entity.getStringUUID());
+                    d.addProperty("scale",entity.getContainmentScale());d.addProperty("position",entity.position().toString());specimens.add(d);
+                }
+                proof.add("specimens",specimens);
+                var audit=com.projectseele.world.TerminalDogmaBuilder.inspect(level,
+                        com.projectseele.world.IntegratedNervMapBuilder.GEOFRONT_ORIGIN);
+                proof.addProperty("valid",audit.valid());proof.addProperty("audit",audit.toString());
+                Files.writeString(world.resolve("regional_r04_specimen_receipt.json"),proof.toString());
+                if(specimens.size()!=1||!audit.valid())throw new IllegalStateException("R04 specimen acceptance failed: "+proof);
+            }
             ProjectSeele.LOGGER.info("REGIONAL WAYFINDING COMPLETE labels={}",count);done=true;server.halt(false);
         }
         catch(Exception failure)

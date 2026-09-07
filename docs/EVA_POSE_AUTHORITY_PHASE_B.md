@@ -8,6 +8,12 @@ write EVA bones after Gecko has evaluated its controllers. Preview/live motion,
 weapon pitch and pilot head now execute through `EvaPoseGraph.commit`, with
 conditional ownership when a live full-body action already owns aim or head.
 
+## R04 continuation (2026-09-08)
+
+The owner authorized continued firearm and RMB refinement. The post-Gecko commit now ends with a firearm contact solve, after pose transitions: shared server/client weapon frame, both wrist constraints, head alignment and an explicitly synchronized prone body pose. Recorder ownership follows the actual final firearm rotation/position/scale write sets. A visible mesh vertex is read from the native draw transform to verify the muzzle independently; Gecko 4.8.4's world-space convenience matrix is not used for this measurement.
+
+Standing-fists RMB reuses the already selected Group-C third clip with a separate heavy-action timeline, root authority and contact event. No second bone writer is introduced outside `EvaPoseGraph.commit`. Human visual acceptance of these R04 refinements remains pending; runtime and building evidence are recorded in `WORLD_MOTION_R04.md`.
+
 ## Authority boundary
 
 The runtime order is:

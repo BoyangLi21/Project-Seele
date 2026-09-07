@@ -112,12 +112,9 @@ public final class LocalTriangleMeshLayer<T extends GeoAnimatable> extends GeoRe
                 && "cannon".equals(bone.getName())
                 && meshLocation.getPath().endsWith("eva_pallet_smg.mesh.json"))
         {
-            Vector3f rendered = pose.transformPosition(new Vector3f(
-                    part.muzzleX(), part.muzzleY(), part.muzzleZ()));
-            Vec3 camera = Minecraft.getInstance().gameRenderer
-                    .getMainCamera().getPosition();
-            EvaUnit01Renderer.rememberRifleMuzzle(eva.getId(),
-                    camera.add(rendered.x, rendered.y, rendered.z));
+            if (this.getRenderer() instanceof EvaUnit01Renderer renderer)
+                EvaUnit01Renderer.rememberRifleMuzzle(eva.getId(), renderer.renderedMeshPoint(
+                        pose, new Vector3f(part.muzzleX(), part.muzzleY(), part.muzzleZ()), eva, partialTick));
         }
         VertexConsumer targetBuffer = this.textureSelector == null ? buffer
                 : bufferSource.getBuffer(RenderType.entityCutoutNoCull(

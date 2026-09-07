@@ -161,9 +161,7 @@ public final class ClientFxManager
     public static void addRifleTracer(ClientboundRifleTracerPacket packet)
     {
         Vec3 fallback = new Vec3(packet.x1, packet.y1, packet.z1);
-        Vec3 muzzle = EvaUnit01Renderer.rifleMuzzleOrFallback(
-                packet.entityId, fallback);
-        ACTIVE.add(new RifleTracer(muzzle,
+        ACTIVE.add(new RifleTracer(packet.entityId, fallback,
                 new Vec3(packet.x2, packet.y2, packet.z2)));
     }
 
@@ -559,13 +557,16 @@ public final class ClientFxManager
     private static final class RifleTracer extends WorldFx
     {
         static final int LIFETIME = 4;
-        private final Vector3f end;
+        private final Vec3 destination;
+        private final int entityId;
+        private Vec3 visibleOrigin;
+        private float firstRenderTime = -1;
 
-        RifleTracer(Vec3 from, Vec3 to)
+        RifleTracer(int entityId, Vec3 from, Vec3 to)
         {
             super(from);
-            this.end = new Vector3f((float) (to.x - from.x),
-                    (float) (to.y - from.y), (float) (to.z - from.z));
+            this.entityId = entityId;
+            this.destination = to;
         }
 
         @Override
@@ -577,10 +578,31 @@ public final class ClientFxManager
         @Override
         void render(PoseStack poseStack, VertexConsumer consumer, float partialTick)
         {
-            float alpha = Mth.clamp(1.0F - (this.age + partialTick) / LIFETIME, 0.0F, 1.0F);
-            RibbonRenderer.drawStarRibbon(poseStack.last().pose(), consumer,
-                    new Vector3f(), this.end, 0.11F, 0.045F,
-                    1.0F, 0.76F, 0.28F, alpha * 0.92F);
+            if (visibleOrigin == null)
+            {
+                visibleOrigin = EvaUnit01Renderer.rifleMuzzleOrFallback(entityId, pos);
+                firstRenderTime = this.age + partialTick;
+            }
+            float t = Math.max(0, this.age + partialTick - firstRenderTime);
+            Vec3 ray = destination.subtract(visibleOrigin);
+            double distance = ray.length();
+            if (distance < .01) return;
+            Vec3 direction = ray.scale(1 / distance);
+            double head = Math.min(distance, (t + .08) * 220);
+            double tail = Math.max(0, head - 18);
+            Vector3f start = visibleOrigin.subtract(pos).add(direction.scale(tail)).toVector3f();
+            Vector3f end = visibleOrigin.subtract(pos).add(direction.scale(head)).toVector3f();
+            float alpha = Mth.clamp(1 - t / 2.5F, 0, 1);
+            if (t * 220 < distance + 18)
+                RibbonRenderer.drawStarRibbon(poseStack.last().pose(), consumer,
+                        start, end, .09F, .035F, 1, .78F, .35F, alpha);
+            if (t < .7F)
+            {
+                Vector3f flash = visibleOrigin.subtract(pos).toVector3f();
+                RibbonRenderer.drawStarRibbon(poseStack.last().pose(), consumer,
+                        flash, new Vector3f(flash).add(direction.scale(1.6).toVector3f()),
+                        .42F * (1 - t), .06F, 1, .92F, .65F, 1 - t);
+            }
         }
     }
 
