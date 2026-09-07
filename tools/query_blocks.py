@@ -33,7 +33,7 @@ AIR = {"minecraft:air", "minecraft:cave_air", "minecraft:void_air"}
 
 
 def iter_selected_sections(world: Path, dimension: str,
-                           selected: dict[tuple[int, int], set[int]]):
+                           selected: dict[tuple[int, int], set[int]], *, skip_unfinished: bool = False):
     """Read exact requested sections as palette/index arrays for large measured patches.
 
     Coordinates are chunk X/Z and section Y. Decoding remains centralized here;
@@ -49,6 +49,7 @@ def iter_selected_sections(world: Path, dimension: str,
         wanted=selected.get((cx,cz))
         if not wanted:continue
         if str(chunk.get('Status','')).removeprefix('minecraft:')!='full':
+            if skip_unfinished:continue
             raise RuntimeError(f'Unfinished chunk {(cx,cz)}')
         for section in chunk.get('sections',[]):
             sy=int(section.get('Y',0))

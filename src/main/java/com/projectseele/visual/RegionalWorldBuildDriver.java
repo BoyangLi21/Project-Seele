@@ -36,7 +36,7 @@ public final class RegionalWorldBuildDriver
     @SubscribeEvent
     public static void tick(TickEvent.ServerTickEvent event)
     {
-        if (MODE.isEmpty() || MODE.equals("passengers") || MODE.equals("transit-riding") || done || event.phase != TickEvent.Phase.END) return;
+        if (MODE.isEmpty() || MODE.equals("passengers") || MODE.equals("transit-riding") || MODE.equals("flight-riding") || MODE.equals("circle-riding") || MODE.equals("train-boarding") || MODE.equals("bay-boarding") || MODE.equals("collision-audit") || MODE.equals("station-photo") || MODE.equals("quality-photos") || done || event.phase != TickEvent.Phase.END) return;
         MinecraftServer server=event.getServer();
         Path world=server.getWorldPath(LevelResource.ROOT).normalize();
         if (!world.getFileName().toString().equals("SEELE_TV_WORLD_PREVIEW_20260906"))
@@ -85,7 +85,10 @@ public final class RegionalWorldBuildDriver
                 if (age%20!=0) return;
                 JsonObject transit = RegionalNativeTransitInspection.snapshot();
                 if (transit==null) { if(age>1000)throw new IllegalStateException("MTR world unavailable"); return; }
-                if (transit.get("rails").getAsInt()!=98 || transit.get("routes").getAsInt()!=7)
+                JsonObject expected=JsonParser.parseString(Files.readString(world.resolve("regional_plan.json"))).getAsJsonObject();
+                int expectedRails=expected.has("native_rail_count")?expected.get("native_rail_count").getAsInt():98;
+                int expectedRoutes=expected.has("native_route_count")?expected.get("native_route_count").getAsInt():7;
+                if (transit.get("rails").getAsInt()!=expectedRails || transit.get("routes").getAsInt()!=expectedRoutes)
                     throw new IllegalStateException("Incomplete installed MTR network " + transit);
                 for (JsonElement entry : transit.getAsJsonArray("vehicles"))
                 {
@@ -94,11 +97,11 @@ public final class RegionalWorldBuildDriver
                             .add(Math.round(v.get("x").getAsDouble())+","+Math.round(v.get("y").getAsDouble())+","+Math.round(v.get("z").getAsDouble()));
                 }
                 if(age%200==0)ProjectSeele.LOGGER.info("REGIONAL LIVE MTR vehicleSamples={}",VEHICLE_POSITIONS.entrySet().stream().map(e->e.getKey()+":"+e.getValue().size()).toList());
-                if(VEHICLE_POSITIONS.size()>=7 && VEHICLE_POSITIONS.values().stream().allMatch(set->set.size()>=5))
+                if(VEHICLE_POSITIONS.size()>=expectedRoutes && VEHICLE_POSITIONS.values().stream().allMatch(set->set.size()>=5))
                 {
                     transit.addProperty("paletteValid",true);transit.addProperty("nativeGatewayCarCount",1);
                     Files.writeString(world.resolve("regional_commission_receipt.json"),new GsonBuilder().setPrettyPrinting().create().toJson(transit));
-                    ProjectSeele.LOGGER.info("REGIONAL COMMISSION COMPLETE nativeLines=7 nativeLargeCar=1");stop(server);
+                    ProjectSeele.LOGGER.info("REGIONAL COMMISSION COMPLETE nativeLines={} nativeLargeCar=1",expectedRoutes);stop(server);
                 }
                 else if(age>4800)throw new IllegalStateException("Not every installed MTR line produced moving vehicles");
                 return;

@@ -1,9 +1,10 @@
 """Check native MTR swept corridors against actual saved blocks, using query_blocks."""
 from collections import defaultdict,Counter
-import json
+from pathlib import Path
+import json,argparse
 import numpy as np
 from query_blocks import iter_selected_sections,AIR
-from regional_voxels import WORLD,OUT,DIM
+from regional_voxels import WORLD,OUT,DIM,ROOT
 
 
 def free(state):
@@ -21,12 +22,28 @@ def mark(masks,x0,y0,z0,x1,y1,z1):
 
 
 def main():
+    parser=argparse.ArgumentParser();parser.add_argument('--quality',action='store_true');parser.add_argument('--airborne',action='store_true');parser.add_argument('--airfield-profile',action='store_true');parser.add_argument('--samples');args=parser.parse_args()
     samples=json.loads((OUT/'transit2/track_samples.json').read_text(encoding='utf-8'))
+    result_folder=ROOT/'artifacts/world_quality_r02' if args.quality else OUT
+    if args.quality:
+        samples+=json.loads((result_folder/'estate_transit_draft/track_samples.json').read_text(encoding='utf-8'))
+        if list((result_folder/'airport_rail_splice').glob('applied_*/receipt.json')):
+            ids={r['id'] for r in json.loads((result_folder/'airport_rail_splice.json').read_text(encoding='utf-8'))['additions']}
+            samples=[r for r in samples if r['id']!='S1_section_1_underpass']
+            samples += [r for r in json.loads((result_folder/'airport_rail_splice_prototype/track_samples.json').read_text(encoding='utf-8')) if r['id'] in ids]
+        if args.airfield_profile or (result_folder/'airfield_profile_install_receipt.json').exists():
+            retired={r['id'] for r in json.loads((result_folder/'airfield_profile_plan.json').read_text(encoding='utf-8'))['retire_rails']}
+            samples=[r for r in samples if r['id'] not in retired]
+            samples+=json.loads((result_folder/'airfield_profile_native/track_samples.json').read_text(encoding='utf-8'))
+    if args.airborne:
+        result_folder=ROOT/'artifacts/world_quality_r02'
+        source=Path(args.samples) if args.samples else result_folder/'native_flight_samples.json'
+        samples=[r for r in json.loads(source.read_text(encoding='utf-8')) if max(p[1] for p in r['points'])>90]
     rails={};selected=defaultdict(set)
     for rail in samples:
         masks={};floor={};plane=rail['mode']=='AIRPLANE';r=17 if plane else 1
         for p in rail['points'][::2 if plane else 1]:
-            x,y,z=map(round,p);mark(masks,x-r,y+(2 if plane else 1),z-r,x+r,y+(10 if plane else 4),z+r)
+            x,y,z=map(round,p);mark(masks,x-r,y+(1 if args.airborne else 2 if plane else 1),z-r,x+r,y+(11 if args.airborne else 10 if plane else 4),z+r)
             if not plane:mark(floor,x,y-3,z,x,y-1,z)
         rails[rail['id']]=(masks,floor)
         for cx,cz,sy in masks.keys()|floor.keys():selected[cx,cz].add(sy)
@@ -56,8 +73,10 @@ def main():
         result.append(dict(id=name,obstructed_cells=sum(collisions.values()),unsupported_center_cells=unsupported,states=dict(collisions),examples=examples))
         if collisions or unsupported:print('CLEARANCE FAIL',name,sum(collisions.values()),unsupported,examples[:2],flush=True)
     report=dict(rails=len(result),passed=sum(r['obstructed_cells']==0 and r['unsupported_center_cells']==0 for r in result),results=result,
-        envelope='TRAIN: centre +/-1, y+1..4; AIRPLANE: +/-17 square, y+2..10 sampled every 2m (overlapping conservative wing envelopes)')
-    (OUT/'transit_clearance.json').write_text(json.dumps(report,indent=2),encoding='utf-8')
+        envelope='AIRBORNE: native generated curves, +/-17, y+1..11' if args.airborne else 'TRAIN: centre +/-1, y+1..4; AIRPLANE: +/-17 square, y+2..10 sampled every 2m (overlapping conservative wing envelopes)')
+    report['airfield_profile']=args.airfield_profile
+    if args.airborne:report['sample_source']=str(source)
+    (result_folder/('flight_clearance.json' if args.airborne else 'transit_clearance_profile.json' if args.airfield_profile else 'transit_clearance.json')).write_text(json.dumps(report,indent=2),encoding='utf-8')
     print('TRANSIT CLEARANCE',report['passed'],'/',len(result),flush=True)
 
 

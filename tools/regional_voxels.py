@@ -50,6 +50,16 @@ class Painter:
         for cx in range(x0//16,x1//16+1):
             for cz in range(z0//16,z1//16+1):self.by_chunk[cx,cz].append(i)
     def put(self,x,y,z,state,owner,mode='new'):self.fill(x,y,z,x,y,z,state,owner,mode)
+    def protect(self,box,owner,modes=()):
+        self.keep_boxes.append(dict(box=tuple(box),owner=owner,modes=tuple(modes)))
+    def match(self,box,before,after,owner):
+        self.fill(*box,after,owner,'match')
+        self.ops[-1]=Op(self.ops[-1].box,after,owner,'match',(before,))
+    def heightfield(self,cx,cz,heights,active,owner,clear_vegetation=None):
+        if clear_vegetation is None:clear_vegetation=np.ones((16,16),dtype=bool)
+        op=Op((cx*16,32,cz*16,cx*16+15,255,cz*16+15),'minecraft:grass_block[snowy=false]',owner,'heightfield',
+              (np.asarray(heights,dtype=int).tolist(),np.asarray(active,dtype=bool).tolist(),np.asarray(clear_vegetation,dtype=bool).tolist()))
+        self.by_chunk[cx,cz].append(len(self.ops));self.ops.append(op)
     def grade(self,x0,z0,x1,z1,floor,owner,margin=12):
         op=Op((x0-margin,-32,z0-margin,x1+margin,255,z1+margin),'minecraft:stone',owner,'grade',(x0,z0,x1,z1,floor,margin))
         i=len(self.ops);self.ops.append(op)
@@ -77,6 +87,7 @@ class Painter:
         (folder/'places.json').write_text(json.dumps(self.meta,ensure_ascii=False,indent=2),encoding='utf-8')
         (folder/'chunks.json').write_text(json.dumps(sorted(self.by_chunk)),encoding='utf-8')
         (folder/'states.json').write_text(json.dumps(sorted({o.state for o in self.ops})),encoding='utf-8')
+        (folder/'protected.json').write_text(json.dumps(self.keep_boxes,ensure_ascii=False),encoding='utf-8')
         (folder/'block_entities.json').write_text(json.dumps([{'pos':p,'snbt':v.snbt()} for p,v in self.block_entities.items()],ensure_ascii=False),encoding='utf-8')
         print(name,'operations',len(self.ops),'chunks',len(self.by_chunk),'block entities',len(self.block_entities),flush=True)
         return folder
@@ -87,6 +98,11 @@ class Painter:
         groups=defaultdict(dict)
         for (cx,cz),ops in self.by_chunk.items():groups[cx//32,cz//32][cx,cz]=ops
         additions_by_chunk=defaultdict(set)
+        protected_by_chunk=defaultdict(list)
+        for protection in self.keep_boxes:
+            x0,y0,z0,x1,y1,z1=protection['box']
+            for cx in range(x0//16,x1//16+1):
+                for cz in range(z0//16,z1//16+1):protected_by_chunk[cx,cz].append(protection)
         for p in self.block_entities:additions_by_chunk[p[0]//16,p[2]//16].add(p)
         touched=[];counts=Counter();protected=Counter();start=time.monotonic()
         try:
@@ -108,6 +124,18 @@ class Painter:
                         pal,idx=measured[cx,cz,sy];mapping=np.asarray([code(s) for s in pal],dtype=np.uint16)
                         before[(sy-minimum)*16:(sy-minimum+1)*16]=mapping[idx].reshape(16,16,16)
                     after=before.copy();entity_positions={tuple(int(t[k]) for k in ('x','y','z')) for t in root.get('block_entities',[])}
+                    protection_cache={}
+                    def protected_cells(mode):
+                        if mode not in protection_cache:
+                            held=np.zeros(before.shape,dtype=bool)
+                            for protection in protected_by_chunk[cx,cz]:
+                                if protection['modes'] and mode not in protection['modes']:continue
+                                x0,y0,z0,x1,y1,z1=protection['box']
+                                y0=max(y0,minimum*16);y1=min(y1,(maximum+1)*16-1)
+                                if y0>y1:continue
+                                held[y0-minimum*16:y1-minimum*16+1,max(z0-cz*16,0):min(z1-cz*16+1,16),max(x0-cx*16,0):min(x1-cx*16+1,16)]=True
+                            protection_cache[mode]=held
+                        return protection_cache[mode]
                     for i in op_indices:
                         op=self.ops[i];x0,y0,z0,x1,y1,z1=op.box
                         ax=max(x0,cx*16)-cx*16;bx=min(x1,cx*16+15)-cx*16+1
@@ -115,6 +143,18 @@ class Painter:
                         ay=y0-minimum*16;by=y1-minimum*16+1
                         target=code(op.state);src=before[ay:by,az:bz,ax:bx];view=after[ay:by,az:bz,ax:bx]
                         if np.any(src==65535):raise RuntimeError(f'Unknown voxel in {op.owner}')
+                        if op.mode=='heightfield':
+                            heights=np.asarray(op.extra[0],dtype=int);active=np.asarray(op.extra[1],dtype=bool)[None,:,:]
+                            yy=np.arange(y0,y1+1)[:,None,None];target_heights=heights[None,:,:]
+                            stone=code('minecraft:stone');soil=code('minecraft:dirt');grass=code('minecraft:grass_block[snowy=false]');air=code('minecraft:air')
+                            allowed=np.asarray([natural(s) for s in palettes],dtype=bool)
+                            # Earlier retirement operations are part of this staged surface pass.
+                            editable=allowed[view] & active & ~protected_cells(op.mode)[ay:by,az:bz,ax:bx]
+                            vegetation=np.asarray([s.split('[')[0].endswith(('_log','_leaves')) for s in palettes],dtype=bool)[view]
+                            editable &= ~((yy>target_heights)&vegetation&~np.asarray(op.extra[2],dtype=bool)[None,:,:])
+                            values=np.where(yy>target_heights,air,np.where(yy==target_heights,grass,np.where(yy>=target_heights-3,soil,stone)))
+                            view[editable]=np.broadcast_to(values,view.shape)[editable]
+                            continue
                         if op.mode=='grade':
                             import math
                             gx0,gz0,gx1,gz1,desired,margin=op.extra
@@ -127,6 +167,7 @@ class Painter:
                                     if not len(ys):raise RuntimeError(f'No measured ground for {op.owner} at {cx*16+xx,cz*16+zz}')
                                     old_y=y0+int(ys[-1]);x=cx*16+xx;z=cz*16+zz
                                     distance=math.hypot(max(gx0-x,0,x-gx1),max(gz0-z,0,z-gz1))
+                                    if distance>=margin:continue
                                     mix=min(1,distance/max(1,margin));mix=mix*mix*(3-2*mix)
                                     new_y=round(desired*(1-mix)+old_y*mix)
                                     authored=~natural_mask[original]
@@ -138,12 +179,15 @@ class Painter:
                                         if yy<=new_y:column[iy]=grass if yy==new_y else soil if yy>=new_y-3 else stone
                                         else:column[iy]=air
                             continue
-                        if op.mode=='owned':mask=np.ones(src.shape,dtype=bool)
+                        if op.mode in ('owned','retire'):mask=np.ones(src.shape,dtype=bool)
+                        elif op.mode=='ground_clear':mask=np.asarray([s.split('[')[0].removeprefix('minecraft:') in NATURAL-{'water'} for s in palettes],dtype=bool)[src]
+                        elif op.mode=='match':mask=np.asarray([s==op.extra[0] for s in palettes],dtype=bool)[src]
                         else:
                             allowed=np.asarray([natural(s) or s==op.state for s in palettes],dtype=bool)
                             if op.mode=='air':allowed=np.asarray([s.split('[')[0] in AIR or s.startswith('minecraft:light[') or s==op.state for s in palettes],dtype=bool)
                             mask=allowed[src]
                             protected[op.owner]+=int((~mask & (view!=target)).sum())
+                        mask &= ~protected_cells(op.mode)[ay:by,az:bz,ax:bx]
                         view[mask]=target
                     diff=(before!=after)&(before!=65535)
                     if not diff.any():continue

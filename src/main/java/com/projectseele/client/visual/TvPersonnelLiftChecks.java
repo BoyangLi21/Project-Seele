@@ -31,22 +31,43 @@ import java.util.Map;
 @Mod.EventBusSubscriber(modid = ProjectSeele.MODID, value = Dist.CLIENT)
 public final class TvPersonnelLiftChecks
 {
-    private static final boolean ENABLED = "lifts".equals(System.getProperty("projectseele.tvWorldPreviewReview", ""));
+    private static final String MODE=System.getProperty("projectseele.tvWorldPreviewReview", "");
+    private static final boolean ENABLED = MODE.equals("lifts")||MODE.equals("lifts-surface");
+    private static final int FIRST_LIFT=MODE.equals("lifts-surface")?3:0;
     private static final List<String> TRACE = new ArrayList<>();
     private static final Map<BlockPos, BlockState> SHELL = new HashMap<>();
     private static final List<Integer> ROUTE = new ArrayList<>();
-    private static int lift, age, timer, trip, source, initial, arrival, totalTrips;
+    private static int lift=FIRST_LIFT;
+    private static int age, timer, trip, source, initial, arrival, totalTrips;
     private static boolean entered, ready, moving;
     private static volatile boolean done;
     private static double previousY, maxStep;
     private static ItemStack savedMainHand;
+    private static net.minecraft.world.phys.Vec3 savedPosition;
+    private static net.minecraft.resources.ResourceKey<net.minecraft.world.level.Level> savedDimension;
+    private static GameType savedMode;
+    private static float savedYaw,savedPitch;
+    private static boolean savedFlying;
+    private static boolean optionsSaved, savedPause;
+    private static int savedDistance;
 
     private TvPersonnelLiftChecks() {}
 
     @SubscribeEvent
     public static void client(TickEvent.ClientTickEvent event)
     {
-        if (ENABLED && done && event.phase == TickEvent.Phase.END) Minecraft.getInstance().stop();
+        if (!ENABLED || event.phase != TickEvent.Phase.END) return;
+        var mc = Minecraft.getInstance();
+        if (!optionsSaved)
+        {
+            optionsSaved=true;savedPause=mc.options.pauseOnLostFocus;savedDistance=mc.options.renderDistance().get();
+            mc.options.pauseOnLostFocus=false;mc.options.renderDistance().set(6);
+        }
+        if(done)
+        {
+            mc.options.pauseOnLostFocus=savedPause;mc.options.renderDistance().set(savedDistance);
+            mc.stop();
+        }
     }
 
     @SubscribeEvent
@@ -66,10 +87,10 @@ public final class TvPersonnelLiftChecks
             var specs = S20PhysicalElevatorDirector.s20Lifts(level);
             if (lift == specs.size())
             {
-                log("COMPLETE lifts=" + lift + " passengerTrips=" + totalTrips + " maxStep=" + maxStep);
+                log("COMPLETE lifts=" + (lift-FIRST_LIFT) + " firstLift="+FIRST_LIFT+" passengerTrips=" + totalTrips + " maxStep=" + maxStep);
                 Files.writeString(world.resolve("tv_preview_lift_checks.txt"), String.join("\n", TRACE));
-                player.teleportTo(level, 112.5, 81, 273.5, -90, 0);
-                if (savedMainHand != null) player.setItemInHand(InteractionHand.MAIN_HAND, savedMainHand);
+                Files.deleteIfExists(world.resolve("tv_preview_lift_failure.txt"));
+                restore(player);
                 done = true;
                 return;
             }
@@ -78,6 +99,7 @@ public final class TvPersonnelLiftChecks
             if (!entered)
             {
                 entered = true;
+                if(savedPosition==null){savedPosition=player.position();savedDimension=player.level().dimension();savedMode=player.gameMode.getGameModeForPlayer();savedYaw=player.getYRot();savedPitch=player.getXRot();savedFlying=player.getAbilities().flying;}
                 player.setGameMode(GameType.CREATIVE);
                 player.getAbilities().flying = false;
                 player.onUpdateAbilities();
@@ -111,6 +133,10 @@ public final class TvPersonnelLiftChecks
                 ROUTE.clear();
                 for (var stop : spec.stops()) if (stop.walkY() != source) ROUTE.add(stop.walkY());
                 ROUTE.add(initial);
+                // Let the client acknowledge the setup teleport before the native
+                // car moves, especially on the long surface lift.
+                player.teleportTo(level,centre.getX()+.5,source,centre.getZ()+.5,0,0);
+                player.fallDistance=0;player.setDeltaMovement(net.minecraft.world.phys.Vec3.ZERO);player.setOnGround(true);
                 ready = true;
                 timer = 0;
                 log("START " + spec.id() + " source=" + source + " route=" + ROUTE);
@@ -119,9 +145,11 @@ public final class TvPersonnelLiftChecks
             if (moving)
             {
                 double step = Math.abs(player.getY() - previousY);
+                if(spec.id().equals(S20PhysicalElevatorDirector.SURFACE_TRANSIT_LIFT_ID)&&(timer%10==0||step>=8))
+                    log("SAMPLE surface player="+player.getY()+" previous="+previousY+" cage="+group.getCurrentY()+" lastCage="+group.getLastY()+" targetSpeed="+group.getTargetSpeed());
                 previousY = player.getY();
                 maxStep = Math.max(step, maxStep);
-                require(step < 10, "passenger movement continuity " + step);
+                require(step < 10, "passenger movement continuity " + step+" player="+player.getY()+" cage="+group.getCurrentY()+" lastCage="+group.getLastY());
                 require(timer < 2400, "native trip timeout " + spec.id());
                 if (group.isMoving()) { arrival = 0; return; }
                 if (++arrival < 60) return;
@@ -149,7 +177,7 @@ public final class TvPersonnelLiftChecks
                 lift++; trip = 0; timer = 0; entered = false; ready = false;
                 return;
             }
-            player.teleportTo(level, centre.getX() + .5, source, centre.getZ() + .5, 0, 0);
+            require(Math.abs(player.getY()-source)<.6,"passenger settled on source car before departure");
             S20MovingElevatorsAdapter.prepareDoorsBeforeUse(player, centre.atY(source).relative(wall, distance - 1).above());
             BlockPos anchor = group.getCageAnchorBlockPos(source);
             SHELL.clear();
@@ -168,8 +196,7 @@ public final class TvPersonnelLiftChecks
         catch (Exception exception)
         {
             ProjectSeele.LOGGER.error("TV LIFT CHECKS FAILED lift=" + lift + " trip=" + trip, exception);
-            if (savedMainHand != null) server.getPlayerList().getPlayers().get(0)
-                    .setItemInHand(InteractionHand.MAIN_HAND, savedMainHand);
+            restore(server.getPlayerList().getPlayers().get(0));
             try { Files.writeString(world.resolve("tv_preview_lift_failure.txt"), String.join("\n", TRACE) + "\n" + exception); }
             catch (Exception ignored) { }
             done = true;
@@ -179,6 +206,14 @@ public final class TvPersonnelLiftChecks
     private static void require(boolean condition, String reason)
     {
         if (!condition) throw new IllegalStateException(reason);
+    }
+    private static void restore(ServerPlayer player)
+    {
+        if(savedMainHand!=null)player.setItemInHand(InteractionHand.MAIN_HAND,savedMainHand);
+        if(savedMode!=null)player.setGameMode(savedMode);
+        if(savedPosition!=null)player.teleportTo(player.server.getLevel(savedDimension),savedPosition.x,savedPosition.y,savedPosition.z,savedYaw,savedPitch);
+        player.fallDistance=0;player.setDeltaMovement(net.minecraft.world.phys.Vec3.ZERO);
+        player.getAbilities().flying=savedFlying;player.onUpdateAbilities();
     }
     private static void log(String line)
     {

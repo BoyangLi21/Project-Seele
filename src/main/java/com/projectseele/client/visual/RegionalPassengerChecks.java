@@ -38,14 +38,31 @@ public final class RegionalPassengerChecks
     private static double previousY, maxStep;
     private static ItemStack mainHand, offHand;
     private static GameType gameType;
+    private static net.minecraft.world.phys.Vec3 savedPosition;
+    private static net.minecraft.resources.ResourceKey<net.minecraft.world.level.Level> savedDimension;
+    private static float savedYaw, savedPitch;
+    private static boolean savedFlying, savedPause, optionsSaved;
+    private static int savedDistance;
 
     @SubscribeEvent
     public static void client(TickEvent.ClientTickEvent event)
     {
         if (!ENABLED || event.phase != TickEvent.Phase.END) return;
-        Minecraft.getInstance().options.pauseOnLostFocus = false;
-        Minecraft.getInstance().options.renderDistance().set(6);
-        if (done) Minecraft.getInstance().stop();
+        var mc = Minecraft.getInstance();
+        if (!optionsSaved)
+        {
+            optionsSaved = true;
+            savedPause = mc.options.pauseOnLostFocus;
+            savedDistance = mc.options.renderDistance().get();
+            mc.options.pauseOnLostFocus = false;
+            mc.options.renderDistance().set(6);
+        }
+        if (done)
+        {
+            mc.options.pauseOnLostFocus = savedPause;
+            mc.options.renderDistance().set(savedDistance);
+            mc.stop();
+        }
     }
 
     @SubscribeEvent
@@ -66,6 +83,8 @@ public final class RegionalPassengerChecks
             {
                 entered = true;
                 mainHand = player.getMainHandItem().copy(); offHand = player.getOffhandItem().copy(); gameType = player.gameMode.getGameModeForPlayer();
+                savedPosition = player.position(); savedDimension = player.level().dimension();
+                savedYaw = player.getYRot(); savedPitch = player.getXRot(); savedFlying = player.getAbilities().flying;
                 player.setGameMode(GameType.CREATIVE);player.getAbilities().flying=false;player.onUpdateAbilities();
                 player.setItemInHand(InteractionHand.MAIN_HAND,ItemStack.EMPTY);player.setItemInHand(InteractionHand.OFF_HAND,ItemStack.EMPTY);
                 player.teleportTo(level,-360.5,81,730.5,0,0);
@@ -86,7 +105,12 @@ public final class RegionalPassengerChecks
                 if (timer<20)return;
                 require(level.getBlockState(new BlockPos(-360,82,733)).isAir(),"valid swipe opens physical gate");
                 log("PASS employee card opens entry");
-                player.teleportTo(level,-359.5,source,750.5,180,0);stage++;timer=0;return;
+                boolean upper = RegionalGatewayDirector.carAt(level,81), lower = RegionalGatewayDirector.carAt(level,-466);
+                require(upper != lower,"one physical car before passenger test");
+                source = upper ? 81 : -466; target = upper ? -466 : 81;
+                player.teleportTo(level,-359.5,source,750.5,180,0);
+                player.fallDistance=0;player.setDeltaMovement(net.minecraft.world.phys.Vec3.ZERO);player.setOnGround(true);
+                stage++;timer=0;return;
             }
             var group=RegionalGatewayDirector.group(level);
             require(group!=null,"native elevator group exists");
@@ -94,6 +118,7 @@ public final class RegionalPassengerChecks
             if (moving)
             {
                 double step=Math.abs(player.getY()-previousY);previousY=player.getY();maxStep=Math.max(step,maxStep);
+                if(timer%10==0)log("SAMPLE player="+player.getY()+" cage="+group.getCurrentY()+" lastCage="+group.getLastY()+" speed="+group.getTargetSpeed()+" noPhysics="+player.noPhysics+" noGravity="+player.isNoGravity());
                 require(step<10,"continuous native passenger travel step="+step);
                 require(timer<2200,"native elevator travel timeout");
                 if(group.isMoving()){arrival=0;return;}
@@ -115,9 +140,11 @@ public final class RegionalPassengerChecks
             {
                 log("COMPLETE roundTrips=1 passengerTrips=2 maxStep="+maxStep);
                 Files.writeString(world.resolve("regional_passenger_checks.txt"),String.join("\n",TRACE));
+                Files.deleteIfExists(world.resolve("regional_passenger_failure.txt"));
                 restore(player,level);done=true;return;
             }
             require(RegionalGatewayDirector.carAt(level,source),"one physical car at source");
+            require(Math.abs(player.getY()-source)<.6,"passenger settled inside source car before departure y="+player.getY());
             BlockPos anchor=group.getCageAnchorBlockPos(source);CARGO.clear();
             for(int x=0;x<15;x++)for(int z=0;z<15;z++)for(int y:new int[]{0,8})
             {BlockPos offset=new BlockPos(x,y,z);CARGO.put(offset,level.getBlockState(anchor.offset(offset)));}
@@ -137,7 +164,9 @@ public final class RegionalPassengerChecks
         if(mainHand!=null)player.setItemInHand(InteractionHand.MAIN_HAND,mainHand);
         if(offHand!=null)player.setItemInHand(InteractionHand.OFF_HAND,offHand);
         if(gameType!=null)player.setGameMode(gameType);
-        player.teleportTo(level,-359.5,81,695.5,0,0);
+        if(savedPosition!=null)player.teleportTo(player.server.getLevel(savedDimension),savedPosition.x,savedPosition.y,savedPosition.z,savedYaw,savedPitch);
+        player.fallDistance=0;player.setDeltaMovement(net.minecraft.world.phys.Vec3.ZERO);
+        player.getAbilities().flying=savedFlying;player.onUpdateAbilities();
     }
     private static void require(boolean condition,String reason){if(!condition)throw new IllegalStateException(reason);}
     private static void log(String line){TRACE.add(line);ProjectSeele.LOGGER.info("REGIONAL PASSENGER {}",line);}

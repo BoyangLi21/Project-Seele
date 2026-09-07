@@ -75,7 +75,7 @@ public final class TvWorldPreviewPreparation
     @SubscribeEvent
     public static void serverTick(TickEvent.ServerTickEvent event)
     {
-        if (MODE.isEmpty() || MODE.equals("review") || MODE.equals("systemtest") || MODE.equals("evatest") || MODE.equals("lifts")
+        if (MODE.isEmpty() || MODE.equals("review") || MODE.equals("systemtest") || MODE.equals("evatest") || MODE.equals("lifts") || MODE.equals("lifts-surface")
                 || finished || event.phase != TickEvent.Phase.END) return;
         var server = event.getServer();
         if (!server.isDedicatedServer() && server.getPlayerList().getPlayers().isEmpty()) return;

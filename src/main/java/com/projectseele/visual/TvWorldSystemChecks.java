@@ -127,9 +127,11 @@ public final class TvWorldSystemChecks
             if (variant == 3)
             {
                 for (int i = 0; i < 3; i++) if (TrainingPilotDirector.requiresRouteTicket(i)) return;
+                String scope = MODE.equals("evatest") ? "EVA-only; city remains at surface" : "city down/up";
                 Files.writeString(world.resolve("tv_preview_system_checks.txt"), String.join("\n", TRACE)
-                        + "\nCOMPLETE city down/up; three EVA round trips; stable UUIDs; maxStep=" + maxStep + "\n");
-                log("COMPLETE city down/up and all three EVA round trips; maxStep=" + maxStep);
+                        + "\nCOMPLETE " + scope + "; three EVA round trips; stable UUIDs; maxStep=" + maxStep + "\n");
+                Files.deleteIfExists(world.resolve("tv_preview_system_failure.txt"));
+                log("COMPLETE " + scope + "; all three EVA round trips; maxStep=" + maxStep);
                 done = true;
                 TvWorldPreviewPreparation.completeExternalStage(server);
                 return;

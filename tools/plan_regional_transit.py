@@ -61,7 +61,7 @@ def main():
         for i,((a,ha),(b,hb)) in enumerate(zip(path,path[1:])):add(f'C1_{part}_{i}',a,b,ha,hb)
     sid=add('C1_depot',[-944,96,160],[-816,96,160],'E','E','siding')
     add('C1_yard_link',[-816,96,160],[-720,96,80],'E','N',speed=40)
-    lines.append(dict(id='C1',name='第三新東京環状線',color=0x426B57,platforms=[p['id'] for p in [central,harbour,gate,west]],siding=sid,cars=metro,frequency=2,dwell=8000,repeat=True))
+    lines.append(dict(id='C1',name='第三新東京環状線',color=0x426B57,platforms=[p['id'] for p in [central,harbour,gate,west,central]],siding=sid,cars=metro,frequency=2,dwell=8000,repeat=True))
     shuttle('R1','箱根地域本線',0x476A91,[
         ('hakone_central','新箱根中央',[-1480,104,640],'E',96),
         ('innovation','地域技術センター',[-1080,104,560],'E',96),
@@ -87,26 +87,30 @@ def main():
     # Paired one-way runways and taxi loops; MTR creates the airborne connection.
     air_platforms=[]
     for ap,ox,rz,mirror,name in [('bay',480,1430,False,'箱根湾空港'),('hakone',-2160,-20,True,'新箱根飛行場')]:
-        def xyz(u,v):return [ox+(720-u if mirror else u),80,rz+v]
+        def xyz(u,v,y=80):return [ox+(720-u if mirror else u),y,rz+v]
         def heading(h):return {'E':'W','W':'E','N':'N','S':'S'}[h] if mirror else h
-        def ar(id,a,b,ha,hb,kind='rail',speed=40,reverse_speed=0):
-            return add('F1_'+ap+'_'+id,xyz(*a),xyz(*b),heading(ha),heading(hb),kind,'AIRPLANE',speed,reverse_speed)
+        def ar(id,a,b,ha,hb,kind='rail',speed=40,reverse_speed=0,ay=80,by=80):
+            return add('F1_'+ap+'_'+id,xyz(*a,ay),xyz(*b,by),heading(ha),heading(hb),kind,'AIRPLANE',speed,reverse_speed)
         gate_id=ar('gate',(150,-190),(190,-190),'E','E','platform')
         air_platforms.append(gate_id)
         outbound=[((190,-190),'E'),((640,-190),'E'),((680,-150),'S'),((680,-40),'S'),((640,0),'W')]
         inbound=[((640,60),'E'),((680,60),'E'),((720,20),'N'),((720,-230),'N'),((680,-270),'W'),((80,-270),'W'),((40,-230),'S'),((80,-190),'E'),((112,-190),'E'),((150,-190),'E')]
         for section,path in [('taxi_out',outbound),('taxi_in',inbound)]:
             for i,((a,ha),(b,hb)) in enumerate(zip(path,path[1:])):ar(section+str(i),a,b,ha,hb)
-        ar('takeoff',(640,0),(40,0),'W','W','runway',220,0)
-        ar('landing',(40,60),(640,60),'E','E','runway',180,0)
+        # Begin climbing over the cleared runway and remain above the surrounding
+        # hills on approach; the ground pavement itself stays level.
+        ar('takeoff_run',(640,0),(360,0),'W','W','rail',220,0)
+        ar('takeoff',(360,0),(40,0),'W','W','runway',220,0,80,180)
+        ar('landing',(40,60),(400,60),'E','E','runway',180,0,180,80)
+        ar('landing_rollout',(400,60),(640,60),'E','E','rail',180,0)
         if ap=='bay':
             air_siding=ar('depot',(32,-130),(96,-130),'E','E','siding')
             ar('yard_link',(96,-130),(112,-190),'E','E')
         key='airport' if ap=='bay' else 'hakone_airfield'
         station_bounds[key]=dict(id=key,name=name,min=[ox-10,50,rz-310],max=[ox+740,118,rz+100])
         platform_info.append(dict(id=gate_id,station=key,name=name,center=xyz(170,-190),heading=heading('E'),length=40,line='F1',mode='AIRPLANE'))
-    lines.append(dict(id='F1',name='箱根湾・新箱根連絡便',color=0x7993A4,mode='AIRPLANE',platforms=air_platforms,
-                      siding=air_siding,cars=[car('a320',30,-14.25,-2,0,0)],frequency=1,dwell=20000,repeat=True,cruise=240))
+    lines.append(dict(id='F1',name='箱根湾・新箱根連絡便',color=0x7993A4,mode='AIRPLANE',platforms=air_platforms+[air_platforms[0]],
+                      siding=air_siding,cars=[car('a320',30,-14.25,-2,0,0)],frequency=1,dwell=20000,repeat=True,cruise=280))
     plan=dict(revision=1,rails=rails,stations=list(station_bounds.values()),platforms=platform_info,lines=lines)
     (OUT/'transit_plan.json').write_text(json.dumps(plan,ensure_ascii=False,indent=2),encoding='utf-8')
     print('Native transit contract:',len(rails),'rails;',len(lines),'lines;',len(platform_info),'platforms')

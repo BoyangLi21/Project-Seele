@@ -6,7 +6,9 @@
   "minVersion": "0.8",
   "mixins": [
     "MovingElevatorGroupAccessMixin",
-    "MovingElevatorRemoteAccessor"
+    "MovingElevatorRemoteAccessor",
+    "TransportPassengerDiagnosticsMixin",
+    "MtrRouteEndpointMixin"
   ],
   "client": [
     "client.CameraMixin",
@@ -14,7 +16,8 @@
     "client.MinecraftRenderTargetMixin",
     "client.PlayerModelGendoPoseMixin",
     "client.MovingElevatorDisplayMixin",
-    "client.MovingElevatorPanelMixin"
+    "client.MovingElevatorPanelMixin",
+    "client.TransportPassengerPacketDiagnosticsMixin"
   ],
   "injectors": {
     "defaultRequire": 1
