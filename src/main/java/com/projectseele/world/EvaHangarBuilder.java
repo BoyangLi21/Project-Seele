@@ -738,7 +738,7 @@ public final class EvaHangarBuilder
     {
         for (int variant = 0; variant < 3; variant++)
         {
-            if (hangarBed(IntegratedNervMapBuilder.geoFrontOrigin(level),
+            if (hangarBed(RegionalFacilityLayout.evaOrigin(level),
                     variant).equals(position))
             {
                 return true;
@@ -762,7 +762,7 @@ public final class EvaHangarBuilder
             return false;
         }
         BlockPos bed = hangarBed(
-                IntegratedNervMapBuilder.geoFrontOrigin(level), variant);
+                RegionalFacilityLayout.evaOrigin(level), variant);
         return Math.abs(unit.getX() - (bed.getX() + 0.5D)) <= HALF_WIDTH - 1
                 && Math.abs(unit.getZ() - (bed.getZ() + 0.5D))
                         <= HALF_DEPTH - 1

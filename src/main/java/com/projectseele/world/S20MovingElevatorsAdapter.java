@@ -1024,6 +1024,9 @@ public final class S20MovingElevatorsAdapter
     private static boolean retireRelocatedCompactCage(
             ServerLevel level, S20PhysicalElevatorDirector.LiftSpec spec)
     {
+        // The regional cold migration already retired this old site and moved
+        // both native groups. Loading the new car must not depend on old chunks.
+        if (RegionalFacilityLayout.migrated(level.getServer())) return true;
         if (!spec.id().equals(
                 S20PhysicalElevatorDirector.COMPACT_CAGE_LIFT_ID))
         {

@@ -1,0 +1,196 @@
+"""Measured region patch engine for the explicitly authorized regional build.
+
+Shape authoring is independent of Anvil IO. The only block reader is
+query_blocks; the existing palette writer is reused with per-region backups,
+compressed before/after arrays, precondition checks and exact readback.
+"""
+from collections import defaultdict,Counter
+from dataclasses import dataclass
+from datetime import datetime
+from pathlib import Path
+import gzip,json,shutil,msvcrt,time
+import nbtlib
+import numpy as np
+from query_blocks import iter_selected_sections,dimension_dir,AIR
+from transplant_s22_authority import read_region,parse_chunk,build_region,decoded_sections,flush_decoded,chunk_blob
+from apply_s20_approved_semantic_repairs import parse_state,atomic_replace
+
+ROOT=Path(__file__).resolve().parents[1]
+WORLD=ROOT/'run/saves/SEELE_TV_WORLD_PREVIEW_20260906'
+OUT=ROOT/'artifacts/world_expansion_20260907'
+DIM='projectseele:geofront'
+NATURAL={'stone','dirt','grass_block','gravel','sand','sandstone','bedrock','clay','coarse_dirt','rooted_dirt','podzol','mud','water'}
+
+
+def natural(state):
+    name=state.split('[')[0]
+    plants={'short_grass','grass','tall_grass','fern','large_fern','dead_bush','seagrass','tall_seagrass','kelp','kelp_plant',
+            'dandelion','poppy','blue_orchid','allium','azure_bluet','oxeye_daisy','cornflower','lily_of_the_valley','sunflower','lilac','rose_bush','peony','snow','snow_block'}
+    return name in AIR or name=='minecraft:light' or name.startswith('minecraft:') and (name[10:] in NATURAL|plants
+        or name.endswith(('_log','_leaves','_sapling','_tulip')))
+
+
+@dataclass(frozen=True)
+class Op:
+    box:tuple
+    state:str
+    owner:str
+    mode:str='new'
+    extra:tuple=()
+
+
+class Painter:
+    def __init__(self):
+        self.ops=[];self.by_chunk=defaultdict(list);self.block_entities={};self.keep_boxes=[]
+        self.meta={'rooms':[],'landmarks':[],'doors':[],'walk_nodes':[]}
+    def fill(self,x0,y0,z0,x1,y1,z1,state,owner,mode='new'):
+        x0,x1=sorted((int(x0),int(x1)));y0,y1=sorted((int(y0),int(y1)));z0,z1=sorted((int(z0),int(z1)))
+        if y0<-672 or y1>=320:raise ValueError((owner,y0,y1))
+        op=Op((x0,y0,z0,x1,y1,z1),state,owner,mode);i=len(self.ops);self.ops.append(op)
+        for cx in range(x0//16,x1//16+1):
+            for cz in range(z0//16,z1//16+1):self.by_chunk[cx,cz].append(i)
+    def put(self,x,y,z,state,owner,mode='new'):self.fill(x,y,z,x,y,z,state,owner,mode)
+    def grade(self,x0,z0,x1,z1,floor,owner,margin=12):
+        op=Op((x0-margin,-32,z0-margin,x1+margin,255,z1+margin),'minecraft:stone',owner,'grade',(x0,z0,x1,z1,floor,margin))
+        i=len(self.ops);self.ops.append(op)
+        for cx in range((x0-margin)//16,(x1+margin)//16+1):
+            for cz in range((z0-margin)//16,(z1+margin)//16+1):self.by_chunk[cx,cz].append(i)
+    def sign(self,x,y,z,lines,owner,facing='north'):
+        self.put(x,y,z,f'minecraft:oak_wall_sign[facing={facing},waterlogged=false]',owner)
+        front=nbtlib.Compound({'messages':nbtlib.List[nbtlib.String]([nbtlib.String(json.dumps({'text':str(t)},ensure_ascii=False)) for t in (list(lines)+['']*4)[:4]]),
+            'color':nbtlib.String('black'),'has_glowing_text':nbtlib.Byte(0)})
+        self.block_entities[x,y,z]=nbtlib.Compound({'id':nbtlib.String('minecraft:sign'),'x':nbtlib.Int(x),'y':nbtlib.Int(y),'z':nbtlib.Int(z),
+            'front_text':front,'back_text':nbtlib.Compound(front),'is_waxed':nbtlib.Byte(1)})
+    def chest(self,x,y,z,items,owner,facing='north'):
+        self.put(x,y,z,f'minecraft:chest[facing={facing},type=single,waterlogged=false]',owner)
+        entries=[]
+        for slot,(item,count) in enumerate(items[:27]):
+            entries.append(nbtlib.Compound({'Slot':nbtlib.Byte(slot),'id':nbtlib.String(item),'Count':nbtlib.Byte(count)}))
+        self.block_entities[x,y,z]=nbtlib.Compound({'id':nbtlib.String('minecraft:chest'),'x':nbtlib.Int(x),'y':nbtlib.Int(y),'z':nbtlib.Int(z),'Items':nbtlib.List[nbtlib.Compound](entries)})
+    def bed(self,x,y,z,owner,color='white'):
+        for zz,part in [(z,'foot'),(z-1,'head')]:
+            self.put(x,y,zz,f'minecraft:{color}_bed[facing=north,occupied=false,part={part}]',owner)
+            self.block_entities[x,y,zz]=nbtlib.Compound({'id':nbtlib.String('minecraft:bed'),'x':nbtlib.Int(x),'y':nbtlib.Int(y),'z':nbtlib.Int(zz)})
+    def save_plan(self,name):
+        folder=OUT/name;folder.mkdir(parents=True,exist_ok=True)
+        with gzip.open(folder/'ops.json.gz','wt',encoding='utf-8') as f:json.dump([o.__dict__ for o in self.ops],f,ensure_ascii=False)
+        (folder/'places.json').write_text(json.dumps(self.meta,ensure_ascii=False,indent=2),encoding='utf-8')
+        (folder/'chunks.json').write_text(json.dumps(sorted(self.by_chunk)),encoding='utf-8')
+        (folder/'states.json').write_text(json.dumps(sorted({o.state for o in self.ops})),encoding='utf-8')
+        (folder/'block_entities.json').write_text(json.dumps([{'pos':p,'snbt':v.snbt()} for p,v in self.block_entities.items()],ensure_ascii=False),encoding='utf-8')
+        print(name,'operations',len(self.ops),'chunks',len(self.by_chunk),'block entities',len(self.block_entities),flush=True)
+        return folder
+    def apply(self,name):
+        folder=self.save_plan(name)
+        lock=(WORLD/'session.lock').open('r+b');msvcrt.locking(lock.fileno(),msvcrt.LK_NBLCK,1)
+        report_dir=folder/('applied_'+datetime.now().strftime('%Y%m%d_%H%M%S'));(report_dir/'before').mkdir(parents=True);(report_dir/'delta').mkdir()
+        groups=defaultdict(dict)
+        for (cx,cz),ops in self.by_chunk.items():groups[cx//32,cz//32][cx,cz]=ops
+        additions_by_chunk=defaultdict(set)
+        for p in self.block_entities:additions_by_chunk[p[0]//16,p[2]//16].add(p)
+        touched=[];counts=Counter();protected=Counter();start=time.monotonic()
+        try:
+            for number,((rx,rz),chunks_ops) in enumerate(sorted(groups.items())):
+                selected={p:{sy for i in ops for sy in range(self.ops[i].box[1]//16,self.ops[i].box[4]//16+1)} for p,ops in chunks_ops.items()}
+                measured={(cx,cz,sy):(pal,idx) for cx,cz,sy,pal,idx in iter_selected_sections(WORLD,DIM,selected)}
+                missing=[(cx,cz,sy) for (cx,cz),ys in selected.items() for sy in ys if (cx,cz,sy) not in measured]
+                if missing:raise RuntimeError(f'Unmeasured sections: {missing[:5]}')
+                path=dimension_dir(WORLD,DIM)/f'region/r.{rx}.{rz}.mca';backup=report_dir/'before'/path.name;shutil.copy2(path,backup)
+                stamps,blobs=read_region(path);dirty=False
+                for (cx,cz),op_indices in chunks_ops.items():
+                    slot=(cx&31)+(cz&31)*32;root=parse_chunk(blobs[slot]);decoded=decoded_sections(root)
+                    minimum=min(selected[cx,cz]);maximum=max(selected[cx,cz]);palettes=[];lookup={}
+                    def code(state):
+                        if state not in lookup:lookup[state]=len(palettes);palettes.append(state)
+                        return lookup[state]
+                    before=np.full(((maximum-minimum+1)*16,16,16),65535,dtype=np.uint16)
+                    for sy in selected[cx,cz]:
+                        pal,idx=measured[cx,cz,sy];mapping=np.asarray([code(s) for s in pal],dtype=np.uint16)
+                        before[(sy-minimum)*16:(sy-minimum+1)*16]=mapping[idx].reshape(16,16,16)
+                    after=before.copy();entity_positions={tuple(int(t[k]) for k in ('x','y','z')) for t in root.get('block_entities',[])}
+                    for i in op_indices:
+                        op=self.ops[i];x0,y0,z0,x1,y1,z1=op.box
+                        ax=max(x0,cx*16)-cx*16;bx=min(x1,cx*16+15)-cx*16+1
+                        az=max(z0,cz*16)-cz*16;bz=min(z1,cz*16+15)-cz*16+1
+                        ay=y0-minimum*16;by=y1-minimum*16+1
+                        target=code(op.state);src=before[ay:by,az:bz,ax:bx];view=after[ay:by,az:bz,ax:bx]
+                        if np.any(src==65535):raise RuntimeError(f'Unknown voxel in {op.owner}')
+                        if op.mode=='grade':
+                            import math
+                            gx0,gz0,gx1,gz1,desired,margin=op.extra
+                            natural_mask=np.asarray([natural(s) for s in palettes],dtype=bool)
+                            ground_mask=np.asarray([s.split('[')[0].removeprefix('minecraft:') in NATURAL-{'water'} for s in palettes],dtype=bool)
+                            soil=code('minecraft:dirt');grass=code('minecraft:grass_block[snowy=false]');stone=code('minecraft:stone');air=code('minecraft:air')
+                            for zz in range(az,bz):
+                                for xx in range(ax,bx):
+                                    original=before[ay:by,zz,xx];ys=np.flatnonzero(ground_mask[original])
+                                    if not len(ys):raise RuntimeError(f'No measured ground for {op.owner} at {cx*16+xx,cz*16+zz}')
+                                    old_y=y0+int(ys[-1]);x=cx*16+xx;z=cz*16+zz
+                                    distance=math.hypot(max(gx0-x,0,x-gx1),max(gz0-z,0,z-gz1))
+                                    mix=min(1,distance/max(1,margin));mix=mix*mix*(3-2*mix)
+                                    new_y=round(desired*(1-mix)+old_y*mix)
+                                    authored=~natural_mask[original]
+                                    if np.any(authored[max(0,old_y-y0-3):]):
+                                        protected[op.owner]+=1;continue
+                                    column=after[:,zz,xx]
+                                    for yy in range(max(y0,min(old_y,new_y)-3),256):
+                                        iy=yy-minimum*16
+                                        if yy<=new_y:column[iy]=grass if yy==new_y else soil if yy>=new_y-3 else stone
+                                        else:column[iy]=air
+                            continue
+                        if op.mode=='owned':mask=np.ones(src.shape,dtype=bool)
+                        else:
+                            allowed=np.asarray([natural(s) or s==op.state for s in palettes],dtype=bool)
+                            if op.mode=='air':allowed=np.asarray([s.split('[')[0] in AIR or s.startswith('minecraft:light[') or s==op.state for s in palettes],dtype=bool)
+                            mask=allowed[src]
+                            protected[op.owner]+=int((~mask & (view!=target)).sum())
+                        view[mask]=target
+                    diff=(before!=after)&(before!=65535)
+                    if not diff.any():continue
+                    offsets=np.flatnonzero(diff).astype(np.uint32);old_values=before.reshape(-1)[offsets];new_values=after.reshape(-1)[offsets]
+                    np.savez_compressed(report_dir/'delta'/f'c.{cx}.{cz}.npz',minimum=np.int32(minimum*16),offsets=offsets,palette=np.asarray(palettes),before=old_values,after=new_values)
+                    changed_positions=set()
+                    for sy in selected[cx,cz]:
+                        block_slice=slice((sy-minimum)*16,(sy-minimum+1)*16);mask=diff[block_slice].reshape(-1)
+                        if not mask.any():continue
+                        item=decoded.get(sy)
+                        if item is None:raise RuntimeError(f'Writer section absent {cx,cz,sy}')
+                        writer_palette,writer_indices,writer_lookup=item
+                        # Check the writer against the independent measured reader before changing indices.
+                        current_names=[str(t['Name'])+('['+','.join(f'{k}={v}' for k,v in sorted(t.get('Properties',{}).items()))+']' if t.get('Properties') else '') for t in writer_palette]
+                        old_pal,old_idx=measured[cx,cz,sy]
+                        if not np.array_equal(np.asarray(current_names)[writer_indices[mask]],np.asarray(old_pal)[old_idx[mask]]):
+                            raise RuntimeError(f'Changed precondition {cx,cz,sy}')
+                        mapping={s:n for n,s in enumerate(current_names)}
+                        values=after[block_slice].reshape(-1)
+                        for value in np.unique(values[mask]):
+                            state=palettes[int(value)]
+                            if state not in mapping:
+                                mapping[state]=len(writer_palette);writer_palette.append(parse_state(state));writer_lookup[state]=mapping[state]
+                            writer_indices[mask & (values==value)]=mapping[state]
+                        for p in entity_positions|additions_by_chunk[cx,cz]:
+                            if p[1]//16==sy and mask[((p[1]&15)<<8)|((p[2]&15)<<4)|(p[0]&15)]:changed_positions.add(p)
+                    existing=[t for t in root.get('block_entities',[]) if tuple(int(t[k]) for k in ('x','y','z')) not in changed_positions]
+                    existing += [self.block_entities[p] for p in changed_positions if p in self.block_entities]
+                    root['block_entities']=nbtlib.List[nbtlib.Compound](existing)
+                    flush_decoded(root,decoded);root['isLightOn']=nbtlib.Byte(0);root.pop('Heightmaps',None)
+                    for section in root.get('sections',[]):section.pop('BlockLight',None);section.pop('SkyLight',None)
+                    blobs[slot]=chunk_blob(root);dirty=True;counts['cells']+=len(offsets);counts['chunks']+=1
+                if dirty:
+                    atomic_replace(path,build_region(stamps,blobs));touched.append((path,backup))
+                    for cx,cz,sy,pal,idx in iter_selected_sections(WORLD,DIM,selected):
+                        payload=report_dir/'delta'/f'c.{cx}.{cz}.npz'
+                        if not payload.exists():continue
+                        with np.load(payload) as d:
+                            low=int(d['minimum']);offsets=d['offsets'];ys=offsets.astype(np.int64)//256+low;keep=(ys//16)==sy
+                            if keep.any():
+                                expected=d['palette'][d['after'][keep]];actual=np.asarray(pal)[idx[(offsets[keep]%4096).astype(int)]]
+                                if not np.array_equal(actual,expected):raise RuntimeError(f'Readback mismatch {cx,cz,sy}')
+                print(f'{name}: regions {number+1}/{len(groups)}, cells {counts["cells"]}, {time.monotonic()-start:.1f}s',flush=True)
+        except Exception:
+            for path,backup in touched:atomic_replace(path,backup.read_bytes())
+            raise
+        receipt=dict(counts=counts,kept_existing_cells=dict(protected),verified=True,elapsed=round(time.monotonic()-start,2))
+        (report_dir/'receipt.json').write_text(json.dumps(receipt,indent=2),encoding='utf-8')
+        print('VERIFIED',report_dir,flush=True)
+        return receipt

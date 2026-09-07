@@ -815,7 +815,7 @@ public final class NervOperationsConsole
                 level.getServer());
         boolean plantReady = compact
                 ? EvaHangarBuilder.runtimeInfrastructurePresent(
-                        level, IntegratedNervMapBuilder.geoFrontOrigin(level))
+                        level, RegionalFacilityLayout.evaOrigin(level))
                 : modern ? FacilityV2EvaRuntime.readyAll(level)
                 : IntegratedNervMapBuilder.prepareRuntime(level).launchReady();
         if (!plantReady)

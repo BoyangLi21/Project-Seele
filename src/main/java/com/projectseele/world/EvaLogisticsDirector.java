@@ -141,7 +141,7 @@ public final class EvaLogisticsDirector
         if (FacilityWorldPolicy.isS20Rebuild(level.getServer()))
         {
             if (!EvaHangarBuilder.runtimeInfrastructurePresent(level,
-                    IntegratedNervMapBuilder.geoFrontOrigin(level)))
+                    RegionalFacilityLayout.evaOrigin(level)))
             {
                 ProjectSeele.LOGGER.error(
                         "S20 fleet reconciliation refused: compact EVA plant markers are incomplete");
@@ -151,7 +151,7 @@ public final class EvaLogisticsDirector
         else
         {
             EvaHangarBuilder.ensure(level,
-                    IntegratedNervMapBuilder.geoFrontOrigin(level));
+                    RegionalFacilityLayout.evaOrigin(level));
         }
         loadFleetStations(level);
         EntryPlugDirector.sweepStrayPlugs(level);
@@ -172,7 +172,7 @@ public final class EvaLogisticsDirector
             if (unit == null && canonical == null && !candidates.isEmpty())
             {
                 BlockPos bed = EvaHangarBuilder.hangarBed(
-                        IntegratedNervMapBuilder.geoFrontOrigin(level), variant);
+                        RegionalFacilityLayout.evaOrigin(level), variant);
                 unit = candidates.stream().min(Comparator.comparingDouble(
                         candidate -> candidate.distanceToSqr(bed.getCenter()))).orElse(null);
                 if (unit != null)
@@ -223,7 +223,7 @@ public final class EvaLogisticsDirector
             if (entry.phase() == Phase.PARKED && !unit.isVehicle())
             {
                 BlockPos bed = EvaHangarBuilder.hangarBed(
-                        IntegratedNervMapBuilder.geoFrontOrigin(level), variant);
+                        RegionalFacilityLayout.evaOrigin(level), variant);
                 placeAt(unit, bed);
                 unit.setSortieDestination(level.dimension(),
                         surfaceLiftBed(level, variant));
@@ -231,7 +231,7 @@ public final class EvaLogisticsDirector
                 unit.setNervLogisticsLocked(true);
                 unit.enterHangarStandby();
                 EvaHangarBuilder.setBoardingBridgeExtension(level,
-                        IntegratedNervMapBuilder.geoFrontOrigin(level), variant,
+                        RegionalFacilityLayout.evaOrigin(level), variant,
                         EvaHangarBuilder.BRIDGE_SEGMENTS);
                 EntryPlugDirector.ensureSuspended(level, variant, unit);
             }
@@ -433,7 +433,7 @@ public final class EvaLogisticsDirector
         }
         if (FacilityWorldPolicy.isS20Rebuild(level.getServer())
                 && !EvaHangarBuilder.ensureRuntimePowerPylon(level,
-                IntegratedNervMapBuilder.geoFrontOrigin(level), variant))
+                RegionalFacilityLayout.evaOrigin(level), variant))
         {
             return new ActionResult(false, label(variant)
                     + " cage external-power socket is obstructed.");
@@ -675,7 +675,7 @@ public final class EvaLogisticsDirector
                         passenger.stopRiding();
                         if (passenger instanceof ServerPlayer player)
                         {
-                            BlockPos gallery = IntegratedNervMapBuilder.geoFrontOrigin(level).offset(
+                            BlockPos gallery = RegionalFacilityLayout.evaOrigin(level).offset(
                                     IntegratedNervMapBuilder.LIFT_X[variant],
                                     EvaHangarBuilder.GALLERY_Y + 1,
                                     EvaHangarBuilder.GALLERY_Z + 2);
@@ -708,14 +708,14 @@ public final class EvaLogisticsDirector
         }
         EntryPlugDirector.reset(level, variant, replacement);
         EvaHangarBuilder.setBoardingBridgeExtension(level,
-                IntegratedNervMapBuilder.geoFrontOrigin(level), variant,
+                RegionalFacilityLayout.evaOrigin(level), variant,
                 EvaHangarBuilder.BRIDGE_SEGMENTS);
-        EvaHangarBuilder.setGate(level, IntegratedNervMapBuilder.geoFrontOrigin(level),
+        EvaHangarBuilder.setGate(level, RegionalFacilityLayout.evaOrigin(level),
                 variant, false);
-        EvaHangarBuilder.setLclLevel(level, IntegratedNervMapBuilder.geoFrontOrigin(level),
+        EvaHangarBuilder.setLclLevel(level, RegionalFacilityLayout.evaOrigin(level),
                 variant, EvaHangarBuilder.LCL_SHOULDER_LAYERS);
         EvaHangarBuilder.restoreStaticCarrier(level,
-                IntegratedNervMapBuilder.geoFrontOrigin(level), variant, bed);
+                RegionalFacilityLayout.evaOrigin(level), variant, bed);
         replacement.setSortieDestination(level.dimension(),
                 surfaceLiftBed(level, variant));
         replacement.setSortieParkingBed(bed);
@@ -907,7 +907,7 @@ public final class EvaLogisticsDirector
             return true;
         }
 
-        BlockPos origin = IntegratedNervMapBuilder.geoFrontOrigin(level);
+        BlockPos origin = RegionalFacilityLayout.evaOrigin(level);
         for (int variant = 0; variant < 3; variant++)
         {
             if (EvaHangarBuilder.cancelControlPosition(origin, variant)
@@ -1042,14 +1042,14 @@ public final class EvaLogisticsDirector
             }
             boolean ready = compactS20
                     ? EvaHangarBuilder.runtimeInfrastructurePresent(
-                    level, IntegratedNervMapBuilder.geoFrontOrigin(level))
+                    level, RegionalFacilityLayout.evaOrigin(level))
                     && compactLiftMarkersPresent(level)
                     : FacilityV2RescueDirector.isTargetWorld(
                     event.getServer())
                     ? IntegratedNervMapBuilder.rescueMechanicalReady(level)
                     : IntegratedNervMapBuilder.isInstalled(level)
                     && EvaHangarBuilder.runtimeInfrastructurePresent(level,
-                    IntegratedNervMapBuilder.geoFrontOrigin(level));
+                    RegionalFacilityLayout.evaOrigin(level));
             if (!ready)
             {
                 return;
@@ -1641,7 +1641,7 @@ public final class EvaLogisticsDirector
                                            boolean moving)
     {
         BlockPos bed = EvaHangarBuilder.hangarBed(
-                IntegratedNervMapBuilder.geoFrontOrigin(level), variant);
+                RegionalFacilityLayout.evaOrigin(level), variant);
         if (!moving && !level.hasChunkAt(bed))
         {
             return;
@@ -1649,7 +1649,7 @@ public final class EvaLogisticsDirector
         Vec3 centre = new Vec3(bed.getX() + 0.5D,
                 bed.getY() + 1.0D,
                 EvaHangarBuilder.gateZ(
-                        IntegratedNervMapBuilder.geoFrontOrigin(level)) + 0.5D);
+                        RegionalFacilityLayout.evaOrigin(level)) + 0.5D);
         NervHangarDoorEntity.reconcile(level, variant, centre, moving);
     }
 
@@ -1703,7 +1703,7 @@ public final class EvaLogisticsDirector
             return FacilityV2EvaRuntime.hangarBed(level, variant);
         }
         return EvaHangarBuilder.hangarBed(
-                IntegratedNervMapBuilder.geoFrontOrigin(level), variant);
+                RegionalFacilityLayout.evaOrigin(level), variant);
     }
 
     private static BlockPos lowerLiftBed(ServerLevel level, int variant)
@@ -1729,7 +1729,7 @@ public final class EvaLogisticsDirector
                     && FacilityV2EvaRuntime.lowerLiftBed(level, variant)
                     .equals(bed);
         }
-        return IntegratedNervMapBuilder.isLowerStation(bed);
+        return IntegratedNervMapBuilder.lowerLiftBed(level,variant).equals(bed);
     }
 
     private static BlockPos surfaceLiftBed(ServerLevel level, int variant)
@@ -1748,7 +1748,7 @@ public final class EvaLogisticsDirector
             return FacilityV2EvaRuntime.lclLevel(level, variant);
         }
         return EvaHangarBuilder.lclLevel(level,
-                IntegratedNervMapBuilder.geoFrontOrigin(level), variant);
+                RegionalFacilityLayout.evaOrigin(level), variant);
     }
 
     private static void setLclLayer(ServerLevel level, int variant,
@@ -1761,7 +1761,7 @@ public final class EvaLogisticsDirector
             return;
         }
         EvaHangarBuilder.setLclLayer(level,
-                IntegratedNervMapBuilder.geoFrontOrigin(level),
+                RegionalFacilityLayout.evaOrigin(level),
                 variant, layer, filled);
     }
 
@@ -1772,7 +1772,7 @@ public final class EvaLogisticsDirector
             return FacilityV2EvaRuntime.drainLclEnvelope(level, variant);
         }
         return EvaHangarBuilder.drainLclEnvelope(level,
-                IntegratedNervMapBuilder.geoFrontOrigin(level), variant);
+                RegionalFacilityLayout.evaOrigin(level), variant);
     }
 
     private static void setBoardingBridgeExtension(
@@ -1785,7 +1785,7 @@ public final class EvaLogisticsDirector
             return;
         }
         EvaHangarBuilder.setBoardingBridgeExtension(level,
-                IntegratedNervMapBuilder.geoFrontOrigin(level),
+                RegionalFacilityLayout.evaOrigin(level),
                 variant, segments);
     }
 
@@ -1798,7 +1798,7 @@ public final class EvaLogisticsDirector
             return;
         }
         EvaHangarBuilder.setGate(level,
-                IntegratedNervMapBuilder.geoFrontOrigin(level),
+                RegionalFacilityLayout.evaOrigin(level),
                 variant, open);
     }
 
@@ -1812,7 +1812,7 @@ public final class EvaLogisticsDirector
             return;
         }
         EvaHangarBuilder.setCarrier(level,
-                IntegratedNervMapBuilder.geoFrontOrigin(level),
+                RegionalFacilityLayout.evaOrigin(level),
                 variant, centre.getZ(), present);
     }
 
@@ -1826,7 +1826,7 @@ public final class EvaLogisticsDirector
             return;
         }
         EvaHangarBuilder.ensureTransportGuideway(level,
-                IntegratedNervMapBuilder.geoFrontOrigin(level),
+                RegionalFacilityLayout.evaOrigin(level),
                 variant, start, end);
     }
 
@@ -1847,7 +1847,7 @@ public final class EvaLogisticsDirector
             return;
         }
         EvaHangarBuilder.restoreStaticCarrier(level,
-                IntegratedNervMapBuilder.geoFrontOrigin(level),
+                RegionalFacilityLayout.evaOrigin(level),
                 variant, centre);
     }
 
@@ -2253,7 +2253,7 @@ public final class EvaLogisticsDirector
         BlockPos boardingStart = FacilityV2EvaRuntime.ready(level, variant)
                 ? FacilityV2EvaRuntime.statusControl(level, variant)
                         .offset(0, 0, -5)
-                : IntegratedNervMapBuilder.geoFrontOrigin(level).offset(
+                : RegionalFacilityLayout.evaOrigin(level).offset(
                         IntegratedNervMapBuilder.LIFT_X[variant],
                         EvaHangarBuilder.GALLERY_Y + 1,
                         EvaHangarBuilder.GALLERY_Z - 1);

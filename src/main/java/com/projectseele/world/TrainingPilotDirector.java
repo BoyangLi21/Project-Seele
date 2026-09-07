@@ -100,7 +100,7 @@ public final class TrainingPilotDirector
         if (!modern && !compactS20)
         {
             EvaHangarBuilder.ensure(
-                    level, IntegratedNervMapBuilder.geoFrontOrigin(level));
+                    level, RegionalFacilityLayout.evaOrigin(level));
         }
         if (!compactS20)
         {
@@ -671,7 +671,7 @@ public final class TrainingPilotDirector
         }
         else
         {
-            BlockPos origin = IntegratedNervMapBuilder.geoFrontOrigin(level);
+            BlockPos origin = RegionalFacilityLayout.evaOrigin(level);
             BlockPos standby = EvaHangarBuilder.pilotStandbyPosition(origin,
                     variant);
             BlockPos sideDoor = EvaHangarBuilder.boardingRouteWaypoint(origin,
@@ -715,7 +715,7 @@ public final class TrainingPilotDirector
                     .offset(0, 0, -5);
         }
         return EvaHangarBuilder.pilotStandbyPosition(
-                IntegratedNervMapBuilder.geoFrontOrigin(level), variant);
+                RegionalFacilityLayout.evaOrigin(level), variant);
     }
 
     private static boolean isSafeFeet(ServerLevel level, BlockPos feet)

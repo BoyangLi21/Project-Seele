@@ -558,6 +558,8 @@ public final class IntegratedNervMapBuilder
     {
         if (!FacilityWorldPolicy.isS22Coastal(level.getServer()))
         {
+            if (RegionalFacilityLayout.migrated(level.getServer()))
+                return createLiftLinks(TOKYO3_ORIGIN.offset(0,0,-256), RegionalFacilityLayout.evaOrigin(level));
             return LIFT_LINKS;
         }
         return createLiftLinks(tokyo3Origin(level), geoFrontOrigin(level));
@@ -595,7 +597,8 @@ public final class IntegratedNervMapBuilder
         {
             return Optional.empty();
         }
-        return findLift(marker);
+        return liftLinks(level).stream().filter(link -> link.lowerBed().equals(marker)
+                || link.surfaceBed().equals(marker)).findFirst();
     }
 
     public static Optional<LiftLink> findLift(BlockPos stationBed)

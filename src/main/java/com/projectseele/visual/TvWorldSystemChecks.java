@@ -201,7 +201,8 @@ public final class TvWorldSystemChecks
             else if (stage == 8)
             {
                 if (entry.phase() != EvaFleetSavedData.Phase.PARKED) return;
-                require(Math.abs(unit.getY() + 442) < 1 && Math.abs(unit.getZ() - 160.5) < 1,
+                double cageZ = RegionalFacilityLayout.migrated(server) ? -95.5 : 160.5;
+                require(Math.abs(unit.getY() + 442) < 1 && Math.abs(unit.getZ() - cageZ) < 1,
                         "returned to assigned wet cage");
                 TrainingPilotDirector.stop(level, variant);
                 log("EVA-0" + variant + " ROUND TRIP PASS");

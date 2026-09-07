@@ -766,7 +766,7 @@ public final class EntryPlugDirector
                     ? FacilityV2EvaRuntime.isPlugCraneCell(
                             level, variant, craneEye.y, craneEye.z, position)
                     : EvaHangarBuilder.isPlugCraneCell(
-                            IntegratedNervMapBuilder.GEOFRONT_ORIGIN,
+                            RegionalFacilityLayout.evaOrigin(level),
                             variant, craneEye.y, craneEye.z, position);
             if (craneCell
                     || EvaHangarBuilder.isActivePlugCraneCell(
@@ -1447,7 +1447,7 @@ public final class EntryPlugDirector
                     level, unit.getUnitVariant());
         }
         return EvaHangarBuilder.plugRestPosition(
-                IntegratedNervMapBuilder.GEOFRONT_ORIGIN,
+                unit.level() instanceof ServerLevel serverLevel ? RegionalFacilityLayout.evaOrigin(serverLevel) : IntegratedNervMapBuilder.GEOFRONT_ORIGIN,
                 unit.getUnitVariant());
     }
 
@@ -1575,7 +1575,7 @@ public final class EntryPlugDirector
             updateS20Crane(level, variant, bed, plugY, plugZ);
             return;
         }
-        BlockPos origin = IntegratedNervMapBuilder.GEOFRONT_ORIGIN;
+        BlockPos origin = RegionalFacilityLayout.evaOrigin(level);
         EvaHangarBuilder.setPlugCrane(level, origin, variant, plugY, plugZ,
                 visualArm);
     }
@@ -1606,7 +1606,7 @@ public final class EntryPlugDirector
             stowS20Crane(level, variant, bed);
             return;
         }
-        BlockPos origin = IntegratedNervMapBuilder.GEOFRONT_ORIGIN;
+        BlockPos origin = RegionalFacilityLayout.evaOrigin(level);
         if (level.hasChunkAt(bed))
         {
             CRANE_SIGNATURE.remove(variant);
@@ -1618,7 +1618,7 @@ public final class EntryPlugDirector
                                        BlockPos bed, double plugY,
                                        double plugZ)
     {
-        BlockPos origin = IntegratedNervMapBuilder.GEOFRONT_ORIGIN;
+        BlockPos origin = RegionalFacilityLayout.evaOrigin(level);
         int removed = EvaHangarBuilder.retirePersistedPlugCrane(
                 level, origin, variant);
         if (removed > 0)
@@ -1643,7 +1643,7 @@ public final class EntryPlugDirector
     private static void stowS20Crane(ServerLevel level, int variant,
                                      BlockPos bed)
     {
-        BlockPos origin = IntegratedNervMapBuilder.GEOFRONT_ORIGIN;
+        BlockPos origin = RegionalFacilityLayout.evaOrigin(level);
         int removed = EvaHangarBuilder.retirePersistedPlugCrane(
                 level, origin, variant);
         if (removed > 0)
@@ -1703,7 +1703,7 @@ public final class EntryPlugDirector
             return FacilityV2EvaRuntime.hangarBed(level, variant);
         }
         return EvaHangarBuilder.hangarBed(
-                IntegratedNervMapBuilder.GEOFRONT_ORIGIN, variant);
+                RegionalFacilityLayout.evaOrigin(level), variant);
     }
 
     private static Vec3 plugRestPosition(ServerLevel level, int variant)
@@ -1713,7 +1713,7 @@ public final class EntryPlugDirector
             return FacilityV2EvaRuntime.plugRestPosition(level, variant);
         }
         return EvaHangarBuilder.plugRestPosition(
-                IntegratedNervMapBuilder.GEOFRONT_ORIGIN, variant);
+                RegionalFacilityLayout.evaOrigin(level), variant);
     }
 
     private static boolean isInsideAssignedCage(

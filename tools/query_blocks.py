@@ -32,6 +32,32 @@ from inspect_map_assets import (  # noqa: E402
 AIR = {"minecraft:air", "minecraft:cave_air", "minecraft:void_air"}
 
 
+def iter_selected_sections(world: Path, dimension: str,
+                           selected: dict[tuple[int, int], set[int]]):
+    """Read exact requested sections as palette/index arrays for large measured patches.
+
+    Coordinates are chunk X/Z and section Y. Decoding remains centralized here;
+    callers receive the same complete state strings as read_box, without a
+    Python dictionary entry for every air voxel. Only FULL chunks are accepted.
+    """
+    import numpy as np
+    if not selected:
+        return
+    bounds=(min(x for x,z in selected),max(x for x,z in selected),
+            min(z for x,z in selected),max(z for x,z in selected))
+    for cx,cz,chunk in iter_chunks(dimension_dir(world,dimension),bounds):
+        wanted=selected.get((cx,cz))
+        if not wanted:continue
+        if str(chunk.get('Status','')).removeprefix('minecraft:')!='full':
+            raise RuntimeError(f'Unfinished chunk {(cx,cz)}')
+        for section in chunk.get('sections',[]):
+            sy=int(section.get('Y',0))
+            if sy not in wanted:continue
+            palette,indices=decode_modern_section(section)
+            if not palette:continue
+            yield cx,cz,sy,tuple(palette_state(entry) for entry in palette),np.asarray(indices,dtype=np.int32)
+
+
 def dimension_dir(world: Path, dimension: str) -> Path:
     if dimension in ("minecraft:overworld", "overworld"):
         return world
