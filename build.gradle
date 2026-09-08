@@ -266,6 +266,12 @@ dependencies {
     def localMovingElevatorsConfig = file('.Codex/local-mods/supermartijn642configlib-1.1.8-forge-mc1.20.jar')
     def localMovingElevatorsCore = file('.Codex/local-mods/supermartijn642corelib-1.1.24-forge-mc1.20.1.jar')
     def localMtr = file('.Codex/local-mods/MTR-forge-4.0.5+1.20.1.jar')
+    def localSbw = file('.Codex/local-mods/superbwarfare-0.8.9.1-hotfix-mc1.20.1-993063bed-all.jar')
+    def localKff = file('.Codex/local-mods/kotlinforforge-4.12.0-all.jar')
+    if (localSbw.exists() && localKff.exists()) {
+        runtimeOnly fg.deobf('local:superbwarfare:0.8.9.1-hotfix-mc1.20.1-993063bed:all')
+        runtimeOnly fg.deobf('local:kotlinforforge:4.12.0:all')
+    }
     def localFarsight = file('.Codex/local-mods/farsight-1.20.1-5.1.jar')
     def localCupboard = file('.Codex/local-mods/cupboard-1.20.1-3.9.jar')
     if (localCurios.exists()) {

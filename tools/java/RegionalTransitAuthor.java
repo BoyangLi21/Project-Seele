@@ -164,6 +164,13 @@ public final class RegionalTransitAuthor
             Depot depot=simulator.depots.stream().filter(d->d.getId()==j.get("depot_id").getAsLong()).findFirst().orElseThrow();
             Siding siding=simulator.sidings.stream().filter(s->s.getId()==j.get("siding_id").getAsLong()).findFirst().orElseThrow();
             if(j.has("cruise"))depot.setCruisingAltitude(j.get("cruise").getAsInt());
+            if(j.has("repeat"))depot.setRepeatInfinitely(j.get("repeat").getAsBoolean());
+            if(j.has("dwell_platform_ids"))
+            {
+                siding.setDelayedVehicleReduceDwellTimePercentage(0);siding.setEarlyVehicleIncreaseDwellTime(false);
+                for(JsonElement id:j.getAsJsonArray("dwell_platform_ids"))
+                    simulator.platforms.stream().filter(p->p.getId()==id.getAsLong()).findFirst().orElseThrow().setDwellTime(integer(j,"dwell",12000));
+            }
             if(bool(j,"restart_vehicles",false)){siding.clearVehicles();freshDepots.add(depot);}
             depots.add(depot);depotKeys.put(depot,key);lineSidings.put(key,siding);
         }

@@ -39,6 +39,8 @@ def main():
         result_folder=ROOT/'artifacts/world_quality_r02'
         source=Path(args.samples) if args.samples else result_folder/'native_flight_samples.json'
         samples=[r for r in json.loads(source.read_text(encoding='utf-8')) if max(p[1] for p in r['points'])>90]
+    elif args.samples:
+        samples=json.loads(Path(args.samples).read_text(encoding='utf-8'))
     rails={};selected=defaultdict(set)
     for rail in samples:
         masks={};floor={};plane=rail['mode']=='AIRPLANE';r=17 if plane else 1

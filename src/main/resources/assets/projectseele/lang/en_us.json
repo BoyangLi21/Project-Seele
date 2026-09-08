@@ -185,5 +185,7 @@
   "block.projectseele.nerv_hazard_paving": "NERV Threshold Marking",
   "block.projectseele.nerv_strip_light": "NERV Recessed Strip Light",
   "block.projectseele.station_tactile_path": "Station Tactile Guide",
-  "block.projectseele.station_tactile_warning": "Station Tactile Warning"
+  "block.projectseele.station_tactile_warning": "Station Tactile Warning",
+  "entity.projectseele.eva_prototype": "Unnamed Experimental EVA",
+  "hud.projectseele.role_experimental": "UNNAMED"
 }

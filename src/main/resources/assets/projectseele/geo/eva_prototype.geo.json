@@ -1,0 +1,695 @@
+{
+  "format_version": "1.12.0",
+  "minecraft:geometry": [
+    {
+      "description": {
+        "identifier": "geometry.eva_prototype",
+        "texture_width": 1024,
+        "texture_height": 512,
+        "visible_bounds_width": 20,
+        "visible_bounds_height": 24,
+        "visible_bounds_offset": [
+          0,
+          8,
+          0
+        ]
+      },
+      "bones": [
+        {
+          "name": "root",
+          "pivot": [
+            0.0,
+            0.18801,
+            -0.0
+          ]
+        },
+        {
+          "name": "torso_lower",
+          "pivot": [
+            0.0,
+            91.15596,
+            -0.0
+          ],
+          "parent": "root"
+        },
+        {
+          "name": "torso_upper",
+          "pivot": [
+            0.0,
+            125.26894,
+            -0.0
+          ],
+          "parent": "torso_lower"
+        },
+        {
+          "name": "pylon_l",
+          "pivot": [
+            19.24322,
+            159.38191,
+            -0.0
+          ],
+          "parent": "torso_upper"
+        },
+        {
+          "name": "pylon_r",
+          "pivot": [
+            -19.24322,
+            159.38191,
+            -0.0
+          ],
+          "parent": "torso_upper"
+        },
+        {
+          "name": "aim_pitch",
+          "pivot": [
+            0.0,
+            155.00845,
+            0.0
+          ],
+          "parent": "torso_upper"
+        },
+        {
+          "name": "clavicle_l",
+          "pivot": [
+            0.0,
+            155.00845,
+            0.0
+          ],
+          "parent": "aim_pitch"
+        },
+        {
+          "name": "arm_l",
+          "pivot": [
+            19.24322,
+            155.00845,
+            -0.0
+          ],
+          "parent": "clavicle_l"
+        },
+        {
+          "name": "forearm_l",
+          "pivot": [
+            23.61668,
+            122.64486,
+            1.31204
+          ],
+          "parent": "arm_l"
+        },
+        {
+          "name": "wrist_l",
+          "pivot": [
+            24.49137,
+            93.34269,
+            0.87469
+          ],
+          "parent": "forearm_l"
+        },
+        {
+          "name": "hand_l",
+          "pivot": [
+            24.49137,
+            93.34269,
+            0.87469
+          ],
+          "parent": "wrist_l"
+        },
+        {
+          "name": "clavicle_r",
+          "pivot": [
+            0.0,
+            155.00845,
+            0.0
+          ],
+          "parent": "aim_pitch"
+        },
+        {
+          "name": "arm_r",
+          "pivot": [
+            -19.24322,
+            155.00845,
+            -0.0
+          ],
+          "parent": "clavicle_r"
+        },
+        {
+          "name": "forearm_r",
+          "pivot": [
+            -23.61668,
+            122.64486,
+            1.31204
+          ],
+          "parent": "arm_r"
+        },
+        {
+          "name": "wrist_r",
+          "pivot": [
+            -24.49137,
+            93.34269,
+            0.87469
+          ],
+          "parent": "forearm_r"
+        },
+        {
+          "name": "hand_r",
+          "pivot": [
+            -24.49137,
+            93.34269,
+            0.87469
+          ],
+          "parent": "wrist_r"
+        },
+        {
+          "name": "knife",
+          "pivot": [
+            -24.49137,
+            88.34269,
+            0.87469
+          ],
+          "parent": "hand_r"
+        },
+        {
+          "name": "cannon",
+          "pivot": [
+            -24.49137,
+            88.34269,
+            0.87469
+          ],
+          "parent": "hand_r"
+        },
+        {
+          "name": "lance",
+          "pivot": [
+            -24.49137,
+            88.34269,
+            0.87469
+          ],
+          "parent": "hand_r"
+        },
+        {
+          "name": "entry_plug",
+          "pivot": [
+            0.0,
+            172.26894,
+            8.0
+          ],
+          "parent": "torso_upper"
+        },
+        {
+          "name": "plug_hatch_l",
+          "pivot": [
+            0.0,
+            172.26894,
+            7.0
+          ],
+          "parent": "torso_upper"
+        },
+        {
+          "name": "plug_hatch_r",
+          "pivot": [
+            0.0,
+            172.26894,
+            7.0
+          ],
+          "parent": "torso_upper"
+        },
+        {
+          "name": "neck",
+          "pivot": [
+            0.0,
+            157.63253,
+            -0.87469
+          ],
+          "parent": "torso_upper"
+        },
+        {
+          "name": "head",
+          "pivot": [
+            0.0,
+            157.63253,
+            -0.87469
+          ],
+          "parent": "neck"
+        },
+        {
+          "name": "horn",
+          "pivot": [
+            0.0,
+            169.63253,
+            -4.87469
+          ],
+          "parent": "head",
+          "rotation": [
+            -22,
+            0,
+            0
+          ]
+        },
+        {
+          "name": "leg_l",
+          "pivot": [
+            10.93365,
+            114.77263,
+            -0.0
+          ],
+          "parent": "torso_lower"
+        },
+        {
+          "name": "shin_l",
+          "pivot": [
+            15.30711,
+            60.1044,
+            0.87469
+          ],
+          "parent": "leg_l"
+        },
+        {
+          "name": "leg_r",
+          "pivot": [
+            -10.93365,
+            114.77263,
+            -0.0
+          ],
+          "parent": "torso_lower"
+        },
+        {
+          "name": "shin_r",
+          "pivot": [
+            -15.30711,
+            60.1044,
+            0.87469
+          ],
+          "parent": "leg_r"
+        },
+        {
+          "name": "ankle_l",
+          "pivot": [
+            15.30711,
+            18.55654,
+            0.87469
+          ],
+          "parent": "shin_l"
+        },
+        {
+          "name": "foot_l",
+          "pivot": [
+            15.30711,
+            18.55654,
+            0.87469
+          ],
+          "parent": "ankle_l"
+        },
+        {
+          "name": "ankle_r",
+          "pivot": [
+            -15.30711,
+            18.55654,
+            0.87469
+          ],
+          "parent": "shin_r"
+        },
+        {
+          "name": "foot_r",
+          "pivot": [
+            -15.30711,
+            18.55654,
+            0.87469
+          ],
+          "parent": "ankle_r"
+        },
+        {
+          "name": "finger_index_axis_l",
+          "pivot": [
+            27.03787,
+            90.5902,
+            0.90649
+          ],
+          "parent": "hand_l",
+          "rotation": [
+            -45.35461414,
+            24.53671482,
+            15.87776516
+          ]
+        },
+        {
+          "name": "finger_index_l",
+          "pivot": [
+            27.03787,
+            90.5902,
+            0.90649
+          ],
+          "parent": "finger_index_axis_l"
+        },
+        {
+          "name": "finger_index_axis_r",
+          "pivot": [
+            -27.03787,
+            90.5902,
+            0.90649
+          ],
+          "parent": "hand_r",
+          "rotation": [
+            -134.64538586,
+            24.53671482,
+            164.12223484
+          ]
+        },
+        {
+          "name": "finger_index_r",
+          "pivot": [
+            -27.03787,
+            90.5902,
+            0.90649
+          ],
+          "parent": "finger_index_axis_r"
+        },
+        {
+          "name": "finger_little_axis_l",
+          "pivot": [
+            23.01068,
+            90.47742,
+            5.95746
+          ],
+          "parent": "hand_l",
+          "rotation": [
+            -27.53088096,
+            24.0270688,
+            20.62276844
+          ]
+        },
+        {
+          "name": "finger_little_l",
+          "pivot": [
+            23.01068,
+            90.47742,
+            5.95746
+          ],
+          "parent": "finger_little_axis_l"
+        },
+        {
+          "name": "finger_little_axis_r",
+          "pivot": [
+            -23.01068,
+            90.47742,
+            5.95746
+          ],
+          "parent": "hand_r",
+          "rotation": [
+            -152.46911904,
+            24.0270688,
+            159.37723156
+          ]
+        },
+        {
+          "name": "finger_little_r",
+          "pivot": [
+            -23.01068,
+            90.47742,
+            5.95746
+          ],
+          "parent": "finger_little_axis_r"
+        },
+        {
+          "name": "finger_middle_axis_l",
+          "pivot": [
+            26.33684,
+            90.33443,
+            3.40775
+          ],
+          "parent": "hand_l",
+          "rotation": [
+            -40.53647513,
+            28.34707887,
+            21.29234199
+          ]
+        },
+        {
+          "name": "finger_middle_l",
+          "pivot": [
+            26.33684,
+            90.33443,
+            3.40775
+          ],
+          "parent": "finger_middle_axis_l"
+        },
+        {
+          "name": "finger_middle_axis_r",
+          "pivot": [
+            -26.33684,
+            90.33443,
+            3.40775
+          ],
+          "parent": "hand_r",
+          "rotation": [
+            -139.46352487,
+            28.34707887,
+            158.70765801
+          ]
+        },
+        {
+          "name": "finger_middle_r",
+          "pivot": [
+            -26.33684,
+            90.33443,
+            3.40775
+          ],
+          "parent": "finger_middle_axis_r"
+        },
+        {
+          "name": "finger_ring_axis_l",
+          "pivot": [
+            24.71974,
+            90.35524,
+            4.80056
+          ],
+          "parent": "hand_l",
+          "rotation": [
+            -38.85407008,
+            27.71773177,
+            21.24339729
+          ]
+        },
+        {
+          "name": "finger_ring_l",
+          "pivot": [
+            24.71974,
+            90.35524,
+            4.80056
+          ],
+          "parent": "finger_ring_axis_l"
+        },
+        {
+          "name": "finger_ring_axis_r",
+          "pivot": [
+            -24.71974,
+            90.35524,
+            4.80056
+          ],
+          "parent": "hand_r",
+          "rotation": [
+            -141.14592992,
+            27.71773177,
+            158.75660271
+          ]
+        },
+        {
+          "name": "finger_ring_r",
+          "pivot": [
+            -24.71974,
+            90.35524,
+            4.80056
+          ],
+          "parent": "finger_ring_axis_r"
+        },
+        {
+          "name": "finger_thumb_l",
+          "pivot": [
+            22.47416,
+            93.67709,
+            -1.16058
+          ],
+          "parent": "hand_l"
+        },
+        {
+          "name": "finger_thumb_r",
+          "pivot": [
+            -22.47416,
+            93.67709,
+            -1.16058
+          ],
+          "parent": "hand_r"
+        },
+        {
+          "name": "finger_index_tip_l",
+          "pivot": [
+            27.03787,
+            87.09143,
+            0.90649
+          ],
+          "parent": "finger_index_l"
+        },
+        {
+          "name": "finger_index_tip_r",
+          "pivot": [
+            -27.03787,
+            87.09143,
+            0.90649
+          ],
+          "parent": "finger_index_r"
+        },
+        {
+          "name": "finger_little_tip_l",
+          "pivot": [
+            23.01068,
+            87.416,
+            5.95746
+          ],
+          "parent": "finger_little_l"
+        },
+        {
+          "name": "finger_little_tip_r",
+          "pivot": [
+            -23.01068,
+            87.416,
+            5.95746
+          ],
+          "parent": "finger_little_r"
+        },
+        {
+          "name": "finger_middle_tip_l",
+          "pivot": [
+            26.33684,
+            86.61699,
+            3.40775
+          ],
+          "parent": "finger_middle_l"
+        },
+        {
+          "name": "finger_middle_tip_r",
+          "pivot": [
+            -26.33684,
+            86.61699,
+            3.40775
+          ],
+          "parent": "finger_middle_r"
+        },
+        {
+          "name": "finger_ring_tip_l",
+          "pivot": [
+            24.71974,
+            86.85647,
+            4.80056
+          ],
+          "parent": "finger_ring_l"
+        },
+        {
+          "name": "finger_ring_tip_r",
+          "pivot": [
+            -24.71974,
+            86.85647,
+            4.80056
+          ],
+          "parent": "finger_ring_r"
+        },
+        {
+          "name": "finger_thumb_tip_l",
+          "pivot": [
+            21.70641,
+            91.61885,
+            -2.59585
+          ],
+          "parent": "finger_thumb_l"
+        },
+        {
+          "name": "finger_thumb_tip_r",
+          "pivot": [
+            -21.70641,
+            91.61885,
+            -2.59585
+          ],
+          "parent": "finger_thumb_r"
+        },
+        {
+          "name": "finger_index_distal_l",
+          "pivot": [
+            27.03787,
+            85.34205,
+            0.90649
+          ],
+          "parent": "finger_index_tip_l"
+        },
+        {
+          "name": "finger_index_distal_r",
+          "pivot": [
+            -27.03787,
+            85.34205,
+            0.90649
+          ],
+          "parent": "finger_index_tip_r"
+        },
+        {
+          "name": "finger_little_distal_l",
+          "pivot": [
+            23.01068,
+            85.92902,
+            5.95746
+          ],
+          "parent": "finger_little_tip_l"
+        },
+        {
+          "name": "finger_little_distal_r",
+          "pivot": [
+            -23.01068,
+            85.92902,
+            5.95746
+          ],
+          "parent": "finger_little_tip_r"
+        },
+        {
+          "name": "finger_middle_distal_l",
+          "pivot": [
+            26.33684,
+            84.7364,
+            3.40775
+          ],
+          "parent": "finger_middle_tip_l"
+        },
+        {
+          "name": "finger_middle_distal_r",
+          "pivot": [
+            -26.33684,
+            84.7364,
+            3.40775
+          ],
+          "parent": "finger_middle_tip_r"
+        },
+        {
+          "name": "finger_ring_distal_l",
+          "pivot": [
+            24.71974,
+            85.10709,
+            4.80056
+          ],
+          "parent": "finger_ring_tip_l"
+        },
+        {
+          "name": "finger_ring_distal_r",
+          "pivot": [
+            -24.71974,
+            85.10709,
+            4.80056
+          ],
+          "parent": "finger_ring_tip_r"
+        },
+        {
+          "name": "n2",
+          "pivot": [
+            -24.49137,
+            88.34269,
+            0.87469
+          ],
+          "parent": "hand_r"
+        }
+      ]
+    }
+  ]
+}

@@ -183,5 +183,7 @@
   "block.projectseele.nerv_hazard_paving": "NERV 门槛警戒铺装",
   "block.projectseele.nerv_strip_light": "NERV 嵌入式灯具",
   "block.projectseele.station_tactile_path": "车站导向盲道",
-  "block.projectseele.station_tactile_warning": "车站警示盲道"
+  "block.projectseele.station_tactile_warning": "车站警示盲道",
+  "entity.projectseele.eva_prototype": "未命名 EVA 试验机",
+  "hud.projectseele.role_experimental": "未命名试验机"
 }

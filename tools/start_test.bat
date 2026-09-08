@@ -58,6 +58,13 @@ if errorlevel 1 (
     pause
     exit /b 1
 )
+rem The R07 vehicles and defense controllers use the pinned SBW/Kotlin pair.
+"%SEELE_POWERSHELL%" -NoProfile -ExecutionPolicy Bypass -File "tools\fetch_r07_vehicles.ps1"
+if errorlevel 1 (
+    echo Military vehicle dependency preparation failed.
+    pause
+    exit /b 1
+)
 rem Another Furniture supplies the three real sittable command chairs. Keep
 rem its private evaluation jar outside run\mods so ForgeGradle can remap it.
 if exist "run\mods\another_furniture-forge-1.20.1-3.0.4.jar" copy /Y "run\mods\another_furniture-forge-1.20.1-3.0.4.jar" ".Codex\local-mods\another-furniture-1.20.1-3.0.4.jar" >nul

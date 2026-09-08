@@ -4,6 +4,7 @@ import com.projectseele.ProjectSeele;
 import com.projectseele.entity.EntryPlugCarrierEntity;
 import com.projectseele.entity.EvaScale;
 import com.projectseele.entity.EvaUnit01Entity;
+import com.projectseele.entity.EvaPrototypeEntity;
 import com.projectseele.entity.LilithEntity;
 import com.projectseele.entity.NervCarrierPlatformEntity;
 import com.projectseele.entity.NervCommandSeatEntity;
@@ -47,6 +48,14 @@ public class ModEntities
                     .clientTrackingRange(64)
                     .updateInterval(1)
                     .build("eva_unit01"));
+
+    public static final RegistryObject<EntityType<EvaPrototypeEntity>> EVA_PROTOTYPE = ENTITY_TYPES.register("eva_prototype",
+            () -> EntityType.Builder.of(EvaPrototypeEntity::new, MobCategory.MISC)
+                    .sized(EvaScale.NORMAL_WIDTH, EvaScale.NORMAL_HEIGHT)
+                    .fireImmune()
+                    .clientTrackingRange(32)
+                    .updateInterval(1)
+                    .build("eva_prototype"));
 
     public static final RegistryObject<EntityType<EvaUnit01Entity>> EVA_UNIT00 = ENTITY_TYPES.register("eva_unit00",
             () -> EntityType.Builder.of(EvaUnit01Entity::new, MobCategory.MISC)

@@ -178,3 +178,9 @@ annotation, fitted stride extraction, shared-root correction and two-leg IK;
 `tools/build_nerv_architectural_assets.py` 独立绘制七种 128×128 建筑贴图及匹配模型：灰蓝墙板、红线墙板、浅色地板、警戒门槛、嵌入式灯具、导向盲道和警示盲道。矢量源位于 `tools/art/nerv_architecture/`；本轮未把网上原画、照片或剧照变成贴图。原 TV 和现实设施的研究链接见 [R06 记录](WORLD_MOTION_R06.md)。
 
 单膝、扶地与卧姿转换由 `tools/author_eva_rifle_stances_r06.py` 在已测量骨架上编制，使用接触约束和双四元数接缝计算；不称作新下载的真人卧射。组合文件仍包含此前本机 MoCap Online 派生动作，保留在 `run/projectseele-local-maps/eva_body_r06.json`，不随仓库发布。售票机与时钟直接使用已经安装的 MTR 4.0.5 模组方块，没有复制或重发其素材。
+
+## R07 原创试验机与军事港区（2026-09-09）
+
+`eva_prototype` 的 83,432 个三角形、46 个部件和 1024×512 材质由 `tools/build_original_eva_prototype_r07.py` 从放样、装甲面、接缝及关节几何创建，没有复制原有 EVA 网格。复用项目公开的 70 骨接口与公开动画；用户尚未提交的原三机资源保持原样。原创造型草图通过内置 imagegen 生成，提示/方式/本机路径记录在 `artifacts/world_expansion_r07/prototype_design.txt`，草图不是游戏截图。实际网格预览由 Blender 渲染。
+
+港口两艘固定舰体、基地建筑及标线为本项目原创建造；未导入查找过的 Planet Minecraft 舰艇文件。SBW 的坦克、飞机、巡逻艇、舰炮、近防炮与激光塔通过原模组使用，未拆出其保留权利的模型、贴图或音频并入本项目。依赖版本、SHA-512 和官方分发 URL 位于 `tools/r07_vehicle_mods.json`，下载物仅保存在忽略目录。详细来源、能力边界与验收记录见 [R07](WORLD_EXPANSION_R07.md)。

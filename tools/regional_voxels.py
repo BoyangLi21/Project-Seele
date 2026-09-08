@@ -108,8 +108,11 @@ class Painter:
         protected_by_chunk=defaultdict(list)
         for protection in self.keep_boxes:
             x0,y0,z0,x1,y1,z1=protection['box']
-            for cx in range(x0//16,x1//16+1):
-                for cz in range(z0//16,z1//16+1):protected_by_chunk[cx,cz].append(protection)
+            # Only edited chunks can consume a protection mask. A broad
+            # keep-out box must not allocate an entry for every world chunk.
+            for cx,cz in self.by_chunk:
+                if x0//16<=cx<=x1//16 and z0//16<=cz<=z1//16:
+                    protected_by_chunk[cx,cz].append(protection)
         for p in self.block_entities:additions_by_chunk[p[0]//16,p[2]//16].add(p)
         touched=[];counts=Counter();protected=Counter();start=time.monotonic()
         try:

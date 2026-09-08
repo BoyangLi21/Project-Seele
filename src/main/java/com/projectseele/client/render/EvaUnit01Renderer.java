@@ -144,12 +144,12 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
     {
         super(context, new EvaUnit01GeoModel());
         this.addRenderLayer(new LocalTriangleMeshLayer<>(this,
-                entity -> meshResourceForVariant(entity.getUnitVariant()),
-                entity -> textureResourceForVariant(entity.getUnitVariant()),
+                EvaUnit01Renderer::meshResourceForEntity,
+                entity -> entity.isExperimentalUnit()?new ResourceLocation(ProjectSeele.MODID,"textures/entity/eva_prototype.png"):textureResourceForVariant(entity.getUnitVariant()),
                 this::shouldRenderBodyMesh));
         this.addRenderLayer(new LocalTriangleMeshLayer<>(this,
-                entity -> meshResourceForVariant(entity.getUnitVariant()),
-                entity -> eyeTextureResourceForVariant(entity.getUnitVariant()),
+                EvaUnit01Renderer::meshResourceForEntity,
+                entity -> entity.isExperimentalUnit()?new ResourceLocation(ProjectSeele.MODID,"textures/entity/eva_prototype_eyes.png"):eyeTextureResourceForVariant(entity.getUnitVariant()),
                 (entity, bone) -> !this.pilotView && entity.isPoweredOn()
                         && "head".equals(bone.getName()), true));
         this.addRenderLayer(new LocalTriangleMeshLayer<>(this,
@@ -194,7 +194,7 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
                        MultiBufferSource bufferSource, int packedLight)
     {
         LocalVisualAssetFingerprint.Fingerprint fingerprint =
-                visualFingerprintForVariant(entity.getUnitVariant());
+                entity.isExperimentalUnit()?LocalVisualAssetFingerprint.inspect("eva_prototype"):visualFingerprintForVariant(entity.getUnitVariant());
         if (LocalVisualAssetFingerprint.isStrictMode() && !fingerprint.valid())
         {
             if (!this.strictFailureReported)
@@ -441,7 +441,7 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
     {
         EvaUnit01Entity entity = this.getAnimatable();
         boolean bodyMesh = entity != null && LocalTriangleMeshLayer.hasPart(
-                meshResourceForVariant(entity.getUnitVariant()), bone.getName());
+                meshResourceForEntity(entity), bone.getName());
         boolean cannonMesh = entity != null
                 && entity.getWeapon() == EvaUnit01Entity.WEAPON_CANNON
                 && "cannon".equals(bone.getName())
@@ -609,6 +609,11 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
         {
             walkBone(child, action);
         }
+    }
+
+    public static ResourceLocation meshResourceForEntity(EvaUnit01Entity entity)
+    {
+        return entity.isExperimentalUnit()?new ResourceLocation(ProjectSeele.MODID,"mesh/eva_prototype.mesh.json"):meshResourceForVariant(entity.getUnitVariant());
     }
 
 }

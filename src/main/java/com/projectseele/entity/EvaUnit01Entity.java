@@ -111,6 +111,11 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     public static final int UNIT_00 = 0;
     public static final int UNIT_01 = 1;
     public static final int UNIT_02 = 2;
+
+    public boolean isExperimentalUnit()
+    {
+        return false;
+    }
     public static final int VISUAL_NORMAL = 0;
     public static final int VISUAL_IDLE = 1;
     public static final int VISUAL_WALK_CONTACT = 2;
@@ -1679,6 +1684,11 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
      */
     public void cancelLaunchFromPilot(ServerPlayer pilot)
     {
+        if(this.isExperimentalUnit())
+        {
+            pilot.displayClientMessage(Component.literal("试验机使用地表格纳库出舱控制"),true);
+            return;
+        }
         if (!(this.level() instanceof net.minecraft.server.level.ServerLevel serverLevel))
         {
             return;
@@ -1715,7 +1725,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     /** Arms a pilot who entered while the EVA was still inside its wet cage. */
     public boolean armPreparedLaunch(BlockPos bed)
     {
-        if (this.level().isClientSide || this.isLaunchSequenceActive()
+        if (this.isExperimentalUnit() || this.level().isClientSide || this.isLaunchSequenceActive()
                 || !this.hasLaunchPassenger()
                 || !(this.level() instanceof ServerLevel serverLevel)
                 || !EvaLogisticsDirector.isAssignedLowerLaunchBed(
@@ -1958,6 +1968,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     @Nullable
     public BlockPos findLaunchBed()
     {
+        if(this.isExperimentalUnit())return null;
         BlockPos base = BlockPos.containing(this.getX(), this.getY() - 0.2D, this.getZ());
         BlockPos nearest = null;
         double nearestDistance = Double.MAX_VALUE;
@@ -3161,6 +3172,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             // than dropping them at the airframe's feet. They then sneak to
             // dismount and climb down from the plug.
             if (this.level() instanceof ServerLevel serverLevel
+                    && !this.isExperimentalUnit()
                     && this.isEntryPlugInserted()
                     && EntryPlugDirector.ejectPilotToPlug(
                             serverLevel, this.getUnitVariant(), this, pilot))
@@ -3403,6 +3415,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
      */
     private boolean isInsideActiveAssignedHangar(ServerLevel level)
     {
+        if(this.isExperimentalUnit())return false;
         int variant = this.getUnitVariant();
         if (FacilityV2EvaRuntime.ready(level, variant))
         {

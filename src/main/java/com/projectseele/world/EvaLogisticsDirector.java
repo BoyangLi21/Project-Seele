@@ -81,6 +81,7 @@ public final class EvaLogisticsDirector
     /** Enforces the world-global UUID contract as entities enter loaded chunks. */
     public static boolean validateCanonical(EvaUnit01Entity unit)
     {
+        if (unit.isExperimentalUnit()) return true;
         if (!(unit.level() instanceof ServerLevel level))
         {
             return true;
@@ -2392,7 +2393,7 @@ public final class EvaLogisticsDirector
         List<EvaUnit01Entity> units = new ArrayList<>();
         for (Entity entity : level.getAllEntities())
         {
-            if (entity instanceof EvaUnit01Entity unit && unit.isAlive())
+            if (entity instanceof EvaUnit01Entity unit && unit.isAlive() && !unit.isExperimentalUnit())
             {
                 units.add(unit);
             }

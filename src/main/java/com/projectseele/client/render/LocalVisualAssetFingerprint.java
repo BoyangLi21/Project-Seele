@@ -20,7 +20,8 @@ public final class LocalVisualAssetFingerprint
             "eva_unit00", new MeshContract(5_510, 43, true),
             "eva_unit01", new MeshContract(6_044, 43, true),
             "eva_unit02", new MeshContract(5_770, 43, true),
-            "mass_production_eva", new MeshContract(4_901, 15, false));
+            "mass_production_eva", new MeshContract(4_901, 15, false),
+            "eva_prototype", new MeshContract(83_432, 46, false));
     private static final Map<String, Fingerprint> CACHE = new ConcurrentHashMap<>();
 
     private LocalVisualAssetFingerprint() {}

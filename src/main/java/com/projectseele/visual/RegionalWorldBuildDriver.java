@@ -36,6 +36,7 @@ public final class RegionalWorldBuildDriver
     @SubscribeEvent
     public static void tick(TickEvent.ServerTickEvent event)
     {
+        if(MODE.equals("r07-review")||MODE.equals("r07-equipment")||MODE.equals("port-boarding")||MODE.equals("r07-photos")||MODE.equals("r07-sortie")||MODE.equals("r07-panel"))return;
         if (MODE.isEmpty() || MODE.equals("passengers") || MODE.equals("transit-riding") || MODE.equals("flight-riding") || MODE.equals("circle-riding") || MODE.equals("train-boarding") || MODE.equals("bay-boarding") || MODE.equals("collision-audit") || MODE.equals("station-photo") || MODE.equals("quality-photos") || MODE.equals("detail-photos") || MODE.equals("wayfinding") || done || event.phase != TickEvent.Phase.END) return;
         MinecraftServer server=event.getServer();
         Path world=server.getWorldPath(LevelResource.ROOT).normalize();
@@ -51,6 +52,12 @@ public final class RegionalWorldBuildDriver
                 return;
             }
             ServerLevel level=server.getLevel(FacilitySchemaV2.DIMENSION);
+            if(MODE.equals("r07-commission"))
+            {
+                JsonObject report=com.projectseele.world.MilitaryR07Director.commission(level);
+                Files.writeString(world.resolve("r07_commissioned.json"),new GsonBuilder().setPrettyPrinting().create().toJson(report));
+                ProjectSeele.LOGGER.info("R07 COMMISSION COMPLETE {}",report);stop(server);return;
+            }
             if (MODE.equals("commission"))
             {
                 if (!registryChecked)
@@ -106,12 +113,13 @@ public final class RegionalWorldBuildDriver
                 else if(age>4800)throw new IllegalStateException("Not every installed MTR line produced moving vehicles");
                 return;
             }
-            if (MODE.equals("survey"))
+            if (MODE.equals("survey") || MODE.equals("survey-military"))
             {
-                int nx=61,nz=46,total=nx*nz;
+                boolean remote=MODE.equals("survey-military");
+                int nx=remote?65:61,nz=remote?65:46,total=nx*nz;
                 for(int n=0;n<12 && sample<total;n++,sample++)
                 {
-                    int x=-2400+(sample%nx)*64,z=-960+(sample/nx)*64;
+                    int x=(remote?4096:-2400)+(sample%nx)*64,z=(remote?-8192:-960)+(sample/nx)*64;
                     int y=level.getChunkSource().getGenerator().getBaseHeight(x,z,Heightmap.Types.OCEAN_FLOOR_WG,
                             level,level.getChunkSource().randomState());
                     JsonArray point=new JsonArray();point.add(x);point.add(y);point.add(z);HEIGHTS.add(point);
@@ -121,18 +129,18 @@ public final class RegionalWorldBuildDriver
                 {
                     JsonObject report=new JsonObject();report.addProperty("seed",level.getSeed());
                     report.add("native_heights",HEIGHTS);
-                    Files.writeString(world.resolve("regional_surface_survey.json"),new Gson().toJson(report));
+                    Files.writeString(world.resolve(remote?"military_surface_scout_r07.json":"regional_surface_survey.json"),new Gson().toJson(report));
                     ProjectSeele.LOGGER.info("REGIONAL SURVEY COMPLETE samples={}",sample);
                     stop(server);
                 }
                 return;
             }
-            if (MODE.equals("generate") || MODE.equals("generate-extra") || MODE.equals("generate-harbour"))
+            if (MODE.equals("generate") || MODE.equals("generate-extra") || MODE.equals("generate-harbour") || MODE.equals("generate-r07"))
             {
                 if(chunks==null)
                 {
-                    chunks=MODE.equals("generate-harbour")
-                            ?JsonParser.parseString(Files.readString(world.resolve("harbour_chunks_r06.json"))).getAsJsonArray()
+                    chunks=MODE.equals("generate-harbour")||MODE.equals("generate-r07")
+                            ?JsonParser.parseString(Files.readString(world.resolve(MODE.equals("generate-r07")?"r07_construction_chunks.json":"harbour_chunks_r06.json"))).getAsJsonArray()
                             :JsonParser.parseString(Files.readString(world.resolve("regional_plan.json"))).getAsJsonObject()
                                 .getAsJsonArray(MODE.equals("generate-extra")?"extra_chunks":"chunks");
                     ProjectSeele.LOGGER.info("REGIONAL GENERATION START chunks={}",chunks.size());
@@ -154,7 +162,7 @@ public final class RegionalWorldBuildDriver
                 }
                 if(completed==chunks.size())
                 {
-                    Files.writeString(world.resolve(MODE.equals("generate-harbour")?"harbour_generation_r06_complete.json":MODE.equals("generate-extra")?"regional_extra_generation_complete.json":"regional_generation_complete.json"),"{\"chunks\":"+completed+"}");
+                    Files.writeString(world.resolve(MODE.equals("generate-r07")?"r07_generation_complete.json":MODE.equals("generate-harbour")?"harbour_generation_r06_complete.json":MODE.equals("generate-extra")?"regional_extra_generation_complete.json":"regional_generation_complete.json"),"{\"chunks\":"+completed+"}");
                     ProjectSeele.LOGGER.info("REGIONAL GENERATION COMPLETE chunks={}",completed);stop(server);
                 }
                 return;

@@ -76,7 +76,7 @@ public final class NervHangarDoorEntity extends Entity
         }
         float current = this.entityData.get(DATA_OPEN);
         float next = Mth.approach(current,
-                this.entityData.get(DATA_TARGET), 0.075F);
+                this.entityData.get(DATA_TARGET), this.getVariant()==3?0.0125F:0.075F);
         if (Math.abs(next - current) > 1.0E-4F)
         {
             this.entityData.set(DATA_OPEN, next);
@@ -90,6 +90,7 @@ public final class NervHangarDoorEntity extends Entity
 
     public float getOpenProgress(float partialTick)
     {
+        if(!this.level().isClientSide)return this.entityData.get(DATA_OPEN);
         return Mth.lerp(partialTick, this.clientOpenO, this.clientOpen);
     }
 
@@ -110,6 +111,7 @@ public final class NervHangarDoorEntity extends Entity
                 return;
             }
             door.entityData.set(DATA_VARIANT, variant);
+            door.entityData.set(DATA_OPEN,open?1F:0F);
             door.setPos(centre.x, centre.y, centre.z);
             level.addFreshEntity(door);
         }

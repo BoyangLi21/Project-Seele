@@ -225,6 +225,7 @@ public final class EvaCommandFeedClient
                 || minecraft.screen != null
                 || VisualCaptureManager.isSuppressingGui()
                 || eva == null
+                || eva.isExperimentalUnit()
                 || EvaPilotResolver.pilot(eva) != minecraft.player
                 || !eva.isAlive())
         {

@@ -140,7 +140,7 @@ public final class ServerboundEvaVideoFramePacket
         EvaUnit01Entity eva = EvaPilotResolver.controlTarget(sender);
         if (!SeeleConfig.liveCockpitVideoEnabled()
                 || !SeeleConfig.videoFrameRelayEnabled()
-                || eva == null || !eva.isAlive()
+                || eva == null || !eva.isAlive() || eva.isExperimentalUnit()
                 || eva.getUnitVariant() != this.variant
                 || EvaPilotResolver.pilot(eva) != sender
                 || this.variant < EvaUnit01Entity.UNIT_00

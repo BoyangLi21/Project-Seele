@@ -23,17 +23,18 @@ import java.util.function.Consumer;
 public final class RegionalTransitRidingChecks
 {
     private static final String MODE=System.getProperty("projectseele.regionalBuild","");
-    private static final boolean ENABLED=MODE.equals("transit-riding")||MODE.equals("flight-riding")||MODE.equals("circle-riding")||MODE.equals("train-boarding")||MODE.equals("bay-boarding");
+    private static final boolean PORT=MODE.equals("port-boarding");
+    private static final boolean ENABLED=PORT||MODE.equals("transit-riding")||MODE.equals("flight-riding")||MODE.equals("circle-riding")||MODE.equals("train-boarding")||MODE.equals("bay-boarding");
     private static final List<String> TRACE=new ArrayList<>();
     private static boolean entered, boarded, finishing;
     private static boolean dispatchRequested;
     private static boolean boardingAligned;
-    private static int alignTicks,finishTicks,nativeBoardingTicks,stepInsideTicks;
+    private static int alignTicks,alignmentAge,finishTicks,nativeBoardingTicks,stepInsideTicks;
     private static volatile boolean serverRegistered;
     private static volatile java.util.Set<Long> serverVehicleIds=java.util.Set.of();
     private static volatile boolean done;
-    private static final String[] SERVICES={"U1","S1","S2","F1","C1"};
-    private static final Vec3[] BOARDING={new Vec3(-330.5,-466,777.5),new Vec3(-1669.5,66,-274.5),new Vec3(-2751.5,71,-967.5),new Vec3(650.5,81,1235.5),new Vec3(-119.5,81,-207.5)};
+    private static final String[] SERVICES=PORT?new String[]{"P1"}:new String[]{"U1","S1","S2","F1","C1"};
+    private static final Vec3[] BOARDING=PORT?new Vec3[]{new Vec3(512.5,81,469.5)}:new Vec3[]{new Vec3(-330.5,-466,777.5),new Vec3(-1669.5,66,-274.5),new Vec3(-2751.5,71,-967.5),new Vec3(650.5,81,1235.5),new Vec3(-119.5,81,-207.5)};
     private static int mode=MODE.equals("flight-riding")||MODE.equals("bay-boarding")?3:MODE.equals("circle-riding")?4:0;
     private static int age, timer, ridingTicks, dismountTicks;
     private static long vehicleId;
@@ -77,6 +78,8 @@ public final class RegionalTransitRidingChecks
             {Files.delete(world.resolve("regional_stop_requested"));log("STOP requested");finish(mc);return;}
             if(registrationFailure!=null)throw new IllegalStateException("Native server rider registration",registrationFailure);
             require(++age<36000,"transit passenger timeout");timer++;
+            if(PORT)require(age<5000,"P1 passenger trip timeout");
+            if(PORT&&!boarded&&boardingAligned&&nativeBoardingTicks==0&&++alignmentAge>100)boardingAligned=false;
             if(!boarded&&nativeBoardingTicks>0)
                 require(++nativeBoardingTicks<150,"real stair boarding window expired at "+mc.player.position());
             if(!entered)
@@ -96,7 +99,7 @@ public final class RegionalTransitRidingChecks
                 boarded=true;stepInsideTicks=mode==3?12:6;ridingTicks=0;travel=0;highestY=-1000;serverRegistered=false;
                 log("BOARD "+SERVICES[mode]+" using actual native platform entry at "+mc.player.position());
             }
-            if(timer%100==0)
+            if(timer%(PORT?20:100)==0)
             {
                 String service=SERVICES[mode];
                 server.execute(()->{
@@ -134,7 +137,7 @@ public final class RegionalTransitRidingChecks
             }
             if(!dispatchRequested && timer>=100)
             {
-                dispatchRequested=true;server.execute(()->dispatchService(mc));return;
+                dispatchRequested=true;if(PORT){boardingAligned=false;alignTicks=0;}server.execute(()->dispatchService(mc));return;
             }
             if(dismountTicks>0)
             {
@@ -145,7 +148,7 @@ public final class RegionalTransitRidingChecks
                     mc.options.keyShift.setDown(false);mode++;timer=0;boarded=false;dispatchRequested=false;boardingAligned=false;nativeBoardingTicks=0;boardingYaw=0;serverVehicleIds=java.util.Set.of();
                     if(mode==(MODE.equals("train-boarding")?3:MODE.equals("bay-boarding")?4:SERVICES.length))
                     {
-                        Files.writeString(world.resolve("regional_transit_riding_checks.txt"),String.join("\n",TRACE)+"\nCOMPLETE "+(MODE.equals("flight-riding")?"F1 round trip and C1 circuit":MODE.equals("circle-riding")?"C1 circuit":MODE.equals("bay-boarding")?"Bay aircraft natural boarding and taxi travel":MODE.equals("train-boarding")?"U1/S1/S2 natural boarding and passenger travel":"U1/S1/S2 trains, F1 round trip and C1 circuit")+" passenger rides\n");
+                        Files.writeString(world.resolve(PORT?"r07_port_riding_checks.txt":"regional_transit_riding_checks.txt"),String.join("\n",TRACE)+"\nCOMPLETE "+(PORT?"P1 natural boarding, full trip and harbor arrival":MODE.equals("flight-riding")?"F1 round trip and C1 circuit":MODE.equals("circle-riding")?"C1 circuit":MODE.equals("bay-boarding")?"Bay aircraft natural boarding and taxi travel":MODE.equals("train-boarding")?"U1/S1/S2 natural boarding and passenger travel":"U1/S1/S2 trains, F1 round trip and C1 circuit")+" passenger rides\n");
                         Files.deleteIfExists(world.resolve("regional_transit_riding_failure.txt"));
                         finish(mc);return;
                     }
@@ -177,6 +180,11 @@ public final class RegionalTransitRidingChecks
                         :mode==4?circleVisitedWest&&travel>2200&&Math.abs(pos.z+199.5)<4&&pos.x>-160&&pos.x<-50
                         :mode==1?pos.x<-1760 && pos.distanceTo(start)>80:pos.distanceTo(start)>80;
                 if(MODE.equals("bay-boarding"))passed=pos.distanceTo(start)>80;
+                if(PORT)
+                {
+                    Object arrived=currentVehicle();
+                    passed=travel>500&&pos.x>1145&&pos.y<74&&arrived!=null&&(Double)call(arrived,"getSpeed")<.001&&(Double)call(arrived.getClass().getField("persistentVehicleData").get(arrived),"getDoorValue")>.5;
+                }
                 if(passed&&(mode==3||mode==4)&&!MODE.equals("bay-boarding"))
                 {
                     Object arrived=currentVehicle();
@@ -236,7 +244,7 @@ public final class RegionalTransitRidingChecks
                 if(mode==3){flightOriginHakone=headPos.x<0;flightCache=cache;flightCar=car;writeAircraftGeometry(vehicle,cache,car,flightOriginHakone?"hakone":"bay");}
                 if(!boardingAligned)
                 {
-                    double length=(Double)call(car,"getLength");boardingAligned=true;alignTicks=20;
+                    double length=(Double)call(car,"getLength");boardingAligned=true;alignmentAge=0;alignTicks=20;
                     if(mode==3&&Files.exists(world.resolve("regional_boarding_gates.json")))
                     {
                         alignTicks=5;Vec3 doorApproach=trainEntrance(vehicle,cache,car);

@@ -243,7 +243,7 @@ public final class EvaHud
                 Component.literal(String.format("SYNCHRO  %.1f%%", synchro))
                         .withStyle(synchroColour),
                 width / 2, m + 6, NERV_ORANGE);
-        String roleKey = switch (eva.getUnitVariant())
+        String roleKey = eva.isExperimentalUnit()?"hud.projectseele.role_experimental":switch (eva.getUnitVariant())
         {
             case EvaUnit01Entity.UNIT_00 -> "hud.projectseele.role_prototype";
             case EvaUnit01Entity.UNIT_02 -> "hud.projectseele.role_assault";
@@ -340,7 +340,8 @@ public final class EvaHud
         guiGraphics.fill(x - 4, y + 35, x + barWidth + 4, y + 36, NERV_ORANGE);
 
         guiGraphics.drawString(gui.getFont(),
-                eva.getDisplayName().copy().withStyle(ChatFormatting.GOLD),
+                gui.getFont().plainSubstrByWidth((eva.isExperimentalUnit()
+                        ?Component.translatable("hud.projectseele.role_experimental"):eva.getDisplayName()).getString(),barWidth-58),
                 x, y - 10, NERV_ORANGE);
         guiGraphics.drawString(gui.getFont(),
                 String.format("%.0f / %.0f", eva.getHealth(), eva.getMaxHealth()),
