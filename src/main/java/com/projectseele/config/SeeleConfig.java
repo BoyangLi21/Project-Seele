@@ -99,6 +99,10 @@ public final class SeeleConfig
     // ----- client -----
     public static final ForgeConfigSpec.BooleanValue ALARM_VIGNETTE;
     public static final ForgeConfigSpec.DoubleValue FX_INTENSITY;
+    public static final ForgeConfigSpec.IntValue VIDEO_TARGET_FPS;
+    public static final ForgeConfigSpec.IntValue VIDEO_CAPTURE_WIDTH;
+    public static final ForgeConfigSpec.DoubleValue VIDEO_JPEG_QUALITY;
+    public static final ForgeConfigSpec.IntValue VIDEO_FRAME_BUDGET_KIB;
 
     static
     {
@@ -359,6 +363,16 @@ public final class SeeleConfig
         FX_INTENSITY = client
                 .comment("Global brightness/opacity multiplier for beam and explosion effects (0 disables cross explosions).")
                 .defineInRange("fxIntensity", 1.0D, 0.0D, 1.0D);
+        client.pop();
+        client.push("cockpit_video");
+        VIDEO_TARGET_FPS=client.comment("Target optical-feed frame rate; stale work is dropped instead of queued.")
+                .defineInRange("targetFps",15,5,20);
+        VIDEO_CAPTURE_WIDTH=client.comment("Optical capture width, rounded to 16 pixels; height is 16:9.")
+                .defineInRange("captureWidth",1280,640,1920);
+        VIDEO_JPEG_QUALITY=client.comment("Preferred JPEG quality. Compression adapts if a frame exceeds its byte budget.")
+                .defineInRange("quality",.86D,.35D,.94D);
+        VIDEO_FRAME_BUDGET_KIB=client.comment("Per-frame budget below the transport ceiling. High-detail frames reduce quality or resolution to fit.")
+                .defineInRange("frameBudgetKiB",384,64,768);
         client.pop();
         CLIENT_SPEC = client.build();
     }

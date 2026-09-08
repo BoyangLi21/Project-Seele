@@ -19,7 +19,7 @@ public final class EvaBodyPose
     private record Clip(float duration,Quaternionf[][] rotations,Vector3f[][] positions) {}
     private record Data(String[] names,Map<String,Integer> index,Map<String,Clip> clips,
                         Map<Integer,Map<String,Bone>> rigs,Map<String,Vector3f[]> support,
-                        JsonObject prone,JsonObject grip,JsonObject mocap) {}
+                        JsonObject prone,JsonObject grip,JsonObject mocap,Map<Integer,Vector3f> eyes) {}
     private static volatile Data data;
 
     public static final class Sample
@@ -55,7 +55,9 @@ public final class EvaBodyPose
     {
         try
         {
-            Path path=Path.of("projectseele-local-maps/eva_body_r05.json");JsonObject all;
+            Path path=Path.of("projectseele-local-maps/eva_body_r06.json");
+            if(!Files.isRegularFile(path))path=Path.of("projectseele-local-maps/eva_body_r05.json");
+            JsonObject all;
             if(Files.isRegularFile(path))all=JsonParser.parseString(Files.readString(path)).getAsJsonObject();
             else
             {
@@ -98,7 +100,9 @@ public final class EvaBodyPose
             {
                 var a=e.getValue().getAsJsonArray();Vector3f[] points=new Vector3f[a.size()];for(int i=0;i<points.length;i++)points[i]=vector(a.get(i)).div(16);support.put(e.getKey(),points);
             }
-            data=new Data(names,index,Map.copyOf(clips),Map.copyOf(rigs),Map.copyOf(support),object(all,"prone"),object(all,"grip"),object(all,"rifle_mocap"));
+            Map<Integer,Vector3f> eyes=new HashMap<>();
+            for(int variant=0;variant<3;variant++)eyes.put(variant,all.has("eye_positions")?vector(all.getAsJsonObject("eye_positions").get(Integer.toString(variant))).div(16):new Vector3f(variant==0?0:.15F,10.64F,-.75F));
+            data=new Data(names,index,Map.copyOf(clips),Map.copyOf(rigs),Map.copyOf(support),object(all,"prone"),object(all,"grip"),object(all,"rifle_mocap"),Map.copyOf(eyes));
             ProjectSeele.LOGGER.info("EVA shared body/socket pose loaded: private={} clips={} bones={}",Files.isRegularFile(path),clips.size(),names.length);
         }
         catch(Exception failure){throw new IllegalStateException("Shared EVA body pose could not load",failure);}
@@ -130,24 +134,39 @@ public final class EvaBodyPose
         }
         return out[0].mul(out[1]);
     }
+    public static boolean hasSupportedStances(){if(data==null)reload();return data.clips().containsKey("rifle_stance");}
+    public static Vector3f eyePoint(int variant){if(data==null)reload();return new Vector3f(data.eyes().get(variant));}
     public static Sample sample(EvaUnit01Entity entity,float partial)
     {
         if(data==null)reload();Data d=data;int variant=entity.getUnitVariant();float phase=entity.rifleGaitPhase(partial);phase-=Mth.floor(phase);
         float time=((entity.level().getGameTime()%24000)+partial)/20;float idlePhase=(time/2.5F)%1;
         float move=entity.rifleMoveBlend(partial),run=entity.rifleRunBlend(partial),crouch=entity.rifleCrouchBlend(partial),prone=entity.rifleProneBlend(partial);prone=prone*prone*prone*(10+prone*(-15+6*prone));
         var gait=mix(clip(d,variant,"walk",phase),clip(d,variant,"run",phase),run);
-        var standing=mix(clip(d,variant,"idle",idlePhase),gait,move);
-        var low=mix(clip(d,variant,"crouch_idle",idlePhase),clip(d,variant,"crouch_walk",phase),move);
-        var body=mix(standing,low,crouch);
-        if(move<.05F&&crouch>.001F&&crouch<.999F)body=clip(d,variant,"stand_to_crouch",crouch);
+        boolean supported=d.clips().containsKey("rifle_stance");float stance=entity.rifleStanceLevel(partial);
+        Sample body;
+        if(supported)
+        {
+            body=clip(d,variant,"rifle_stance",stance/3);
+            float supportWeight=Mth.clamp((stance-1)/.5F,0,1);
+            supportWeight=supportWeight*supportWeight*(3-2*supportWeight);
+            float mobility=move*(1-supportWeight);
+            if(mobility>0)body=mix(body,mix(gait,clip(d,variant,"crouch_walk",phase),Math.min(1,stance)),mobility);
+        }
+        else
+        {
+            var standing=mix(clip(d,variant,"idle",idlePhase),gait,move);
+            var low=mix(clip(d,variant,"crouch_idle",idlePhase),clip(d,variant,"crouch_walk",phase),move);
+            body=mix(standing,low,crouch);
+            if(move<.05F&&crouch>.001F&&crouch<.999F)body=clip(d,variant,"stand_to_crouch",crouch);
+        }
         var bareChest=new Quaternionf(body.rotations.get("torso_lower")).mul(body.rotations.get("torso_upper"));
-        var chest=new Quaternionf(bareChest).rotateY(-.22F);
+        var chest=new Quaternionf(bareChest);if(!supported)chest.rotateY(-.22F);
         var captured=mocap(d,"idle",(time/4)%1).slerp(mocap(d,"walk",phase).slerp(mocap(d,"run",phase),run),move);
-        captured.slerp(chest,crouch);
+        captured.slerp(chest,supported?Math.min(1,stance):crouch);
         float ready=entity.rifleReadyBlend(partial);ready=ready*ready*(3-2*ready);
         captured=bareChest.slerp(captured,ready);
         body.rotations.put("torso_upper",new Quaternionf(body.rotations.get("torso_lower")).invert().mul(captured));body.dirty();
-        if(prone>0&&!d.prone().entrySet().isEmpty())
+        if(!supported&&prone>0&&!d.prone().entrySet().isEmpty())
         {
             var lying=new Sample(body.rig);
             for(var e:d.prone().entrySet())
@@ -165,7 +184,12 @@ public final class EvaBodyPose
             if(!body.rig.containsKey(e.getKey()))continue;var matrix=body.matrix(e.getKey());
             for(var v:e.getValue())floor=Math.min(floor,matrix.transformPosition(new Vector3f(v)).y);
         }
-        if(Float.isFinite(floor)){body.positions.get("root").y-=floor;body.dirty();}
+        // Authored support clips already include the deformed ankle surfaces.
+        // Applying the rigid-foot correction again would lift the prone belly.
+        if(Float.isFinite(floor)&&!(supported&&(stance>1.01F||move<.05F)))
+        {
+            body.positions.get("root").y-=floor;body.dirty();
+        }
         for(var b:body.rig.values())if(b.name().contains("_axis_"))body.rotations.put(b.name(),new Quaternionf(b.bindRotation()));
         for(var e:d.grip().entrySet())if(e.getKey().startsWith("finger_")&&body.rig.containsKey(e.getKey()))
         {

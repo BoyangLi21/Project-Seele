@@ -345,9 +345,12 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     private static final EntityDataAccessor<Float> DATA_RIFLE_GAIT=SynchedEntityData.defineId(EvaUnit01Entity.class,EntityDataSerializers.FLOAT);
     private static final EntityDataAccessor<Float> DATA_RIFLE_MOVE=SynchedEntityData.defineId(EvaUnit01Entity.class,EntityDataSerializers.FLOAT);
     private static final EntityDataAccessor<Float> DATA_RIFLE_RUN=SynchedEntityData.defineId(EvaUnit01Entity.class,EntityDataSerializers.FLOAT);
+    private static final EntityDataAccessor<Float> DATA_RIFLE_STANCE=SynchedEntityData.defineId(EvaUnit01Entity.class,EntityDataSerializers.FLOAT);
     private float rifleCrouchPrevious,riflePronePrevious,rifleReadyPrevious,rifleRecoilPrevious;
-    private final float[] rifleSignalPrevious=new float[7],rifleSignalCurrent=new float[7];
-    private final int[] rifleSignalTicks=new int[7];
+    private final float[] rifleSignalPrevious=new float[8],rifleSignalCurrent=new float[8];
+    private final int[] rifleSignalTicks=new int[8];
+    private float rifleStanceVelocity;
+    private boolean rifleStanceInitialized;
     private double riflePreviousX=Double.NaN,riflePreviousZ;
     private static final EntityDataAccessor<Integer> DATA_N2_ARM_TICKS =
             SynchedEntityData.defineId(EvaUnit01Entity.class, EntityDataSerializers.INT);
@@ -653,6 +656,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         this.entityData.define(DATA_RIFLE_CROUCH,0F);this.entityData.define(DATA_RIFLE_PRONE,0F);
         this.entityData.define(DATA_RIFLE_READY,0F);this.entityData.define(DATA_RIFLE_RECOIL,0F);
         this.entityData.define(DATA_RIFLE_GAIT,0F);this.entityData.define(DATA_RIFLE_MOVE,0F);this.entityData.define(DATA_RIFLE_RUN,0F);
+        this.entityData.define(DATA_RIFLE_STANCE,0F);
         this.entityData.define(DATA_N2_ARM_TICKS, 0);
         this.entityData.define(DATA_CROUCHING, false);
         this.entityData.define(DATA_SPRINTING, false);
@@ -1090,12 +1094,25 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     public float rifleGaitPhase(float p){return rifleSignal(4,DATA_RIFLE_GAIT,p);}
     public float rifleMoveBlend(float p){return rifleSignal(5,DATA_RIFLE_MOVE,p);}
     public float rifleRunBlend(float p){return rifleSignal(6,DATA_RIFLE_RUN,p);}
+    public float rifleStanceLevel(float p){return rifleSignal(7,DATA_RIFLE_STANCE,p);}
     private void updateRiflePoseSignals()
     {
         rifleCrouchPrevious=this.entityData.get(DATA_RIFLE_CROUCH);riflePronePrevious=this.entityData.get(DATA_RIFLE_PRONE);
         rifleReadyPrevious=this.entityData.get(DATA_RIFLE_READY);rifleRecoilPrevious=this.entityData.get(DATA_RIFLE_RECOIL);
         if(!this.level().isClientSide)
         {
+            float wanted=this.isPilotProne()?3F:this.isPilotCrouching()?1F:0F;
+            float stance=this.entityData.get(DATA_RIFLE_STANCE);
+            if(!rifleStanceInitialized){stance=wanted;rifleStanceInitialized=true;}
+            float remaining=wanted-stance;
+            float desired=Math.copySign(Math.min(.08F,(float)Math.sqrt(2*.012F*Math.abs(remaining))),remaining);
+            rifleStanceVelocity=Mth.approach(rifleStanceVelocity,desired,.012F);
+            if(Math.abs(remaining)<Math.abs(rifleStanceVelocity)||Math.abs(remaining)<.001F)
+            {
+                stance=wanted;rifleStanceVelocity=0;
+            }
+            else stance=Mth.clamp(stance+rifleStanceVelocity,0,3);
+            this.entityData.set(DATA_RIFLE_STANCE,stance);
             double dx=this.getX()-riflePreviousX,dz=this.getZ()-riflePreviousZ;
             double distance=Double.isFinite(dx)?Math.hypot(dx,dz):0;riflePreviousX=this.getX();riflePreviousZ=this.getZ();
             boolean moving=distance>.006&&distance<8&&!this.isPilotControlLocked();
@@ -1110,7 +1127,8 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
             }
             this.entityData.set(DATA_RIFLE_CROUCH,Mth.approach(rifleCrouchPrevious,this.isPilotCrouching()?1F:0F,.12F));
             this.entityData.set(DATA_RIFLE_PRONE,Mth.approach(riflePronePrevious,this.isPilotProne()?1F:0F,1F/6F));
-            this.entityData.set(DATA_RIFLE_READY,Mth.approach(rifleReadyPrevious,this.getWeapon()==WEAPON_RIFLE?1F:0F,.16F));
+            float readyTarget=this.getWeapon()==WEAPON_RIFLE?(Math.abs(rifleStanceVelocity)>.001F?.35F:1F):0F;
+            this.entityData.set(DATA_RIFLE_READY,Mth.approach(rifleReadyPrevious,readyTarget,.12F));
             this.entityData.set(DATA_RIFLE_RECOIL,rifleRecoilPrevious<.005F?0F:rifleRecoilPrevious*.52F);
         }
     }
@@ -2604,11 +2622,6 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         AABB zone = new AABB(center, center).inflate(SMASH_RADIUS,
                 EvaScale.fromLegacy(8.5D), SMASH_RADIUS);
         this.strikeZone(pilot, zone, damage, 2.0D, center);
-        if (this.level() instanceof ServerLevel serverLevel)
-        {
-            serverLevel.sendParticles(ParticleTypes.EXPLOSION,
-                    center.x, center.y - 2.0D, center.z, 10, 3.5D, 0.6D, 3.5D, 0.0D);
-        }
         this.playSound(knife || lance ? SoundEvents.PLAYER_ATTACK_SWEEP : SoundEvents.PLAYER_ATTACK_STRONG,
                 3.0F, lance ? 0.48F : knife ? 0.68F : 0.62F);
     }
@@ -2699,14 +2712,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         AABB zone = new AABB(center, center).inflate(STOMP_RADIUS,
                 EvaScale.fromLegacy(3.5D), STOMP_RADIUS);
         this.strikeZone(pilot, zone, STOMP_DAMAGE * this.getMeleeMultiplier(), 2.4D, center);
-        if (this.level() instanceof ServerLevel serverLevel)
-        {
-            serverLevel.sendParticles(ParticleTypes.CLOUD,
-                    center.x, center.y, center.z, 34, 3.8D, 0.35D, 3.8D, 0.06D);
-            serverLevel.sendParticles(ParticleTypes.EXPLOSION,
-                    center.x, center.y, center.z, 8, 2.4D, 0.3D, 2.4D, 0.0D);
-        }
-        this.playSound(SoundEvents.GENERIC_EXPLODE, 3.2F, 0.58F);
+        this.playSound(SoundEvents.PLAYER_ATTACK_KNOCKBACK, 3.2F, 0.58F);
     }
 
     private void cancelSideKick()
@@ -5812,6 +5818,13 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     public EntityDimensions getDimensions(Pose pose)
     {
         EntityDimensions dimensions = super.getDimensions(pose);
+        if(this.rifleStanceInitialized&&this.getWeapon()==WEAPON_RIFLE&&this.getVisualPose()==VISUAL_NORMAL)
+        {
+            float stance=this.entityData.get(DATA_RIFLE_STANCE);
+            float low=Mth.clamp((stance-1)/2,0,1);
+            float height=stance<=1?Mth.lerp(stance,NORMAL_HEIGHT,CROUCH_HEIGHT):Mth.lerp(low,CROUCH_HEIGHT,PRONE_HEIGHT);
+            return EntityDimensions.scalable(Mth.lerp(low,NORMAL_WIDTH,PRONE_WIDTH),height);
+        }
         if (this.proneDimensions)
         {
             return EntityDimensions.scalable(PRONE_WIDTH, PRONE_HEIGHT);
@@ -5823,9 +5836,13 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     public void onSyncedDataUpdated(EntityDataAccessor<?> key)
     {
         super.onSyncedDataUpdated(key);
+        if(DATA_RIFLE_STANCE.equals(key)&&rifleSignalTicks!=null)
+        {
+            this.rifleStanceInitialized=true;this.refreshDimensions();
+        }
         if(this.level().isClientSide&&rifleSignalTicks!=null)
         {
-            java.util.List<EntityDataAccessor<Float>> keys=java.util.List.of(DATA_RIFLE_CROUCH,DATA_RIFLE_PRONE,DATA_RIFLE_READY,DATA_RIFLE_RECOIL,DATA_RIFLE_GAIT,DATA_RIFLE_MOVE,DATA_RIFLE_RUN);
+            java.util.List<EntityDataAccessor<Float>> keys=java.util.List.of(DATA_RIFLE_CROUCH,DATA_RIFLE_PRONE,DATA_RIFLE_READY,DATA_RIFLE_RECOIL,DATA_RIFLE_GAIT,DATA_RIFLE_MOVE,DATA_RIFLE_RUN,DATA_RIFLE_STANCE);
             int index=keys.indexOf(key);
             if(index>=0){float value=this.entityData.get(keys.get(index));rifleSignalPrevious[index]=this.tickCount<2?value:rifleSignalCurrent[index];rifleSignalCurrent[index]=value;rifleSignalTicks[index]=this.tickCount;}
         }
@@ -5936,6 +5953,15 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
      */
     public Vec3 getPilotCameraSeatPosition(Entity passenger)
     {
+        return this.getPilotCameraSeatPosition(passenger,1F);
+    }
+
+    public Vec3 getPilotCameraSeatPosition(Entity passenger,float partial)
+    {
+        if(this.getWeapon()==WEAPON_RIFLE&&this.isPoweredOn()&&this.getVisualPose()==VISUAL_NORMAL
+                &&!this.isVisuallyAirborneForRender()&&EvaBodyPose.hasSupportedStances())
+            return EvaRifleKinematics.sample(this,partial,this.getAimDirectionForPoseCapture()).eye()
+                    .subtract(0,passenger.getEyeHeight(),0);
         // The pilot rides at the animated rig's head socket. First person sees
         // the same world entity and the same evaluated bones as third person.
         float rad = (float) Math.toRadians(this.yBodyRot);
@@ -5959,10 +5985,10 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         // uses the same positive forward socket convention. Express Y as the
         // desired eye position because Camera adds the player's own eye height
         // after positionRider.
-        double targetEyeHeight = EvaScale.fromLegacy(
-                proneView ? 7.00D : crouchView ? 19.70D : 24.63D);
-        double forward = EvaScale.fromLegacy(
-                proneView ? 12.00D : crouchView ? 0.80D : 1.00D);
+        float crouch=this.getVisualPose()==VISUAL_NORMAL?this.rifleCrouchBlend(partial):crouchView?1:0;
+        float prone=this.getVisualPose()==VISUAL_NORMAL?this.rifleProneBlend(partial):proneView?1:0;
+        double targetEyeHeight=EvaScale.fromLegacy(Mth.lerp(prone,Mth.lerp(crouch,24.63D,19.70D),7.00D));
+        double forward=EvaScale.fromLegacy(Mth.lerp(prone,Mth.lerp(crouch,1D,.8D),12D));
         // A right-shouldered rifle puts its receiver immediately beside the
         // EVA's face. Offset the optical eye toward the left eye by less than
         // one block so the stock sits at the screen edge like a human sight

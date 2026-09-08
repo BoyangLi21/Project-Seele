@@ -13,13 +13,15 @@ import org.joml.Vector3f;
 public final class EvaMeshAuditR05
 {
     private static final int[] KEYS={25,65,70,75,80,89,103,130,155,190,270,295,318,345,385,390,396,405,416,440,510,588,610,618,626,639};
+    private static final int[] R06_KEYS={25,65,95,110,130,180,210,245,280,295,305,315,340,370,390,435,450,470,515,535,565,600,615,630,650,675,740,755,770,790,850,925,950};
     private static int next,target,tick;
     private static JsonObject frame,parts;
     private static Path folder;
     public static void begin(int currentTick,int entity,Path output)
     {
         int cycles=Boolean.getBoolean("projectseele.motionReviewR05All")?3:1;
-        frame=null;if(next>=KEYS.length*cycles||currentTick<KEYS[next%KEYS.length]+650*(next/KEYS.length))return;
+        boolean r06=Boolean.getBoolean("projectseele.motionReviewR06");int[] keys=r06?R06_KEYS:KEYS;int cycle=r06?1000:650;
+        frame=null;if(next>=keys.length*cycles||currentTick<keys[next%keys.length]+cycle*(next/keys.length))return;
         tick=currentTick;target=entity;folder=output;frame=new JsonObject();parts=new JsonObject();frame.addProperty("tick",tick);frame.add("parts",parts);
         var level=net.minecraft.client.Minecraft.getInstance().level;
         if(level!=null&&level.getEntity(entity) instanceof com.projectseele.entity.EvaUnit01Entity eva)

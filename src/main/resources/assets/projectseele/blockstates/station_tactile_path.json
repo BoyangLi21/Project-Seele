@@ -1,0 +1,20 @@
+{
+  "variants": {
+    "facing=north": {
+      "model": "projectseele:block/station_tactile_path",
+      "y": 0
+    },
+    "facing=east": {
+      "model": "projectseele:block/station_tactile_path",
+      "y": 90
+    },
+    "facing=south": {
+      "model": "projectseele:block/station_tactile_path",
+      "y": 180
+    },
+    "facing=west": {
+      "model": "projectseele:block/station_tactile_path",
+      "y": 270
+    }
+  }
+}

@@ -24,6 +24,20 @@ public final class ModBlocks
             "nerv_workstation", () -> new com.projectseele.world.NervWorkstationBlock(
                     BlockBehaviour.Properties.copy(Blocks.IRON_BLOCK).strength(1.5F).noOcclusion()));
 
+    public static final RegistryObject<Block> NERV_WALL_PANEL=finish("nerv_wall_panel",Blocks.IRON_BLOCK,0);
+    public static final RegistryObject<Block> NERV_WALL_DATUM=finish("nerv_wall_datum",Blocks.IRON_BLOCK,0);
+    public static final RegistryObject<Block> NERV_FLOOR_PANEL=finish("nerv_floor_panel",Blocks.SMOOTH_STONE,0);
+    public static final RegistryObject<Block> NERV_HAZARD_PAVING=finish("nerv_hazard_paving",Blocks.SMOOTH_STONE,0);
+    public static final RegistryObject<Block> NERV_STRIP_LIGHT=finish("nerv_strip_light",Blocks.IRON_BLOCK,14);
+    public static final RegistryObject<Block> STATION_TACTILE_WARNING=finish("station_tactile_warning",Blocks.SMOOTH_STONE,0);
+    public static final RegistryObject<Block> STATION_TACTILE_PATH=BLOCKS.register("station_tactile_path",
+            ()->new com.projectseele.world.NervWayfindingTileBlock(BlockBehaviour.Properties.copy(Blocks.SMOOTH_STONE)));
+
+    private static RegistryObject<Block> finish(String name,Block material,int light)
+    {
+        return BLOCKS.register(name,()->new Block(BlockBehaviour.Properties.copy(material).strength(2F).lightLevel(s->light)));
+    }
+
     public static final RegistryObject<Block> RETRACTABLE_BUILDING_CORE = BLOCKS.register(
             "retractable_building_core",
             () -> new RetractableBuildingCoreBlock(BlockBehaviour.Properties.copy(

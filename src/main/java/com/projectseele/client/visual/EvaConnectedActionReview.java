@@ -37,6 +37,7 @@ public final class EvaConnectedActionReview
     private static final boolean ENABLED = Boolean.getBoolean("projectseele.connectedActionReview");
     private static final boolean RIFLE = Boolean.getBoolean("projectseele.rifleActionReview");
     private static final boolean R05 = Boolean.getBoolean("projectseele.motionReviewR05");
+    private static final boolean R06 = Boolean.getBoolean("projectseele.motionReviewR06");
     private static final String BATCH = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
     private static int wait;
     private static int tick;
@@ -113,6 +114,12 @@ public final class EvaConnectedActionReview
         {
             if(R05)
             {
+                if(R06)
+                {
+                    controlsR06(mc,eva);previousTick=tick;
+                    if(tick>=(Boolean.getBoolean("projectseele.motionReviewR05All")?3000:1000))finish(mc,"complete");
+                    return;
+                }
                 controlsR05(mc,eva);previousTick=tick;if(tick>=(Boolean.getBoolean("projectseele.motionReviewR05All")?1950:650))finish(mc,"complete");return;
             }
             rifleControls(mc, eva);
@@ -250,6 +257,34 @@ public final class EvaConnectedActionReview
         });
     }
 
+    private static void controlsR06(Minecraft mc,EvaUnit01Entity eva)
+    {
+        int local=tick%1000,offset=tick-local;String unit=tick>=2000?"unit02":tick>=1000?"unit00":"unit01";
+        if(at(1000)||at(2000))
+        {
+            mc.player.connection.sendCommand("seele motionlab enter "+unit);
+            mc.player.connection.sendCommand("seele motionlab weapon "+unit+" rifle");
+        }
+        boolean moving=local>=35&&local<70||local>=155&&local<250;
+        mc.options.keyUp.setDown(moving);mc.player.input.up=moving;mc.player.input.forwardImpulse=moving?1:0;mc.player.zza=moving?1:0;mc.player.xxa=0;
+        mc.player.setYRot(0);mc.player.setXRot(local>=365&&local<380?12:local>=380&&local<400?-15:0);
+        if(at(offset+45))send(ServerboundEvaControlPacket.ACTION_SPRINT_START);
+        if(at(offset+70))send(ServerboundEvaControlPacket.ACTION_SPRINT_STOP);
+        if(at(offset+85)||at(offset+430))send(ServerboundEvaControlPacket.ACTION_CROUCH_START);
+        if(at(offset+510))send(ServerboundEvaControlPacket.ACTION_CROUCH_STOP);
+        if(at(offset+275)||at(offset+590)||at(offset+730))send(ServerboundEvaControlPacket.ACTION_TOGGLE_PRONE);
+        if(local>=25&&local<805&&tick/4!=previousTick/4)send(ServerboundEvaControlPacket.ACTION_RIFLE_FIRE);
+        if(at(offset+805))mc.player.connection.sendCommand("seele motionlab weapon "+unit+" fists");
+        if(at(offset+830))heavyProbe(mc,eva,false);
+        if(at(offset+835))send(ServerboundEvaControlPacket.ACTION_SMASH);
+        if(at(offset+845))send(ServerboundEvaControlPacket.ACTION_MELEE);
+        if(at(offset+852))heavyProbe(mc,eva,true);
+        if(at(offset+890))mc.player.connection.sendCommand("seele motionlab weapon "+unit+" knife");
+        if(at(offset+910))send(ServerboundEvaControlPacket.ACTION_MELEE);
+        if(at(offset+935))send(ServerboundEvaControlPacket.ACTION_SMASH);
+        positionCamera(mc,eva);
+    }
+
     private static void send(int action)
     {
         SeeleNetwork.CHANNEL.sendToServer(new ServerboundEvaControlPacket(action));
@@ -266,6 +301,12 @@ public final class EvaConnectedActionReview
         }
         Vec3 target = eva.position().add(0, 28, 0);
         Vec3 position = eva.position().add(RIFLE && eva.getUnitVariant() == 0 ? -60 : 60, 32, 48);
+        if(R06)
+        {
+            double lower=Mth.clamp(eva.rifleStanceLevel(1)/3,0,1);
+            target=eva.position().add(0,28-21*lower,8*lower);
+            position=eva.position().add(eva.getUnitVariant()==0?-64:64,32-19*lower,48);
+        }
         Vec3 delta = target.subtract(position);
         camera.setPos(position.x, position.y - camera.getEyeHeight(), position.z);
         camera.setYRot((float)(Mth.atan2(delta.z, delta.x) * Mth.RAD_TO_DEG) - 90.0F);
@@ -293,6 +334,7 @@ public final class EvaConnectedActionReview
         JsonObject row = new JsonObject();
         row.addProperty("tick", tick);
         row.addProperty("variant", eva.getUnitVariant());
+        if(R06)row.addProperty("stanceLevel",eva.rifleStanceLevel(partialTick));
         if(R05)
         {
             row.addProperty("gaitPhase",eva.rifleGaitPhase(partialTick));

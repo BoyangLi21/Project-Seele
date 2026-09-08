@@ -1,0 +1,12 @@
+{
+  "replace": false,
+  "values": [
+    "projectseele:nerv_wall_panel",
+    "projectseele:nerv_wall_datum",
+    "projectseele:nerv_floor_panel",
+    "projectseele:nerv_hazard_paving",
+    "projectseele:nerv_strip_light",
+    "projectseele:station_tactile_path",
+    "projectseele:station_tactile_warning"
+  ]
+}

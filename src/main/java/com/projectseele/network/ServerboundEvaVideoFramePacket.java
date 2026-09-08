@@ -30,13 +30,18 @@ import net.minecraftforge.network.PacketDistributor;
  */
 public final class ServerboundEvaVideoFramePacket
 {
+    private static boolean reviewLoopback(MinecraftServer server)
+    {
+        return Boolean.getBoolean("projectseele.feedReviewR06")&&server.getWorldPath(
+                net.minecraft.world.level.storage.LevelResource.ROOT).normalize().getFileName().toString().startsWith("SEELE_EVA_FEED_REVIEW");
+    }
     public static final int FRAME_WIDTH = 1280;
     public static final int FRAME_HEIGHT = 720;
     public static final int MAX_FRAME_BYTES =
             EvaVideoFrameTransport.MAX_FRAME_BYTES;
     public static final int MAX_CHUNK_BYTES =
             EvaVideoFrameTransport.MAX_CHUNK_BYTES;
-    private static final int MIN_FRAME_INTERVAL_TICKS = 4;
+    private static final int MIN_FRAME_INTERVAL_TICKS = 1;
     public static final int FEED_ACTIVE_TICKS = 60;
     private static final Map<UUID, Long> LAST_ACCEPTED_TICK = new HashMap<>();
     private static final Map<UUID, EvaVideoFrameTransport.Assembly>
@@ -47,10 +52,6 @@ public final class ServerboundEvaVideoFramePacket
     private static final long[] LAST_HUMAN_VARIANT_TICK = {
             Long.MIN_VALUE / 2, Long.MIN_VALUE / 2, Long.MIN_VALUE / 2
     };
-    private static final byte[] PNG_SIGNATURE = {
-            (byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A
-    };
-
     private final int variant;
     private final int frameId;
     private final int chunkIndex;
@@ -145,7 +146,7 @@ public final class ServerboundEvaVideoFramePacket
                 || this.variant < EvaUnit01Entity.UNIT_00
                 || this.variant > EvaUnit01Entity.UNIT_02
                 || !sender.serverLevel().dimension().equals(
-                GeoFrontCommands.GEOFRONT))
+                GeoFrontCommands.GEOFRONT)&&!reviewLoopback(sender.server))
         {
             return false;
         }
@@ -171,7 +172,7 @@ public final class ServerboundEvaVideoFramePacket
         }
 
         ServerLevel level = sender.serverLevel();
-        if (!level.dimension().equals(GeoFrontCommands.GEOFRONT))
+        if (!level.dimension().equals(GeoFrontCommands.GEOFRONT)&&!reviewLoopback(sender.server))
         {
             return;
         }
@@ -190,7 +191,7 @@ public final class ServerboundEvaVideoFramePacket
         int viewers = 0;
         for (ServerPlayer viewer : level.players())
         {
-            if (isCommandViewer(level, viewer.position()))
+            if (isCommandViewer(level, viewer.position())||viewer==sender&&reviewLoopback(sender.server))
             {
                 ClientboundEvaVideoFramePacket.send(viewer, this.variant,
                         frame);
@@ -325,96 +326,7 @@ public final class ServerboundEvaVideoFramePacket
 
     private static boolean validFrame(byte[] data)
     {
-        if (data == null || data.length < 24
-                || data.length > MAX_FRAME_BYTES)
-        {
-            return false;
-        }
-
-        boolean png = true;
-        for (int index = 0; index < PNG_SIGNATURE.length; index++)
-        {
-            if (data[index] != PNG_SIGNATURE[index])
-            {
-                png = false;
-                break;
-            }
-        }
-        if (png)
-        {
-            return readBigEndianInt(data, 16) == FRAME_WIDTH
-                    && readBigEndianInt(data, 20) == FRAME_HEIGHT;
-        }
-        return validJpeg(data);
+        return EvaFrameCodec.inspect(data) != null;
     }
 
-    private static boolean validJpeg(byte[] data)
-    {
-        if ((data[0] & 0xFF) != 0xFF || (data[1] & 0xFF) != 0xD8)
-        {
-            return false;
-        }
-        int offset = 2;
-        while (offset + 4 <= data.length)
-        {
-            while (offset < data.length && (data[offset] & 0xFF) != 0xFF)
-            {
-                offset++;
-            }
-            while (offset < data.length && (data[offset] & 0xFF) == 0xFF)
-            {
-                offset++;
-            }
-            if (offset >= data.length)
-            {
-                return false;
-            }
-            int marker = data[offset++] & 0xFF;
-            if (marker == 0xD8 || marker == 0xD9
-                    || marker >= 0xD0 && marker <= 0xD7 || marker == 0x01)
-            {
-                continue;
-            }
-            if (offset + 2 > data.length)
-            {
-                return false;
-            }
-            int length = readUnsignedShort(data, offset);
-            if (length < 2 || offset + length > data.length)
-            {
-                return false;
-            }
-            if (isStartOfFrame(marker))
-            {
-                return length >= 7
-                        && readUnsignedShort(data, offset + 3) == FRAME_HEIGHT
-                        && readUnsignedShort(data, offset + 5) == FRAME_WIDTH;
-            }
-            if (marker == 0xDA)
-            {
-                return false;
-            }
-            offset += length;
-        }
-        return false;
-    }
-
-    private static boolean isStartOfFrame(int marker)
-    {
-        return marker >= 0xC0 && marker <= 0xCF
-                && marker != 0xC4 && marker != 0xC8 && marker != 0xCC;
-    }
-
-    private static int readUnsignedShort(byte[] data, int offset)
-    {
-        return (data[offset] & 0xFF) << 8 | data[offset + 1] & 0xFF;
-    }
-
-    private static int readBigEndianInt(byte[] data, int offset)
-    {
-        return (data[offset] & 0xFF) << 24
-                | (data[offset + 1] & 0xFF) << 16
-                | (data[offset + 2] & 0xFF) << 8
-                | data[offset + 3] & 0xFF;
-    }
 }

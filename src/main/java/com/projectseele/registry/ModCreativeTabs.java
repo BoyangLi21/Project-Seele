@@ -27,6 +27,13 @@ public class ModCreativeTabs
                         output.accept(ModItems.TERMINAL_DOGMA_ACCESS_CARD.get());
                         output.accept(ModItems.NERV_EMPLOYEE_CARD.get());
                         output.accept(ModItems.NERV_WORKSTATION.get());
+                        output.accept(ModItems.NERV_WALL_PANEL.get());
+                        output.accept(ModItems.NERV_WALL_DATUM.get());
+                        output.accept(ModItems.NERV_FLOOR_PANEL.get());
+                        output.accept(ModItems.NERV_HAZARD_PAVING.get());
+                        output.accept(ModItems.NERV_STRIP_LIGHT.get());
+                        output.accept(ModItems.STATION_TACTILE_PATH.get());
+                        output.accept(ModItems.STATION_TACTILE_WARNING.get());
                         output.accept(ModItems.BETA_CAPSULE.get());
                         output.accept(ModItems.COMMAND_SEAT_BACK.get());
                         output.accept(ModItems.EVA_PROGRESSIVE_KNIFE.get());

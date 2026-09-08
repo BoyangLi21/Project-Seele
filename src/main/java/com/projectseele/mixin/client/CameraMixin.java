@@ -33,6 +33,12 @@ public abstract class CameraMixin
             Entity subject, boolean detached, boolean mirrored,
             float partialTick, CallbackInfo callback)
     {
+        EvaUnit01Entity controlled=EvaPilotResolver.controlTarget(subject);
+        if(!detached&&controlled!=null&&controlled.isPoweredOn()&&!controlled.isActivationCinematicActive())
+        {
+            Vec3 optical=controlled.getPilotCameraSeatPosition(subject,partialTick).add(0,subject.getEyeHeight(),0);
+            this.setPosition(optical.x,optical.y,optical.z);return;
+        }
         if (detached
                 || !(subject.getVehicle() instanceof EntryPlugCarrierEntity plug))
         {
@@ -51,7 +57,7 @@ public abstract class CameraMixin
                     / 0.30F;
             float t = Math.max(0.0F, Math.min(1.0F, raw));
             float blend = t * t * (3.0F - 2.0F * t);
-            Vec3 evaEye = eva.getPilotCameraSeatPosition(subject)
+            Vec3 evaEye = eva.getPilotCameraSeatPosition(subject,partialTick)
                     .add(0.0D, subject.getEyeHeight(), 0.0D);
             eye = eye.lerp(evaEye, blend);
         }

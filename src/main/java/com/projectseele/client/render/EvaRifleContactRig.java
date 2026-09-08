@@ -85,18 +85,41 @@ public final class EvaRifleContactRig
         // rises. Keep that contact on the gun rather than stretching the arm.
         float supportSlide=Math.min(2F,-along+(float)Math.sqrt(Math.max(0,discriminant)));
         Vector3f leftTarget=new Vector3f(supportBase).fma(supportSlide,forward);
+        float stance=eva.rifleStanceLevel(partial);
+        float support=EvaBodyPose.hasSupportedStances()&&stance>1&&stance<3
+                ?(float)Math.pow(Math.sin((stance-1)*Math.PI/2),2):0;
+        float prone=EvaBodyPose.hasSupportedStances()?net.minecraft.util.Mth.clamp(stance-2,0,1):eva.rifleProneBlend(partial);
+        Vector3f leftPole=new Vector3f(right).negate().add(0,-.7F,0);
+        if(EvaBodyPose.hasSupportedStances())
+        {
+            float kneeling=(1-Math.min(1,Math.abs(stance-1)))*(1-eva.rifleMoveBlend(partial));
+            var knee=body.rig.get("shin_l").pivot();knee=new Vector3f(knee).add(0,11.4F/16,0);
+            var kneeWorld=new Matrix4f(root).mul(body.matrix("leg_l")).transformPosition(knee);
+            leftPole.normalize().lerp(kneeWorld.sub(leftShoulder).normalize(),kneeling);
+        }
+        if(support>0)
+        {
+            Vector3f ground=new Vector3f(leftShoulder).fma(4,forward);ground.y=(float)eva.getY()+1.8F;
+            leftTarget.lerp(ground,support);
+            Vector3f handAlong=EvaRigTransforms.pivot(model.getBone("finger_middle_l").orElseThrow()).sub(EvaRigTransforms.pivot(leftHand));
+            Vector3f across=EvaRigTransforms.pivot(model.getBone("finger_index_l").orElseThrow()).sub(EvaRigTransforms.pivot(model.getBone("finger_little_l").orElseThrow()));
+            Quaternionf palmDown=new Quaternionf().setFromNormalized(handFrame(forward,right).mul(handFrame(handAlong,across).transpose()));
+            qL.slerp(palmDown,support);
+            for(String n:body.rig.keySet())if(n.startsWith("finger_")&&n.endsWith("_l")&&!n.contains("_axis_"))
+                model.getBone(n).ifPresent(b->EvaRigTransforms.rotate(b,new Quaternionf().rotationZYX(b.getRotZ(),b.getRotY(),b.getRotX()).slerp(new Quaternionf(),support)));
+        }
         float out=1,down=.7F;
         float highAim=net.minecraft.util.Mth.clamp((float)(f.forward().y-.35)/.35F,0,1);
-        double re=solve(model,"r",rightTarget,qR,new Vector3f(right).mul(out-.35F*highAim).add(0,-down,0),root);
-        double le=solve(model,"l",leftTarget,qL,new Vector3f(right).mul(-out).add(0,-down,0),root);
+        Vector3f rightPole=new Vector3f(right).mul(out-.35F*highAim).add(0,-down,0);
+        rightPole=groundedPole(model,"r",rightTarget,rightPole,root,(float)eva.getY()+3.5F,prone);
+        leftPole=groundedPole(model,"l",leftTarget,leftPole,root,(float)eva.getY()+3.5F,Math.max(prone,support));
+        double re=solve(model,"r",rightTarget,qR,rightPole,root);
+        double le=solve(model,"l",leftTarget,qL,leftPole,root);
         absolute(cannon,gun,root);
         // Lean the gaze toward the existing sight line. This never moves the weapon.
-        var neck=model.getBone("neck").orElseThrow();neck.setRotZ(neck.getRotZ()-.07F*f.ready());
-        var head=model.getBone("head").orElseThrow();var eye=EvaRigTransforms.point(head,EvaRigTransforms.pivot(head),root);
-        var gaze=f.muzzle().add(f.forward().scale(40)).toVector3f().sub(eye).normalize();var lateral=new Vector3f(gaze).cross(0,1,0).normalize();
-        var vertical=new Vector3f(lateral).cross(gaze);var headBasis=new Matrix3f().setColumn(0,lateral).setColumn(1,vertical).setColumn(2,new Vector3f(gaze).negate());
-        var headWorld=new Quaternionf().setFromNormalized(headBasis).rotateZ(-.05F*f.ready());EvaRigTransforms.rotate(head,EvaRigTransforms.rotation(EvaRigTransforms.parent(head,root)).invert().mul(headWorld));
-        EvaHeadClearance.apply(eva,head,root,gun,headWorld,right,forward,partial);
+        var head=model.getBone("head").orElseThrow();var headWorld=new Quaternionf(f.headRotation());
+        EvaRigTransforms.rotate(head,EvaRigTransforms.rotation(EvaRigTransforms.parent(head,root)).invert().mul(headWorld));
+        if(!head.isHidden())EvaHeadClearance.apply(eva,head,root,gun,headWorld,right,forward,partial);
         var shoulder=EvaRigTransforms.point(model.getBone("arm_r").orElseThrow(),EvaRigTransforms.pivot(model.getBone("arm_r").orElseThrow()),root);
         if(LAST.size()>32)LAST.clear();LAST.put(eva.getId(),new Witness(f.muzzle(),re,le,-1,f.stock(),new Vec3(shoulder.x,shoulder.y,shoulder.z)));
         rotations.addAll(Set.of("neck","head","arm_r","forearm_r","wrist_r","hand_r","arm_l","forearm_l","wrist_l","hand_l","cannon"));
@@ -106,5 +129,30 @@ public final class EvaRifleContactRig
     private static double solve(BakedGeoModel model,String side,Vector3f target,Quaternionf rotation,Vector3f pole,Matrix4f root)
     {
         return EvaRigTransforms.solveArm(model.getBone("arm_"+side).orElseThrow(),model.getBone("forearm_"+side).orElseThrow(),model.getBone("wrist_"+side).orElseThrow(),model.getBone("hand_"+side).orElseThrow(),side,target,rotation,pole,root);
+    }
+
+    private static Matrix3f handFrame(Vector3f along,Vector3f across)
+    {
+        var y=new Vector3f(along).normalize();var x=new Vector3f(across).sub(new Vector3f(y).mul(across.dot(y))).normalize();
+        return new Matrix3f().setColumn(0,x).setColumn(1,y).setColumn(2,new Vector3f(x).cross(y));
+    }
+
+    private static Vector3f groundedPole(BakedGeoModel model,String side,Vector3f target,Vector3f preferred,Matrix4f root,float height,float weight)
+    {
+        if(weight<.001F)return preferred;
+        var upper=model.getBone("arm_"+side).orElseThrow();var hand=model.getBone("hand_"+side).orElseThrow();
+        var shoulder=EvaRigTransforms.point(upper,EvaRigTransforms.pivot(upper),root);float scale=root.getScale(new Vector3f()).y;
+        float a=EvaRigTransforms.elbow(side).sub(EvaRigTransforms.pivot(upper)).length()*scale;
+        float b=EvaRigTransforms.pivot(hand).sub(EvaRigTransforms.elbow(side)).length()*scale;
+        var direction=new Vector3f(target).sub(shoulder);float distance=direction.length();if(distance<.001F)return preferred;direction.div(distance);
+        distance=Math.max(Math.abs(a-b)+.001F,Math.min(a+b-.001F,distance));
+        float along=(a*a-b*b+distance*distance)/(2*distance),radius=(float)Math.sqrt(Math.max(0,a*a-along*along));
+        var centre=new Vector3f(shoulder).fma(along,direction);var vertical=new Vector3f(0,1,0).fma(-direction.y,direction);
+        if(vertical.lengthSquared()<.001F||radius<.001F)return preferred;vertical.normalize();
+        float cosine=net.minecraft.util.Mth.clamp((height-centre.y)/(radius*vertical.y),-.999F,.999F);float sine=(float)Math.sqrt(1-cosine*cosine);
+        var sideAxis=new Vector3f(direction).cross(vertical);var first=new Vector3f(vertical).mul(cosine).fma(sine,sideAxis);
+        var second=new Vector3f(vertical).mul(cosine).fma(-sine,sideAxis);
+        var chosen=first.dot(preferred)>second.dot(preferred)?first:second;
+        return new Vector3f(preferred).normalize().lerp(chosen,weight);
     }
 }

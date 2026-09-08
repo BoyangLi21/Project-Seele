@@ -20,19 +20,20 @@ def tree(vertices):
 def seam_pairs(variant):
     mesh = json.loads((PACK / f'mesh/eva_unit0{variant}.mesh.json').read_text(encoding='utf-8'))
     pairs = {}
-    for side in ('l', 'r'):
-        a, b = (mesh['parts'][name + side] for name in ('arm_', 'forearm_'))
-        x = np.array(a['vertices']).reshape(-1, mesh['stride'])[:, :3] + a['pivot']
-        y = np.array(b['vertices']).reshape(-1, mesh['stride'])[:, :3] + b['pivot']
-        matches = []
-        for i, point in enumerate(x):
-            distance = np.linalg.norm(y - point, axis=1)
-            j = int(np.argmin(distance))
-            if distance[j] < .0001:
-                matches.append((i, j))
-        if not matches:
-            raise ValueError(f'No anatomical seam for Unit-{variant}, {side}')
-        pairs[side] = matches
+    for parent, child in (('arm_', 'forearm_'), ('shin_', 'foot_')):
+        for side in ('l', 'r'):
+            a, b = (mesh['parts'][name + side] for name in (parent, child))
+            x = np.array(a['vertices']).reshape(-1, mesh['stride'])[:, :3] + a['pivot']
+            y = np.array(b['vertices']).reshape(-1, mesh['stride'])[:, :3] + b['pivot']
+            matches = []
+            for i, point in enumerate(x):
+                distance = np.linalg.norm(y - point, axis=1)
+                j = int(np.argmin(distance))
+                if distance[j] < .0001:
+                    matches.append((i, j))
+            if not matches:
+                raise ValueError(f'No anatomical seam for Unit-{variant}, {side}')
+            pairs[parent + side] = (parent + side, child + side, matches)
     return pairs
 
 
@@ -66,12 +67,15 @@ def audit(batch):
                               point[0]*np.sin(yaw)+point[2]*np.cos(yaw)])
             expected = world + np.array(pose['renderPosition'])
             row['heavy_contact_error'] = float(np.linalg.norm(actual-expected))
-        for side, pairs in seams[variant].items():
-            a, b = parts['arm_' + side], parts['forearm_' + side]
+        for side, (parent, child, pairs) in seams[variant].items():
+            a, b = parts[parent], parts[child]
             row['seams'][side] = float(max(np.linalg.norm(a[i] - b[j]) for i, j in pairs))
         if 'floor' in capture:
             row['support_above_floor'] = float(min(parts[n][:, 1].min() for n in
                 ('foot_l', 'foot_r', 'torso_lower', 'torso_upper')) - capture['floor'])
+            row['body_above_floor'] = {name: float(parts[name][:, 1].min()-capture['floor'])
+                for name in ('foot_l','foot_r','shin_l','shin_r','torso_lower','torso_upper','forearm_l','forearm_r')}
+        row['stanceLevel'] = pose.get('stanceLevel')
         if 'rifle' in parts:
             rifle = tree(parts['rifle'])
             # Fingers intentionally touch the grip; arms, head and torso must clear it.
@@ -89,7 +93,8 @@ def audit(batch):
                   maximum_heavy_contact_error=max((f.get('heavy_contact_error', 0) for f in frames), default=0),
                   maximum_witness={name: max(p.get(name, 0) for p in poses) for name in
                       ('muzzleError', 'rightHandError', 'leftHandError')})
-    target = ROOT / 'artifacts/motion_review_r05' / f'geometry_audit_{batch.name}.json'
+    generation = 'r06' if any(p.get('stanceLevel') is not None for p in poses) else 'r05'
+    target = ROOT / f'artifacts/motion_review_{generation}' / f'geometry_audit_{batch.name}.json'
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(json.dumps(report, indent=2), encoding='utf-8')
     print(json.dumps({k: v for k, v in report.items() if k != 'frames'}, indent=2))

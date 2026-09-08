@@ -437,9 +437,10 @@ public final class LocalTriangleMeshLayer<T extends GeoAnimatable> extends GeoRe
     private static Map<String,JointSkin> jointSkins(Map<String,MeshPart> parts,int stride)
     {
         Map<String,JointSkin> result=new HashMap<>();
-        for(String side:new String[]{"l","r"})
+        for(String joint:new String[]{"elbow","ankle"})for(String side:new String[]{"l","r"})
         {
-            String upper="arm_"+side,lower="forearm_"+side;var a=parts.get(upper);var b=parts.get(lower);if(a==null||b==null)continue;
+            String upper=(joint.equals("elbow")?"arm_":"shin_")+side,lower=(joint.equals("elbow")?"forearm_":"foot_")+side;
+            var a=parts.get(upper);var b=parts.get(lower);if(a==null||b==null)continue;
             // Pivot + relative coordinates can round to opposite sides of a
             // quantization cell. Match spatially and give BOTH copies the same
             // rest point and exactly half weight; a near-half weight still tears.
@@ -476,7 +477,7 @@ public final class LocalTriangleMeshLayer<T extends GeoAnimatable> extends GeoRe
                 }
                 result.put(name,new JointSkin(name.equals(upper)?lower:upper,weights,rest,rest.clone()));
             }
-            ProjectSeele.LOGGER.info("EVA elbow skin seam: side={} sharedVertices={}",side,seam.size());
+            ProjectSeele.LOGGER.info("EVA joint skin seam: joint={} side={} sharedVertices={}",joint,side,seam.size());
         }
         return Map.copyOf(result);
     }

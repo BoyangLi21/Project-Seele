@@ -207,6 +207,7 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
         }
         Minecraft minecraft = Minecraft.getInstance();
         this.pilotView = isLocalPilotView(minecraft, entity);
+        if(this.pilotView)com.projectseele.client.EvaPilotBodyRenderBridge.mark(entity);
         EvaPoseRuntimeRecorder.maybeStartSmoke(entity);
         // Wet cages and launch shafts use dedicated NERV floodlights.  Keeping
         // the airframe full-bright only while logistics-locked prevents a

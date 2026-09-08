@@ -1,18 +1,12 @@
 package com.projectseele.client;
 
 import java.awt.image.BufferedImage;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.util.Iterator;
 import java.util.Locale;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
-import javax.imageio.IIOImage;
-import javax.imageio.ImageIO;
-import javax.imageio.ImageWriteParam;
-import javax.imageio.ImageWriter;
-import javax.imageio.stream.ImageOutputStream;
 
 import com.mojang.blaze3d.platform.NativeImage;
 import com.mojang.blaze3d.pipeline.RenderTarget;
@@ -26,6 +20,7 @@ import com.projectseele.config.SeeleConfig;
 import com.projectseele.entity.EvaUnit01Entity;
 import com.projectseele.network.ClientboundPilotStatusPacket;
 import com.projectseele.network.EvaVideoFrameTransport;
+import com.projectseele.network.EvaFrameCodec;
 import com.projectseele.network.SeeleNetwork;
 import com.projectseele.network.ServerboundEvaVideoFramePacket;
 import com.projectseele.visual.GeoFrontCommands;
@@ -69,14 +64,19 @@ public final class EvaCommandFeedClient
 {
     public static final IGuiOverlay CAPTURE_OVERLAY =
             (gui, graphics, partialTick, width, height) ->
-                    captureIfDue(partialTick);
+            {
+                if(!Minecraft.getInstance().options.getCameraType().isFirstPerson())captureIfDue(partialTick);
+            };
+
+    public static void opticalWorldRendered(float partial)
+    {
+        if(!captureRenderPass&&Minecraft.getInstance().options.getCameraType().isFirstPerson())captureIfDue(partial);
+    }
 
     /**
-     * The 720p optical pass runs only while a remote operator is physically in
-     * the command room. JPEG keeps five frames per second below Minecraft's
-     * one-megabyte custom-payload ceiling without burdening solo play.
+     * Capture runs on operator demand; each JPEG fits the configured byte
+     * budget before it reaches Minecraft's bounded chunk transport.
      */
-    private static final int CAPTURE_INTERVAL_TICKS = 4;
     private static final long FRAME_STALE_NANOS = 1_500_000_000L;
     private static final double DISPLAY_RANGE_SQR = 150.0D * 150.0D;
     private static final float SCREEN_WIDTH = 10.5F;
@@ -132,6 +132,18 @@ public final class EvaCommandFeedClient
             new AtomicInteger();
     private static final EvaVideoFrameTransport.Assembly[] INCOMING_FRAMES =
             new EvaVideoFrameTransport.Assembly[3];
+    private record QueuedFrame(byte[] bytes,int generation) {}
+    private record DecodedFrame(NativeImage image,int generation) {}
+    private static final java.util.List<AtomicReference<QueuedFrame>> WAITING = java.util.List.of(
+            new AtomicReference<>(),new AtomicReference<>(),new AtomicReference<>());
+    private static final java.util.List<AtomicReference<DecodedFrame>> DECODED = java.util.List.of(
+            new AtomicReference<>(),new AtomicReference<>(),new AtomicReference<>());
+    private static final java.util.List<AtomicBoolean> DECODING = java.util.List.of(
+            new AtomicBoolean(),new AtomicBoolean(),new AtomicBoolean());
+    private static final java.util.List<AtomicBoolean> UPLOADING = java.util.List.of(
+            new AtomicBoolean(),new AtomicBoolean(),new AtomicBoolean());
+    private static final int[] NEWEST_FRAME_ID = new int[3];
+    private static final boolean[] HAS_FRAME_ID = new boolean[3];
     private static TextureTarget firstPersonCaptureTarget;
     private static RenderTarget captureTargetOverride;
     private static boolean captureRenderPass;
@@ -188,7 +200,12 @@ public final class EvaCommandFeedClient
             {232, 143, 38}, {144, 62, 205}, {210, 45, 52}
     };
 
-    private static int lastCaptureTick = -CAPTURE_INTERVAL_TICKS;
+    private static long nextCaptureNanos;
+    private static volatile float compressionHint=.86F;
+    private static final java.util.concurrent.atomic.AtomicLong REVIEW_CAPTURED=new java.util.concurrent.atomic.AtomicLong();
+    private static final java.util.concurrent.atomic.AtomicLong REVIEW_ENCODED=new java.util.concurrent.atomic.AtomicLong();
+    private static final java.util.concurrent.atomic.AtomicLong REVIEW_UPLOADED=new java.util.concurrent.atomic.AtomicLong();
+    private static final java.util.concurrent.atomic.AtomicLong REVIEW_MAX_BYTES=new java.util.concurrent.atomic.AtomicLong();
     private static ClientLevel captureLevel;
     private static int captureEvaId = Integer.MIN_VALUE;
     private static ClientLevel activeLevel;
@@ -217,22 +234,25 @@ public final class EvaCommandFeedClient
         {
             captureLevel = minecraft.level;
             captureEvaId = eva.getId();
-            lastCaptureTick = minecraft.player.tickCount
-                    - CAPTURE_INTERVAL_TICKS;
+            nextCaptureNanos = 0;
         }
-        int tick = minecraft.player.tickCount;
-        if (tick - lastCaptureTick < CAPTURE_INTERVAL_TICKS
+        long now = System.nanoTime();
+        long interval=1_000_000_000L / SeeleConfig.VIDEO_TARGET_FPS.get();
+        if (now < nextCaptureNanos
                 || !CAPTURE_IN_FLIGHT.compareAndSet(false, true))
         {
             return;
         }
-        lastCaptureTick = tick;
+        // Preserve cadence across render-frame rounding, without queuing a
+        // catch-up burst after a pause or a slow encode.
+        nextCaptureNanos = Math.max(nextCaptureNanos+interval,now+interval/4);
 
         NativeImage full;
         try
         {
             full = captureFirstPersonFrame(minecraft, partialTick);
             PerformanceCounters.recordFramebufferCapture();
+            if(Boolean.getBoolean("projectseele.feedReviewR06"))REVIEW_CAPTURED.incrementAndGet();
         }
         catch (RuntimeException exception)
         {
@@ -242,9 +262,10 @@ public final class EvaCommandFeedClient
             return;
         }
         int variant = eva.getUnitVariant();
+        int sourceId = eva.getId();
         int generation = CONNECTION_GENERATION.get();
         Util.ioPool().execute(() -> encodeAndSend(
-                minecraft, variant, generation, full));
+                minecraft, variant, generation, sourceId, full));
     }
 
     /**
@@ -256,23 +277,47 @@ public final class EvaCommandFeedClient
     private static NativeImage captureFirstPersonFrame(
             Minecraft minecraft, float partialTick)
     {
+        RenderTarget mainTarget = minecraft.getMainRenderTarget();
+        int readBuffer=org.lwjgl.opengl.GL11.glGetInteger(org.lwjgl.opengl.GL30.GL_READ_FRAMEBUFFER_BINDING);
+        int drawBuffer=org.lwjgl.opengl.GL11.glGetInteger(org.lwjgl.opengl.GL30.GL_DRAW_FRAMEBUFFER_BINDING);
+        int width=SeeleConfig.VIDEO_CAPTURE_WIDTH.get()/16*16,height=width*9/16;
+        if(firstPersonCaptureTarget==null)
+            firstPersonCaptureTarget=new TextureTarget(width,height,true,Minecraft.ON_OSX);
+        else if(firstPersonCaptureTarget.viewWidth!=width||firstPersonCaptureTarget.viewHeight!=height)
+            firstPersonCaptureTarget.resize(width,height,Minecraft.ON_OSX);
         if (minecraft.options.getCameraType().isFirstPerson())
         {
-            return Screenshot.takeScreenshot(
-                    minecraft.getMainRenderTarget());
-        }
-        if (firstPersonCaptureTarget == null)
-        {
-            firstPersonCaptureTarget = new TextureTarget(
-                    ServerboundEvaVideoFramePacket.FRAME_WIDTH,
-                    ServerboundEvaVideoFramePacket.FRAME_HEIGHT,
-                    true, Minecraft.ON_OSX);
+            // Read back the stream-sized image, not a possible 4K/ultrawide display.
+            int sourceWidth=mainTarget.viewWidth,sourceHeight=mainTarget.viewHeight;
+            int cropWidth=Math.min(sourceWidth,sourceHeight*16/9),cropHeight=Math.min(sourceHeight,sourceWidth*9/16);
+            int x=(sourceWidth-cropWidth)/2,y=(sourceHeight-cropHeight)/2;
+            try
+            {
+                org.lwjgl.opengl.GL30.glBindFramebuffer(org.lwjgl.opengl.GL30.GL_READ_FRAMEBUFFER,mainTarget.frameBufferId);
+                org.lwjgl.opengl.GL30.glBindFramebuffer(org.lwjgl.opengl.GL30.GL_DRAW_FRAMEBUFFER,firstPersonCaptureTarget.frameBufferId);
+                org.lwjgl.opengl.GL30.glBlitFramebuffer(x,y,x+cropWidth,y+cropHeight,0,0,width,height,
+                        org.lwjgl.opengl.GL11.GL_COLOR_BUFFER_BIT,org.lwjgl.opengl.GL11.GL_LINEAR);
+                return Screenshot.takeScreenshot(firstPersonCaptureTarget);
+            }
+            finally
+            {
+                org.lwjgl.opengl.GL30.glBindFramebuffer(org.lwjgl.opengl.GL30.GL_READ_FRAMEBUFFER,readBuffer);
+                org.lwjgl.opengl.GL30.glBindFramebuffer(org.lwjgl.opengl.GL30.GL_DRAW_FRAMEBUFFER,drawBuffer);
+            }
         }
 
         CameraType originalCamera = minecraft.options.getCameraType();
-        RenderTarget mainTarget = minecraft.getMainRenderTarget();
+        var modelView=com.mojang.blaze3d.systems.RenderSystem.getModelViewStack();
+        var projection=new Matrix4f(com.mojang.blaze3d.systems.RenderSystem.getProjectionMatrix());
+        var sorting=com.mojang.blaze3d.systems.RenderSystem.getVertexSorting();
+        var inverseView=new Matrix3f(com.mojang.blaze3d.systems.RenderSystem.getInverseViewRotationMatrix());
+        modelView.pushPose();
         try
         {
+            // This pass starts inside a GUI overlay. Its global model-view
+            // matrix still contains the GUI far-plane translation; world
+            // entities would otherwise be clipped despite submitting vertices.
+            modelView.setIdentity();com.mojang.blaze3d.systems.RenderSystem.applyModelViewMatrix();
             minecraft.options.setCameraType(CameraType.FIRST_PERSON);
             captureTargetOverride = firstPersonCaptureTarget;
             captureRenderPass = true;
@@ -291,6 +336,9 @@ public final class EvaCommandFeedClient
             captureTargetOverride = null;
             captureRenderPass = false;
             minecraft.options.setCameraType(originalCamera);
+            modelView.popPose();com.mojang.blaze3d.systems.RenderSystem.applyModelViewMatrix();
+            com.mojang.blaze3d.systems.RenderSystem.setProjectionMatrix(projection,sorting);
+            com.mojang.blaze3d.systems.RenderSystem.setInverseViewRotationMatrix(inverseView);
             mainTarget.bindWrite(true);
         }
     }
@@ -303,7 +351,7 @@ public final class EvaCommandFeedClient
 
     /**
      * The pilot client cannot know whether a remote operator is watching the
-     * command wall. Server demand keeps GPU readback and PNG compression at
+     * command wall. Server demand keeps GPU readback and image compression at
      * zero cost in normal one-player testing.
      */
     public static void setCaptureDemand(boolean demanded)
@@ -346,23 +394,21 @@ public final class EvaCommandFeedClient
     }
 
     private static void encodeAndSend(Minecraft minecraft, int variant,
-                                      int generation, NativeImage full)
+                                      int generation, int sourceId, NativeImage full)
     {
-        try (full;
-             NativeImage reduced = new NativeImage(
-                     ServerboundEvaVideoFramePacket.FRAME_WIDTH,
-                     ServerboundEvaVideoFramePacket.FRAME_HEIGHT, false))
+        try (full)
         {
-            full.resizeSubRectTo(0, 0, full.getWidth(), full.getHeight(),
-                    reduced);
-            byte[] png = encodeJpeg(reduced);
+            EvaFrameCodec.Encoded encoded = encodeJpeg(full);
+            byte[] png = encoded.bytes();
+            if(Boolean.getBoolean("projectseele.feedReviewR06")) { REVIEW_ENCODED.incrementAndGet();REVIEW_MAX_BYTES.accumulateAndGet(png.length,Math::max); }
+            compressionHint=encoded.quality();
             PerformanceCounters.recordPngEncode();
             if (png.length <= ServerboundEvaVideoFramePacket.MAX_FRAME_BYTES)
             {
                 int frameId = NEXT_CAPTURE_FRAME_ID.incrementAndGet();
                 int chunks = EvaVideoFrameTransport.chunkCount(png.length);
                 minecraft.execute(() -> sendFrameChunks(minecraft, variant,
-                        generation, frameId, chunks, png));
+                        generation, sourceId, frameId, chunks, png));
             }
         }
         catch (IOException | RuntimeException exception)
@@ -377,7 +423,7 @@ public final class EvaCommandFeedClient
     }
 
     private static void sendFrameChunks(Minecraft minecraft, int variant,
-                                        int generation, int frameId,
+                                        int generation, int sourceId, int frameId,
                                         int chunks, byte[] frame)
     {
         if (generation != CONNECTION_GENERATION.get()
@@ -386,6 +432,8 @@ public final class EvaCommandFeedClient
         {
             return;
         }
+        EvaUnit01Entity source=EvaPilotResolver.controlTarget(minecraft.player);
+        if(source==null||source.getId()!=sourceId)return;
         for (int index = 0; index < chunks; index++)
         {
             SeeleNetwork.CHANNEL.sendToServer(
@@ -407,6 +455,9 @@ public final class EvaCommandFeedClient
             return;
         }
         EvaVideoFrameTransport.Assembly assembly = INCOMING_FRAMES[variant];
+        if(HAS_FRAME_ID[variant]&&frameId!=NEWEST_FRAME_ID[variant]&&frameId-NEWEST_FRAME_ID[variant]<=0)return;
+        if(HAS_FRAME_ID[variant]&&frameId==NEWEST_FRAME_ID[variant]&&assembly==null)return;
+        NEWEST_FRAME_ID[variant]=frameId;HAS_FRAME_ID[variant]=true;
         if (assembly == null || assembly.expired(System.nanoTime())
                 || !assembly.matches(frameId, chunkCount, totalBytes))
         {
@@ -434,12 +485,14 @@ public final class EvaCommandFeedClient
     {
         captureDemanded = false;
         CONNECTION_GENERATION.incrementAndGet();
-        CAPTURE_IN_FLIGHT.set(false);
         captureLevel = null;
         captureEvaId = Integer.MIN_VALUE;
         for (int variant = 0; variant < INCOMING_FRAMES.length; variant++)
         {
             INCOMING_FRAMES[variant] = null;
+            HAS_FRAME_ID[variant]=false;WAITING.get(variant).set(null);
+            var decoded=DECODED.get(variant).getAndSet(null);
+            if(decoded!=null)decoded.image().close();
         }
     }
 
@@ -451,21 +504,81 @@ public final class EvaCommandFeedClient
         {
             return;
         }
-        NativeImage image = null;
+        if(EvaFrameCodec.inspect(png)==null)return;
+        WAITING.get(variant).set(new QueuedFrame(png,CONNECTION_GENERATION.get()));
+        startDecode(variant);
+    }
+
+    private static void startDecode(int variant)
+    {
+        if(!DECODING.get(variant).compareAndSet(false,true))return;
+        Util.ioPool().execute(()->{
+            try
+            {
+                QueuedFrame frame;
+                while((frame=WAITING.get(variant).getAndSet(null))!=null)
+                {
+                    if(frame.generation()!=CONNECTION_GENERATION.get())continue;
+                    // NativeImage.read(byte[]) copies the complete image onto
+                    // LWJGL's small per-thread stack. Use heap-owned native input.
+                    NativeImage image;
+                    var input=org.lwjgl.system.MemoryUtil.memAlloc(frame.bytes().length);
+                    try { input.put(frame.bytes()).flip();image=NativeImage.read(input); }
+                    finally { org.lwjgl.system.MemoryUtil.memFree(input); }
+                    if(!EvaFrameCodec.allowedSize(image.getWidth(),image.getHeight())
+                            ||frame.generation()!=CONNECTION_GENERATION.get()||WAITING.get(variant).get()!=null)
+                    {
+                        image.close();continue;
+                    }
+                    var old=DECODED.get(variant).getAndSet(new DecodedFrame(image,frame.generation()));
+                    if(old!=null)old.image().close();
+                    scheduleUpload(variant);
+                }
+            }
+            catch(IOException|RuntimeException failure)
+            {
+                ProjectSeele.LOGGER.warn("Rejected EVA command feed frame",failure);
+            }
+            finally
+            {
+                DECODING.get(variant).set(false);
+                if(WAITING.get(variant).get()!=null)startDecode(variant);
+            }
+        });
+    }
+
+    private static void scheduleUpload(int variant)
+    {
+        if(!UPLOADING.get(variant).compareAndSet(false,true))return;
+        Minecraft.getInstance().execute(()->{
+            try
+            {
+                var frame=DECODED.get(variant).getAndSet(null);
+                if(frame!=null)
+                {
+                    if(frame.generation()==CONNECTION_GENERATION.get())uploadFrame(variant,frame.image());
+                    else frame.image().close();
+                }
+            }
+            finally
+            {
+                UPLOADING.get(variant).set(false);
+                if(DECODED.get(variant).get()!=null)scheduleUpload(variant);
+            }
+        });
+    }
+
+    private static void uploadFrame(int variant,NativeImage image)
+    {
         try
         {
-            image = NativeImage.read(png);
-            if (image.getWidth()
-                    != ServerboundEvaVideoFramePacket.FRAME_WIDTH
-                    || image.getHeight()
-                    != ServerboundEvaVideoFramePacket.FRAME_HEIGHT)
-            {
-                image.close();
-                return;
-            }
-
             Minecraft minecraft = Minecraft.getInstance();
             DynamicTexture texture = TEXTURES[variant];
+            if(texture!=null&&(texture.getPixels()==null||texture.getPixels().getWidth()!=image.getWidth()
+                    ||texture.getPixels().getHeight()!=image.getHeight()))
+            {
+                texture.close();texture=null;TEXTURES[variant]=null;
+            }
             if (texture == null)
             {
                 texture = new DynamicTexture(image);
@@ -475,17 +588,13 @@ public final class EvaCommandFeedClient
             }
             else
             {
-                NativeImage previous = texture.getPixels();
                 texture.setPixels(image);
-                if (previous != null)
-                {
-                    previous.close();
-                }
             }
             texture.upload();
             LAST_FRAME_NANOS[variant] = System.nanoTime();
+            if(Boolean.getBoolean("projectseele.feedReviewR06"))REVIEW_UPLOADED.incrementAndGet();
         }
-        catch (IOException | RuntimeException exception)
+        catch (RuntimeException exception)
         {
             if (image != null)
             {
@@ -497,6 +606,22 @@ public final class EvaCommandFeedClient
     }
 
     /** True only while this client owns a recently decoded command-room frame. */
+    public static long[] reviewCounts()
+    {
+        return new long[]{REVIEW_CAPTURED.get(),REVIEW_ENCODED.get(),REVIEW_UPLOADED.get(),REVIEW_MAX_BYTES.get()};
+    }
+
+    public static void saveReviewFeed(int variant,java.nio.file.Path file)
+    {
+        if(!Boolean.getBoolean("projectseele.feedReviewR06")||TEXTURES[variant]==null)return;
+        var pixels=TEXTURES[variant].getPixels();if(pixels==null)return;
+        var copy=new NativeImage(pixels.getWidth(),pixels.getHeight(),false);copy.copyFrom(pixels);
+        Util.ioPool().execute(()->{
+            try(copy){java.nio.file.Files.createDirectories(file.getParent());copy.writeToFile(file);}
+            catch(IOException failure){ProjectSeele.LOGGER.warn("Saving feed review",failure);}
+        });
+    }
+
     public static boolean hasFreshFrame(int variant)
     {
         return variant >= EvaUnit01Entity.UNIT_00
@@ -687,7 +812,7 @@ public final class EvaCommandFeedClient
         }
     }
 
-    private static byte[] encodeJpeg(NativeImage image) throws IOException
+    private static EvaFrameCodec.Encoded encodeJpeg(NativeImage image) throws IOException
     {
         int width = image.getWidth();
         int height = image.getHeight();
@@ -706,44 +831,9 @@ public final class EvaCommandFeedClient
                 width, height, BufferedImage.TYPE_INT_RGB);
         buffered.setRGB(0, 0, width, height, rgb, 0, width);
 
-        byte[] encoded = writeJpeg(buffered, 0.78F);
-        if (encoded.length > ServerboundEvaVideoFramePacket.MAX_FRAME_BYTES)
-        {
-            encoded = writeJpeg(buffered, 0.64F);
-        }
-        if (encoded.length > ServerboundEvaVideoFramePacket.MAX_FRAME_BYTES)
-        {
-            encoded = writeJpeg(buffered, 0.48F);
-        }
-        return encoded;
-    }
-
-    private static byte[] writeJpeg(BufferedImage image, float quality)
-            throws IOException
-    {
-        Iterator<ImageWriter> writers =
-                ImageIO.getImageWritersByFormatName("jpeg");
-        if (!writers.hasNext())
-        {
-            throw new IOException("No JPEG encoder is available");
-        }
-        ImageWriter writer = writers.next();
-        try (ByteArrayOutputStream output = new ByteArrayOutputStream();
-             ImageOutputStream imageOutput =
-                     ImageIO.createImageOutputStream(output))
-        {
-            writer.setOutput(imageOutput);
-            ImageWriteParam parameters = writer.getDefaultWriteParam();
-            parameters.setCompressionMode(ImageWriteParam.MODE_EXPLICIT);
-            parameters.setCompressionQuality(quality);
-            writer.write(null, new IIOImage(image, null, null), parameters);
-            imageOutput.flush();
-            return output.toByteArray();
-        }
-        finally
-        {
-            writer.dispose();
-        }
+        return EvaFrameCodec.encode(buffered,
+                Math.min(SeeleConfig.VIDEO_JPEG_QUALITY.get().floatValue(),compressionHint+.01F),
+                SeeleConfig.VIDEO_FRAME_BUDGET_KIB.get()*1024);
     }
 
     /**

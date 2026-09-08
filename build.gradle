@@ -137,6 +137,16 @@ minecraft {
                 property 'projectseele.motionReviewR05', 'true'
                 if (project.hasProperty('motionReviewR05All')) property 'projectseele.motionReviewR05All', 'true'
             }
+            if (project.hasProperty('feedReviewR06')) {
+                property 'projectseele.feedReviewR06', 'true'
+            }
+            if (project.hasProperty('motionReviewR06')) {
+                property 'projectseele.connectedActionReview', 'true'
+                property 'projectseele.rifleActionReview', 'true'
+                property 'projectseele.motionReviewR05', 'true'
+                property 'projectseele.motionReviewR06', 'true'
+                if (project.hasProperty('motionReviewR05All')) property 'projectseele.motionReviewR05All', 'true'
+            }
             if (project.hasProperty('pyramidInteriorReview')) {
                 property 'projectseele.pyramidInteriorReview', 'true'
             }
@@ -369,4 +379,14 @@ tasks.register('verifyEvaPoseTransition', JavaExec) {
 }
 tasks.named('check').configure {
     dependsOn 'verifyEvaPoseTransition'
+}
+
+tasks.register('verifyEvaVideoCodec', JavaExec) {
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.projectseele.network.EvaVideoCodecTest'
+    systemProperty 'java.awt.headless', 'true'
+}
+tasks.named('check').configure {
+    dependsOn 'verifyEvaVideoCodec'
 }

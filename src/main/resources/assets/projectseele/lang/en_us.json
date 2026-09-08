@@ -167,16 +167,23 @@
   "block.projectseele.geofront_skyweave": "GeoFront Static Skyweave",
   "block.projectseele.one_way_glass": "NERV One-Way Observation Glass",
   "item.projectseele.terminal_dogma_access_card": "NERV Highest Clearance Card",
-  "item.projectseele.nerv_employee_card": "NERV Employee Card"
-  ,"entity.projectseele.nerv_armament_station": "NERV Armament Building"
-  ,"msg.projectseele.armament_spawn_exists": "An armament station already exists nearby"
-  ,"msg.projectseele.armament_spawned": "NERV armament station installed at %s"
-  ,"msg.projectseele.armament_command_rejected": "Armament station rejected that command in its current phase"
-  ,"msg.projectseele.armament_deploying": "Armament building deploying"
-  ,"msg.projectseele.armament_recalling": "Armament building returning underground"
-  ,"msg.projectseele.armament_missing": "No NERV armament station is within 128 blocks"
-  ,"msg.projectseele.armament_removed": "Nearest armament station removed without changing terrain"
-  ,"msg.projectseele.armament_rifle_acquired": "PALLET RIFLE TRANSFER COMPLETE"
-  ,"msg.projectseele.armament_already_installed": "This EVA already carries a Pallet Rifle",
-  "block.projectseele.nerv_workstation": "NERV CRT Workstation"
+  "item.projectseele.nerv_employee_card": "NERV Employee Card",
+  "entity.projectseele.nerv_armament_station": "NERV Armament Building",
+  "msg.projectseele.armament_spawn_exists": "An armament station already exists nearby",
+  "msg.projectseele.armament_spawned": "NERV armament station installed at %s",
+  "msg.projectseele.armament_command_rejected": "Armament station rejected that command in its current phase",
+  "msg.projectseele.armament_deploying": "Armament building deploying",
+  "msg.projectseele.armament_recalling": "Armament building returning underground",
+  "msg.projectseele.armament_missing": "No NERV armament station is within 128 blocks",
+  "msg.projectseele.armament_removed": "Nearest armament station removed without changing terrain",
+  "msg.projectseele.armament_rifle_acquired": "PALLET RIFLE TRANSFER COMPLETE",
+  "msg.projectseele.armament_already_installed": "This EVA already carries a Pallet Rifle",
+  "block.projectseele.nerv_workstation": "NERV CRT Workstation",
+  "block.projectseele.nerv_wall_panel": "NERV Painted Wall Panel",
+  "block.projectseele.nerv_wall_datum": "NERV Datum Wall Panel",
+  "block.projectseele.nerv_floor_panel": "NERV Floor Panel",
+  "block.projectseele.nerv_hazard_paving": "NERV Threshold Marking",
+  "block.projectseele.nerv_strip_light": "NERV Recessed Strip Light",
+  "block.projectseele.station_tactile_path": "Station Tactile Guide",
+  "block.projectseele.station_tactile_warning": "Station Tactile Warning"
 }

@@ -11,17 +11,17 @@
   "msg.projectseele.power_depleted": "内部电池耗尽——EVA 操纵离线，请立即弹出",
   "msg.projectseele.power_cable_severed": "重大损伤导致脐带断裂——五分钟内部电源开始供电",
   "itemGroup.projectseele": "Project SEELE",
-  "message.projectseele.use_entry_gantry": "\u8bf7\u4ece\u80cc\u90e8\u9ad8\u4f4d\u63d2\u5165\u6813\u6808\u6865\u767b\u4e58",
-  "message.projectseele.aim_entry_plug": "\u8bf7\u5c06\u51c6\u661f\u5bf9\u51c6 EVA \u80cc\u90e8\u7684\u63d2\u5165\u6813\u63a5\u53e3",
-  "message.projectseele.launch_locked": "\u53d1\u5c04\u8f7d\u53f0\u5df2\u9501\u5b9a\u2014\u2014\u63d2\u5165\u4e0e\u540c\u6b65\u8fdb\u884c\u4e2d",
-  "message.projectseele.launch_interlock": "\u53d1\u5c04\u5e8f\u5217\u4e2d\u7981\u6b62\u5f39\u51fa\u63d2\u5165\u6813",
-  "message.projectseele.board_external_entry_plug": "\u8bf7\u4ece\u80cc\u90e8\u767b\u673a\u6865\u8fdb\u5165\u540a\u6302\u4e2d\u7684\u63d2\u5165\u6813",
-  "message.projectseele.launch_bed_occupied": "\u8be5\u53d1\u5c04\u53f0\u5df2\u88ab\u53e6\u4e00\u53f0 EVA \u5360\u7528",
-  "message.projectseele.launch_surface_clear": "\u5df2\u7a81\u7834\u5730\u8868\u2014\u2014\u9a7e\u9a76\u6743\u5df2\u6062\u590d",
+  "message.projectseele.use_entry_gantry": "请从背部高位插入栓栈桥登乘",
+  "message.projectseele.aim_entry_plug": "请将准星对准 EVA 背部的插入栓接口",
+  "message.projectseele.launch_locked": "发射载台已锁定——插入与同步进行中",
+  "message.projectseele.launch_interlock": "发射序列中禁止弹出插入栓",
+  "message.projectseele.board_external_entry_plug": "请从背部登机桥进入吊挂中的插入栓",
+  "message.projectseele.launch_bed_occupied": "该发射台已被另一台 EVA 占用",
+  "message.projectseele.launch_surface_clear": "已突破地表——驾驶权已恢复",
   "hud.projectseele.launch_standby": "发射就绪 — 等待指挥部发射授权",
-  "hud.projectseele.launch_interlock": "\u7535\u78c1\u9501\u5b9a / \u5f39\u5c04\u5f85\u547d",
-  "hud.projectseele.launch_ascent": "\u7d27\u6025\u5730\u8868\u5f39\u5c04",
-  "hud.projectseele.launch_surface_clear": "\u5df2\u7a81\u7834\u5730\u8868\u2014\u2014\u9a7e\u9a76\u6743\u6062\u590d\u4e2d",
+  "hud.projectseele.launch_interlock": "电磁锁定 / 弹射待命",
+  "hud.projectseele.launch_ascent": "紧急地表弹射",
+  "hud.projectseele.launch_surface_clear": "已突破地表——驾驶权恢复中",
   "item.projectseele.sachiel_spawn_egg": "萨基尔刷怪蛋",
   "item.projectseele.s2_engine_fragment": "S²机关碎片",
   "item.projectseele.shamshel_spawn_egg": "夏姆榭尔刷怪蛋",
@@ -138,7 +138,7 @@
   "advancements.projectseele.first_victory.description": "击败第五使徒拉米尔",
   "advancements.projectseele.yashima_untouched.title": "无伤屋岛",
   "advancements.projectseele.yashima_untouched.description": "全程未被拉米尔命中并将其击败",
-  "entity.projectseele.lilith": "\u8389\u8389\u4e1d",
+  "entity.projectseele.lilith": "莉莉丝",
   "message.projectseele.scenario_released": "机体自生命之树解放",
   "msg.projectseele.sync_angel_gain": "A10 神经连接稳定：同步率 +%s%%（当前 %s%%）",
   "msg.projectseele.sync_feedback": "神经反噬：驾驶员承受 %s 伤害（同步率 %s%%）",
@@ -165,16 +165,23 @@
   "entity.projectseele.ultraman_avatar": "奥特曼",
   "block.projectseele.clear_glass": "NERV 无划痕结构玻璃",
   "item.projectseele.terminal_dogma_access_card": "NERV 最高权限卡",
-  "item.projectseele.nerv_employee_card": "NERV 员工卡"
-  ,"entity.projectseele.nerv_armament_station": "NERV 兵装大楼"
-  ,"msg.projectseele.armament_spawn_exists": "附近已经存在兵装升降站"
-  ,"msg.projectseele.armament_spawned": "NERV 兵装升降站已安装于 %s"
-  ,"msg.projectseele.armament_command_rejected": "兵装升降站当前阶段拒绝该命令"
-  ,"msg.projectseele.armament_deploying": "兵装大楼开始升起"
-  ,"msg.projectseele.armament_recalling": "兵装大楼正在返回地下"
-  ,"msg.projectseele.armament_missing": "128 格内没有 NERV 兵装升降站"
-  ,"msg.projectseele.armament_removed": "最近的兵装升降站已移除，地形未改变"
-  ,"msg.projectseele.armament_rifle_acquired": "帕雷特步枪移交完成"
-  ,"msg.projectseele.armament_already_installed": "该 EVA 已装备帕雷特步枪",
-  "block.projectseele.nerv_workstation": "NERV CRT 工作终端"
+  "item.projectseele.nerv_employee_card": "NERV 员工卡",
+  "entity.projectseele.nerv_armament_station": "NERV 兵装大楼",
+  "msg.projectseele.armament_spawn_exists": "附近已经存在兵装升降站",
+  "msg.projectseele.armament_spawned": "NERV 兵装升降站已安装于 %s",
+  "msg.projectseele.armament_command_rejected": "兵装升降站当前阶段拒绝该命令",
+  "msg.projectseele.armament_deploying": "兵装大楼开始升起",
+  "msg.projectseele.armament_recalling": "兵装大楼正在返回地下",
+  "msg.projectseele.armament_missing": "128 格内没有 NERV 兵装升降站",
+  "msg.projectseele.armament_removed": "最近的兵装升降站已移除，地形未改变",
+  "msg.projectseele.armament_rifle_acquired": "帕雷特步枪移交完成",
+  "msg.projectseele.armament_already_installed": "该 EVA 已装备帕雷特步枪",
+  "block.projectseele.nerv_workstation": "NERV CRT 工作终端",
+  "block.projectseele.nerv_wall_panel": "NERV 灰蓝墙板",
+  "block.projectseele.nerv_wall_datum": "NERV 红线墙板",
+  "block.projectseele.nerv_floor_panel": "NERV 浅色地板",
+  "block.projectseele.nerv_hazard_paving": "NERV 门槛警戒铺装",
+  "block.projectseele.nerv_strip_light": "NERV 嵌入式灯具",
+  "block.projectseele.station_tactile_path": "车站导向盲道",
+  "block.projectseele.station_tactile_warning": "车站警示盲道"
 }

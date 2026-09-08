@@ -14,6 +14,7 @@
     "client.CameraMixin",
     "client.AbstractClientPlayerSkinMixin",
     "client.MinecraftRenderTargetMixin",
+    "client.GameRendererFeedProjectionMixin",
     "client.PlayerModelGendoPoseMixin",
     "client.MovingElevatorDisplayMixin",
     "client.MovingElevatorPanelMixin",

@@ -127,12 +127,14 @@ public final class RegionalWorldBuildDriver
                 }
                 return;
             }
-            if (MODE.equals("generate") || MODE.equals("generate-extra"))
+            if (MODE.equals("generate") || MODE.equals("generate-extra") || MODE.equals("generate-harbour"))
             {
                 if(chunks==null)
                 {
-                    chunks=JsonParser.parseString(Files.readString(world.resolve("regional_plan.json"))).getAsJsonObject()
-                            .getAsJsonArray(MODE.equals("generate-extra")?"extra_chunks":"chunks");
+                    chunks=MODE.equals("generate-harbour")
+                            ?JsonParser.parseString(Files.readString(world.resolve("harbour_chunks_r06.json"))).getAsJsonArray()
+                            :JsonParser.parseString(Files.readString(world.resolve("regional_plan.json"))).getAsJsonObject()
+                                .getAsJsonArray(MODE.equals("generate-extra")?"extra_chunks":"chunks");
                     ProjectSeele.LOGGER.info("REGIONAL GENERATION START chunks={}",chunks.size());
                 }
                 var iterator=PENDING.entrySet().iterator();
@@ -152,7 +154,7 @@ public final class RegionalWorldBuildDriver
                 }
                 if(completed==chunks.size())
                 {
-                    Files.writeString(world.resolve(MODE.equals("generate-extra")?"regional_extra_generation_complete.json":"regional_generation_complete.json"),"{\"chunks\":"+completed+"}");
+                    Files.writeString(world.resolve(MODE.equals("generate-harbour")?"harbour_generation_r06_complete.json":MODE.equals("generate-extra")?"regional_extra_generation_complete.json":"regional_generation_complete.json"),"{\"chunks\":"+completed+"}");
                     ProjectSeele.LOGGER.info("REGIONAL GENERATION COMPLETE chunks={}",completed);stop(server);
                 }
                 return;

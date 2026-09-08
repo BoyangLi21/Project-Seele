@@ -172,3 +172,9 @@ annotation, fitted stride extraction, shared-root correction and two-leg IK;
 本轮清理的 NERV 叶片标志及 MoCap Online 持枪动捕重定向结果保留在本机资源目录，不进入仓库或发行物。
 
 2026-09-08 R05：空手站立右键重击使用 [ACCAD Open Motion Project](https://accad.osu.edu/research/motion-lab/mocap-system-and-data) 的 `Male2_E4_CrossRight`，版权归 ACCAD / The Ohio State University，按 [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/) 署名。派生数据经过裁剪、EVA 比例重定向、脚底约束、肘部修正、握拳和时长映射，详见 `motion/eva_heavy_right_cross_r05.json` 的 provenance。MoCap Online Demo `MOB1_CrouchWalk_F` 与相关持枪动捕重定向仍仅用于本机私有资源，未纳入仓库。
+
+## R06 建筑饰面与姿态（2026-09-08）
+
+`tools/build_nerv_architectural_assets.py` 独立绘制七种 128×128 建筑贴图及匹配模型：灰蓝墙板、红线墙板、浅色地板、警戒门槛、嵌入式灯具、导向盲道和警示盲道。矢量源位于 `tools/art/nerv_architecture/`；本轮未把网上原画、照片或剧照变成贴图。原 TV 和现实设施的研究链接见 [R06 记录](WORLD_MOTION_R06.md)。
+
+单膝、扶地与卧姿转换由 `tools/author_eva_rifle_stances_r06.py` 在已测量骨架上编制，使用接触约束和双四元数接缝计算；不称作新下载的真人卧射。组合文件仍包含此前本机 MoCap Online 派生动作，保留在 `run/projectseele-local-maps/eva_body_r06.json`，不随仓库发布。售票机与时钟直接使用已经安装的 MTR 4.0.5 模组方块，没有复制或重发其素材。
