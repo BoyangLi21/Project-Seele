@@ -170,3 +170,5 @@ annotation, fitted stride extraction, shared-root correction and two-leg IK;
 `textures/block/nerv_workstation.png` 为内置 imagegen 生成的原创绿色单色屏幕 UI，搭配项目原创的 CRT 外壳、底座与键盘模型；它是装饰工作终端，不替代已实现的指挥室控制系统，也不显示实时遥测。提示围绕 1990 年代日本机房显示风格、MAGI 三子系统、波形与节点图；未复制官方标志或原画。SHA-256 与完整本机来源记录见 `artifacts/world_motion_r04/asset_manifest.json`。
 
 本轮清理的 NERV 叶片标志及 MoCap Online 持枪动捕重定向结果保留在本机资源目录，不进入仓库或发行物。
+
+2026-09-08 R05：空手站立右键重击使用 [ACCAD Open Motion Project](https://accad.osu.edu/research/motion-lab/mocap-system-and-data) 的 `Male2_E4_CrossRight`，版权归 ACCAD / The Ohio State University，按 [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/) 署名。派生数据经过裁剪、EVA 比例重定向、脚底约束、肘部修正、握拳和时长映射，详见 `motion/eva_heavy_right_cross_r05.json` 的 provenance。MoCap Online Demo `MOB1_CrouchWalk_F` 与相关持枪动捕重定向仍仅用于本机私有资源，未纳入仓库。

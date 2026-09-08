@@ -93,16 +93,18 @@ public final class EvaMotionEngineV2
             MotionDatabase.empty();
     private static volatile MotionDatabase liveKnifeDatabase =
             MotionDatabase.empty();
+    private static volatile MotionDatabase liveHeavyDatabase=MotionDatabase.empty();
 
     private EvaMotionEngineV2() {}
 
     public static void reload(ResourceManager resourceManager)
     {
-        EvaRifleMocap.reload(resourceManager);
-        EvaRifleProneBody.reload(resourceManager);
+        com.projectseele.entity.EvaBodyPose.reload();
+        liveHeavyDatabase=load(resourceManager,new ResourceLocation(ProjectSeele.MODID,"motion/eva_heavy_right_cross_r05.json"),"EVA R05 right cross");
         STATES.clear();
         GAMEPLAY.clear();
-        connectedLocomotion = load(resourceManager, CONNECTED_LOCOMOTION_DATABASE,
+        ResourceLocation revisedLocomotion=new ResourceLocation(ProjectSeele.MODID,"motion/eva_connected_locomotion_r05.json");
+        connectedLocomotion = load(resourceManager, resourceManager.getResource(revisedLocomotion).isPresent()?revisedLocomotion:CONNECTED_LOCOMOTION_DATABASE,
                 "EVA connected locomotion");
         database = load(resourceManager, DATABASE, "EVA Motion Engine V2");
         physicsDatabase = load(resourceManager, PHYSICS_DATABASE,
@@ -756,7 +758,7 @@ public final class EvaMotionEngineV2
                     && (entity.getCockpitAttackAnim(partialTick) > 0.0F
                         || entity.getCockpitSmashAnim(partialTick) > 0.0F));
         if (!action && !base) return BoneWrites.empty();
-        MotionDatabase db = heavy || ordinary >= 0 ? liveOrdinaryAttackDatabase
+        MotionDatabase db = heavy ? liveHeavyDatabase : ordinary >= 0 ? liveOrdinaryAttackDatabase
                 : kick ? liveKickDatabase : knife >= 0 ? liveKnifeDatabase : connectedLocomotion;
         if (db.bones.length == 0) return BoneWrites.empty();
         GameplayState state = GAMEPLAY.computeIfAbsent(entity, ignored -> new GameplayState());
@@ -774,7 +776,7 @@ public final class EvaMotionEngineV2
         double phase;
         if (heavy)
         {
-            clip = "ordinary_attack_group_c_stage_3";
+            clip = "heavy_right_cross";
             phase = entity.heavyMotionProgress(partialTick);
         }
         else if (ordinary >= 0)
@@ -853,6 +855,7 @@ public final class EvaMotionEngineV2
                 root.setPosX(root.getInitialSnapshot().getOffsetX() + target.rootMeters.x * MODEL_UNITS_PER_SOURCE_METRE);
                 root.setPosZ(root.getInitialSnapshot().getOffsetZ() + target.rootMeters.z * MODEL_UNITS_PER_SOURCE_METRE);
             }
+            else if(heavy){root.setPosX(root.getInitialSnapshot().getOffsetX());root.setPosZ(root.getInitialSnapshot().getOffsetZ());}
             positions.add("root");
         });
         for (int i = 0; i < db.bones.length; i++)

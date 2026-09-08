@@ -30,6 +30,7 @@ public final class EvaLiveCombatMotion
     private static final Map<String, RootClip> KNIFE = load(
             KNIFE_RESOURCE, "EVA approved knife root");
     private static final RootClip HEAVY_CONTACT = loadHeavyContact();
+    private static final Map<String,RootClip> HEAVY=load("/assets/projectseele/motion/eva_heavy_right_cross_r05.json","EVA R05 right cross root");
 
     private EvaLiveCombatMotion() {}
 
@@ -69,11 +70,12 @@ public final class EvaLiveCombatMotion
     {
         return sample(HEAVY_CONTACT, progress);
     }
+    public static Vec3 heavy(float progress){return sample(HEAVY.get("heavy_right_cross"),progress);}
 
     private static RootClip loadHeavyContact()
     {
         try (InputStream stream=EvaLiveCombatMotion.class.getResourceAsStream(
-                "/assets/projectseele/motion/eva_heavy_contact_r04.json"))
+                "/assets/projectseele/motion/eva_heavy_contact_r05.json"))
         {
             if(stream==null)throw new IllegalStateException("missing heavy contact curve");
             JsonArray rows=JsonParser.parseReader(new InputStreamReader(stream,StandardCharsets.UTF_8))

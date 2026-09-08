@@ -5,6 +5,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.ArrayList;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
@@ -119,8 +120,12 @@ public final class LocalTriangleMeshLayer<T extends GeoAnimatable> extends GeoRe
         VertexConsumer targetBuffer = this.textureSelector == null ? buffer
                 : bufferSource.getBuffer(RenderType.entityCutoutNoCull(
                         this.textureSelector.apply(animatable)));
-        float[] values = part.vertices();
+        float[] values = skinVertices(mesh,part,bone);
         int stride = mesh.stride();
+        if(Boolean.getBoolean("projectseele.motionReviewR05")&&!this.fullBright&&animatable instanceof EvaUnit01Entity eva
+                &&this.getRenderer() instanceof EvaUnit01Renderer renderer)
+            com.projectseele.client.visual.EvaMeshAuditR05.capture(eva.getId(),meshLocation.getPath().contains("pallet_smg")?"rifle":bone.getName(),
+                    values,stride,part.pivotX(),part.pivotY(),part.pivotZ(),renderer.renderedMeshTransform(pose,eva,partialTick));
         int vertexLight = this.fullBright
                 ? LightTexture.FULL_BRIGHT : packedLight;
         for (int index = 0; index + stride * 3 <= values.length; index += stride * 3)
@@ -160,6 +165,21 @@ public final class LocalTriangleMeshLayer<T extends GeoAnimatable> extends GeoRe
     {
         CACHE.clear();
         LOAD_ATTEMPTED.clear();
+        EvaHeadClearance.clear();
+    }
+
+    static float[] nativeTrianglePositions(ResourceLocation resource,String name)
+    {
+        MeshData mesh=getMesh(resource);if(mesh==null)return null;
+        MeshPart part=mesh.parts().get(name);if(part==null)return null;
+        float[] source=part.vertices(),result=new float[source.length/mesh.stride()*3];
+        for(int i=0,j=0;i<source.length;i+=mesh.stride(),j+=3)
+        {
+            result[j]=-(source[i]+part.pivotX())/16;
+            result[j+1]=(source[i+1]+part.pivotY())/16;
+            result[j+2]=(source[i+2]+part.pivotZ())/16;
+        }
+        return result;
     }
 
     /**
@@ -354,7 +374,7 @@ public final class LocalTriangleMeshLayer<T extends GeoAnimatable> extends GeoRe
             MeshData mesh = new MeshData(stride, Map.copyOf(parts),
                     triangleCount, captureTag,
                     (minimumX + maximumX) * 0.5F, minimumY,
-                    (minimumZ + maximumZ) * 0.5F);
+                    (minimumZ + maximumZ) * 0.5F, jointSkins(parts,stride));
             CACHE.put(meshLocation, mesh);
             ProjectSeele.LOGGER.info("Loaded local triangle mesh {}: {}",
                     meshLocation, captureTag);
@@ -404,7 +424,96 @@ public final class LocalTriangleMeshLayer<T extends GeoAnimatable> extends GeoRe
     private record MeshData(int stride, Map<String, MeshPart> parts,
                             int triangleCount, String captureTag,
                             float centreX, float minimumY,
-                            float centreZ) {}
+                            float centreZ,Map<String,JointSkin> joints) {}
+
+    private record JointSkin(String other,float[] weights,float[] rest,float[] scratch) {}
+
+    private static Vector3f restPoint(MeshPart p,int offset)
+    {
+        return new Vector3f(p.vertices()[offset]+p.pivotX(),
+                p.vertices()[offset+1]+p.pivotY(),p.vertices()[offset+2]+p.pivotZ());
+    }
+
+    private static Map<String,JointSkin> jointSkins(Map<String,MeshPart> parts,int stride)
+    {
+        Map<String,JointSkin> result=new HashMap<>();
+        for(String side:new String[]{"l","r"})
+        {
+            String upper="arm_"+side,lower="forearm_"+side;var a=parts.get(upper);var b=parts.get(lower);if(a==null||b==null)continue;
+            // Pivot + relative coordinates can round to opposite sides of a
+            // quantization cell. Match spatially and give BOTH copies the same
+            // rest point and exactly half weight; a near-half weight still tears.
+            float epsilonSquared=.002F*.002F;
+            var seam=new ArrayList<Vector3f>();
+            for(int i=0;i<a.vertices().length;i+=stride)
+            {
+                var point=restPoint(a,i);
+                for(int j=0;j<b.vertices().length;j+=stride)
+                {
+                    var other=restPoint(b,j);if(point.distanceSquared(other)>epsilonSquared)continue;
+                    var centre=new Vector3f(point).add(other).mul(.5F);
+                    if(seam.stream().noneMatch(v->v.distanceSquared(centre)<epsilonSquared))seam.add(centre);
+                    break;
+                }
+            }
+            if(seam.size()<3)continue;
+            for(String name:new String[]{upper,lower})
+            {
+                var p=parts.get(name);float[] weights=new float[p.vertices().length/stride],rest=p.vertices().clone();
+                for(int i=0;i<weights.length;i++)
+                {
+                    var point=restPoint(p,i*stride);float distanceSquared=Float.POSITIVE_INFINITY;Vector3f nearest=null;
+                    for(var s:seam){float d=point.distanceSquared(s);if(d<distanceSquared){distanceSquared=d;nearest=s;}}
+                    if(distanceSquared<epsilonSquared)
+                    {
+                        weights[i]=.5F;rest[i*stride]=nearest.x-p.pivotX();
+                        rest[i*stride+1]=nearest.y-p.pivotY();rest[i*stride+2]=nearest.z-p.pivotZ();
+                    }
+                    else
+                    {
+                        float t=Math.max(0,1-(float)Math.sqrt(distanceSquared)/6);weights[i]=.5F*t*t*(3-2*t);
+                    }
+                }
+                result.put(name,new JointSkin(name.equals(upper)?lower:upper,weights,rest,rest.clone()));
+            }
+            ProjectSeele.LOGGER.info("EVA elbow skin seam: side={} sharedVertices={}",side,seam.size());
+        }
+        return Map.copyOf(result);
+    }
+
+    private static GeoBone findBone(GeoBone bone,String name)
+    {
+        if(bone.getName().equals(name))return bone;
+        for(var child:bone.getChildBones()){var found=findBone(child,name);if(found!=null)return found;}
+        return null;
+    }
+
+    /** Dual-quaternion blending keeps both copies of every seam vertex coincident. */
+    private static float[] skinVertices(MeshData mesh,MeshPart part,GeoBone bone)
+    {
+        var skin=mesh.joints().get(bone.getName());if(skin==null)return part.vertices();
+        var root=bone;while(root.getParent()!=null)root=root.getParent();var other=findBone(root,skin.other());if(other==null)return part.vertices();
+        var matrix=EvaRigTransforms.model(bone).invert().mul(EvaRigTransforms.model(other));
+        var q=EvaRigTransforms.rotation(matrix);if(q.w<0)q.mul(-1);
+        var dual=new org.joml.Quaternionf(matrix.m30(),matrix.m31(),matrix.m32(),0).mul(q).mul(.5F);
+        float[] source=skin.rest(),out=skin.scratch();int stride=mesh.stride();
+        for(int vertex=0;vertex<skin.weights().length;vertex++)
+        {
+            float weight=skin.weights()[vertex];if(weight==0)continue;int i=vertex*stride;
+            float rx=q.x*weight,ry=q.y*weight,rz=q.z*weight,rw=1-weight+q.w*weight;
+            float inv=1F/(float)Math.sqrt(rx*rx+ry*ry+rz*rz+rw*rw);rx*=inv;ry*=inv;rz*=inv;rw*=inv;
+            float dx=dual.x*weight*inv,dy=dual.y*weight*inv,dz=dual.z*weight*inv,dw=dual.w*weight*inv;
+            float dot=rx*dx+ry*dy+rz*dz+rw*dw;dx-=rx*dot;dy-=ry*dot;dz-=rz*dot;dw-=rw*dot;
+            float tx=2*(-dw*rx+dx*rw-dy*rz+dz*ry),ty=2*(-dw*ry+dx*rz+dy*rw-dz*rx),tz=2*(-dw*rz-dx*ry+dy*rx+dz*rw);
+            float x=-(source[i]+part.pivotX())/16,y=(source[i+1]+part.pivotY())/16,z=(source[i+2]+part.pivotZ())/16;
+            float ax=2*(ry*z-rz*y),ay=2*(rz*x-rx*z),az=2*(rx*y-ry*x);
+            out[i]=-(x+rw*ax+ry*az-rz*ay+tx)*16-part.pivotX();
+            out[i+1]=(y+rw*ay+rz*ax-rx*az+ty)*16-part.pivotY();out[i+2]=(z+rw*az+rx*ay-ry*ax+tz)*16-part.pivotZ();
+            x=-source[i+5];y=source[i+6];z=source[i+7];ax=2*(ry*z-rz*y);ay=2*(rz*x-rx*z);az=2*(rx*y-ry*x);
+            out[i+5]=-(x+rw*ax+ry*az-rz*ay);out[i+6]=y+rw*ay+rz*ax-rx*az;out[i+7]=z+rw*az+rx*ay-ry*ax;
+        }
+        return out;
+    }
 
     private record MeshPart(float pivotX, float pivotY, float pivotZ,
                             float[] vertices, float muzzleX,

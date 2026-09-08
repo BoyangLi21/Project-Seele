@@ -20,7 +20,7 @@ from scipy.spatial.transform import Rotation
 from render_unit01_rig_preview import bone_matrix, load_skeleton, sample_channel
 
 
-def read_bvh(path, first=0, last=None):
+def read_bvh(path, first=0, last=None, world_space=False, stride=2):
     """Read native BVH channel order; preserve its Y-up source coordinates."""
     hierarchy, motion = path.read_text(encoding='utf-8-sig').split('MOTION', 1)
     tokens = re.findall(r'[{}]|[^\s{}]+', hierarchy)
@@ -49,7 +49,7 @@ def read_bvh(path, first=0, last=None):
     joint(-1)
     lines = motion.strip().splitlines()
     dt = float(lines[1].split(':')[1])
-    data = np.loadtxt(lines[2:])[first:last:2]
+    data = np.loadtxt(lines[2:])[first:last:stride]
     matrices, points = [], {}
     for j in joints:
         local = np.tile(np.eye(4), (len(data),1,1))
@@ -68,9 +68,11 @@ def read_bvh(path, first=0, last=None):
     toe_name = next(n for n in ('LeftToeBase','LeftToe','LeftFoot_end') if n in points)
     toe = np.mean(points[toe_name]-points['LeftFoot'],axis=0)
     if forward @ toe < 0: forward *= -1
+    if world_space:
+        return {n: np.stack((p@forward,p@left,p[:,1]),axis=1) for n,p in points.items()},pelvis[:,1],dt*stride
     relative = {n: np.stack(((p-pelvis)@forward, (p-pelvis)@left, (p-pelvis)[:,1]),axis=1)
                 for n,p in points.items()}
-    return relative, pelvis[:,1], dt*2
+    return relative, pelvis[:,1], dt*stride
 
 
 def main():

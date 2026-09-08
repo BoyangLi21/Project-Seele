@@ -381,11 +381,13 @@ public final class EvaMotionLabDirector
         // Distance and centre-line marks remain readable beneath a 60-block EVA.
         for (int z = -152; z <= 152; z += 16)
         {
-            fill(level, -1, FLOOR_Y + 1, z, 1, FLOOR_Y + 1, z, white);
+            fill(level, -1, FLOOR_Y + 1, z, 1, FLOOR_Y + 1, z, Blocks.AIR.defaultBlockState());
+            fill(level, -1, FLOOR_Y, z, 1, FLOOR_Y, z, white);
         }
         for (int x = -152; x <= 152; x += 16)
         {
-            fill(level, x, FLOOR_Y + 1, -1, x, FLOOR_Y + 1, 1, white);
+            fill(level, x, FLOOR_Y + 1, -1, x, FLOOR_Y + 1, 1, Blocks.AIR.defaultBlockState());
+            fill(level, x, FLOOR_Y, -1, x, FLOOR_Y, 1, white);
         }
         for (int variant = 0; variant < 3; variant++)
         {
@@ -397,13 +399,15 @@ public final class EvaMotionLabDirector
                 default -> Blocks.PURPLE_CONCRETE.defaultBlockState();
             };
             fill(level, x - 21, FLOOR_Y + 1, UNIT_Z - 21,
-                    x + 21, FLOOR_Y + 1, UNIT_Z + 21, road);
+                    x + 21, FLOOR_Y + 2, UNIT_Z + 21, Blocks.AIR.defaultBlockState());
+            fill(level, x - 21, FLOOR_Y, UNIT_Z - 21,
+                    x + 21, FLOOR_Y, UNIT_Z + 21, road);
             for (int d = -21; d <= 21; d++)
             {
-                set(level, new BlockPos(x - 21, FLOOR_Y + 2, UNIT_Z + d), accent);
-                set(level, new BlockPos(x + 21, FLOOR_Y + 2, UNIT_Z + d), accent);
-                set(level, new BlockPos(x + d, FLOOR_Y + 2, UNIT_Z - 21), accent);
-                set(level, new BlockPos(x + d, FLOOR_Y + 2, UNIT_Z + 21), accent);
+                set(level, new BlockPos(x - 21, FLOOR_Y, UNIT_Z + d), accent);
+                set(level, new BlockPos(x + 21, FLOOR_Y, UNIT_Z + d), accent);
+                set(level, new BlockPos(x + d, FLOOR_Y, UNIT_Z - 21), accent);
+                set(level, new BlockPos(x + d, FLOOR_Y, UNIT_Z + 21), accent);
             }
         }
 
@@ -415,11 +419,13 @@ public final class EvaMotionLabDirector
                 double radius = Math.sqrt(x * x + z * z);
                 if (radius >= 86.0D && radius <= 96.0D)
                 {
-                    set(level, new BlockPos(x, FLOOR_Y + 1, z), road);
+                    set(level, new BlockPos(x, FLOOR_Y + 1, z), Blocks.AIR.defaultBlockState());
+                    set(level, new BlockPos(x, FLOOR_Y + 2, z), Blocks.AIR.defaultBlockState());
+                    set(level, new BlockPos(x, FLOOR_Y, z), road);
                 }
                 if (radius >= 90.5D && radius <= 91.5D)
                 {
-                    set(level, new BlockPos(x, FLOOR_Y + 2, z), white);
+                    set(level, new BlockPos(x, FLOOR_Y, z), white);
                 }
             }
         }

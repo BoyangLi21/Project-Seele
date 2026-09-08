@@ -18,7 +18,7 @@ public final class EvaScale
 
     public static final float NORMAL_WIDTH = 8.5F * WORLD_MULTIPLIER;
     public static final float NORMAL_HEIGHT = 30.0F * WORLD_MULTIPLIER;
-    public static final float CROUCH_HEIGHT = 21.0F * WORLD_MULTIPLIER;
+    public static final float CROUCH_HEIGHT = 24.0F * WORLD_MULTIPLIER;
     public static final float PRONE_WIDTH = 24.0F * WORLD_MULTIPLIER;
     public static final float PRONE_HEIGHT = 8.5F * WORLD_MULTIPLIER;
 

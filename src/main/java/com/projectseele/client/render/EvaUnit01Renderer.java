@@ -134,6 +134,11 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
                 pose, this.entityRenderTranslations).transformPosition(point);
         return eva.getPosition(partial).add(world.x, world.y, world.z);
     }
+    public org.joml.Matrix4f renderedMeshTransform(org.joml.Matrix4f pose,EvaUnit01Entity eva,float partial)
+    {
+        var world=software.bernie.geckolib.util.RenderUtils.invertAndMultiplyMatrices(pose,this.entityRenderTranslations);
+        Vec3 p=eva.getPosition(partial);world.m30(world.m30()+(float)p.x).m31(world.m31()+(float)p.y).m32(world.m32()+(float)p.z);return world;
+    }
 
     public EvaUnit01Renderer(EntityRendererProvider.Context context)
     {

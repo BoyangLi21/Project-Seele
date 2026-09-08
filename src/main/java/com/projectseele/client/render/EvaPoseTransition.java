@@ -76,6 +76,7 @@ public final class EvaPoseTransition
             state.start = time;
             state.duration = entity.isPilotCrouching() || entity.isPilotProne()
                     || state.lowStance ? 0.28D
+                    : entity.isHeavyMotionActive() ? 0.18D
                     : entity.hasLiveActionForRender(partialTick) ? 0.10D : 0.20D;
             state.lowStance = entity.isPilotCrouching() || entity.isPilotProne();
             for (Track track : state.bones.values())
@@ -102,10 +103,6 @@ public final class EvaPoseTransition
                 continue;
             }
             Pose result = blending ? track.sample(target, age, state.duration) : target;
-            if (dt > 1.0E-6D)
-            {
-                track.update(result, dt);
-            }
             result.write(bone);
             if (blending)
             {
@@ -114,6 +111,7 @@ public final class EvaPoseTransition
             }
         }
         state.time = time;
+        state.pendingDt = dt;
         return new EvaMotionEngineV2.BoneWrites(Set.copyOf(rotations),
                 Set.copyOf(positions), OWNER);
     }
@@ -126,6 +124,19 @@ public final class EvaPoseTransition
         private double start;
         private double duration;
         private boolean lowStance;
+        private double pendingDt;
+        private boolean finalInitialized;
+    }
+
+    public static void recordFinal(EvaUnit01Entity entity,BakedGeoModel model)
+    {
+        State state=STATES.get(entity);if(state==null)return;
+        state.bones.forEach((name,track)->model.getBone(name).ifPresent(bone->{
+            Pose pose=Pose.read(bone);
+            if(!state.finalInitialized){track.last=pose;track.source=pose;}
+            else if(state.pendingDt>1e-6)track.update(pose,state.pendingDt);
+        }));
+        state.finalInitialized=true;
     }
 
     private static final class Track

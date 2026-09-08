@@ -201,13 +201,18 @@ public final class EvaPoseGraph
         }
         EvaMotionEngineV2.BoneWrites transitions = EvaPoseTransition.apply(
                 entity, model, partialTick);
+        var jointWrites=entity.getMotionLabPhysicsPreview()==0?EvaArmArticulation.apply(model):EvaMotionEngineV2.BoneWrites.empty();
         var firearm=EvaRifleContactRig.apply(entity,model,partialTick,modelToWorld);
+        Set<String> jointR=new LinkedHashSet<>(jointWrites.rotationBones());jointR.addAll(firearm.rotationBones());
+        Set<String> jointP=new LinkedHashSet<>(jointWrites.positionBones());jointP.addAll(firearm.positionBones());
+        firearm=new EvaMotionEngineV2.BoneWrites(Set.copyOf(jointR),Set.copyOf(jointP),"MOTION_ENGINE_LIVE_ACTION");
         if(!firearm.rotationBones().isEmpty())
         {
             Set<String> r=new LinkedHashSet<>(motionWrites.rotationBones());r.addAll(firearm.rotationBones());
             Set<String> p=new LinkedHashSet<>(motionWrites.positionBones());p.addAll(firearm.positionBones());
             motionWrites=new EvaMotionEngineV2.BoneWrites(Set.copyOf(r),Set.copyOf(p),"MOTION_ENGINE_LIVE_ACTION");
         }
+        EvaPoseTransition.recordFinal(entity,model);
         Snapshot committed = snapshot(
                 entity, partialTick, motionWrites, transitions, firearm, true);
         if (LAST_COMMITS.size() > 48)

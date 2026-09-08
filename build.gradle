@@ -131,6 +131,12 @@ minecraft {
                 property 'projectseele.connectedActionReview', 'true'
                 property 'projectseele.rifleActionReview', 'true'
             }
+            if (project.hasProperty('motionReviewR05')) {
+                property 'projectseele.connectedActionReview', 'true'
+                property 'projectseele.rifleActionReview', 'true'
+                property 'projectseele.motionReviewR05', 'true'
+                if (project.hasProperty('motionReviewR05All')) property 'projectseele.motionReviewR05All', 'true'
+            }
             if (project.hasProperty('pyramidInteriorReview')) {
                 property 'projectseele.pyramidInteriorReview', 'true'
             }
