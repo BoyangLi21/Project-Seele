@@ -72,6 +72,7 @@ public class ClientEvents
         event.registerEntityRenderer(ModEntities.EVA_UNIT02.get(), EvaUnit01Renderer::new);
         event.registerEntityRenderer(ModEntities.EVA_PROTOTYPE.get(), EvaUnit01Renderer::new);
         event.registerEntityRenderer(ModEntities.INDUSTRIAL_MEMBER.get(), com.projectseele.client.render.IndustrialMemberRenderer::new);
+        event.registerBlockEntityRenderer(com.projectseele.registry.ModBlockEntities.ONE_WAY_GLASS.get(),com.projectseele.client.render.OneWayGlassRenderer::new);
         event.registerEntityRenderer(ModEntities.ENTRY_PLUG_CARRIER.get(),
                 EntryPlugCarrierRenderer::new);
         event.registerEntityRenderer(ModEntities.TRAINING_PILOT.get(),

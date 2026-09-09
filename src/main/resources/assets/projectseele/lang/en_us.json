@@ -187,5 +187,7 @@
   "block.projectseele.station_tactile_path": "Station Tactile Guide",
   "block.projectseele.station_tactile_warning": "Station Tactile Warning",
   "entity.projectseele.eva_prototype": "Unnamed Experimental EVA",
-  "hud.projectseele.role_experimental": "UNNAMED"
+  "hud.projectseele.role_experimental": "UNNAMED",
+  "block.projectseele.nerv_pyramid_panel": "NERV Pyramid Facade",
+  "block.projectseele.nerv_pyramid_marking": "NERV Pyramid Marking"
 }

@@ -22,8 +22,9 @@ public final class RegionalStationPhoto
     private static final String MODE=System.getProperty("projectseele.regionalBuild","");
     private static final boolean R07=MODE.equals("r07-photos"),DETAIL=R07||MODE.equals("detail-photos");
     private static final boolean ENABLED=MODE.equals("station-photo")||MODE.equals("quality-photos")||DETAIL;
-    private record View(String file,Vec3 position,float yaw,float pitch,String action,int warmup)
-    {View(String file,Vec3 position,float yaw,float pitch){this(file,position,yaw,pitch,"",220);}}
+    private record View(String file,Vec3 position,float yaw,float pitch,String action,int warmup,
+                        java.util.List<net.minecraft.core.BlockPos> requiredSections)
+    {View(String file,Vec3 position,float yaw,float pitch){this(file,position,yaw,pitch,"",220,java.util.List.of());}}
     private static volatile boolean actionReady=true;
     private static View[] VIEWS=MODE.equals("quality-photos")?new View[]{
             new View("quality_kirisato_exterior.png",new Vec3(-2918.5,97,-1150.5),-60,8),
@@ -61,12 +62,19 @@ public final class RegionalStationPhoto
                     {
                         var d=item.getAsJsonObject();var p=d.getAsJsonArray("position");String file=d.get("file").getAsString();
                         if(!file.matches("[A-Za-z0-9_-]+\\.png"))throw new IllegalArgumentException("Invalid photo filename");
-                        views.add(new View(file,new Vec3(p.get(0).getAsDouble(),p.get(1).getAsDouble(),p.get(2).getAsDouble()),d.get("yaw").getAsFloat(),d.get("pitch").getAsFloat(),d.has("action")?d.get("action").getAsString():"",d.has("warmupTicks")?d.get("warmupTicks").getAsInt():220));
+                        java.util.List<net.minecraft.core.BlockPos> required=new java.util.ArrayList<>();
+                        if(d.has("requiredSections"))for(var point:d.getAsJsonArray("requiredSections"))
+                        {
+                            var xyz=point.getAsJsonArray();
+                            required.add(new net.minecraft.core.BlockPos(xyz.get(0).getAsInt(),xyz.get(1).getAsInt(),xyz.get(2).getAsInt()));
+                        }
+                        views.add(new View(file,new Vec3(p.get(0).getAsDouble(),p.get(1).getAsDouble(),p.get(2).getAsDouble()),d.get("yaw").getAsFloat(),d.get("pitch").getAsFloat(),d.has("action")?d.get("action").getAsString():"",d.has("warmupTicks")?d.get("warmupTicks").getAsInt():220,java.util.List.copyOf(required)));
                     }
                     if(views.isEmpty())throw new IllegalArgumentException("Empty photo itinerary");
                     VIEWS=views.toArray(View[]::new);
                 }
                 entered=true;oldDistance=mc.options.renderDistance().get();oldGui=mc.options.hideGui;oldPause=mc.options.pauseOnLostFocus;oldCamera=mc.options.getCameraType();
+                Files.deleteIfExists(world.resolve("station_photo_ready.json"));
                 mc.options.pauseOnLostFocus=false;mc.options.renderDistance().set(R07?18:DETAIL?10:8);mc.options.hideGui=true;mc.options.setCameraType(net.minecraft.client.CameraType.FIRST_PERSON);mc.options.broadcastOptions();
                 actionReady=VIEWS[view].action().isEmpty();
                 server.execute(()->{
@@ -115,11 +123,29 @@ public final class RegionalStationPhoto
                     }
                 });
             }
-            if(sceneAge>VIEWS[view].warmup()&&frames>100&&!ready)
+            // A timer alone can capture an incomplete building while distant
+            // sections are still arriving in this very tall dimension.
+            boolean geometryReady=VIEWS[view].requiredSections().stream().allMatch(
+                    p->mc.level.hasChunkAt(p)&&mc.levelRenderer.isChunkCompiled(p));
+            if(!geometryReady&&sceneAge%200==0)
+                for(var p:VIEWS[view].requiredSections())
+                    ProjectSeele.LOGGER.info("REGIONAL PHOTO WAIT file={} anchor={} loaded={} compiled={} state={}",
+                            VIEWS[view].file(),p,mc.level.hasChunkAt(p),mc.levelRenderer.isChunkCompiled(p),mc.level.getBlockState(p));
+            if(sceneAge>VIEWS[view].warmup()&&frames>100&&!ready&&geometryReady)
             {
                 ready=true;Files.writeString(world.resolve("station_photo_ready.json"),"{\"ready\":true,\"renderedSections\":"+mc.levelRenderer.countRenderedChunks()+"}");
                 ProjectSeele.LOGGER.info("REGIONAL PHOTO READY file={} sections={} camera={}",VIEWS[view].file(),mc.levelRenderer.countRenderedChunks(),mc.gameRenderer.getMainCamera().getPosition());
                 ProjectSeele.LOGGER.info("REGIONAL PHOTO GEOMETRY {}",mc.levelRenderer.getChunkStatistics());
+                if(!VIEWS[view].requiredSections().isEmpty())
+                    ProjectSeele.LOGGER.info("REGIONAL PHOTO REQUIRED SECTIONS PASS file={} anchors={}",VIEWS[view].file(),VIEWS[view].requiredSections());
+                if(VIEWS[view].file().startsWith("r09_"))
+                {
+                    var pane=new net.minecraft.core.BlockPos(53,-327,313);var outside=new net.minecraft.core.BlockPos(126,-316,275);
+                    var state=mc.level.getBlockState(pane);
+                    ProjectSeele.LOGGER.info("R09 OPTICAL STATE file={} fps={} pane={} solid={} outside={} compiled={}",
+                            VIEWS[view].file(),mc.getFps(),state,state.isSolidRender(mc.level,pane),
+                            mc.level.getBlockState(outside),mc.levelRenderer.isChunkCompiled(outside));
+                }
                 if(R07)for(var actor:mc.level.entitiesForRendering())
                     if(actor instanceof com.projectseele.entity.EvaUnit01Entity eva&&eva.isExperimentalUnit())
                         ProjectSeele.LOGGER.info("PROTOTYPE PHOTO STATE file={} position={} bounds={} hidden={} locked={} passengers={}",VIEWS[view].file(),eva.position(),eva.getBoundingBox(),eva.isInvisible(),eva.isNervLogisticsLocked(),eva.getPassengers());

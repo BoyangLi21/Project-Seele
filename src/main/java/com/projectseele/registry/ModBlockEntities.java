@@ -19,5 +19,8 @@ public final class ModBlockEntities
             () -> BlockEntityType.Builder.of(UmbilicalPylonBlockEntity::new,
                     ModBlocks.UMBILICAL_PYLON.get()).build(null));
 
+    public static final RegistryObject<BlockEntityType<com.projectseele.world.OneWayGlassBlockEntity>> ONE_WAY_GLASS=
+            BLOCK_ENTITY_TYPES.register("one_way_glass",()->BlockEntityType.Builder.of(com.projectseele.world.OneWayGlassBlockEntity::new,ModBlocks.ONE_WAY_GLASS.get()).build(null));
+
     private ModBlockEntities() {}
 }

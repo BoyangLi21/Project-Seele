@@ -185,5 +185,7 @@
   "block.projectseele.station_tactile_path": "车站导向盲道",
   "block.projectseele.station_tactile_warning": "车站警示盲道",
   "entity.projectseele.eva_prototype": "未命名 EVA 试验机",
-  "hud.projectseele.role_experimental": "未命名试验机"
+  "hud.projectseele.role_experimental": "未命名试验机",
+  "block.projectseele.nerv_pyramid_panel": "NERV 金字塔深色饰面",
+  "block.projectseele.nerv_pyramid_marking": "NERV 金字塔标识饰面"
 }

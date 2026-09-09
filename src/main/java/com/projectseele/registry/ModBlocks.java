@@ -29,6 +29,10 @@ public final class ModBlocks
     public static final RegistryObject<Block> NERV_FLOOR_PANEL=finish("nerv_floor_panel",Blocks.SMOOTH_STONE,0);
     public static final RegistryObject<Block> NERV_HAZARD_PAVING=finish("nerv_hazard_paving",Blocks.SMOOTH_STONE,0);
     public static final RegistryObject<Block> NERV_STRIP_LIGHT=finish("nerv_strip_light",Blocks.IRON_BLOCK,14);
+    public static final RegistryObject<Block> NERV_PYRAMID_PANEL=BLOCKS.register("nerv_pyramid_panel",
+            ()->new Block(BlockBehaviour.Properties.copy(Blocks.REINFORCED_DEEPSLATE)));
+    public static final RegistryObject<Block> NERV_PYRAMID_MARKING=BLOCKS.register("nerv_pyramid_marking",
+            ()->new Block(BlockBehaviour.Properties.copy(Blocks.REINFORCED_DEEPSLATE)));
     public static final RegistryObject<Block> STATION_TACTILE_WARNING=finish("station_tactile_warning",Blocks.SMOOTH_STONE,0);
     public static final RegistryObject<Block> STATION_TACTILE_PATH=BLOCKS.register("station_tactile_path",
             ()->new com.projectseele.world.NervWayfindingTileBlock(BlockBehaviour.Properties.copy(Blocks.SMOOTH_STONE)));

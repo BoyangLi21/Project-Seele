@@ -64,6 +64,11 @@ public class ModItems
             () -> new BlockItem(ModBlocks.ONE_WAY_GLASS.get(),
                     new Item.Properties()));
 
+    public static final RegistryObject<Item> NERV_PYRAMID_PANEL=ITEMS.register("nerv_pyramid_panel",
+            ()->new BlockItem(ModBlocks.NERV_PYRAMID_PANEL.get(),new Item.Properties()));
+    public static final RegistryObject<Item> NERV_PYRAMID_MARKING=ITEMS.register("nerv_pyramid_marking",
+            ()->new BlockItem(ModBlocks.NERV_PYRAMID_MARKING.get(),new Item.Properties()));
+
     public static final RegistryObject<Item> TERMINAL_DOGMA_ACCESS_CARD =
             ITEMS.register("terminal_dogma_access_card",
                     () -> new Item(new Item.Properties().stacksTo(1)));

@@ -24,6 +24,8 @@ public class ModCreativeTabs
                         output.accept(ModItems.UMBILICAL_PYLON.get());
                         output.accept(ModItems.CLEAR_GLASS.get());
                         output.accept(ModItems.ONE_WAY_GLASS.get());
+                        output.accept(ModItems.NERV_PYRAMID_PANEL.get());
+                        output.accept(ModItems.NERV_PYRAMID_MARKING.get());
                         output.accept(ModItems.TERMINAL_DOGMA_ACCESS_CARD.get());
                         output.accept(ModItems.NERV_EMPLOYEE_CARD.get());
                         output.accept(ModItems.NERV_WORKSTATION.get());
