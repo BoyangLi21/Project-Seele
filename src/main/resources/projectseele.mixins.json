@@ -9,13 +9,15 @@
     "MovingElevatorRemoteAccessor",
     "TransportPassengerDiagnosticsMixin",
     "MtrRouteEndpointMixin",
-    "SbwDefenseOwnerMixin"
+    "SbwDefenseOwnerMixin",
+    "EvaSmallObstacleMixin"
   ],
   "client": [
     "client.CameraMixin",
     "client.AbstractClientPlayerSkinMixin",
     "client.MinecraftRenderTargetMixin",
     "client.GameRendererFeedProjectionMixin",
+    "client.LargeStructureRenderMixin",
     "client.PlayerModelGendoPoseMixin",
     "client.MovingElevatorDisplayMixin",
     "client.MovingElevatorPanelMixin",

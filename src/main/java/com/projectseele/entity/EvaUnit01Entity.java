@@ -209,7 +209,8 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     private static final float CROUCH_SPEED = 0.18F;
     private static final float PRONE_SPEED = 0.10F;
     private static final float SPRINT_SPEED = 0.78F;
-    private static final double JUMP_VELOCITY = 3.49D;
+    private static final double JUMP_VELOCITY = 4.836D;
+    private static final double AIRFRAME_GRAVITY = 0.18D;
     private static final double JUMP_SUPPORT_PROBE = 0.75D;
     private static final int JUMP_COOLDOWN_TICKS = 10;
     private static final int JUMP_BUFFER_TICKS = 20;
@@ -644,7 +645,8 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
                 .add(Attributes.MOVEMENT_SPEED, 0.42D)
                 .add(Attributes.KNOCKBACK_RESISTANCE, 1.0D)
                 .add(Attributes.ATTACK_DAMAGE, 12.0D)
-                .add(ForgeMod.STEP_HEIGHT_ADDITION.get(), 1.0D);
+                .add(ForgeMod.STEP_HEIGHT_ADDITION.get(), 1.0D)
+                .add(ForgeMod.ENTITY_GRAVITY.get(), AIRFRAME_GRAVITY);
     }
 
     @Override
@@ -770,6 +772,9 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     public void readAdditionalSaveData(CompoundTag tag)
     {
         super.readAdditionalSaveData(tag);
+        var gravity=this.getAttribute(ForgeMod.ENTITY_GRAVITY.get());
+        if(gravity!=null&&Math.abs(gravity.getBaseValue()-.08D)<.000001D)
+            gravity.setBaseValue(AIRFRAME_GRAVITY);
         int intrinsicMask = this.intrinsicArmamentMask();
         int savedWeapon = tag.contains("SeeleWeapon")
                 ? Mth.clamp(tag.getInt("SeeleWeapon"), WEAPON_FISTS, WEAPON_N2)
@@ -3117,7 +3122,8 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
                 return false;
             }
         }
-        Vec3 motion = this.getDeltaMovement();
+        this.cancelLiveActionsForStanceChange();
+        this.cancelHeavyMotion();
         this.triggerAnim("strike", "takeoff");
         // A ridden living entity is movement-authoritative on the pilot's
         // client. Setting velocity only on the logical server is overwritten
@@ -3129,12 +3135,12 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         this.explicitJumpInProgress = true;
         this.explicitJumpObservedAirborne = false;
         this.explicitJumpAuthorizationTicks = JUMP_BUFFER_TICKS;
-        this.setDeltaMovement(motion.x, JUMP_VELOCITY, motion.z);
+        // Do not also send a vanilla velocity impulse. It can arrive one tick
+        // before the sequence and add a second, clamped takeoff displacement.
         if (this.getVisualPose() == VISUAL_LIVE_JUMP)
         {
             ProjectSeele.LOGGER.info("Visual live jump accepted velocityY={}", JUMP_VELOCITY);
         }
-        this.hasImpulse = true;
         this.jumpCooldown = JUMP_COOLDOWN_TICKS;
         this.jumpBufferTicks = 0;
         this.groundedGraceTicks = 0;
@@ -3152,8 +3158,10 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         {
             return false;
         }
-        return !this.level().noCollision(
-                this, this.getBoundingBox().move(0.0D, -JUMP_SUPPORT_PROBE, 0.0D));
+        AABB body=this.getBoundingBox();
+        AABB feet=new AABB(body.minX+.05D,body.minY-JUMP_SUPPORT_PROBE,body.minZ+.05D,
+                body.maxX-.05D,body.minY+.01D,body.maxZ-.05D);
+        return !this.level().noCollision(this,feet);
     }
 
     public void exitEva(ServerPlayer pilot)
@@ -5265,6 +5273,10 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     @Override
     public boolean hurt(DamageSource source, float amount)
     {
+        if (source.is(DamageTypeTags.IS_FALL))
+        {
+            return false;
+        }
         if ((this.isNervLogisticsLocked() || this.isLaunchSequenceActive())
                 && source.is(DamageTypes.IN_WALL))
         {
@@ -5272,11 +5284,11 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         }
         if (source.is(DamageTypeTags.BYPASSES_INVULNERABILITY))
         {
-            return this.applyHullDamageWithFeedback(source, amount);
+            return this.applyHullDamage(source, amount);
         }
         if (AtFieldRules.bypassesAtField(source))
         {
-            return this.applyHullDamageWithFeedback(source, amount);
+            return this.applyHullDamage(source, amount);
         }
         if (this.isAtFieldOn() && amount > 0.0F)
         {
@@ -5296,16 +5308,16 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
                 this.entityData.set(DATA_AT_ENERGY, energy - absorbed);
                 this.rippleAt(source);
                 float leftover = (fieldCost - absorbed) / costMultiplier;
-                return leftover > 0.0F && this.applyHullDamageWithFeedback(source, leftover);
+                return leftover > 0.0F && this.applyHullDamage(source, leftover);
             }
             // Conventional weapons cannot even scratch the field.
             this.rippleAt(source);
             return false;
         }
-        return this.applyHullDamageWithFeedback(source, amount);
+        return this.applyHullDamage(source, amount);
     }
 
-    private boolean applyHullDamageWithFeedback(DamageSource source, float amount)
+    private boolean applyHullDamage(DamageSource source, float amount)
     {
         float healthBefore = this.getHealth();
         boolean accepted = super.hurt(source, amount);
@@ -5315,21 +5327,8 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
         {
             this.severUmbilicalFromDamage();
         }
-        if (accepted && actualHullDamage > 0.0F
-                && this.getControllingPassenger() instanceof ServerPlayer pilot)
-        {
-            float synchronization = EvaPilotCapability.synchronization(pilot);
-            float feedback = actualHullDamage
-                    * EvaPilotCapability.neuralFeedbackFraction(synchronization);
-            if (feedback >= 0.05F)
-            {
-                pilot.hurt(source, feedback);
-                pilot.displayClientMessage(Component.translatable(
-                        "msg.projectseele.sync_feedback",
-                        String.format("%.1f", feedback),
-                        String.format("%.1f", synchronization)), true);
-            }
-        }
+        // Hull damage affects the airframe. Synchronization no longer copies
+        // that damage into the protected cockpit occupant's vanilla health.
         return accepted;
     }
 
@@ -5731,6 +5730,21 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     }
 
     @Override
+    public void lerpMotion(double x, double y, double z)
+    {
+        // The rider simulates a sequence-authorized jump. The server's living-
+        // vehicle velocity is zeroed by vanilla, and motion packets also clamp
+        // speeds to 3.9; applying either midway through flight truncates jumps.
+        if (this.level().isClientSide && this.isControlledByLocalInstance()
+                && !this.isPilotControlLocked()
+                && (this.clientJumpImpulsePending || this.clientExplicitJumpInProgress))
+        {
+            return;
+        }
+        super.lerpMotion(x, y, z);
+    }
+
+    @Override
     public void travel(Vec3 input)
     {
         if (this.isCrucified() || (!this.isBerserk() && this.isPilotControlLocked()))
@@ -6031,11 +6045,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity
     @Override
     public boolean causeFallDamage(float distance, float multiplier, DamageSource source)
     {
-        // A 40-metre war machine does not stub its toe.
-        float safeFall = EvaScale.fromLegacy(18.0F);
-        return distance > safeFall
-                && super.causeFallDamage(distance - safeFall,
-                        multiplier * 0.5F, source);
+        return false;
     }
 
     @Override

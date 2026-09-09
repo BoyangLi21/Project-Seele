@@ -37,7 +37,8 @@ public final class RegionalSpatialAuditDriver
     private static JsonArray cases;
     private static FakePlayer player;
     private static int age,index,wait,steps,stalled,settled,stepLimit;
-    private static boolean done,positioned;
+    public static volatile boolean done;
+    private static boolean positioned;
     private static Vec3 start,end;
     private static JsonArray route;
     private static int waypoint;

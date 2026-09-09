@@ -36,6 +36,7 @@ public final class RegionalWorldBuildDriver
     @SubscribeEvent
     public static void tick(TickEvent.ServerTickEvent event)
     {
+        if(MODE.equals("r08-mobility")||MODE.equals("r08-installations")||MODE.equals("r08-details")||MODE.equals("r08-heli-recover"))return;
         if(MODE.equals("r07-review")||MODE.equals("r07-equipment")||MODE.equals("port-boarding")||MODE.equals("r07-photos")||MODE.equals("r07-sortie")||MODE.equals("r07-panel"))return;
         if (MODE.isEmpty() || MODE.equals("passengers") || MODE.equals("transit-riding") || MODE.equals("flight-riding") || MODE.equals("circle-riding") || MODE.equals("train-boarding") || MODE.equals("bay-boarding") || MODE.equals("collision-audit") || MODE.equals("station-photo") || MODE.equals("quality-photos") || MODE.equals("detail-photos") || MODE.equals("wayfinding") || done || event.phase != TickEvent.Phase.END) return;
         MinecraftServer server=event.getServer();

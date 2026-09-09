@@ -57,6 +57,10 @@ public class ModEntities
                     .updateInterval(1)
                     .build("eva_prototype"));
 
+    public static final RegistryObject<EntityType<com.projectseele.entity.IndustrialMemberEntity>> INDUSTRIAL_MEMBER = ENTITY_TYPES.register("industrial_member",
+            () -> EntityType.Builder.<com.projectseele.entity.IndustrialMemberEntity>of(com.projectseele.entity.IndustrialMemberEntity::new, MobCategory.MISC)
+                    .sized(0,0).clientTrackingRange(32).updateInterval(20).noSummon().build("industrial_member"));
+
     public static final RegistryObject<EntityType<EvaUnit01Entity>> EVA_UNIT00 = ENTITY_TYPES.register("eva_unit00",
             () -> EntityType.Builder.of(EvaUnit01Entity::new, MobCategory.MISC)
                     .sized(EvaScale.NORMAL_WIDTH, EvaScale.NORMAL_HEIGHT)

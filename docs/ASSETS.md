@@ -184,3 +184,11 @@ annotation, fitted stride extraction, shared-root correction and two-leg IK;
 `eva_prototype` 的 83,432 个三角形、46 个部件和 1024×512 材质由 `tools/build_original_eva_prototype_r07.py` 从放样、装甲面、接缝及关节几何创建，没有复制原有 EVA 网格。复用项目公开的 70 骨接口与公开动画；用户尚未提交的原三机资源保持原样。原创造型草图通过内置 imagegen 生成，提示/方式/本机路径记录在 `artifacts/world_expansion_r07/prototype_design.txt`，草图不是游戏截图。实际网格预览由 Blender 渲染。
 
 港口两艘固定舰体、基地建筑及标线为本项目原创建造；未导入查找过的 Planet Minecraft 舰艇文件。SBW 的坦克、飞机、巡逻艇、舰炮、近防炮与激光塔通过原模组使用，未拆出其保留权利的模型、贴图或音频并入本项目。依赖版本、SHA-512 和官方分发 URL 位于 `tools/r07_vehicle_mods.json`，下载物仅保存在忽略目录。详细来源、能力边界与验收记录见 [R07](WORLD_EXPANSION_R07.md)。
+
+## R08 黑金试验机与历史驱逐舰（2026-09-09）
+
+R07 的两艘简化原创舰体已被本机私有导入替换。实际使用的是 Nekoseal 的 [IJN Destroyer Division 6 (Akatsuki Class Destroyers)](https://www.planetminecraft.com/project/ijn-destroyer-division-6-akatsuki-class-destroyer/) 公开下载世界，ZIP SHA-256 为 `6e3fafaffd9060fec1f962890c7d5102ca65c7d0c63c48a4438dfd03029b2472`。从四艘模型中选择两艘约 238×23 格的舰体，保留作者方块和细节，旋转后按海平面安放；移除了源模型的不可见 barrier，并为本地图另做泊位和登舰桥。作者署名位于登舰点，下载来源及测量记录在忽略的 `artifacts/world_refinement_r08/ships/`。源世界、导入后世界及含其几何的导出图仅供本机使用，不作为 MIT 模组素材再发布。此前未成功下载的 Yukikaze 文件未用于本轮。
+
+试验机保留用户已认可的原创设计图作为造型参考，通过 `tools/build_original_eva_prototype_r08.py` 重新建立黑金装甲轮廓和关节细节。最终模型为 98,722 个三角形、46 个网格部件，沿用公开 70 骨接口；没有从既有 EVA 网格复制顶点。模型、材质与构建脚本是本项目原创资源。材质在同一套资源中更新，运行时模型合同随之更新；三张原机型待提交资源按用户基线保留。离线 Blender 图用于检查几何，原生游戏图用于确认实际加载结果，两者不能混称。
+
+码头桁架、容器端门、基地分隔和维修设施、黑色井筒外罩、机库屋面与平台下部结构均为本项目方块建造。现实参考和 TV 空间关系见 [R08 原作布局核对](TV_LAYOUT_REFERENCE_R08.md)；没有把官方剧照、照片、音频加入发行包。

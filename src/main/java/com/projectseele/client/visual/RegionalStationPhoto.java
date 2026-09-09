@@ -120,6 +120,9 @@ public final class RegionalStationPhoto
                 ready=true;Files.writeString(world.resolve("station_photo_ready.json"),"{\"ready\":true,\"renderedSections\":"+mc.levelRenderer.countRenderedChunks()+"}");
                 ProjectSeele.LOGGER.info("REGIONAL PHOTO READY file={} sections={} camera={}",VIEWS[view].file(),mc.levelRenderer.countRenderedChunks(),mc.gameRenderer.getMainCamera().getPosition());
                 ProjectSeele.LOGGER.info("REGIONAL PHOTO GEOMETRY {}",mc.levelRenderer.getChunkStatistics());
+                if(R07)for(var actor:mc.level.entitiesForRendering())
+                    if(actor instanceof com.projectseele.entity.EvaUnit01Entity eva&&eva.isExperimentalUnit())
+                        ProjectSeele.LOGGER.info("PROTOTYPE PHOTO STATE file={} position={} bounds={} hidden={} locked={} passengers={}",VIEWS[view].file(),eva.position(),eva.getBoundingBox(),eva.isInvisible(),eva.isNervLogisticsLocked(),eva.getPassengers());
             }
             if(captured&&sceneAge>Math.max(280,VIEWS[view].warmup()+60)&&view+1<VIEWS.length)
             {

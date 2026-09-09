@@ -22,6 +22,16 @@ public final class EvaPrototypeEntity extends EvaUnit01Entity
         return true;
     }
 
+    public boolean isInsideTestHangar()
+    {
+        return this.level().dimension().equals(com.projectseele.world.FacilitySchemaV2.DIMENSION)
+                && this.getX()>=6384 && this.getX()<=6500
+                && this.getY()>=76 && this.getY()<=160
+                && this.getZ()>=-6288 && this.getZ()<=-6136
+                && this.level().getBlockState(new net.minecraft.core.BlockPos(6442,76,-6205))
+                    .is(com.projectseele.registry.ModBlocks.NERV_FLOOR_PANEL.get());
+    }
+
     @Override
     public InteractionResult tryEnterFromPlug(Player player,boolean requireAim)
     {

@@ -214,6 +214,7 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
         // 24-block model from sampling one dark centre voxel and becoming a
         // black silhouette despite the illuminated shaft walls.
         boolean nervFloodlit = entity.isNervLogisticsLocked()
+                || entity instanceof com.projectseele.entity.EvaPrototypeEntity prototype && prototype.isInsideTestHangar()
                 || entity.getLaunchPhase() == EvaUnit01Entity.LAUNCH_ASCENT;
         if (entity.hasActiveCarrierMotion())
         {

@@ -292,11 +292,14 @@ public final class EvaMotionEngineV2
                 runtime.fallAge = 0.0D;
                 runtime.apexReached = false;
                 runtime.landingActive = false;
+                runtime.carryLandingGait = false;
                 runtime.selectionKey = "";
             }
             if (runtime.wasAirborne && !airborneNow)
             {
                 runtime.landingActive = true;
+                runtime.landingGaitPhase = 0.0D;
+                runtime.carryLandingGait = false;
                 runtime.selectionKey = "";
                 runtime.actionTime = 0.0D;
             }
@@ -421,7 +424,7 @@ public final class EvaMotionEngineV2
         }
         else if (airborneNow)
         {
-            selection = runtime.airborneAge < takeoffClip.durationSeconds
+            selection = runtime.airborneAge < takeoffClip.durationSeconds / 1.55D
                     ? Selection.single(takeoffClip, "takeoff_v2")
                     : Selection.single(db.clip("jump_airborne_v2"),
                             "airborne_v2");
@@ -448,7 +451,12 @@ public final class EvaMotionEngineV2
             }
             runtime.selectionKey = selection.key();
             runtime.actionTime = 0.0D;
-            if (enteringLocomotion || !selection.locomotion())
+            if (enteringLocomotion && runtime.carryLandingGait)
+            {
+                runtime.phase = runtime.landingGaitPhase;
+                runtime.carryLandingGait = false;
+            }
+            else if (enteringLocomotion || !selection.locomotion())
             {
                 runtime.phase = 0.0D;
             }
@@ -509,7 +517,7 @@ public final class EvaMotionEngineV2
             else
             {
                 runtime.phase = 0.5D * Mth.clamp(
-                        (runtime.airborneAge - takeoffClip.durationSeconds)
+                        (runtime.airborneAge - takeoffClip.durationSeconds / 1.55D)
                                 / 0.30D, 0.0D, 1.0D);
             }
         }
@@ -526,8 +534,10 @@ public final class EvaMotionEngineV2
         }
         else
         {
+            double playbackRate="takeoff_v2".equals(selection.key())?1.55D:
+                    "landing_v2".equals(selection.key())?1.7D:1.0D;
             runtime.actionTime = Math.min(selection.primary().durationSeconds,
-                    runtime.actionTime + dt);
+                    runtime.actionTime + dt * playbackRate);
             runtime.phase = Mth.clamp(runtime.actionTime
                     / selection.primary().durationSeconds, 0.0D, 1.0D);
         }
@@ -539,6 +549,18 @@ public final class EvaMotionEngineV2
 
         selection.primary().sample(runtime.phase, runtime.poseA);
         runtime.target.copyFrom(runtime.poseA);
+        if(runtime.landingActive&&(entity.getDeltaMovement().horizontalDistanceSqr()>.01D||entity.isPilotSprinting()))
+        {
+            Selection locomotion=select(entity,db);
+            if(locomotion.locomotion())
+            {
+                runtime.landingGaitPhase=wrap01(runtime.landingGaitPhase+dt*locomotion.speedBlocksPerSecond()/Math.max(1,locomotion.strideBlocks()));
+                runtime.carryLandingGait=true;
+                locomotion.primary().sample(runtime.landingGaitPhase,runtime.poseB);
+                float landingBlend=(float)Mth.clamp((runtime.phase-.12D)/.70D,0D,1D);
+                PoseBuffer.blend(runtime.poseA,runtime.poseB,landingBlend,runtime.target);
+            }
+        }
         if (selection.secondary() != null && selection.blend() > 0.0001F)
         {
             selection.secondary().sample(runtime.phase, runtime.poseB);
@@ -1254,6 +1276,14 @@ public final class EvaMotionEngineV2
         BlockHitResult hit = entity.level().clip(new ClipContext(
                 start, end, ClipContext.Block.COLLIDER,
                 ClipContext.Fluid.NONE, entity));
+        for(int retry=0;retry<4&&hit.getType()==HitResult.Type.BLOCK;retry++)
+        {
+            var pos=hit.getBlockPos();var state=entity.level().getBlockState(pos);
+            var shape=state.getCollisionShape(entity.level(),pos,net.minecraft.world.phys.shapes.CollisionContext.of(entity));
+            if(!com.projectseele.entity.EvaObstacleCollision.ignores(entity,state,pos,shape))break;
+            start=new Vec3(predicted.x,pos.getY()-.001D,predicted.z);
+            hit=entity.level().clip(new ClipContext(start,end,ClipContext.Block.COLLIDER,ClipContext.Fluid.NONE,entity));
+        }
         if (hit.getType() != HitResult.Type.BLOCK)
         {
             return predicted;
@@ -1370,6 +1400,8 @@ public final class EvaMotionEngineV2
         private boolean airStateInitialized;
         private boolean wasAirborne;
         private boolean landingActive;
+        private boolean carryLandingGait;
+        private double landingGaitPhase;
         private boolean apexReached;
         private double airborneAge;
         private double fallAge;
