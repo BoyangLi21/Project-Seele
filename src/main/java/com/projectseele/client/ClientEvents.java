@@ -24,6 +24,7 @@ import com.projectseele.client.render.UltramanAvatarRenderer;
 import com.projectseele.client.render.LilithRenderer;
 import com.projectseele.client.render.ColossalHumanoidRenderer;
 import com.projectseele.client.render.HybridAddonRenderer;
+import com.projectseele.client.render.RiggedAngelLayer;
 import com.projectseele.registry.ModEntities;
 import com.projectseele.registry.ModFluids;
 import com.projectseele.registry.ModBlocks;
@@ -96,13 +97,13 @@ public class ClientEvents
         event.registerEntityRenderer(ModEntities.ULTRAMAN_AVATAR.get(),
                 UltramanAvatarRenderer::new);
         event.registerEntityRenderer(ModEntities.SACHIEL.get(), context -> new HybridAddonRenderer<>(context,
-                ColossalHumanoidRenderer.Style.SACHIEL, "sachiel", 8.0F));
+                ColossalHumanoidRenderer.Style.SACHIEL, "sachiel", 5.0F));
         event.registerEntityRenderer(ModEntities.SHAMSHEL.get(),
-                context -> new ColossalHumanoidRenderer<>(context, ColossalHumanoidRenderer.Style.SHAMSHEL));
+                context -> new HybridAddonRenderer<>(context, ColossalHumanoidRenderer.Style.SHAMSHEL,"shamshel",5.0F));
         event.registerEntityRenderer(ModEntities.ZERUEL.get(),
-                context -> new ColossalHumanoidRenderer<>(context, ColossalHumanoidRenderer.Style.ZERUEL));
+                context -> new HybridAddonRenderer<>(context, ColossalHumanoidRenderer.Style.ZERUEL,"zeruel",5.0F));
         event.registerEntityRenderer(ModEntities.ISRAFEL.get(), context -> new HybridAddonRenderer<>(context,
-                ColossalHumanoidRenderer.Style.SACHIEL, "israfel", 9.0F));
+                ColossalHumanoidRenderer.Style.SACHIEL, "israfel", 5.0F));
         event.registerEntityRenderer(ModEntities.LILITH.get(), LilithRenderer::new);
         event.registerEntityRenderer(ModEntities.MASS_PRODUCTION_EVA.get(), context -> new HybridAddonRenderer<>(context,
                 ColossalHumanoidRenderer.Style.MASS_PRODUCTION, "mass_production_eva", 6.5F));
@@ -127,11 +128,12 @@ public class ClientEvents
     public static void onRegisterGuiOverlays(RegisterGuiOverlaysEvent event)
     {
         event.registerAboveAll("angel_alarm", AlarmOverlay.INSTANCE);
-        event.registerAboveAll("eva_cockpit", EvaHud.COCKPIT);
+        event.registerAboveAll("eva_cockpit",(gui,g,p,w,h)->{if(!FirstBattleClient.active())EvaHud.COCKPIT.render(gui,g,p,w,h);});
         event.registerAboveAll("sniper_scope", EvaHud.SCOPE);
         event.registerAboveAll("plug_insertion", EvaHud.INSERTION);
         event.registerAboveAll("nuclear_flash", EvaHud.NUCLEAR_FLASH);
         event.registerAboveAll("eva_command_feed_capture", EvaCommandFeedClient.CAPTURE_OVERLAY);
+        event.registerAboveAll("first_battle",FirstBattleClient.OVERLAY);
     }
 
     @SubscribeEvent
@@ -154,6 +156,7 @@ public class ClientEvents
         event.registerReloadListener((ResourceManagerReloadListener) resourceManager ->
         {
             LocalTriangleMeshLayer.clearCache();
+            RiggedAngelLayer.clearCache();
             LocalVisualAssetFingerprint.clearCache();
             EvaPoseGraph.reload(resourceManager);
             EvaSkinnedMeshRuntime.reload(resourceManager);

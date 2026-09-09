@@ -6,4 +6,6 @@ package com.projectseele.entity;
  */
 public interface Angel
 {
+    /** Remaining field strength, when this Angel has a finite contact barrier. */
+    default float getAtField(){return 0;}
 }

@@ -5,6 +5,12 @@
 
 ## 音效（全部原创合成）
 
+R10 新增的 15 个 `eva_*.ogg` 由 `tools/build_eva_audio_r10.py` 固定种子合成，无录音采样。用途包括落足、落地、关节、挥击、实体命中、刀切、装甲、核心、AT 侵蚀/撕裂、咆哮和驾驶反馈。波形参数、响度与 SHA-256 记录在 `artifacts/first_battle_world_r10/audio/manifest.json`。
+
+R10 机柜、档案柜、监护器、工作椅和战术屏由 `build_room_equipment_r10.py`、`build_briefing_furniture_r10.py` 原创绘制/建模；战术地图使用本机现有道路规划，未使用原片图像。首战动作由 `author_first_battle_r10.py` 编制，不是影视动作数据提取。
+
+R10 负责人授权下载的九份 Battle Orchestra 模型与纹理仅放在 `external-assets/incoming/angels_r10` 和本机资源包中；不提交、不包含在公开构建中。模型获取与实机状态见 [R10 记录](WORLD_MOTION_R10.md) 和 [使徒来源清单](ANGEL_MODEL_ACQUISITION.md)。
+
 | 文件 | 用途 | 来源 |
 |---|---|---|
 | `sounds/alarm.ogg` | 使徒来袭循环警报 | 原创：`tools/gen_sounds.ps1` 数学合成（正弦+奇次谐波双音） |

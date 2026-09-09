@@ -34,6 +34,7 @@ public class ServerboundEvaControlPacket
     public static final int ACTION_CANCEL_LAUNCH = 15;
     public static final int ACTION_SELF_LAUNCH = 16;
     public static final int ACTION_TAKE_ARMAMENT = 17;
+    public static final int ACTION_SKIP_FIRST_BATTLE = 18;
 
     public final int action;
     public final int requestId;
@@ -111,6 +112,7 @@ public class ServerboundEvaControlPacket
                     case ACTION_RIFLE_FIRE -> eva.fireRifle(sender);
                     case ACTION_CANCEL_LAUNCH -> eva.cancelLaunchFromPilot(sender);
                     case ACTION_SELF_LAUNCH -> eva.releaseLaunchFromPilot(sender);
+                    case ACTION_SKIP_FIRST_BATTLE -> com.projectseele.event.FirstBattleDirector.skip(sender);
                     case ACTION_TAKE_ARMAMENT ->
                     {
                         if (eva.level() instanceof net.minecraft.server.level.ServerLevel level)

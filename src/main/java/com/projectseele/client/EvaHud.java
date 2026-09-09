@@ -239,10 +239,8 @@ public final class EvaHud
         float synchro = eva.getSynchronizationRatio(partialTick);
         ChatFormatting synchroColour = synchro < 25.0F ? ChatFormatting.RED
                 : synchro >= 50.0F ? ChatFormatting.GREEN : ChatFormatting.GOLD;
-        guiGraphics.drawCenteredString(gui.getFont(),
-                Component.literal(String.format("SYNCHRO  %.1f%%", synchro))
-                        .withStyle(synchroColour),
-                width / 2, m + 6, NERV_ORANGE);
+        String syncText=String.format("SYNCHRO  %.1f%%",synchro);
+        guiGraphics.drawString(gui.getFont(),Component.literal(syncText).withStyle(synchroColour),width-12-gui.getFont().width(syncText),m+6,NERV_ORANGE);
         String roleKey = eva.isExperimentalUnit()?"hud.projectseele.role_experimental":switch (eva.getUnitVariant())
         {
             case EvaUnit01Entity.UNIT_00 -> "hud.projectseele.role_prototype";
@@ -280,10 +278,10 @@ public final class EvaHud
                         : powerSeconds <= 60 ? 0xFFE03535 : 0xFFE89A22);
 
         int heading = Math.floorMod(Math.round(player.getYRot()), 360);
-        guiGraphics.drawCenteredString(gui.getFont(),
-                Component.literal(String.format("HDG %03d   PITCH %+03d", heading, Math.round(-player.getXRot())))
-                        .withStyle(ChatFormatting.DARK_GRAY),
-                width / 2, m + 18, 0xFFB8A48D);
+        String headingText=String.format("HDG %03d  PITCH %+03d",heading,Math.round(-player.getXRot()));
+        guiGraphics.drawString(gui.getFont(),headingText,width-12-gui.getFont().width(headingText),m+18,0xFFC1B5A2);
+        String speedText=String.format("%.0f km/h",eva.getDeltaMovement().horizontalDistance()*72);
+        guiGraphics.drawString(gui.getFont(),speedText,width-12-gui.getFont().width(speedText),m+30,0xFFCFD2BE);
 
         if (eva.isLaunchSequenceActive())
         {
@@ -332,8 +330,8 @@ public final class EvaHud
         }
 
         int x = 10;
-        int y = height - 64;
-        int barWidth = 130;
+        int y = height - 57;
+        int barWidth = Math.min(146,width/2-20);
 
         guiGraphics.fill(x - 4, y - 14, x + barWidth + 4, y + 36, PANEL_BG);
         guiGraphics.fill(x - 4, y - 14, x + barWidth + 4, y - 13, NERV_ORANGE);
@@ -365,10 +363,8 @@ public final class EvaHud
                 x, y + 25, 0xFFFFFFFF);
 
         // Weapon line.
-        guiGraphics.drawString(gui.getFont(),
-                Component.translatable(eva.getWeaponTranslationKey())
-                        .withStyle(ChatFormatting.YELLOW),
-                x + 44, y + 25, 0xFFFFFFFF);
+        String weapon=gui.getFont().plainSubstrByWidth(Component.translatable(eva.getWeaponTranslationKey()).getString(),width/2-20);
+        guiGraphics.drawString(gui.getFont(),weapon,width-10-gui.getFont().width(weapon),height-38,0xFFE4C68A);
 
         String stanceKey = eva.isShieldBraced() ? "hud.projectseele.stance_shield"
                 : eva.isPilotProne() ? "hud.projectseele.stance_prone"
@@ -387,8 +383,8 @@ public final class EvaHud
                     ? "hud.projectseele.controls_unit00" : "hud.projectseele.controls";
             Component controls = Component.translatable(controlsKey)
                     .withStyle(ChatFormatting.GRAY);
-            guiGraphics.drawString(gui.getFont(), controls,
-                    width - 10 - gui.getFont().width(controls), height - 12, 0xFFFFFFFF);
+            String hint=gui.getFont().plainSubstrByWidth(controls.getString(),width-24);
+            guiGraphics.drawCenteredString(gui.getFont(),hint,width/2,height-12,0xFFB5B2A8);
         }
     };
 
@@ -612,7 +608,7 @@ public final class EvaHud
                 new ClipContext(from, farEnd, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, player));
         Vec3 end = blockHit.getLocation();
         EntityHitResult entityHit = ProjectileUtil.getEntityHitResult(player.level(), player, from, end,
-                new AABB(from, end).inflate(1.0D),
+                new AABB(from, end).inflate(32,80,32),
                 e -> e instanceof LivingEntity && e != player && e != eva
                         && !e.isSpectator() && e.isAlive());
 

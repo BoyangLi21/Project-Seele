@@ -103,9 +103,19 @@ public final class EntryPlugKinematics
         Vec3 origin = unit.position()
                 .add(rear.scale(SOCKET_REAR_BLOCKS))
                 .add(0.0D, SOCKET_HEIGHT_BLOCKS, 0.0D);
-        return new RigidTransform(origin,
+        RigidTransform normal=new RigidTransform(origin,
                 orientation.qx(), orientation.qy(),
                 orientation.qz(), orientation.qw());
+        if(unit.isFirstBattleActive()&&com.projectseele.entity.FirstBattleClip.ready())
+        {
+            var signals=unit.firstBattleSignals();var spec=signals.spec(unit);float t=signals.time(unit,1);
+            Vec3 p=com.projectseele.entity.FirstBattleClip.point(spec,true,"socket_blocks",t);
+            Vec3 outward=com.projectseele.entity.FirstBattleClip.point(spec,true,"socket_outward_blocks",t).subtract(p).normalize();
+            Vec3 up=com.projectseele.entity.FirstBattleClip.point(spec,true,"socket_up_blocks",t).subtract(p).normalize();
+            RigidTransform authored=RigidTransform.fromAxes(p,up.cross(outward).normalize(),up,outward);
+            return authored.interpolate(normal,com.projectseele.entity.FirstBattleClip.smooth((t-21.6F)/1.4F));
+        }
+        return normal;
     }
 
     /**

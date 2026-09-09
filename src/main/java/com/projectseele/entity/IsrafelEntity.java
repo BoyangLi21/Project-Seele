@@ -32,6 +32,7 @@ public class IsrafelEntity extends Monster implements Angel, GeoEntity
     private static final RawAnimation ANIM_WALK = RawAnimation.begin().thenLoop("animation.entity_israfel.move");
     private final AnimatableInstanceCache geoCache = GeckoLibUtil.createInstanceCache(this);
     private float atField = 850.0F;
+    @Override public float getAtField(){return atField;}
     private boolean split;
     private boolean resolved;
     private int downedTicks;

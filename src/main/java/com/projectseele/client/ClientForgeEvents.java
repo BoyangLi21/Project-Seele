@@ -602,6 +602,15 @@ public final class ClientForgeEvents
                 && minecraft.player.getVehicle()
                         instanceof EntryPlugCarrierEntity;
         boolean opticalSight = isCannonScopeActive(eva) || isRifleSightActive(eva);
+        if(eva!=null&&(minecraft.options.getCameraType().isFirstPerson()||eva.isFirstBattleActive()))
+        {
+            var overlay=event.getOverlay();
+            if(overlay==VanillaGuiOverlay.HOTBAR.type()||overlay==VanillaGuiOverlay.CROSSHAIR.type()
+                    ||overlay==VanillaGuiOverlay.PLAYER_HEALTH.type()||overlay==VanillaGuiOverlay.ARMOR_LEVEL.type()
+                    ||overlay==VanillaGuiOverlay.FOOD_LEVEL.type()||overlay==VanillaGuiOverlay.MOUNT_HEALTH.type()
+                    ||overlay==VanillaGuiOverlay.AIR_LEVEL.type()||overlay==VanillaGuiOverlay.EXPERIENCE_BAR.type()
+                    ||overlay==VanillaGuiOverlay.JUMP_BAR.type())event.setCanceled(true);
+        }
         if ((opticalSight || insideExternalPlug)
                 && (event.getOverlay() == VanillaGuiOverlay.HOTBAR.type()
                 || event.getOverlay() == VanillaGuiOverlay.CROSSHAIR.type()))

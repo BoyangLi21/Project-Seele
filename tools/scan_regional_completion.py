@@ -12,16 +12,18 @@ def passable(state):
     return name in AIR or name=='minecraft:light' or name.endswith(('_button','_wall_sign','_sign','_torch')) or name=='minecraft:torch'
 
 
-def volume(lo,hi):
+def volume(lo,hi,*,allow_unknown=False):
     selected={(cx,cz):set(range(lo[1]//16,hi[1]//16+1)) for cx in range(lo[0]//16,hi[0]//16+1) for cz in range(lo[2]//16,hi[2]//16+1)}
     palettes=[];lookup={};a=np.full((hi[1]-lo[1]+1,hi[2]-lo[2]+1,hi[0]-lo[0]+1),65535,dtype=np.uint16)
-    for cx,cz,sy,pal,idx in iter_selected_sections(WORLD,DIM,selected):
+    for cx,cz,sy,pal,idx in iter_selected_sections(WORLD,DIM,selected,skip_unfinished=allow_unknown):
         for state in pal:
             if state not in lookup:lookup[state]=len(palettes);palettes.append(state)
         mapping=np.asarray([lookup[s] for s in pal],dtype=np.uint16);v=mapping[idx].reshape(16,16,16)
         x0=max(lo[0],cx*16);x1=min(hi[0],cx*16+15)+1;z0=max(lo[2],cz*16);z1=min(hi[2],cz*16+15)+1;y0=max(lo[1],sy*16);y1=min(hi[1],sy*16+15)+1
         a[y0-lo[1]:y1-lo[1],z0-lo[2]:z1-lo[2],x0-lo[0]:x1-lo[0]]=v[y0-sy*16:y1-sy*16,z0-cz*16:z1-cz*16,x0-cx*16:x1-cx*16]
-    if np.any(a==65535):raise RuntimeError('Unmeasured local circulation volume')
+    if np.any(a==65535):
+        if not allow_unknown:raise RuntimeError('Unmeasured local circulation volume')
+        a[a==65535]=len(palettes);palettes.append('UNKNOWN')
     return a,palettes
 
 

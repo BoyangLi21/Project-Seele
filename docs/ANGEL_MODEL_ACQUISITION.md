@@ -1,6 +1,8 @@
 # Project SEELE — Angel model acquisition ledger
 
-Updated: 2026-08-20.  This is a sourcing ledger, not proof that an asset has
+Updated: 2026-09-09. R10 downloaded nine Battle Orchestra source archives for explicitly authorized private evaluation, with source URLs, archive hashes, extraction receipts and individual previews. Sachiel, Shamshel, Israfel and Zeruel now have independent weighted runtime rigs and native screenshots; the other five downloads remain source tests. See [R10](WORLD_MOTION_R10.md). Public redistribution is not authorized by those downloads. Sketchfab candidates requiring login were not reported as downloaded.
+
+The older candidate queue below remains a sourcing ledger, not proof that an asset has
 been downloaded, licensed for redistribution, optimized, rigged, or accepted
 in game.  Every selected asset still needs a source archive, author/license
 record, conversion receipt, visual review, and final attribution entry.
@@ -10,11 +12,11 @@ record, conversion receipt, visual review, and final attribution entry.
 | Subject | Current state | Final-model status |
 |---|---|---|
 | Ramiel | Native procedural octahedron/deformation renderer | Retain; no external mesh needed |
-| Sachiel | Local high-detail external model (`external-assets/incoming/sachiel.zip`) | Present; still needs final visual acceptance |
+| Sachiel | R10 private Battle Orchestra mesh, 17-bone weighted rig | Native rendering and paired first battle verified |
 | Lilith | Local Solodovnykov/Kiki conversion | Present; separate from Giant Rei |
-| Israfel | Reuses the Sachiel-derived silhouette | Placeholder; must be replaced |
-| Shamshel | `ColossalHumanoidRenderer` procedural body | Placeholder; must be replaced |
-| Zeruel | `ColossalHumanoidRenderer` procedural body | Placeholder; must be replaced |
+| Israfel | Its own R10 combined-form source and 17-bone rig | Native rendering verified |
+| Shamshel | R10 separate body/tail/whip rig, 15 bones | Native rendering verified |
+| Zeruel | R10 five-bone rig and repaired folded paper arms | Native rendering verified |
 | Mass Production EVA | Local high-detail model | Present; EoE vessel, not an Angel |
 
 ## Priority acquisition queue

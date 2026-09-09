@@ -27,12 +27,19 @@ public abstract class CameraMixin
 {
     @Shadow
     protected abstract void setPosition(double x, double y, double z);
+    @Shadow protected abstract void setRotation(float yaw,float pitch);
 
     @Inject(method = "setup", at = @At("TAIL"))
     private void projectseele$smoothEntryPlugCamera(BlockGetter level,
             Entity subject, boolean detached, boolean mirrored,
             float partialTick, CallbackInfo callback)
     {
+        var directed=com.projectseele.client.FirstBattleClient.camera((Camera)(Object)this,partialTick);
+        if(directed!=null)
+        {
+            Vec3 p=directed.position(),d=directed.target().subtract(p);this.setPosition(p.x,p.y,p.z);
+            this.setRotation((float)Math.toDegrees(Math.atan2(-d.x,d.z)),(float)-Math.toDegrees(Math.atan2(d.y,d.horizontalDistance())));return;
+        }
         EvaUnit01Entity controlled=EvaPilotResolver.controlTarget(subject);
         if(!detached&&controlled!=null&&controlled.isPoweredOn()&&!controlled.isActivationCinematicActive())
         {

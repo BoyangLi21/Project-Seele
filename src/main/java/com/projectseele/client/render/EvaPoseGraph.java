@@ -201,7 +201,7 @@ public final class EvaPoseGraph
         }
         EvaMotionEngineV2.BoneWrites transitions = EvaPoseTransition.apply(
                 entity, model, partialTick);
-        var jointWrites=entity.getMotionLabPhysicsPreview()==0?EvaArmArticulation.apply(model):EvaMotionEngineV2.BoneWrites.empty();
+        var jointWrites=entity.getMotionLabPhysicsPreview()==0&&!entity.isFirstBattleActive()?EvaArmArticulation.apply(model):EvaMotionEngineV2.BoneWrites.empty();
         var firearm=EvaRifleContactRig.apply(entity,model,partialTick,modelToWorld);
         Set<String> jointR=new LinkedHashSet<>(jointWrites.rotationBones());jointR.addAll(firearm.rotationBones());
         Set<String> jointP=new LinkedHashSet<>(jointWrites.positionBones());jointP.addAll(firearm.positionBones());

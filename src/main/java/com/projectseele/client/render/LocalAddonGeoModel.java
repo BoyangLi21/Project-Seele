@@ -36,4 +36,12 @@ public class LocalAddonGeoModel<T extends GeoEntity> extends GeoModel<T>
     {
         return this.animation;
     }
+
+    @Override
+    public void setCustomAnimations(T animatable,long instanceId,software.bernie.geckolib.core.animation.AnimationState<T> state)
+    {
+        super.setCustomAnimations(animatable,instanceId,state);
+        if(animatable instanceof net.minecraft.world.entity.Entity entity)
+            FirstBattlePoseRenderer.apply(entity,this.getBakedModel(this.getModelResource(animatable)),state.getPartialTick());
+    }
 }

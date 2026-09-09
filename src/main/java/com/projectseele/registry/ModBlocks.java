@@ -29,6 +29,11 @@ public final class ModBlocks
     public static final RegistryObject<Block> NERV_FLOOR_PANEL=finish("nerv_floor_panel",Blocks.SMOOTH_STONE,0);
     public static final RegistryObject<Block> NERV_HAZARD_PAVING=finish("nerv_hazard_paving",Blocks.SMOOTH_STONE,0);
     public static final RegistryObject<Block> NERV_STRIP_LIGHT=finish("nerv_strip_light",Blocks.IRON_BLOCK,14);
+    public static final RegistryObject<Block> NERV_SERVER_RACK=equipment("nerv_server_rack",3);
+    public static final RegistryObject<Block> NERV_STORAGE_PANEL=equipment("nerv_storage_panel",0);
+    public static final RegistryObject<Block> NERV_MEDICAL_PANEL=equipment("nerv_medical_panel",4);
+    public static final RegistryObject<Block> NERV_OFFICE_CHAIR=BLOCKS.register("nerv_office_chair",()->new com.projectseele.world.NervOfficeChairBlock(BlockBehaviour.Properties.copy(Blocks.IRON_BLOCK).strength(1.5F).noOcclusion()));
+    public static final RegistryObject<Block> NERV_BRIEFING_TILE=BLOCKS.register("nerv_briefing_tile",()->new com.projectseele.world.NervBriefingTileBlock(BlockBehaviour.Properties.copy(Blocks.IRON_BLOCK).lightLevel(s->6)));
     public static final RegistryObject<Block> NERV_PYRAMID_PANEL=BLOCKS.register("nerv_pyramid_panel",
             ()->new Block(BlockBehaviour.Properties.copy(Blocks.REINFORCED_DEEPSLATE)));
     public static final RegistryObject<Block> NERV_PYRAMID_MARKING=BLOCKS.register("nerv_pyramid_marking",
@@ -40,6 +45,10 @@ public final class ModBlocks
     private static RegistryObject<Block> finish(String name,Block material,int light)
     {
         return BLOCKS.register(name,()->new Block(BlockBehaviour.Properties.copy(material).strength(2F).lightLevel(s->light)));
+    }
+    private static RegistryObject<Block> equipment(String name,int light)
+    {
+        return BLOCKS.register(name,()->new com.projectseele.world.NervWayfindingTileBlock(BlockBehaviour.Properties.copy(Blocks.IRON_BLOCK).strength(2F).lightLevel(s->light)));
     }
 
     public static final RegistryObject<Block> RETRACTABLE_BUILDING_CORE = BLOCKS.register(

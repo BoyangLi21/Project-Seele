@@ -19,9 +19,17 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
 /** Fourth Angel: low-hovering pursuit type with a pair of sweeping energy whips. */
-public class ShamshelEntity extends Monster implements Angel, SiegeAnchorAware
+public class ShamshelEntity extends Monster implements Angel, SiegeAnchorAware, software.bernie.geckolib.animatable.GeoEntity
 {
+    private final software.bernie.geckolib.core.animatable.instance.AnimatableInstanceCache geoCache=software.bernie.geckolib.util.GeckoLibUtil.createInstanceCache(this);
+    @Override public software.bernie.geckolib.core.animatable.instance.AnimatableInstanceCache getAnimatableInstanceCache(){return geoCache;}
+    @Override public void registerControllers(software.bernie.geckolib.core.animation.AnimatableManager.ControllerRegistrar controllers)
+    {
+        controllers.add(new software.bernie.geckolib.core.animation.AnimationController<>(this,"base",6,state->state.setAndContinue(
+                software.bernie.geckolib.core.animation.RawAnimation.begin().thenLoop(state.isMoving()?"animation.Shamshel.move":"animation.Shamshel.idle"))));
+    }
     private float atField = 700.0F;
+    @Override public float getAtField(){return atField;}
     private int sweepCooldown = 30;
     private BlockPos siegeBeacon;
 

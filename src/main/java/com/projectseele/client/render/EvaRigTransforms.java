@@ -57,7 +57,7 @@ final class EvaRigTransforms
         bend.normalize();var joint=new Vector3f(shoulder).fma(along,direction).fma(height,bend);
         var du=new Vector3f(joint).sub(shoulder);var dl=new Vector3f(target).sub(joint);var axis=new Vector3f(du).cross(dl);
         if(axis.lengthSquared()<1e-8F)axis.set(du).cross(bend);
-        axis.normalize();var localSide=rotation(parent(upper,root)).transform(new Vector3f(1,0,0));if(axis.dot(localSide)<0)axis.negate();
+        axis.normalize();var localSide=rotation(new Matrix4f(root).mul(model(upper))).transform(new Vector3f(1,0,0));if(axis.dot(localSide)<0)axis.negate();
         for(var bone:new GeoBone[]{lower,wrist,hand}){bone.setPosX(0);bone.setPosY(0);bone.setPosZ(0);}
         wrist.setRotX(0);wrist.setRotY(0);wrist.setRotZ(0);
         orient(upper,u,du,axis,root);var actual=parent(lower,root).transformPosition(new Vector3f(centre));

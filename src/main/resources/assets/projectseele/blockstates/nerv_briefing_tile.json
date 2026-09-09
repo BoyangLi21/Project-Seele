@@ -1,0 +1,148 @@
+{
+  "variants": {
+    "part=0": {
+      "model": "projectseele:block/nerv_briefing_tile_0"
+    },
+    "part=1": {
+      "model": "projectseele:block/nerv_briefing_tile_1"
+    },
+    "part=2": {
+      "model": "projectseele:block/nerv_briefing_tile_2"
+    },
+    "part=3": {
+      "model": "projectseele:block/nerv_briefing_tile_3"
+    },
+    "part=4": {
+      "model": "projectseele:block/nerv_briefing_tile_4"
+    },
+    "part=5": {
+      "model": "projectseele:block/nerv_briefing_tile_5"
+    },
+    "part=6": {
+      "model": "projectseele:block/nerv_briefing_tile_6"
+    },
+    "part=7": {
+      "model": "projectseele:block/nerv_briefing_tile_7"
+    },
+    "part=8": {
+      "model": "projectseele:block/nerv_briefing_tile_8"
+    },
+    "part=9": {
+      "model": "projectseele:block/nerv_briefing_tile_9"
+    },
+    "part=10": {
+      "model": "projectseele:block/nerv_briefing_tile_10"
+    },
+    "part=11": {
+      "model": "projectseele:block/nerv_briefing_tile_11"
+    },
+    "part=12": {
+      "model": "projectseele:block/nerv_briefing_tile_12"
+    },
+    "part=13": {
+      "model": "projectseele:block/nerv_briefing_tile_13"
+    },
+    "part=14": {
+      "model": "projectseele:block/nerv_briefing_tile_14"
+    },
+    "part=15": {
+      "model": "projectseele:block/nerv_briefing_tile_15"
+    },
+    "part=16": {
+      "model": "projectseele:block/nerv_briefing_tile_16"
+    },
+    "part=17": {
+      "model": "projectseele:block/nerv_briefing_tile_17"
+    },
+    "part=18": {
+      "model": "projectseele:block/nerv_briefing_tile_18"
+    },
+    "part=19": {
+      "model": "projectseele:block/nerv_briefing_tile_19"
+    },
+    "part=20": {
+      "model": "projectseele:block/nerv_briefing_tile_20"
+    },
+    "part=21": {
+      "model": "projectseele:block/nerv_briefing_tile_21"
+    },
+    "part=22": {
+      "model": "projectseele:block/nerv_briefing_tile_22"
+    },
+    "part=23": {
+      "model": "projectseele:block/nerv_briefing_tile_23"
+    },
+    "part=24": {
+      "model": "projectseele:block/nerv_briefing_tile_24"
+    },
+    "part=25": {
+      "model": "projectseele:block/nerv_briefing_tile_25"
+    },
+    "part=26": {
+      "model": "projectseele:block/nerv_briefing_tile_26"
+    },
+    "part=27": {
+      "model": "projectseele:block/nerv_briefing_tile_27"
+    },
+    "part=28": {
+      "model": "projectseele:block/nerv_briefing_tile_28"
+    },
+    "part=29": {
+      "model": "projectseele:block/nerv_briefing_tile_29"
+    },
+    "part=30": {
+      "model": "projectseele:block/nerv_briefing_tile_30"
+    },
+    "part=31": {
+      "model": "projectseele:block/nerv_briefing_tile_31"
+    },
+    "part=32": {
+      "model": "projectseele:block/nerv_briefing_tile_32"
+    },
+    "part=33": {
+      "model": "projectseele:block/nerv_briefing_tile_33"
+    },
+    "part=34": {
+      "model": "projectseele:block/nerv_briefing_tile_34"
+    },
+    "part=35": {
+      "model": "projectseele:block/nerv_briefing_tile_35"
+    },
+    "part=36": {
+      "model": "projectseele:block/nerv_briefing_tile_36"
+    },
+    "part=37": {
+      "model": "projectseele:block/nerv_briefing_tile_37"
+    },
+    "part=38": {
+      "model": "projectseele:block/nerv_briefing_tile_38"
+    },
+    "part=39": {
+      "model": "projectseele:block/nerv_briefing_tile_39"
+    },
+    "part=40": {
+      "model": "projectseele:block/nerv_briefing_tile_40"
+    },
+    "part=41": {
+      "model": "projectseele:block/nerv_briefing_tile_41"
+    },
+    "part=42": {
+      "model": "projectseele:block/nerv_briefing_tile_42"
+    },
+    "part=43": {
+      "model": "projectseele:block/nerv_briefing_tile_43"
+    },
+    "part=44": {
+      "model": "projectseele:block/nerv_briefing_tile_44"
+    },
+    "part=45": {
+      "model": "projectseele:block/nerv_briefing_tile_45"
+    },
+    "part=46": {
+      "model": "projectseele:block/nerv_briefing_tile_46"
+    },
+    "part=47": {
+      "model": "projectseele:block/nerv_briefing_tile_47"
+    }
+  }
+}

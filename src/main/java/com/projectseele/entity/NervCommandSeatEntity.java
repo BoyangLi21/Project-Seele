@@ -57,6 +57,11 @@ public final class NervCommandSeatEntity extends Entity
     {
         super.tick();
         this.setDeltaMovement(Vec3.ZERO);
+        if(!this.level().isClientSide&&this.getTags().contains("seele_office_seat")&&this.tickCount>5)
+        {
+            var pos=net.minecraft.core.BlockPos.of(this.getPersistentData().getLong("OfficeChair"));
+            if(!this.isVehicle()||!(this.level().getBlockState(pos).getBlock() instanceof com.projectseele.world.NervOfficeChairBlock))this.discard();
+        }
     }
 
     @Override
@@ -78,6 +83,17 @@ public final class NervCommandSeatEntity extends Entity
     @Override
     public Vec3 getDismountLocationForPassenger(LivingEntity passenger)
     {
+        if(this.getTags().contains("seele_office_seat"))
+        {
+            var p=net.minecraft.core.BlockPos.of(this.getPersistentData().getLong("OfficeChair"));
+            for(int turn:new int[]{0,90,-90,180})
+            {
+                Vec3 candidate=Vec3.atBottomCenterOf(p).add(Vec3.directionFromRotation(0,this.getYRot()+turn).scale(1.35));
+                if(this.level().noCollision(passenger,passenger.getDimensions(net.minecraft.world.entity.Pose.STANDING).makeBoundingBox(candidate))
+                        &&!this.level().getBlockState(net.minecraft.core.BlockPos.containing(candidate.add(0,-.1,0))).getCollisionShape(this.level(),net.minecraft.core.BlockPos.containing(candidate.add(0,-.1,0))).isEmpty())return candidate;
+            }
+            return Vec3.atBottomCenterOf(p).add(0,1.25,0);
+        }
         // Every authored chair faces north. Two blocks south clears its
         // physical backrest before placing the player on the supported aisle.
         return this.position().add(0.0D, 0.08D, 2.25D);

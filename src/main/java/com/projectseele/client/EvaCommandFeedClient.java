@@ -62,6 +62,7 @@ import org.joml.Matrix4f;
         value = Dist.CLIENT)
 public final class EvaCommandFeedClient
 {
+    public static boolean isOpticalRenderPass(){return captureRenderPass;}
     public static final IGuiOverlay CAPTURE_OVERLAY =
             (gui, graphics, partialTick, width, height) ->
             {
@@ -286,7 +287,7 @@ public final class EvaCommandFeedClient
             firstPersonCaptureTarget=new TextureTarget(width,height,true,Minecraft.ON_OSX);
         else if(firstPersonCaptureTarget.viewWidth!=width||firstPersonCaptureTarget.viewHeight!=height)
             firstPersonCaptureTarget.resize(width,height,Minecraft.ON_OSX);
-        if (minecraft.options.getCameraType().isFirstPerson())
+        if (minecraft.options.getCameraType().isFirstPerson()&&!FirstBattleClient.active())
         {
             // Read back the stream-sized image, not a possible 4K/ultrawide display.
             int sourceWidth=mainTarget.viewWidth,sourceHeight=mainTarget.viewHeight;

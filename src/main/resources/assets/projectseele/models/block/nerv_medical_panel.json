@@ -1,0 +1,8 @@
+{
+  "parent": "minecraft:block/orientable",
+  "textures": {
+    "top": "projectseele:block/nerv_wall_panel",
+    "front": "projectseele:block/nerv_medical_panel",
+    "side": "projectseele:block/nerv_wall_panel"
+  }
+}

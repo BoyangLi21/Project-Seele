@@ -91,6 +91,12 @@ public final class EvaRifleKinematics
             Vec3 up=right.cross(aim).normalize();
             Vec3 stock=pocket.add(up.scale(5)).subtract(aim.scale(recoil*.22));
             Vec3 grip=stock.add(aim.scale(STOCK_BACK)).subtract(up.scale(STOCK_UP));
+            // During kneel/prone handoffs the magazine or receiver can reach
+            // the floor before the muzzle. Lift the complete held weapon by
+            // its measured support hull; both hands and the optical solution
+            // consume this same corrected frame.
+            double clearance=EvaRifleClearance.lift(grip,right,aim,up,entity.getY());
+            if(clearance>0){grip=grip.add(0,clearance,0);stock=stock.add(0,clearance,0);}
             Vec3 muzzle=grip.add(aim.scale(CAP_FORWARD)).subtract(up.scale(CAP_DOWN)).add(right.scale(-.0014665D*WEAPON_SCALE));
             if(supported)
             {

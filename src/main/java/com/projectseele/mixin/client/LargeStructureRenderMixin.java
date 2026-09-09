@@ -31,7 +31,7 @@ public abstract class LargeStructureRenderMixin
     private boolean seele$useLoadedGeometryForTallEntities(LevelRenderer renderer,BlockPos position)
     {
         Entity entity=this.seele$renderCandidate;
-        if((entity instanceof EvaUnit01Entity||entity instanceof IndustrialMemberEntity)
+        if((entity instanceof EvaUnit01Entity||entity instanceof IndustrialMemberEntity||entity instanceof com.projectseele.entity.Angel)
                 &&entity.blockPosition().equals(position))
         {
             var level=Minecraft.getInstance().level;

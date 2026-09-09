@@ -40,7 +40,8 @@ public class HybridAddonRenderer<T extends LivingEntity & GeoEntity> extends Ent
         this.mesh = new ResourceLocation(ProjectSeele.MODID, "mesh/" + assetName + ".mesh.json");
         this.fallback = new ColossalHumanoidRenderer<>(context, fallbackStyle);
         this.detailed = new MeshBackedRenderer<>(context,
-                new LocalAddonGeoModel<>(this.geometry, this.texture, this.animation), this.mesh);
+                new LocalAddonGeoModel<>(this.geometry, this.texture, this.animation), this.mesh,
+                !assetName.equals("mass_production_eva"));
         this.detailed.withScale(scale);
         this.shadowRadius = fallbackStyle == ColossalHumanoidRenderer.Style.SACHIEL ? 3.8F : 4.5F;
     }
@@ -58,6 +59,8 @@ public class HybridAddonRenderer<T extends LivingEntity & GeoEntity> extends Ent
     public void render(T entity, float yaw, float partialTick, PoseStack poseStack,
                        MultiBufferSource buffers, int packedLight)
     {
+        if(entity instanceof com.projectseele.entity.SachielEntity angel&&angel.isFirstBattleActive()
+                &&angel.firstBattleSignals().time(angel,partialTick)>=18.65F)return;
         if (LocalVisualAssetFingerprint.isStrictMode()
                 && "mass_production_eva".equals(this.assetName))
         {
@@ -91,6 +94,8 @@ public class HybridAddonRenderer<T extends LivingEntity & GeoEntity> extends Ent
     public boolean shouldRender(T entity, Frustum frustum, double cameraX,
                                 double cameraY, double cameraZ)
     {
+        if(entity instanceof com.projectseele.entity.Angel&&entity.shouldRender(cameraX,cameraY,cameraZ))
+            return frustum.isVisible(entity.getBoundingBox().inflate(42,8,42));
         if (entity instanceof MassProductionEvaEntity
                 && entity.shouldRender(cameraX, cameraY, cameraZ))
         {
@@ -114,6 +119,10 @@ public class HybridAddonRenderer<T extends LivingEntity & GeoEntity> extends Ent
     {
         return hasDetailedResources() ? this.texture : this.fallback.getTextureLocation(entity);
     }
+    @Override public net.minecraft.world.phys.Vec3 getRenderOffset(T entity,float partial)
+    {
+        return super.getRenderOffset(entity,partial).add(com.projectseele.entity.FirstBattleClip.renderOffset(entity,partial));
+    }
 
     public LocalVisualAssetFingerprint.Fingerprint visualFingerprint()
     {
@@ -126,11 +135,13 @@ public class HybridAddonRenderer<T extends LivingEntity & GeoEntity> extends Ent
         private final ResourceLocation mesh;
 
         MeshBackedRenderer(EntityRendererProvider.Context context, LocalAddonGeoModel<T> model,
-                           ResourceLocation mesh)
+                           ResourceLocation mesh,boolean weightedCandidate)
         {
             super(context, model);
             this.mesh = mesh;
-            this.addRenderLayer(new LocalTriangleMeshLayer<>(this, entity -> this.mesh));
+            this.addRenderLayer(new LocalTriangleMeshLayer<>(this, entity -> this.mesh,null,
+                    (entity,bone)->!weightedCandidate||!RiggedAngelLayer.available(this.mesh)));
+            if(weightedCandidate)this.addRenderLayer(new RiggedAngelLayer<>(this,this.mesh));
         }
 
         @Override

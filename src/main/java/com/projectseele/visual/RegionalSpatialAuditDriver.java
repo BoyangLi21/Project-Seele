@@ -30,7 +30,8 @@ import java.util.*;
 @Mod.EventBusSubscriber(modid=ProjectSeele.MODID)
 public final class RegionalSpatialAuditDriver
 {
-    private static final boolean ENABLED="collision-audit".equals(System.getProperty("projectseele.regionalBuild",""));
+    private static final boolean COMBINED="r10-world".equals(System.getProperty("projectseele.regionalBuild",""));
+    private static final boolean ENABLED=COMBINED||"collision-audit".equals(System.getProperty("projectseele.regionalBuild",""));
     private static final TicketType<ChunkPos> TICKET=TicketType.create("projectseele_spatial_audit",Comparator.comparingLong(ChunkPos::toLong),100);
     private static final Gson GSON=new GsonBuilder().setPrettyPrinting().create();
     private static final JsonArray RESULTS=new JsonArray();
@@ -111,7 +112,7 @@ public final class RegionalSpatialAuditDriver
             if(index==cases.size())
             {
                 Files.writeString(world.resolve("quality_native_walk_results.json"),GSON.toJson(RESULTS));
-                ProjectSeele.LOGGER.info("SPATIAL NATIVE COMPLETE cases={}",RESULTS.size());done=true;server.halt(false);return;
+                ProjectSeele.LOGGER.info("SPATIAL NATIVE COMPLETE cases={}",RESULTS.size());done=true;if(!COMBINED)server.halt(false);return;
             }
             JsonObject test=cases.get(index).getAsJsonObject();
             if(wait==0)

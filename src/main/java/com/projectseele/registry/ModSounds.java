@@ -22,6 +22,21 @@ public class ModSounds
     public static final RegistryObject<SoundEvent> DRILL = register("drill");
     public static final RegistryObject<SoundEvent> RAMIEL_HUM = register("ramiel_hum");
     public static final RegistryObject<SoundEvent> RIFLE_FIRE = register("rifle_fire");
+    public static final RegistryObject<SoundEvent> EVA_FOOT_CONCRETE=register("eva_foot_concrete");
+    public static final RegistryObject<SoundEvent> EVA_FOOT_SOIL=register("eva_foot_soil");
+    public static final RegistryObject<SoundEvent> EVA_LAND=register("eva_land");
+    public static final RegistryObject<SoundEvent> EVA_SERVO=register("eva_servo");
+    public static final RegistryObject<SoundEvent> EVA_SWING=register("eva_swing");
+    public static final RegistryObject<SoundEvent> EVA_IMPACT=register("eva_impact");
+    public static final RegistryObject<SoundEvent> EVA_ARMOR_IMPACT=register("eva_armor_impact");
+    public static final RegistryObject<SoundEvent> EVA_KNIFE_CUT=register("eva_knife_cut");
+    public static final RegistryObject<SoundEvent> EVA_CORE_BREAK=register("eva_core_break");
+    public static final RegistryObject<SoundEvent> EVA_AT_PRESSURE=register("eva_at_pressure");
+    public static final RegistryObject<SoundEvent> EVA_AT_TEAR=register("eva_at_tear");
+    public static final RegistryObject<SoundEvent> EVA_BERSERK_ROAR=register("eva_berserk_roar");
+    public static final RegistryObject<SoundEvent> EVA_COCKPIT_CONFIRM=register("eva_cockpit_confirm");
+    public static final RegistryObject<SoundEvent> EVA_COCKPIT_WARNING=register("eva_cockpit_warning");
+    public static final RegistryObject<SoundEvent> EVA_DRIVE_LOOP=register("eva_drive_loop");
 
     private static RegistryObject<SoundEvent> register(String name)
     {

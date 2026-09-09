@@ -24,9 +24,17 @@ import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.network.PacketDistributor;
 
 /** Fourteenth Angel: extreme A.T. Field, paper-arm cleaves and twin-eye annihilation beam. */
-public class ZeruelEntity extends Monster implements Angel, SiegeAnchorAware
+public class ZeruelEntity extends Monster implements Angel, SiegeAnchorAware, software.bernie.geckolib.animatable.GeoEntity
 {
+    private final software.bernie.geckolib.core.animatable.instance.AnimatableInstanceCache geoCache=software.bernie.geckolib.util.GeckoLibUtil.createInstanceCache(this);
+    @Override public software.bernie.geckolib.core.animatable.instance.AnimatableInstanceCache getAnimatableInstanceCache(){return geoCache;}
+    @Override public void registerControllers(software.bernie.geckolib.core.animation.AnimatableManager.ControllerRegistrar controllers)
+    {
+        controllers.add(new software.bernie.geckolib.core.animation.AnimationController<>(this,"base",6,state->state.setAndContinue(
+                software.bernie.geckolib.core.animation.RawAnimation.begin().thenLoop(state.isMoving()?"animation.Zeruel.move":"animation.Zeruel.idle"))));
+    }
     private float atField = 2400.0F;
+    @Override public float getAtField(){return atField;}
     private int armCooldown = 28;
     private int beamCooldown = 90;
     private BlockPos siegeBeacon;

@@ -215,7 +215,7 @@ public class ModEntities
 
     public static final RegistryObject<EntityType<SachielEntity>> SACHIEL = ENTITY_TYPES.register("sachiel",
             () -> EntityType.Builder.of(SachielEntity::new, MobCategory.MONSTER)
-                    .sized(9.0F, 24.0F).fireImmune().clientTrackingRange(14).build("sachiel"));
+                    .sized(18.0F, 60.0F).fireImmune().clientTrackingRange(24).build("sachiel"));
 
     public static final RegistryObject<EntityType<MassProductionEvaEntity>> MASS_PRODUCTION_EVA =
             ENTITY_TYPES.register("mass_production_eva",
@@ -229,15 +229,15 @@ public class ModEntities
 
     public static final RegistryObject<EntityType<ShamshelEntity>> SHAMSHEL = ENTITY_TYPES.register("shamshel",
             () -> EntityType.Builder.of(ShamshelEntity::new, MobCategory.MONSTER)
-                    .sized(10.0F, 20.0F).fireImmune().clientTrackingRange(14).build("shamshel"));
+                    .sized(20.0F, 60.0F).fireImmune().clientTrackingRange(24).build("shamshel"));
 
     public static final RegistryObject<EntityType<ZeruelEntity>> ZERUEL = ENTITY_TYPES.register("zeruel",
             () -> EntityType.Builder.of(ZeruelEntity::new, MobCategory.MONSTER)
-                    .sized(12.0F, 28.0F).fireImmune().clientTrackingRange(18).build("zeruel"));
+                    .sized(24.0F, 60.0F).fireImmune().clientTrackingRange(24).build("zeruel"));
 
     public static final RegistryObject<EntityType<IsrafelEntity>> ISRAFEL = ENTITY_TYPES.register("israfel",
             () -> EntityType.Builder.of(IsrafelEntity::new, MobCategory.MONSTER)
-                    .sized(9.0F, 24.0F).fireImmune().clientTrackingRange(16).build("israfel"));
+                    .sized(18.0F, 60.0F).fireImmune().clientTrackingRange(24).build("israfel"));
     public static final RegistryObject<EntityType<LilithEntity>> LILITH =
             ENTITY_TYPES.register("lilith",
                     () -> EntityType.Builder.of(LilithEntity::new, MobCategory.MISC)

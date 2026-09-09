@@ -30,6 +30,7 @@ public final class EvaLiveCombatMotion
     private static final Map<String, RootClip> KNIFE = load(
             KNIFE_RESOURCE, "EVA approved knife root");
     private static final RootClip HEAVY_CONTACT = loadHeavyContact();
+    private static final Map<String,RootClip> CONTACTS=loadContacts();
     private static final Map<String,RootClip> HEAVY=load("/assets/projectseele/motion/eva_heavy_right_cross_r05.json","EVA R05 right cross root");
 
     private EvaLiveCombatMotion() {}
@@ -71,6 +72,26 @@ public final class EvaLiveCombatMotion
         return sample(HEAVY_CONTACT, progress);
     }
     public static Vec3 heavy(float progress){return sample(HEAVY.get("heavy_right_cross"),progress);}
+    public static Vec3 ordinaryContact(int stage,float progress){return sample(CONTACTS.get("ordinary_"+Mth.clamp(stage,0,3)),progress);}
+    public static Vec3 kickContact(float progress){return sample(CONTACTS.get("kick"),progress);}
+
+    private static Map<String,RootClip> loadContacts()
+    {
+        try(var in=EvaLiveCombatMotion.class.getResourceAsStream("/assets/projectseele/motion/eva_melee_contacts_r10.json"))
+        {
+            if(in==null)throw new IllegalStateException("Missing measured melee contacts");
+            var data=JsonParser.parseReader(new InputStreamReader(in,StandardCharsets.UTF_8)).getAsJsonObject().getAsJsonObject("curves");
+            Map<String,RootClip> result=new HashMap<>();
+            for(var entry:data.entrySet())
+            {
+                var rows=entry.getValue().getAsJsonArray();Vec3[] points=new Vec3[rows.size()];
+                for(int i=0;i<points.length;i++){var p=rows.get(i).getAsJsonArray();points[i]=new Vec3(p.get(0).getAsDouble(),p.get(1).getAsDouble(),p.get(2).getAsDouble());}
+                result.put(entry.getKey(),new RootClip(points));
+            }
+            ProjectSeele.LOGGER.info("R10 measured melee contacts loaded: {}",result.keySet());return Map.copyOf(result);
+        }
+        catch(Exception e){ProjectSeele.LOGGER.error("R10 melee contacts rejected",e);return Map.of();}
+    }
 
     private static RootClip loadHeavyContact()
     {

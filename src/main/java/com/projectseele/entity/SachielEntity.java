@@ -29,8 +29,32 @@ import software.bernie.geckolib.core.animation.RawAnimation;
 import software.bernie.geckolib.util.GeckoLibUtil;
 
 /** Third Angel: a close-range giant that ends the fight with a cross-shaped self-destruction. */
-public class SachielEntity extends Monster implements Angel, GeoEntity, SiegeAnchorAware
+public class SachielEntity extends Monster implements Angel, GeoEntity, SiegeAnchorAware, FirstBattleSignals.Actor
 {
+    private static final FirstBattleSignals.SignalSet FIRST_BATTLE=new FirstBattleSignals.SignalSet(SachielEntity.class);
+    private static final net.minecraft.network.syncher.EntityDataAccessor<Float> FIELD=net.minecraft.network.syncher.SynchedEntityData.defineId(SachielEntity.class,net.minecraft.network.syncher.EntityDataSerializers.FLOAT);
+    private boolean firstBattleUsed,firstBattleDeathResolved;
+    private float firstBattlePreviousField;
+    @Override public FirstBattleSignals.SignalSet firstBattleSignals(){return FIRST_BATTLE;}
+    @Override public boolean isFirstBattleEva(){return false;}
+    public boolean isFirstBattleActive(){return FIRST_BATTLE.active(this);}
+    public boolean hasUsedFirstBattle(){return firstBattleUsed;}
+    @Override protected void defineSynchedData(){super.defineSynchedData();FIRST_BATTLE.define(this.entityData);this.entityData.define(FIELD,900F);}
+    public void beginFirstBattle(FirstBattleSignals.Spec spec,int partner)
+    {
+        firstBattlePreviousField=atField;firstBattleUsed=true;selfDestructTicks=-1;this.getNavigation().stop();FIRST_BATTLE.begin(this,spec,partner,-1);setFirstBattleField(900);
+    }
+    public void endFirstBattle(){if(isFirstBattleActive())FIRST_BATTLE.end(this);}
+    public void recoverFirstBattle(){endFirstBattle();setFirstBattleField(firstBattlePreviousField);}
+    public void setFirstBattleField(float value){atField=Math.max(0,value);this.entityData.set(FIELD,atField);}
+    public void finishFirstBattle(EvaUnit01Entity eva,net.minecraft.server.level.ServerPlayer pilot)
+    {
+        if(firstBattleDeathResolved||!this.isAlive())return;firstBattleDeathResolved=true;this.setLastHurtByPlayer(pilot);this.setHealth(0);this.die(this.damageSources().mobAttack(eva));
+    }
+    @Override public void aiStep()
+    {
+        FIRST_BATTLE.clientPhysics(this);if(isFirstBattleActive()){FirstBattleClip.applyKinematics(this);return;}super.aiStep();
+    }
     private static final RawAnimation ANIM_IDLE = RawAnimation.begin().thenLoop("animation.Sachiel.idle");
     private static final RawAnimation ANIM_WALK = RawAnimation.begin().thenLoop("animation.Sachiel.move");
     private final AnimatableInstanceCache geoCache = GeckoLibUtil.createInstanceCache(this);
@@ -70,10 +94,20 @@ public class SachielEntity extends Monster implements Angel, GeoEntity, SiegeAnc
     public void tick()
     {
         super.tick();
+        if(isFirstBattleActive())return;
+        if(!this.level().isClientSide&&!firstBattleUsed&&this.getHealth()<=this.getMaxHealth()*.32F&&this.tickCount%5==0)
+        {
+            // Contact root motion can temporarily clear vanilla's onGround bit.
+            // Retry once the pair settles; rifle damage is eligible as well.
+            for(var eva:this.level().getEntitiesOfClass(EvaUnit01Entity.class,this.getBoundingBox().inflate(48,80,48),e->e.getPilotEntity()!=null))
+                if(com.projectseele.event.FirstBattleDirector.tryStart(this,eva,false))return;
+        }
         if (this.level().isClientSide)
         {
             return;
         }
+        this.entityData.set(FIELD,this.atField);
+        if(isFirstBattleActive())return;
         if (this.selfDestructTicks >= 0)
         {
             this.setDeltaMovement(Vec3.ZERO);
@@ -117,6 +151,7 @@ public class SachielEntity extends Monster implements Angel, GeoEntity, SiegeAnc
     @Override
     public boolean hurt(DamageSource source, float amount)
     {
+        if(isFirstBattleActive())return source.is(net.minecraft.tags.DamageTypeTags.BYPASSES_INVULNERABILITY)&&super.hurt(source,amount);
         if (this.selfDestructTicks >= 0)
         {
             return false;
@@ -126,6 +161,7 @@ public class SachielEntity extends Monster implements Angel, GeoEntity, SiegeAnc
             if (source.getEntity() instanceof EvaUnit01Entity eva && eva.isMeleeWeapon())
             {
                 this.atField = Math.max(0.0F, this.atField - amount);
+                this.entityData.set(FIELD,this.atField);
                 if (this.level() instanceof ServerLevel server)
                 {
                     AtFieldFX.ripple(server, this.getBoundingBox().getCenter(), eva.getForward());
@@ -137,10 +173,13 @@ public class SachielEntity extends Monster implements Angel, GeoEntity, SiegeAnc
         if (amount >= this.getHealth())
         {
             this.setHealth(1.0F);
+            if(source.getEntity() instanceof EvaUnit01Entity eva&&com.projectseele.event.FirstBattleDirector.tryStart(this,eva,false))return true;
             this.selfDestructTicks = 45;
             return true;
         }
-        return super.hurt(source, amount);
+        boolean accepted=super.hurt(source,amount);
+        if(accepted&&source.getEntity() instanceof EvaUnit01Entity eva)com.projectseele.event.FirstBattleDirector.tryStart(this,eva,false);
+        return accepted;
     }
 
     private void selfDestruct()
@@ -167,6 +206,7 @@ public class SachielEntity extends Monster implements Angel, GeoEntity, SiegeAnc
     public void addAdditionalSaveData(CompoundTag tag)
     {
         super.addAdditionalSaveData(tag);
+        FIRST_BATTLE.save(this,tag);tag.putFloat("SachielAtField",atField);tag.putInt("SachielSelfDestruct",selfDestructTicks);tag.putBoolean("FirstBattleUsed",firstBattleUsed);tag.putBoolean("FirstBattleDeathResolved",firstBattleDeathResolved);tag.putFloat("FirstBattlePreviousField",firstBattlePreviousField);
         if (this.siegeBeacon != null)
         {
             tag.putLong("SiegeBeacon", this.siegeBeacon.asLong());
@@ -177,13 +217,15 @@ public class SachielEntity extends Monster implements Angel, GeoEntity, SiegeAnc
     public void readAdditionalSaveData(CompoundTag tag)
     {
         super.readAdditionalSaveData(tag);
+        atField=tag.contains("SachielAtField")?tag.getFloat("SachielAtField"):900;this.entityData.set(FIELD,atField);
+        selfDestructTicks=tag.contains("SachielSelfDestruct")?tag.getInt("SachielSelfDestruct"):-1;firstBattleUsed=tag.getBoolean("FirstBattleUsed");firstBattleDeathResolved=tag.getBoolean("FirstBattleDeathResolved");firstBattlePreviousField=tag.getFloat("FirstBattlePreviousField");FIRST_BATTLE.restore(this,tag);
         this.siegeBeacon = tag.contains("SiegeBeacon")
                 ? BlockPos.of(tag.getLong("SiegeBeacon")) : null;
     }
 
     public float getAtField()
     {
-        return this.atField;
+        return this.level().isClientSide?this.entityData.get(FIELD):this.atField;
     }
 
     @Override

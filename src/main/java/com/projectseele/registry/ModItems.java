@@ -23,6 +23,11 @@ public class ModItems
     public static final RegistryObject<Item> NERV_WORKSTATION = ITEMS.register("nerv_workstation",
             () -> new BlockItem(ModBlocks.NERV_WORKSTATION.get(),new Item.Properties()));
     public static final RegistryObject<Item> NERV_WALL_PANEL=ITEMS.register("nerv_wall_panel",()->new BlockItem(ModBlocks.NERV_WALL_PANEL.get(),new Item.Properties()));
+    public static final RegistryObject<Item> NERV_SERVER_RACK=ITEMS.register("nerv_server_rack",()->new BlockItem(ModBlocks.NERV_SERVER_RACK.get(),new Item.Properties()));
+    public static final RegistryObject<Item> NERV_STORAGE_PANEL=ITEMS.register("nerv_storage_panel",()->new BlockItem(ModBlocks.NERV_STORAGE_PANEL.get(),new Item.Properties()));
+    public static final RegistryObject<Item> NERV_MEDICAL_PANEL=ITEMS.register("nerv_medical_panel",()->new BlockItem(ModBlocks.NERV_MEDICAL_PANEL.get(),new Item.Properties()));
+    public static final RegistryObject<Item> NERV_OFFICE_CHAIR=ITEMS.register("nerv_office_chair",()->new BlockItem(ModBlocks.NERV_OFFICE_CHAIR.get(),new Item.Properties()));
+    public static final RegistryObject<Item> NERV_BRIEFING_TILE=ITEMS.register("nerv_briefing_tile",()->new BlockItem(ModBlocks.NERV_BRIEFING_TILE.get(),new Item.Properties()));
     public static final RegistryObject<Item> NERV_WALL_DATUM=ITEMS.register("nerv_wall_datum",()->new BlockItem(ModBlocks.NERV_WALL_DATUM.get(),new Item.Properties()));
     public static final RegistryObject<Item> NERV_FLOOR_PANEL=ITEMS.register("nerv_floor_panel",()->new BlockItem(ModBlocks.NERV_FLOOR_PANEL.get(),new Item.Properties()));
     public static final RegistryObject<Item> NERV_HAZARD_PAVING=ITEMS.register("nerv_hazard_paving",()->new BlockItem(ModBlocks.NERV_HAZARD_PAVING.get(),new Item.Properties()));

@@ -20,7 +20,8 @@ import java.nio.file.*;
 public final class RegionalStationPhoto
 {
     private static final String MODE=System.getProperty("projectseele.regionalBuild","");
-    private static final boolean R07=MODE.equals("r07-photos"),DETAIL=R07||MODE.equals("detail-photos");
+    private static final boolean R10_MODELS=MODE.equals("r10-models")||MODE.equals("r10-choreography");
+    private static final boolean R07=MODE.equals("r07-photos")||MODE.equals("r10-world")||R10_MODELS,DETAIL=R07||MODE.equals("detail-photos");
     private static final boolean ENABLED=MODE.equals("station-photo")||MODE.equals("quality-photos")||DETAIL;
     private record View(String file,Vec3 position,float yaw,float pitch,String action,int warmup,
                         java.util.List<net.minecraft.core.BlockPos> requiredSections)
@@ -47,7 +48,7 @@ public final class RegionalStationPhoto
         if(!ENABLED||event.phase!=TickEvent.Phase.END)return;
         Minecraft mc=Minecraft.getInstance();if(mc.player==null||mc.getSingleplayerServer()==null)return;
         var server=mc.getSingleplayerServer();Path world=server.getWorldPath(LevelResource.ROOT).normalize();
-        if(!world.getFileName().toString().equals("SEELE_TV_WORLD_PREVIEW_20260906"))return;
+        if(!world.getFileName().toString().equals(R10_MODELS?"SEELE_ANGEL_MODEL_REVIEW_R10":"SEELE_TV_WORLD_PREVIEW_20260906"))return;
         try
         {
             if(finishing){if(++finishTicks>40)mc.stop();return;}
@@ -88,7 +89,11 @@ public final class RegionalStationPhoto
                 if(age%20==0)server.execute(()->{
                     var level=server.getLevel(FacilitySchemaV2.DIMENSION);var state=com.projectseele.world.MilitaryR07Director.state(level);
                     String action=VIEWS[view].action();
-                    if(action.equals("open"))
+                    if(R10_MODELS&&action.startsWith("pose:"))
+                    {
+                        com.projectseele.visual.AngelModelR10Review.seek(Float.parseFloat(action.substring(5)));actionReady=true;
+                    }
+                    else if(action.equals("open"))
                     {
                         if(state.phase==com.projectseele.world.MilitaryR07Director.Phase.WET)com.projectseele.world.MilitaryR07Director.request(level,"drain",null);
                         if(state.phase==com.projectseele.world.MilitaryR07Director.Phase.DRY)com.projectseele.world.MilitaryR07Director.request(level,"door",null);
@@ -178,7 +183,7 @@ public final class RegionalStationPhoto
     private static void position(Minecraft mc)
     {
         var server=mc.getSingleplayerServer();var p=server.getPlayerList().getPlayers().get(0);View camera=VIEWS[view];
-        var level=server.getLevel(FacilitySchemaV2.DIMENSION);
+        var level=R10_MODELS?server.overworld():server.getLevel(FacilitySchemaV2.DIMENSION);
         Vec3 eye=camera.position().add(0,1.62,0);var cell=net.minecraft.core.BlockPos.containing(eye);
         var state=level.getBlockState(cell);
         if(DETAIL&&state.getCollisionShape(level,cell).toAabbs().stream().anyMatch(b->b.move(cell).contains(eye)))

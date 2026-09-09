@@ -250,6 +250,7 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
     public Vec3 getRenderOffset(EvaUnit01Entity entity, float partialTick)
     {
         Vec3 base = super.getRenderOffset(entity, partialTick);
+        if (entity.isFirstBattleActive()) return base.add(com.projectseele.entity.FirstBattleClip.renderOffset(entity,partialTick));
         if (!entity.hasActiveCarrierMotion())
         {
             return base;
@@ -308,6 +309,7 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
     private static boolean isLocalPilotView(Minecraft minecraft,
                                              EvaUnit01Entity entity)
     {
+        if(entity.isFirstBattleActive())return com.projectseele.client.FirstBattleClient.insideOptics(entity);
         return minecraft.options.getCameraType().isFirstPerson()
                 && minecraft.getCameraEntity() != null
                 && EvaPilotResolver.controlTarget(

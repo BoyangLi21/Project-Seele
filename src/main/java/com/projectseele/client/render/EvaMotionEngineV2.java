@@ -103,7 +103,8 @@ public final class EvaMotionEngineV2
         liveHeavyDatabase=load(resourceManager,new ResourceLocation(ProjectSeele.MODID,"motion/eva_heavy_right_cross_r05.json"),"EVA R05 right cross");
         STATES.clear();
         GAMEPLAY.clear();
-        ResourceLocation revisedLocomotion=new ResourceLocation(ProjectSeele.MODID,"motion/eva_connected_locomotion_r05.json");
+        ResourceLocation revisedLocomotion=new ResourceLocation(ProjectSeele.MODID,"motion/eva_connected_locomotion_r10.json");
+        if(resourceManager.getResource(revisedLocomotion).isEmpty())revisedLocomotion=new ResourceLocation(ProjectSeele.MODID,"motion/eva_connected_locomotion_r05.json");
         connectedLocomotion = load(resourceManager, resourceManager.getResource(revisedLocomotion).isPresent()?revisedLocomotion:CONNECTED_LOCOMOTION_DATABASE,
                 "EVA connected locomotion");
         database = load(resourceManager, DATABASE, "EVA Motion Engine V2");
@@ -152,6 +153,7 @@ public final class EvaMotionEngineV2
     public static BoneWrites apply(EvaUnit01Entity entity,
                                    BakedGeoModel model, float partialTick)
     {
+        if(entity.isFirstBattleActive())return FirstBattlePoseRenderer.apply(entity,model,partialTick);
         int previewMode = entity.getMotionLabPhysicsPreview();
         if (previewMode == 0)
         {
@@ -788,7 +790,6 @@ public final class EvaMotionEngineV2
         double dt = Math.max(0.0D, Math.min(0.1D, time - state.time));
         double x = Mth.lerp((double)partialTick, entity.xOld, entity.getX());
         double z = Mth.lerp((double)partialTick, entity.zOld, entity.getZ());
-        double distance = state.initialized ? Math.hypot(x - state.x, z - state.z) : 0.0D;
         state.time = time;
         state.x = x;
         state.z = z;
@@ -833,19 +834,11 @@ public final class EvaMotionEngineV2
                 state.crouched = crouch;
                 state.stanceStart = time;
             }
-            float runTarget = entity.isPilotSprinting() && moving && !crouch ? 1.0F : 0.0F;
-            state.run += (runTarget - state.run) * (float)(1.0D - Math.exp(-dt / 0.08D));
+            state.run = entity.rifleRunBlend(partialTick);
             clip = crouch ? moving ? "crouch_walk" : "crouch_idle" : moving ? "walk" : "idle";
-            double stride = crouch ? db.clip("crouch_walk").strideBlocks(CROUCH_STRIDE_BLOCKS)
-                    : Mth.lerp(state.run, WALK_STRIDE_BLOCKS, RUN_STRIDE_BLOCKS);
-            if (moving && distance < 8.0D)
-            {
-                double yaw = Math.toRadians(entity.getYRot());
-                Vec3 velocity = entity.getDeltaMovement();
-                double forward = velocity.x * -Math.sin(yaw) + velocity.z * Math.cos(yaw);
-                state.gaitPhase = wrap01(state.gaitPhase + (forward < -0.001D ? -1 : 1)
-                        * distance / stride);
-            }
+            // One phase drives the feet, rifle carrier motion and contact audio.
+            // Weapon changes therefore cannot restart the gait on a different foot.
+            state.gaitPhase = wrap01(entity.rifleGaitPhase(partialTick));
             phase = moving ? state.gaitPhase : wrap01(time / db.clip(clip).durationSeconds);
             String stanceClip = crouch ? "stand_to_crouch" : "crouch_to_stand";
             if (moving) state.stanceStart = Double.NEGATIVE_INFINITY;

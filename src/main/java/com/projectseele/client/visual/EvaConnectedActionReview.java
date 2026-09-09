@@ -38,6 +38,7 @@ public final class EvaConnectedActionReview
     private static final boolean RIFLE = Boolean.getBoolean("projectseele.rifleActionReview");
     private static final boolean R05 = Boolean.getBoolean("projectseele.motionReviewR05");
     private static final boolean R06 = Boolean.getBoolean("projectseele.motionReviewR06");
+    private static final boolean R10="r10-motion".equals(System.getProperty("projectseele.regionalBuild",""));
     private static final String BATCH = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
     private static int wait;
     private static int tick;
@@ -55,6 +56,8 @@ public final class EvaConnectedActionReview
     private static net.minecraft.world.entity.animal.IronGolem heavyProbe;
     private static float heavyProbeHealth;
     private static volatile int heavyProbeFailures;
+    private static boolean preferencesSaved,oldPause,oldGui;
+    private static CameraType oldCamera;
 
     private EvaConnectedActionReview() {}
 
@@ -71,6 +74,7 @@ public final class EvaConnectedActionReview
             ProjectSeele.LOGGER.error("Connected action review requires a disposable SEELE_EVA_CONNECTED_REVIEW save");
             return;
         }
+        if(!preferencesSaved){preferencesSaved=true;oldPause=mc.options.pauseOnLostFocus;oldGui=mc.options.hideGui;oldCamera=mc.options.getCameraType();}
         mc.options.pauseOnLostFocus = false;
         if (++wait < 100) return;
         if (wait == 100)
@@ -116,8 +120,8 @@ public final class EvaConnectedActionReview
             {
                 if(R06)
                 {
-                    controlsR06(mc,eva);previousTick=tick;
-                    if(tick>=(Boolean.getBoolean("projectseele.motionReviewR05All")?3000:1000))finish(mc,"complete");
+                    if(R10&&tick>=1000)controlsR10(mc,eva);else controlsR06(mc,eva);previousTick=tick;
+                    if(tick>=(R10?1400:Boolean.getBoolean("projectseele.motionReviewR05All")?3000:1000))finish(mc,"complete");
                     return;
                 }
                 controlsR05(mc,eva);previousTick=tick;if(tick>=(Boolean.getBoolean("projectseele.motionReviewR05All")?1950:650))finish(mc,"complete");return;
@@ -285,6 +289,17 @@ public final class EvaConnectedActionReview
         positionCamera(mc,eva);
     }
 
+    private static void controlsR10(Minecraft mc,EvaUnit01Entity eva)
+    {
+        int local=tick-1000;
+        if(at(1000))mc.player.connection.sendCommand("seele motionlab weapon unit01 fists");
+        boolean walking=local>=10&&local<120||local>=145&&local<240||local>=340&&local<390,back=local>=200&&local<240;
+        mc.options.keyUp.setDown(walking&&!back);mc.options.keyDown.setDown(walking&&back);mc.options.keyJump.setDown(local>=125&&local<128||local>=345&&local<348);
+        mc.player.input.up=walking&&!back;mc.player.input.down=walking&&back;mc.player.input.forwardImpulse=walking?(back?-1:1):0;mc.player.zza=mc.player.input.forwardImpulse;mc.player.xxa=0;mc.player.setYRot(0);mc.player.setXRot(0);
+        if(at(1050))send(ServerboundEvaControlPacket.ACTION_SPRINT_START);if(at(1100))send(ServerboundEvaControlPacket.ACTION_SPRINT_STOP);
+        if(at(1260))send(ServerboundEvaControlPacket.ACTION_MELEE);if(at(1300))send(ServerboundEvaControlPacket.ACTION_SMASH);
+        positionCamera(mc,eva);
+    }
     private static void send(int action)
     {
         SeeleNetwork.CHANNEL.sendToServer(new ServerboundEvaControlPacket(action));
@@ -411,7 +426,9 @@ public final class EvaConnectedActionReview
         mc.options.keyUp.setDown(false);
         mc.options.keyDown.setDown(false);
         mc.options.keySprint.setDown(false);
+        mc.options.keyJump.setDown(false);
         mc.setCameraEntity(mc.player);
+        if(preferencesSaved){mc.options.pauseOnLostFocus=oldPause;mc.options.hideGui=oldGui;mc.options.setCameraType(oldCamera);}
         try
         {
             if (poses != null) poses.close();
