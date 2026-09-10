@@ -26,8 +26,10 @@ public final class EvaLogisticsV2Plan implements FacilityZonePlan
     private static final int EVA_DECK_Y = -465;
 
     private static final BlockState AIR = Blocks.AIR.defaultBlockState();
-    private static final BlockState SHELL =
-            Blocks.REINFORCED_DEEPSLATE.defaultBlockState();
+    private static BlockState structuralShell()
+    {
+        return com.projectseele.world.NervMaterials.structuralBlock().defaultBlockState();
+    }
     private static final BlockState STRUCTURE =
             Blocks.DEEPSLATE_TILES.defaultBlockState();
     private static final BlockState FLOOR =
@@ -152,7 +154,7 @@ public final class EvaLogisticsV2Plan implements FacilityZonePlan
         {
             boolean rib = Math.floorMod(z - this.minZ, 8) <= 1
                     || Math.floorMod(y + 504, 16) <= 1;
-            return rib ? accent() : SHELL;
+            return rib ? accent() : structuralShell();
         }
         return AIR;
     }
@@ -188,7 +190,7 @@ public final class EvaLogisticsV2Plan implements FacilityZonePlan
                 && y >= -504 && y <= -392;
         if (boundary && !evaDoor)
         {
-            return Math.floorMod(y + z, 18) <= 1 ? accent() : SHELL;
+            return Math.floorMod(y + z, 18) <= 1 ? accent() : structuralShell();
         }
         if (y >= -464 && y <= -392
                 && (Math.abs(dx) >= 45 && Math.abs(dx) <= 48)
@@ -225,7 +227,7 @@ public final class EvaLogisticsV2Plan implements FacilityZonePlan
             if (lowerWall && !northEntry)
             {
                 return Math.floorMod(y + z, 20) <= 1
-                        ? accent() : SHELL;
+                        ? accent() : structuralShell();
             }
             return AIR;
         }
@@ -301,7 +303,7 @@ public final class EvaLogisticsV2Plan implements FacilityZonePlan
                 {
                     return GLASS;
                 }
-                return y == baseY + 6 ? accent() : SHELL;
+                return y == baseY + 6 ? accent() : structuralShell();
             }
         }
         return null;

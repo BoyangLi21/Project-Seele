@@ -20,8 +20,10 @@ public final class StaffLiftShaftV2Plan implements FacilityZonePlan
     private static final int[] LANDINGS = {-408, -348, -332};
 
     private static final BlockState AIR = Blocks.AIR.defaultBlockState();
-    private static final BlockState SHELL =
-            Blocks.REINFORCED_DEEPSLATE.defaultBlockState();
+    private static BlockState structuralShell()
+    {
+        return com.projectseele.world.NervMaterials.structuralBlock().defaultBlockState();
+    }
     private static final BlockState STRUCTURE =
             Blocks.DEEPSLATE_TILES.defaultBlockState();
     private static final BlockState FLOOR =
@@ -109,7 +111,7 @@ public final class StaffLiftShaftV2Plan implements FacilityZonePlan
         if (x == 56 || x == 71 || z == 56 || z == 71
                 || y == -416 || y == -305)
         {
-            return Math.floorMod(y + 416, 12) <= 1 ? CYAN : SHELL;
+            return Math.floorMod(y + 416, 12) <= 1 ? CYAN : structuralShell();
         }
         return AIR;
     }

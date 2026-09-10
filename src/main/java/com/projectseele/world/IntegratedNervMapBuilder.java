@@ -974,7 +974,7 @@ public final class IntegratedNervMapBuilder
         {
             return Blocks.IRON_BLOCK.defaultBlockState();
         }
-        return Blocks.REINFORCED_DEEPSLATE.defaultBlockState();
+        return com.projectseele.world.NervMaterials.structuralBlock().defaultBlockState();
     }
 
     private static void buildSurfaceHead(ServerLevel level, LiftLink link)
@@ -1075,7 +1075,7 @@ public final class IntegratedNervMapBuilder
                     {
                         set(level, position,
                                 (x == 0 || z == 0) ? accent
-                                        : Blocks.REINFORCED_DEEPSLATE
+                                        : com.projectseele.world.NervMaterials.structuralBlock()
                                                 .defaultBlockState());
                     }
                 }
@@ -1328,7 +1328,7 @@ public final class IntegratedNervMapBuilder
 
     private static boolean isShaftWall(BlockState state)
     {
-        return state.is(Blocks.REINFORCED_DEEPSLATE)
+        return state.is(com.projectseele.world.NervMaterials.STRUCTURAL_SHELL)
                 || state.is(Blocks.IRON_BLOCK)
                 || state.is(Blocks.SEA_LANTERN)
                 || state.is(Blocks.GRAY_STAINED_GLASS)

@@ -2,6 +2,7 @@
   "replace": false,
   "values": [
     "projectseele:nerv_wall_panel",
+    "projectseele:nerv_structural_panel",
     "projectseele:nerv_wall_datum",
     "projectseele:nerv_floor_panel",
     "projectseele:nerv_hazard_paving",

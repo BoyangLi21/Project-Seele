@@ -25,8 +25,10 @@ public final class FacilityV2SceneConnectorBuilder
 {
     private static final int REVISION = 6;
     private static final int UPDATE_CLIENTS = Block.UPDATE_CLIENTS;
-    private static final BlockState STRUCTURE =
-            Blocks.REINFORCED_DEEPSLATE.defaultBlockState();
+    private static BlockState structuralStructure()
+    {
+        return com.projectseele.world.NervMaterials.structuralBlock().defaultBlockState();
+    }
     private static final BlockState FLOOR =
             Blocks.POLISHED_DEEPSLATE.defaultBlockState();
     private static final BlockState ROAD =
@@ -119,7 +121,7 @@ public final class FacilityV2SceneConnectorBuilder
             for (int x = -10; x <= 10; x++)
             {
                 set(level, centre.offset(x, floorY - 1, z),
-                        Math.floorMod(x + z, 8) == 0 ? LIGHT : STRUCTURE);
+                        Math.floorMod(x + z, 8) == 0 ? LIGHT : structuralStructure());
                 set(level, centre.offset(x, floorY, z),
                         Math.abs(x) >= 8 ? ROAD_EDGE : FLOOR);
                 for (int y = floorY + 1; y <= floorY + 7; y++)
@@ -127,11 +129,11 @@ public final class FacilityV2SceneConnectorBuilder
                     boolean wall = Math.abs(x) == 10;
                     set(level, centre.offset(x, y, z),
                             wall ? (y >= floorY + 2
-                                    && y <= floorY + 5 ? GLASS : STRUCTURE)
+                                    && y <= floorY + 5 ? GLASS : structuralStructure())
                                     : Blocks.AIR.defaultBlockState());
                 }
                 set(level, centre.offset(x, floorY + 8, z),
-                        Math.floorMod(x + z, 9) == 0 ? LIGHT : STRUCTURE);
+                        Math.floorMod(x + z, 9) == 0 ? LIGHT : structuralStructure());
             }
         }
 
@@ -162,7 +164,7 @@ public final class FacilityV2SceneConnectorBuilder
                     }
                     for (int support = -369; support < stepY; support++)
                     {
-                        set(level, centre.offset(x, support, z), STRUCTURE);
+                        set(level, centre.offset(x, support, z), structuralStructure());
                     }
                 }
             }
@@ -226,7 +228,7 @@ public final class FacilityV2SceneConnectorBuilder
                 int z = baseZ + (xMajor ? lane : 0);
                 for (int y = -369; y < -361; y++)
                 {
-                    set(level, centre.offset(x, y, z), STRUCTURE);
+                    set(level, centre.offset(x, y, z), structuralStructure());
                 }
                 boolean edge = Math.abs(lane) >= width / 2 - 1;
                 boolean line = Math.abs(lane) <= 1
@@ -303,10 +305,10 @@ public final class FacilityV2SceneConnectorBuilder
                         boolean outerWall = x == 23;
                         set(level, floor.above(y),
                                 outerWall ? (y >= 2 && y <= 5
-                                        ? GLASS : STRUCTURE)
+                                        ? GLASS : structuralStructure())
                                         : Blocks.AIR.defaultBlockState());
                     }
-                    set(level, floor.above(7), STRUCTURE);
+                    set(level, floor.above(7), structuralStructure());
                 }
                 // Replace a narrow part of the carrier-tunnel wall with a
                 // pressure-rated window at the operator's eye level.
@@ -324,7 +326,7 @@ public final class FacilityV2SceneConnectorBuilder
                     set(level, new BlockPos(
                             bed.getX() + x, y, endZ + 1),
                             y >= floorY + 2 && y <= floorY + 5
-                                    ? GLASS : STRUCTURE);
+                                    ? GLASS : structuralStructure());
                 }
             }
         }
@@ -369,7 +371,7 @@ public final class FacilityV2SceneConnectorBuilder
                 for (int supportY = lowerFloorY - 2;
                      supportY < floorY; supportY++)
                 {
-                    set(level, centre.offset(x, supportY, z), STRUCTURE);
+                    set(level, centre.offset(x, supportY, z), structuralStructure());
                 }
                 set(level, centre.offset(x, floorY, z),
                         x == 50 || x == 58 ? ROAD_EDGE : tread);
@@ -379,11 +381,11 @@ public final class FacilityV2SceneConnectorBuilder
                     set(level, centre.offset(x, y, z),
                             wall && y >= floorY + 2 && y <= floorY + 4
                                     ? GLASS
-                                    : wall ? STRUCTURE
+                                    : wall ? structuralStructure()
                                     : Blocks.AIR.defaultBlockState());
                 }
                 set(level, centre.offset(x, floorY + 7, z),
-                        Math.floorMod(x + z, 9) == 0 ? LIGHT : STRUCTURE);
+                        Math.floorMod(x + z, 9) == 0 ? LIGHT : structuralStructure());
             }
         }
 
@@ -418,7 +420,7 @@ public final class FacilityV2SceneConnectorBuilder
                                 wall && y >= lowerFloorY + 2
                                         && y <= lowerFloorY + 5
                                         ? GLASS
-                                        : wall ? STRUCTURE
+                                        : wall ? structuralStructure()
                                         : Blocks.AIR.defaultBlockState());
                     }
                     set(level, centre.offset(x, lowerFloorY + 7, z),
@@ -520,7 +522,7 @@ public final class FacilityV2SceneConnectorBuilder
                 {
                     BlockPos pylon = centre.offset(centreX + dx,
                             surfaceY + 1, -76 + dz);
-                    set(level, pylon, STRUCTURE);
+                    set(level, pylon, structuralStructure());
                     set(level, pylon.above(), accent);
                     set(level, pylon.above(2), Blocks.BEACON
                             .defaultBlockState());
@@ -609,7 +611,7 @@ public final class FacilityV2SceneConnectorBuilder
                 {
                     set(level, centre.offset(x, -359, z),
                             Math.floorMod(x + z, 5) == 0
-                                    ? LIGHT : STRUCTURE);
+                                    ? LIGHT : structuralStructure());
                     for (int y = -358; y <= -354; y++)
                     {
                         boolean wall = Math.abs(x - intakeX) == 2
@@ -618,7 +620,7 @@ public final class FacilityV2SceneConnectorBuilder
                                 wall ? GLASS
                                         : Blocks.AIR.defaultBlockState());
                     }
-                    set(level, centre.offset(x, -353, z), STRUCTURE);
+                    set(level, centre.offset(x, -353, z), structuralStructure());
                 }
             }
         }
@@ -703,7 +705,7 @@ public final class FacilityV2SceneConnectorBuilder
                 for (int y = surfaceY - 4; y < surfaceY; y++)
                 {
                     set(level, centre.offset(x, y, z),
-                            Blocks.REINFORCED_DEEPSLATE.defaultBlockState());
+                            com.projectseele.world.NervMaterials.structuralBlock().defaultBlockState());
                 }
                 boolean edge = Math.abs(lane) >= width / 2 - 1;
                 boolean centreLine = Math.abs(lane) <= 1
@@ -746,11 +748,11 @@ public final class FacilityV2SceneConnectorBuilder
                     set(level, centre.offset(x, y, z),
                             wall && y >= floorY + 2 && y <= floorY + 5
                                     ? GLASS
-                                    : wall ? STRUCTURE
+                                    : wall ? structuralStructure()
                                     : Blocks.AIR.defaultBlockState());
                 }
                 set(level, centre.offset(x, floorY + 7, z),
-                        Math.floorMod(x - z, 13) == 0 ? LIGHT : STRUCTURE);
+                        Math.floorMod(x - z, 13) == 0 ? LIGHT : structuralStructure());
             }
         }
     }
@@ -771,11 +773,11 @@ public final class FacilityV2SceneConnectorBuilder
                     set(level, centre.offset(x, y, z),
                             wall && y >= floorY + 2 && y <= floorY + 5
                                     ? GLASS
-                                    : wall ? STRUCTURE
+                                    : wall ? structuralStructure()
                                     : Blocks.AIR.defaultBlockState());
                 }
                 set(level, centre.offset(x, floorY + 7, z),
-                        Math.floorMod(x - z, 13) == 0 ? LIGHT : STRUCTURE);
+                        Math.floorMod(x - z, 13) == 0 ? LIGHT : structuralStructure());
             }
         }
     }

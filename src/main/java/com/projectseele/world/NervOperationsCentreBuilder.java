@@ -298,9 +298,9 @@ public final class NervOperationsCentreBuilder
                 .is(Blocks.POLISHED_DEEPSLATE)
                 && level.getBlockState(origin.offset(0, 8, 87)).isAir()
                 && level.getBlockState(origin.offset(-30, 20, 40))
-                .is(Blocks.REINFORCED_DEEPSLATE)
+                .is(com.projectseele.world.NervMaterials.STRUCTURAL_SHELL)
                 && level.getBlockState(origin.offset(30, 20, 40))
-                .is(Blocks.REINFORCED_DEEPSLATE)
+                .is(com.projectseele.world.NervMaterials.STRUCTURAL_SHELL)
                 && level.getBlockState(origin.offset(20, 58, 40))
                 .is(Blocks.DEEPSLATE_TILES)
                 && level.getBlockState(origin.offset(0, -22, 40))
@@ -1278,7 +1278,7 @@ public final class NervOperationsCentreBuilder
         final int maximumY = 58;
         final int minimumZ = -35;
         final int maximumZ = 98;
-        BlockState wall = Blocks.REINFORCED_DEEPSLATE.defaultBlockState();
+        BlockState wall = com.projectseele.world.NervMaterials.structuralBlock().defaultBlockState();
         BlockState floor = Blocks.POLISHED_DEEPSLATE.defaultBlockState();
         BlockState ceiling = Blocks.DEEPSLATE_TILES.defaultBlockState();
 
@@ -1457,7 +1457,7 @@ public final class NervOperationsCentreBuilder
             set(level, origin.offset(x, floorY + 5, z),
                     Math.floorMod(x + z, 11) == 0
                             ? Blocks.SEA_LANTERN.defaultBlockState()
-                            : Blocks.REINFORCED_DEEPSLATE.defaultBlockState());
+                            : com.projectseele.world.NervMaterials.structuralBlock().defaultBlockState());
         }
         // Wall only where the corridor actually meets open cavern, so every
         // junction stays open and no leg is sealed off.
@@ -1481,7 +1481,7 @@ public final class NervOperationsCentreBuilder
                 for (int y = 1; y <= 4; y++)
                 {
                     set(level, origin.offset(x + step[0], floorY + y, z + step[1]),
-                            Blocks.REINFORCED_DEEPSLATE.defaultBlockState());
+                            com.projectseele.world.NervMaterials.structuralBlock().defaultBlockState());
                 }
             }
         }
@@ -1496,7 +1496,7 @@ public final class NervOperationsCentreBuilder
                     Blocks.LADDER.defaultBlockState()
                             .setValue(LadderBlock.FACING, Direction.SOUTH));
             set(level, origin.offset(ladderX, y, ladderZ - 1),
-                    Blocks.REINFORCED_DEEPSLATE.defaultBlockState());
+                    com.projectseele.world.NervMaterials.structuralBlock().defaultBlockState());
         }
     }
 
@@ -1699,7 +1699,7 @@ public final class NervOperationsCentreBuilder
                 {
                     set(level, origin.offset(x, y,
                             SOUTH_INTERCHANGE_Z + 3),
-                            Blocks.REINFORCED_DEEPSLATE.defaultBlockState());
+                            com.projectseele.world.NervMaterials.structuralBlock().defaultBlockState());
                 }
             }
             if (x < EAST_SHAFT_GAP_X - 3)
@@ -1708,7 +1708,7 @@ public final class NervOperationsCentreBuilder
                 {
                     set(level, origin.offset(x, y,
                             SOUTH_INTERCHANGE_Z - 1),
-                            Blocks.REINFORCED_DEEPSLATE.defaultBlockState());
+                            com.projectseele.world.NervMaterials.structuralBlock().defaultBlockState());
                 }
             }
         }
@@ -1938,8 +1938,8 @@ public final class NervOperationsCentreBuilder
                 {"operations-west-wall", 24, 20, 70, Blocks.DEEPSLATE_BRICKS},
                 {"operations-north-wall", 10, 20, 84, Blocks.DEEPSLATE_BRICKS},
                 {"operations-ceiling", 0, 36, 70, Blocks.DEEPSLATE_BRICKS},
-                {"envelope-west", -30, 20, 40, Blocks.REINFORCED_DEEPSLATE},
-                {"envelope-east", 30, 20, 40, Blocks.REINFORCED_DEEPSLATE},
+                {"envelope-west", -30, 20, 40, com.projectseele.world.NervMaterials.structuralBlock()},
+                {"envelope-east", 30, 20, 40, com.projectseele.world.NervMaterials.structuralBlock()},
                 {"envelope-roof", 20, 58, 40, Blocks.DEEPSLATE_TILES},
                 {"envelope-floor", 0, -22, 40, Blocks.POLISHED_DEEPSLATE},
                 {"rear-landing", 0, 7, 87, Blocks.POLISHED_DEEPSLATE},

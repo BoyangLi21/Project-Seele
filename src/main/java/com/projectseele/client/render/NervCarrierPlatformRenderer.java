@@ -103,7 +103,7 @@ public final class NervCarrierPlatformRenderer
         // A visible under-carriage, traction spine and transverse sleepers
         // make transport read as a machine riding rails instead of an EVA
         // whose coordinates are simply interpolated through the tunnel.
-        BlockState underframe = Blocks.REINFORCED_DEEPSLATE.defaultBlockState();
+        BlockState underframe = com.projectseele.world.NervMaterials.structuralBlock().defaultBlockState();
         renderBlock(poses, buffers, packedLight, underframe,
                 -6.2F, -0.72F, -half + 1.5F,
                 1.25F, 0.42F, inner - 2.0F);

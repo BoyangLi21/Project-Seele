@@ -18,8 +18,10 @@ public final class DogmaLiftShaftV2Plan implements FacilityZonePlan
     private static final String PLAN_VERSION = "dogma-lift-shaft-v2-a1";
 
     private static final BlockState AIR = Blocks.AIR.defaultBlockState();
-    private static final BlockState SHELL =
-            Blocks.REINFORCED_DEEPSLATE.defaultBlockState();
+    private static BlockState structuralShell()
+    {
+        return com.projectseele.world.NervMaterials.structuralBlock().defaultBlockState();
+    }
     private static final BlockState STRUCTURE =
             Blocks.DEEPSLATE_TILES.defaultBlockState();
     private static final BlockState FLOOR =
@@ -106,7 +108,7 @@ public final class DogmaLiftShaftV2Plan implements FacilityZonePlan
         if (x == 24 || x == 39 || z == 160 || z == 183
                 || y == -632 || y == -389)
         {
-            return Math.floorMod(y + 632, 16) <= 1 ? RED : SHELL;
+            return Math.floorMod(y + 632, 16) <= 1 ? RED : structuralShell();
         }
         return AIR;
     }

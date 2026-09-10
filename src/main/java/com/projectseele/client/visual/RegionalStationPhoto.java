@@ -51,7 +51,12 @@ public final class RegionalStationPhoto
         if(!world.getFileName().toString().equals(R10_MODELS?"SEELE_ANGEL_MODEL_REVIEW_R10":"SEELE_TV_WORLD_PREVIEW_20260906"))return;
         try
         {
-            if(finishing){if(++finishTicks>40)mc.stop();return;}
+            if(finishing)
+            {
+                if(MODE.equals("r10-world")&&!com.projectseele.visual.RegionalSpatialAuditDriver.done){mc.options.pauseOnLostFocus=false;return;}
+                mc.options.pauseOnLostFocus=oldPause;
+                if(++finishTicks>40)mc.stop();return;
+            }
             if(++age<80)return;
             if(!entered)
             {

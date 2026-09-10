@@ -129,7 +129,7 @@ public class HybridAddonRenderer<T extends LivingEntity & GeoEntity> extends Ent
         return LocalVisualAssetFingerprint.inspect(this.assetName);
     }
 
-    private static final class MeshBackedRenderer<T extends LivingEntity & GeoEntity>
+    static final class MeshBackedRenderer<T extends LivingEntity & GeoEntity>
             extends GeoEntityRenderer<T>
     {
         private final ResourceLocation mesh;
@@ -142,6 +142,12 @@ public class HybridAddonRenderer<T extends LivingEntity & GeoEntity> extends Ent
             this.addRenderLayer(new LocalTriangleMeshLayer<>(this, entity -> this.mesh,null,
                     (entity,bone)->!weightedCandidate||!RiggedAngelLayer.available(this.mesh)));
             if(weightedCandidate)this.addRenderLayer(new RiggedAngelLayer<>(this,this.mesh));
+        }
+
+        org.joml.Matrix4f renderedMeshTransform(org.joml.Matrix4f pose,net.minecraft.world.entity.Entity entity,float partial)
+        {
+            var world=software.bernie.geckolib.util.RenderUtils.invertAndMultiplyMatrices(pose,this.entityRenderTranslations);
+            var origin=entity.getPosition(partial);world.m30(world.m30()+(float)origin.x).m31(world.m31()+(float)origin.y).m32(world.m32()+(float)origin.z);return world;
         }
 
         @Override

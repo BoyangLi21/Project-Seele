@@ -14,8 +14,10 @@ public final class MagiDogmaSpineV2Plan implements FacilityZonePlan
     private static final String PLAN_VERSION = "magi-dogma-spine-v2-a1";
 
     private static final BlockState AIR = Blocks.AIR.defaultBlockState();
-    private static final BlockState SHELL =
-            Blocks.REINFORCED_DEEPSLATE.defaultBlockState();
+    private static BlockState structuralShell()
+    {
+        return com.projectseele.world.NervMaterials.structuralBlock().defaultBlockState();
+    }
     private static final BlockState FLOOR =
             Blocks.POLISHED_DEEPSLATE.defaultBlockState();
     private static final BlockState DARK =
@@ -90,7 +92,7 @@ public final class MagiDogmaSpineV2Plan implements FacilityZonePlan
         }
         if (y == -389)
         {
-            return Math.floorMod(z - 40, 12) <= 1 ? LIGHT : SHELL;
+            return Math.floorMod(z - 40, 12) <= 1 ? LIGHT : structuralShell();
         }
         if (x == 24 || x == 39 || z == 40 || z == 159
                 || y == -400)
@@ -99,7 +101,7 @@ public final class MagiDogmaSpineV2Plan implements FacilityZonePlan
             {
                 return GLASS;
             }
-            return Math.floorMod(z - 40, 20) <= 2 ? RED : SHELL;
+            return Math.floorMod(z - 40, 20) <= 2 ? RED : structuralShell();
         }
         if (y >= -395 && y <= -390)
         {

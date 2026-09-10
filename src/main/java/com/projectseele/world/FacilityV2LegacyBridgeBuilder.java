@@ -21,8 +21,10 @@ import net.minecraft.world.level.block.state.properties.AttachFace;
 public final class FacilityV2LegacyBridgeBuilder
 {
     private static final int REVISION = 3;
-    private static final BlockState STRUCTURE =
-            Blocks.REINFORCED_DEEPSLATE.defaultBlockState();
+    private static BlockState structuralStructure()
+    {
+        return com.projectseele.world.NervMaterials.structuralBlock().defaultBlockState();
+    }
     private static final BlockState FLOOR =
             Blocks.POLISHED_DEEPSLATE.defaultBlockState();
     private static final BlockState LIGHT =
@@ -172,9 +174,9 @@ public final class FacilityV2LegacyBridgeBuilder
             for (int y = -360; y < COMMAND_FLOOR_Y; y++)
             {
                 set(level, centre.offset(x, y, 29),
-                        Math.floorMod(y + 360, 8) == 0 ? LIGHT : STRUCTURE);
+                        Math.floorMod(y + 360, 8) == 0 ? LIGHT : structuralStructure());
                 set(level, centre.offset(x, y, 35),
-                        Math.floorMod(y + 360, 8) == 0 ? LIGHT : STRUCTURE);
+                        Math.floorMod(y + 360, 8) == 0 ? LIGHT : structuralStructure());
             }
         }
     }
@@ -214,14 +216,14 @@ public final class FacilityV2LegacyBridgeBuilder
                                 ? LIGHT : FLOOR);
                 set(level, centre.offset(
                                 x, OBSERVATION_FLOOR_Y + 8, z),
-                        Math.floorMod(x + z, 11) == 0 ? LIGHT : STRUCTURE);
+                        Math.floorMod(x + z, 11) == 0 ? LIGHT : structuralStructure());
                 for (int y = OBSERVATION_FLOOR_Y + 1;
                      y < OBSERVATION_FLOOR_Y + 8; y++)
                 {
                     BlockState state = z == -168 || z == -160
                             ? (y >= OBSERVATION_FLOOR_Y + 3
                             && y <= OBSERVATION_FLOOR_Y + 5
-                            ? GLASS : STRUCTURE)
+                            ? GLASS : structuralStructure())
                             : Blocks.AIR.defaultBlockState();
                     set(level, centre.offset(x, y, z), state);
                 }
@@ -269,7 +271,7 @@ public final class FacilityV2LegacyBridgeBuilder
                 }
                 set(level, centre.offset(x, floorY, z), floor);
                 set(level, centre.offset(x, floorY + 8, z),
-                        Math.floorMod(x - z, 13) == 0 ? LIGHT : STRUCTURE);
+                        Math.floorMod(x - z, 13) == 0 ? LIGHT : structuralStructure());
                 for (int y = floorY + 1; y < floorY + 8; y++)
                 {
                     boolean boundary = x == minX || x == maxX
@@ -281,7 +283,7 @@ public final class FacilityV2LegacyBridgeBuilder
                     set(level, centre.offset(x, y, z),
                             boundary && !cageDoor && !liftNeck
                                     ? (y >= floorY + 3
-                                    && y <= floorY + 5 ? GLASS : STRUCTURE)
+                                    && y <= floorY + 5 ? GLASS : structuralStructure())
                                     : Blocks.AIR.defaultBlockState());
                 }
             }
@@ -306,13 +308,13 @@ public final class FacilityV2LegacyBridgeBuilder
                     set(level, centre.offset(x, floorY, z),
                             Math.abs(x - centreX) == 4 ? accent : FLOOR);
                     set(level, centre.offset(x, floorY + 7, z),
-                            Math.abs(x - centreX) == 4 ? accent : STRUCTURE);
+                            Math.abs(x - centreX) == 4 ? accent : structuralStructure());
                     for (int y = floorY + 1; y < floorY + 7; y++)
                     {
                         boolean wall = Math.abs(x - centreX) == 4;
                         set(level, centre.offset(x, y, z),
                                 wall ? (y >= floorY + 2
-                                && y <= floorY + 5 ? GLASS : STRUCTURE)
+                                && y <= floorY + 5 ? GLASS : structuralStructure())
                                 : Blocks.AIR.defaultBlockState());
                     }
                 }
@@ -368,7 +370,7 @@ public final class FacilityV2LegacyBridgeBuilder
                 set(level, centre.offset(x, floorY, z),
                         Math.floorMod(x + z, 9) == 0 ? LIGHT : FLOOR);
                 set(level, centre.offset(x, floorY + 8, z),
-                        Math.floorMod(x + z, 11) == 0 ? LIGHT : STRUCTURE);
+                        Math.floorMod(x + z, 11) == 0 ? LIGHT : structuralStructure());
                 for (int y = floorY + 1; y < floorY + 8; y++)
                 {
                     boolean wall = z == minZ || z == maxZ;
@@ -391,7 +393,7 @@ public final class FacilityV2LegacyBridgeBuilder
                 set(level, centre.offset(x, floorY, z),
                         Math.floorMod(x + z, 9) == 0 ? LIGHT : FLOOR);
                 set(level, centre.offset(x, floorY + 8, z),
-                        Math.floorMod(x + z, 11) == 0 ? LIGHT : STRUCTURE);
+                        Math.floorMod(x + z, 11) == 0 ? LIGHT : structuralStructure());
                 for (int y = floorY + 1; y < floorY + 8; y++)
                 {
                     boolean wall = x == minX || x == maxX;
@@ -405,7 +407,7 @@ public final class FacilityV2LegacyBridgeBuilder
 
     private static BlockState windowedWall(int relativeY)
     {
-        return relativeY >= 3 && relativeY <= 5 ? GLASS : STRUCTURE;
+        return relativeY >= 3 && relativeY <= 5 ? GLASS : structuralStructure();
     }
 
     private static void clear(ServerLevel level, BlockPos centre,

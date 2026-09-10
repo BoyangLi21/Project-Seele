@@ -109,8 +109,10 @@ public final class S20PhysicalElevatorDirector
             Blocks.BLACK_CONCRETE.defaultBlockState();
     private static final BlockState CABIN_DOOR =
             Blocks.LIGHT_GRAY_STAINED_GLASS.defaultBlockState();
-    private static final BlockState LANDING_FRAME =
-            Blocks.REINFORCED_DEEPSLATE.defaultBlockState();
+    private static BlockState structuralLandingFrame()
+    {
+        return com.projectseele.world.NervMaterials.structuralBlock().defaultBlockState();
+    }
     private static final BlockState LANDING_ACCENT =
             Blocks.ORANGE_CONCRETE.defaultBlockState();
     private static final BlockState LANDING_LIGHT =
@@ -2035,7 +2037,7 @@ public final class S20PhysicalElevatorDirector
                         .relative(exit, LANDING_DOOR_DISTANCE)
                         .relative(lateral, side).above(dy);
                 set(level, frame,
-                        dy == 2 ? LANDING_ACCENT : LANDING_FRAME);
+                        dy == 2 ? LANDING_ACCENT : structuralLandingFrame());
             }
         }
         for (int side = -2; side <= 2; side++)
@@ -2045,7 +2047,7 @@ public final class S20PhysicalElevatorDirector
                     .relative(lateral, side)
                     .above(DOOR_HEIGHT);
             set(level, header,
-                    side == 0 ? LANDING_LIGHT : LANDING_FRAME);
+                    side == 0 ? LANDING_LIGHT : structuralLandingFrame());
         }
 
         BlockPos callBacking = centre
@@ -2361,7 +2363,7 @@ public final class S20PhysicalElevatorDirector
                 || state.is(Blocks.DEEPSLATE_TILES)
                 || state.is(Blocks.POLISHED_DEEPSLATE)
                 || state.is(Blocks.POLISHED_BLACKSTONE)
-                || state.is(Blocks.REINFORCED_DEEPSLATE)
+                || state.is(com.projectseele.world.NervMaterials.STRUCTURAL_SHELL)
                 || state.is(Blocks.SEA_LANTERN)
                 || state.is(Blocks.LODESTONE)))
         {
@@ -2378,7 +2380,7 @@ public final class S20PhysicalElevatorDirector
                 || state.is(Blocks.WHITE_CONCRETE)
                 || state.is(Blocks.ORANGE_CONCRETE)
                 || state.is(Blocks.SEA_LANTERN)
-                || state.is(Blocks.REINFORCED_DEEPSLATE)
+                || state.is(com.projectseele.world.NervMaterials.STRUCTURAL_SHELL)
                 || state.is(Blocks.GRAY_STAINED_GLASS)
                 || state.is(Blocks.LIGHT_GRAY_STAINED_GLASS)
                 || state.is(Blocks.POLISHED_DEEPSLATE)
@@ -2403,7 +2405,7 @@ public final class S20PhysicalElevatorDirector
                 || state.is(Blocks.GRAY_STAINED_GLASS)
                 || state.is(Blocks.ORANGE_CONCRETE)
                 || state.is(Blocks.SEA_LANTERN)
-                || state.is(Blocks.REINFORCED_DEEPSLATE)
+                || state.is(com.projectseele.world.NervMaterials.STRUCTURAL_SHELL)
                 || state.is(Blocks.POLISHED_DEEPSLATE)
                 || state.is(Blocks.STONE_BUTTON)))
         {
@@ -2428,7 +2430,7 @@ public final class S20PhysicalElevatorDirector
                         || Math.abs(y - spec.upper().walkY()) <= 3;
         if (endpointPlane && (state.is(Blocks.POLISHED_DEEPSLATE)
                 || state.is(Blocks.POLISHED_BLACKSTONE)
-                || state.is(Blocks.REINFORCED_DEEPSLATE)
+                || state.is(com.projectseele.world.NervMaterials.STRUCTURAL_SHELL)
                 || state.is(Blocks.SEA_LANTERN)
                 || state.is(Blocks.SMOOTH_STONE)))
         {

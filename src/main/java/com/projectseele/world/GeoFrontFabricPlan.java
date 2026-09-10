@@ -671,7 +671,7 @@ public final class GeoFrontFabricPlan
         }
         else
         {
-            state = Blocks.REINFORCED_DEEPSLATE.defaultBlockState();
+            state = com.projectseele.world.NervMaterials.structuralBlock().defaultBlockState();
         }
         return relative(centre, x, y, z, state);
     }
@@ -745,7 +745,7 @@ public final class GeoFrontFabricPlan
             }
             else
             {
-                state = Blocks.REINFORCED_DEEPSLATE.defaultBlockState();
+                state = com.projectseele.world.NervMaterials.structuralBlock().defaultBlockState();
             }
             return relative(centre, x, y, z, state);
         }
@@ -834,7 +834,7 @@ public final class GeoFrontFabricPlan
             if (y < GARDEN_SURFACE_Y)
             {
                 return relative(centre, x, y, z,
-                        Blocks.REINFORCED_DEEPSLATE.defaultBlockState());
+                        com.projectseele.world.NervMaterials.structuralBlock().defaultBlockState());
             }
             if (y == GARDEN_SURFACE_Y)
             {
@@ -920,7 +920,7 @@ public final class GeoFrontFabricPlan
             }
             else
             {
-                state = Blocks.REINFORCED_DEEPSLATE.defaultBlockState();
+                state = com.projectseele.world.NervMaterials.structuralBlock().defaultBlockState();
             }
             return relative(centre, x, y, z, state);
         }
@@ -968,7 +968,7 @@ public final class GeoFrontFabricPlan
         }
         else if (floor)
         {
-            state = Blocks.REINFORCED_DEEPSLATE.defaultBlockState();
+            state = com.projectseele.world.NervMaterials.structuralBlock().defaultBlockState();
         }
         else if (roof)
         {
@@ -1338,7 +1338,7 @@ public final class GeoFrontFabricPlan
             {
                 return Blocks.AIR.defaultBlockState();
             }
-            return Blocks.REINFORCED_DEEPSLATE.defaultBlockState();
+            return com.projectseele.world.NervMaterials.structuralBlock().defaultBlockState();
         }
 
         return null;
@@ -1405,7 +1405,7 @@ public final class GeoFrontFabricPlan
         }
         if (y < ROAD_SURFACE_Y)
         {
-            return Blocks.REINFORCED_DEEPSLATE.defaultBlockState();
+            return com.projectseele.world.NervMaterials.structuralBlock().defaultBlockState();
         }
         if (y > ROAD_SURFACE_Y)
         {
@@ -1435,7 +1435,7 @@ public final class GeoFrontFabricPlan
             {
                 if (y < GARDEN_SURFACE_Y)
                 {
-                    return Blocks.REINFORCED_DEEPSLATE
+                    return com.projectseele.world.NervMaterials.structuralBlock()
                             .defaultBlockState();
                 }
                 if (y == GARDEN_SURFACE_Y)
@@ -1593,7 +1593,7 @@ public final class GeoFrontFabricPlan
             {
                 return Blocks.AIR.defaultBlockState();
             }
-            return Blocks.REINFORCED_DEEPSLATE.defaultBlockState();
+            return com.projectseele.world.NervMaterials.structuralBlock().defaultBlockState();
         }
         return null;
     }
@@ -1631,7 +1631,7 @@ public final class GeoFrontFabricPlan
         }
         if (floor)
         {
-            return Blocks.REINFORCED_DEEPSLATE.defaultBlockState();
+            return com.projectseele.world.NervMaterials.structuralBlock().defaultBlockState();
         }
         if (roof)
         {

@@ -543,7 +543,7 @@ public final class GeoFrontLandscapeBuilder
             {
                 set(level, origin.offset(centre.getX() + x, 1,
                                 centre.getZ() + z),
-                        Blocks.REINFORCED_DEEPSLATE.defaultBlockState());
+                        com.projectseele.world.NervMaterials.structuralBlock().defaultBlockState());
                 for (int y = 2; y <= 6; y++)
                 {
                     clear(level, origin.offset(centre.getX() + x, y,
@@ -562,19 +562,19 @@ public final class GeoFrontLandscapeBuilder
                                 centre.getZ() - 5),
                         y == 4 && Math.floorMod(x, 4) == 0
                                 ? Blocks.RED_STAINED_GLASS.defaultBlockState()
-                                : Blocks.REINFORCED_DEEPSLATE.defaultBlockState());
+                                : com.projectseele.world.NervMaterials.structuralBlock().defaultBlockState());
                 set(level, origin.offset(centre.getX() + x, y,
                                 centre.getZ() + 5),
-                        Blocks.REINFORCED_DEEPSLATE.defaultBlockState());
+                        com.projectseele.world.NervMaterials.structuralBlock().defaultBlockState());
             }
             for (int z = -4; z <= 4; z++)
             {
                 set(level, origin.offset(centre.getX() - 7, y,
                                 centre.getZ() + z),
-                        Blocks.REINFORCED_DEEPSLATE.defaultBlockState());
+                        com.projectseele.world.NervMaterials.structuralBlock().defaultBlockState());
                 set(level, origin.offset(centre.getX() + 7, y,
                                 centre.getZ() + z),
-                        Blocks.REINFORCED_DEEPSLATE.defaultBlockState());
+                        com.projectseele.world.NervMaterials.structuralBlock().defaultBlockState());
             }
         }
 
@@ -1007,7 +1007,7 @@ public final class GeoFrontLandscapeBuilder
                             ? y == 4 && Math.abs(side) == 6
                                     ? Blocks.ORANGE_CONCRETE
                                     .defaultBlockState()
-                                    : Blocks.REINFORCED_DEEPSLATE
+                                    : com.projectseele.world.NervMaterials.structuralBlock()
                                     .defaultBlockState()
                             : Blocks.AIR.defaultBlockState());
                 }

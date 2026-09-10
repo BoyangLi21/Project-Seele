@@ -25,8 +25,10 @@ public final class EvaCageV2Plan implements FacilityZonePlan
     private static final int EVA_Z = 804;
 
     private static final BlockState AIR = Blocks.AIR.defaultBlockState();
-    private static final BlockState SHELL =
-            Blocks.REINFORCED_DEEPSLATE.defaultBlockState();
+    private static BlockState structuralShell()
+    {
+        return com.projectseele.world.NervMaterials.structuralBlock().defaultBlockState();
+    }
     private static final BlockState STRUCTURE =
             Blocks.DEEPSLATE_TILES.defaultBlockState();
     private static final BlockState FLOOR =
@@ -141,7 +143,7 @@ public final class EvaCageV2Plan implements FacilityZonePlan
         {
             boolean rib = Math.floorMod(y + 496, 16) <= 1
                     || Math.floorMod(z - 741, 20) <= 1;
-            return rib ? accent() : SHELL;
+            return rib ? accent() : structuralShell();
         }
         return AIR;
     }
@@ -175,11 +177,11 @@ public final class EvaCageV2Plan implements FacilityZonePlan
             }
             if (y == WALK_Y + 7)
             {
-                return Math.floorMod(z, 6) <= 1 ? LIGHT : SHELL;
+                return Math.floorMod(z, 6) <= 1 ? LIGHT : structuralShell();
             }
             if (Math.abs(dx) == 8 && y >= WALK_Y && y <= WALK_Y + 6)
             {
-                return SHELL;
+                return structuralShell();
             }
             if (y >= WALK_Y && y <= WALK_Y + 6)
             {

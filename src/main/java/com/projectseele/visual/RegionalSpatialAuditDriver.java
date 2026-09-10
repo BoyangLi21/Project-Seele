@@ -142,6 +142,23 @@ public final class RegionalSpatialAuditDriver
                 stepLimit=Math.max(2000,(int)Math.ceil(length/.12)+route.size()*100);
                 TRACE.asList().clear();positioned=true;
                 activeLevel=level;RESTORE.clear();
+                if(test.has("interactBlocks"))
+                {
+                    // Imported multi-height shutters are functional entrances too.
+                    // Snapshot their local neighbours before invoking the real use action.
+                    for(var item:test.getAsJsonArray("interactBlocks"))
+                    {
+                        var value=item.getAsJsonArray();BlockPos pos=new BlockPos(value.get(0).getAsInt(),value.get(1).getAsInt(),value.get(2).getAsInt());
+                        for(BlockPos neighbour:BlockPos.betweenClosed(pos.offset(-1,-1,-1),pos.offset(1,3,1)))RESTORE.putIfAbsent(neighbour.immutable(),level.getBlockState(neighbour));
+                    }
+                    for(var item:test.getAsJsonArray("interactBlocks"))
+                    {
+                        var value=item.getAsJsonArray();BlockPos pos=new BlockPos(value.get(0).getAsInt(),value.get(1).getAsInt(),value.get(2).getAsInt());var state=level.getBlockState(pos);
+                        var open=state.getProperties().stream().filter(property->property.getName().equals("open")).findFirst();
+                        if(open.isPresent()&&state.getValue(open.get()).toString().equals("true"))continue;
+                        state.use(level,player,net.minecraft.world.InteractionHand.MAIN_HAND,new net.minecraft.world.phys.BlockHitResult(Vec3.atCenterOf(pos),net.minecraft.core.Direction.NORTH,pos,false));
+                    }
+                }
                 if(test.has("useDoor"))
                 {
                     JsonArray d=test.getAsJsonArray("door");BlockPos door=new BlockPos(d.get(0).getAsInt(),d.get(1).getAsInt(),d.get(2).getAsInt());

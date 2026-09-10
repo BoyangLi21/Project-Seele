@@ -22,6 +22,7 @@ public final class CockpitFeedbackClient
     private static Drive drive;
     private static int warningCooldown,lastStance=-1;
     private static java.util.UUID linkedPilotActor;
+    private static double fovTime=Double.NaN,fovSpeed;
     private static EvaUnit01Entity actor(){var p=Minecraft.getInstance().player;return p==null?null:EvaPilotResolver.controlTarget(p);}
     private static final class Drive extends AbstractTickableSoundInstance
     {
@@ -39,7 +40,7 @@ public final class CockpitFeedbackClient
     @SubscribeEvent public static void tick(TickEvent.ClientTickEvent event)
     {
         if(event.phase!=TickEvent.Phase.END)return;var eva=actor();var mc=Minecraft.getInstance();
-        if(eva==null){drive=null;lastStance=-1;warningCooldown=0;linkedPilotActor=null;return;}
+        if(eva==null){drive=null;lastStance=-1;warningCooldown=0;linkedPilotActor=null;fovTime=Double.NaN;fovSpeed=0;return;}
         if(!eva.getUUID().equals(linkedPilotActor))
         {
             linkedPilotActor=eva.getUUID();
@@ -56,7 +57,10 @@ public final class CockpitFeedbackClient
     @SubscribeEvent public static void fov(ViewportEvent.ComputeFov event)
     {
         var eva=actor();if(eva==null||eva.isFirstBattleActive()||ClientForgeEvents.isRifleSightActive(eva)||eva.getCannonCharge()>0)return;
-        event.setFOV(event.getFOV()+Math.min(3.2,eva.getDeltaMovement().horizontalDistance()*1.5));
+        double now=eva.level().getGameTime()+event.getPartialTick(),wanted=Math.min(3.2,eva.getDeltaMovement().horizontalDistance()*1.5);
+        if(Double.isNaN(fovTime)||now<fovTime||now-fovTime>10)fovSpeed=wanted;
+        else fovSpeed+=(wanted-fovSpeed)*(1-Math.pow(.5,(now-fovTime)/20/.12));
+        fovTime=now;event.setFOV(event.getFOV()+fovSpeed);
     }
     private CockpitFeedbackClient() {}
 }

@@ -52,8 +52,10 @@ public final class S20SurfaceTransitDirector
 
     private static final BlockState FLOOR =
             Blocks.POLISHED_DEEPSLATE.defaultBlockState();
-    private static final BlockState STRUCTURE =
-            Blocks.REINFORCED_DEEPSLATE.defaultBlockState();
+    private static BlockState structuralStructure()
+    {
+        return com.projectseele.world.NervMaterials.structuralBlock().defaultBlockState();
+    }
     private static final BlockState WALL =
             Blocks.DEEPSLATE_TILES.defaultBlockState();
     private static final BlockState BLACK =
@@ -230,7 +232,7 @@ public final class S20SurfaceTransitDirector
                     boolean cardinalLight = (dx == 0 || dz == 0)
                             && Math.floorMod(y - SHAFT_MIN_Y, 8) == 4;
                     set(level, position, cardinalLight ? LIGHT
-                            : band ? ACCENT : STRUCTURE);
+                            : band ? ACCENT : structuralStructure());
                 }
             }
         }
@@ -275,7 +277,7 @@ public final class S20SurfaceTransitDirector
                             || dx == 0 || dz == 0;
                     set(level, new BlockPos(
                             AXIS_X + dx, y, AXIS_Z + dz),
-                            beam ? STRUCTURE : FLOOR);
+                            beam ? structuralStructure() : FLOOR);
                 }
             }
         }
@@ -397,7 +399,7 @@ public final class S20SurfaceTransitDirector
             }
             for (int z : new int[] {AXIS_Z - 3, AXIS_Z + 3})
             {
-                set(level, new BlockPos(x, floorY, z), STRUCTURE);
+                set(level, new BlockPos(x, floorY, z), structuralStructure());
                 for (int y = LOWER_WALK_Y;
                      y <= LOWER_WALK_Y + 3; y++)
                 {
@@ -421,7 +423,7 @@ public final class S20SurfaceTransitDirector
                      z <= AXIS_Z + 3; z++)
                 {
                     set(level, new BlockPos(
-                            x, floorY - 1, z), STRUCTURE);
+                            x, floorY - 1, z), structuralStructure());
                 }
             }
         }
@@ -458,7 +460,7 @@ public final class S20SurfaceTransitDirector
                                     y - SHAFT_MIN_Y, 16) == 8;
                     set(level, position,
                             cardinalLight ? LIGHT
-                                    : band ? ACCENT : STRUCTURE);
+                                    : band ? ACCENT : structuralStructure());
                 }
             }
         }

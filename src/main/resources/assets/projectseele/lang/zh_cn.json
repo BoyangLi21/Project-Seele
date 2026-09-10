@@ -209,5 +209,6 @@
   "hud.projectseele.pilot_link_ready": "神经连接完成 · Shift 蹲姿 / Z 卧倒 / V 弹出",
   "block.projectseele.nerv_office_chair": "NERV 工作椅",
   "block.projectseele.nerv_briefing_tile": "NERV 作战地图屏",
-  "key.projectseele.un_eye_laser": "EVA-UN 眼部激光"
+  "key.projectseele.un_eye_laser": "EVA-UN 眼部激光",
+  "block.projectseele.nerv_structural_panel": "NERV 涂装结构板"
 }

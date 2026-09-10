@@ -6100,7 +6100,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
             return EvaBodyPose.opticalEye(this,partial).subtract(0,passenger.getEyeHeight(),0);
         // The pilot rides at the animated rig's head socket. First person sees
         // the same world entity and the same evaluated bones as third person.
-        float rad = (float) Math.toRadians(this.yBodyRot);
+        float rad = (float) Math.toRadians(Mth.rotLerp(partial,this.yBodyRotO,this.yBodyRot));
         // All three reviewed Tiger bodies share the same 192-pixel height and
         // semantic rig contract. Keep one eye-socket calculation so Unit-00
         // and Unit-02 cannot fall back to the former SmOd seat coordinates.
@@ -6134,9 +6134,9 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
                 ? EvaScale.fromLegacy(0.90D) : 0.0D;
         double seatHeight = targetEyeHeight - passenger.getEyeHeight();
         return new Vec3(
-                this.getX() - Math.sin(rad) * forward + Math.cos(rad) * lateral,
-                this.getY() + seatHeight,
-                this.getZ() + Math.cos(rad) * forward + Math.sin(rad) * lateral);
+                Mth.lerp(partial,this.xo,this.getX()) - Math.sin(rad) * forward + Math.cos(rad) * lateral,
+                Mth.lerp(partial,this.yo,this.getY()) + seatHeight,
+                Mth.lerp(partial,this.zo,this.getZ()) + Math.cos(rad) * forward + Math.sin(rad) * lateral);
     }
 
     @Override

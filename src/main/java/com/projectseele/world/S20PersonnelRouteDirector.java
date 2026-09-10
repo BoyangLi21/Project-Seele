@@ -36,8 +36,10 @@ public final class S20PersonnelRouteDirector
 
     private static final BlockState FLOOR =
             Blocks.POLISHED_DEEPSLATE.defaultBlockState();
-    private static final BlockState SUPPORT =
-            Blocks.REINFORCED_DEEPSLATE.defaultBlockState();
+    private static BlockState structuralSupport()
+    {
+        return com.projectseele.world.NervMaterials.structuralBlock().defaultBlockState();
+    }
     private static final BlockState WALL =
             Blocks.DEEPSLATE_TILES.defaultBlockState();
     private static final BlockState ACCENT =
@@ -152,7 +154,7 @@ public final class S20PersonnelRouteDirector
             }
             for (int x : new int[] {26, 30})
             {
-                level.setBlock(new BlockPos(x, -449, z), SUPPORT, UPDATE);
+                level.setBlock(new BlockPos(x, -449, z), structuralSupport(), UPDATE);
                 for (int y = -448; y <= -445; y++)
                 {
                     level.setBlock(new BlockPos(x, y, z),
@@ -186,7 +188,7 @@ public final class S20PersonnelRouteDirector
             }
             for (int x : new int[] {46, 50})
             {
-                level.setBlock(new BlockPos(x, -449, z), SUPPORT, UPDATE);
+                level.setBlock(new BlockPos(x, -449, z), structuralSupport(), UPDATE);
                 for (int y = -448; y <= -445; y++)
                 {
                     level.setBlock(new BlockPos(x, y, z), WALL, UPDATE);
@@ -258,7 +260,7 @@ public final class S20PersonnelRouteDirector
             }
             for (int x : new int[] {89, 97})
             {
-                level.setBlock(new BlockPos(x, -443, z), SUPPORT, UPDATE);
+                level.setBlock(new BlockPos(x, -443, z), structuralSupport(), UPDATE);
                 for (int y = -442; y <= -439; y++)
                 {
                     level.setBlock(new BlockPos(x, y, z),
@@ -285,7 +287,7 @@ public final class S20PersonnelRouteDirector
         }
         for (int z : new int[] {270, 276})
         {
-            level.setBlock(new BlockPos(x, -443, z), SUPPORT, UPDATE);
+            level.setBlock(new BlockPos(x, -443, z), structuralSupport(), UPDATE);
             for (int y = -442; y <= -439; y++)
             {
                 level.setBlock(new BlockPos(x, y, z),
@@ -297,7 +299,7 @@ public final class S20PersonnelRouteDirector
         {
             for (int z = 271; z <= 275; z++)
             {
-                level.setBlock(new BlockPos(x, -444, z), SUPPORT, UPDATE);
+                level.setBlock(new BlockPos(x, -444, z), structuralSupport(), UPDATE);
             }
         }
     }
@@ -323,7 +325,7 @@ public final class S20PersonnelRouteDirector
             }
             for (int z : new int[] {170, 176})
             {
-                level.setBlock(new BlockPos(x, -399, z), SUPPORT, UPDATE);
+                level.setBlock(new BlockPos(x, -399, z), structuralSupport(), UPDATE);
                 level.setBlock(new BlockPos(x, -398, z), WALL, UPDATE);
                 level.setBlock(new BlockPos(x, -397, z), GLASS, UPDATE);
                 level.setBlock(new BlockPos(x, -396, z), GLASS, UPDATE);

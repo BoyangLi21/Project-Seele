@@ -22,8 +22,10 @@ public final class PyramidCirculationV2Plan implements FacilityZonePlan
             "STAFF_SERVICE_CONNECTOR");
 
     private static final BlockState AIR = Blocks.AIR.defaultBlockState();
-    private static final BlockState SHELL =
-            Blocks.REINFORCED_DEEPSLATE.defaultBlockState();
+    private static BlockState structuralShell()
+    {
+        return com.projectseele.world.NervMaterials.structuralBlock().defaultBlockState();
+    }
     private static final BlockState FLOOR =
             Blocks.POLISHED_DEEPSLATE.defaultBlockState();
     private static final BlockState DARK =
@@ -120,7 +122,7 @@ public final class PyramidCirculationV2Plan implements FacilityZonePlan
         }
         if (y == this.walkY + 7)
         {
-            return Math.floorMod(x, 12) <= 1 ? LIGHT : SHELL;
+            return Math.floorMod(x, 12) <= 1 ? LIGHT : structuralShell();
         }
         if ((z == minZ || z == maxZ)
                 && y >= this.walkY && y <= this.walkY + 6)
@@ -136,12 +138,12 @@ public final class PyramidCirculationV2Plan implements FacilityZonePlan
                 return "STAFF_SERVICE_CONNECTOR".equals(this.zoneId)
                         ? CYAN : ORANGE;
             }
-            return SHELL;
+            return structuralShell();
         }
         if ((x == minX || x == maxX)
                 && y >= this.walkY - 1 && y <= this.walkY + 7)
         {
-            return SHELL;
+            return structuralShell();
         }
         if (y < this.walkY - 1)
         {
@@ -149,7 +151,7 @@ public final class PyramidCirculationV2Plan implements FacilityZonePlan
             // legible from the GeoFront instead of floating in the cavern.
             boolean support = Math.floorMod(x - minX, 20) <= 2
                     && (z <= minZ + 2 || z >= maxZ - 2);
-            return support ? SHELL : null;
+            return support ? structuralShell() : null;
         }
         if (y >= this.walkY && y <= this.walkY + 6)
         {

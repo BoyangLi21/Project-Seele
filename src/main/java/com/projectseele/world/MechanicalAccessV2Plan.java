@@ -25,8 +25,10 @@ public final class MechanicalAccessV2Plan implements FacilityZonePlan
     private static final int ROOF_Y = -401;
 
     private static final BlockState AIR = Blocks.AIR.defaultBlockState();
-    private static final BlockState SHELL =
-            Blocks.REINFORCED_DEEPSLATE.defaultBlockState();
+    private static BlockState structuralShell()
+    {
+        return com.projectseele.world.NervMaterials.structuralBlock().defaultBlockState();
+    }
     private static final BlockState FLOOR =
             Blocks.POLISHED_DEEPSLATE.defaultBlockState();
     private static final BlockState DARK =
@@ -117,7 +119,7 @@ public final class MechanicalAccessV2Plan implements FacilityZonePlan
         }
         if (y == ROOF_Y)
         {
-            return lightBay(x, z) ? LIGHT : SHELL;
+            return lightBay(x, z) ? LIGHT : structuralShell();
         }
 
         boolean boundary = !insideFootprint(x - 1, z)
@@ -130,7 +132,7 @@ public final class MechanicalAccessV2Plan implements FacilityZonePlan
             {
                 return GLASS;
             }
-            return airlockFrame(x, z) ? DARK : SHELL;
+            return airlockFrame(x, z) ? DARK : structuralShell();
         }
         if (airlockFrame(x, z)
                 && (y == FLOOR_Y + 1 || y == ROOF_Y - 1))
@@ -189,7 +191,7 @@ public final class MechanicalAccessV2Plan implements FacilityZonePlan
                 && Math.floorMod(x + 600, 24) <= 1
                 && Math.floorMod(z, 24) <= 1)
         {
-            return SHELL;
+            return structuralShell();
         }
         return null;
     }

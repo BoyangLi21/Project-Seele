@@ -24,8 +24,10 @@ public final class Unit01CageV2Plan implements FacilityZonePlan
     private static final int OBSERVATION_WALK_Y = -416;
 
     private static final BlockState AIR = Blocks.AIR.defaultBlockState();
-    private static final BlockState SHELL =
-            Blocks.REINFORCED_DEEPSLATE.defaultBlockState();
+    private static BlockState structuralShell()
+    {
+        return com.projectseele.world.NervMaterials.structuralBlock().defaultBlockState();
+    }
     private static final BlockState STRUCTURE =
             Blocks.DEEPSLATE_TILES.defaultBlockState();
     private static final BlockState FLOOR =
@@ -125,7 +127,7 @@ public final class Unit01CageV2Plan implements FacilityZonePlan
             {
                 boolean rib = Math.floorMod(y + 480, 12) <= 1
                         || Math.floorMod(z + 72, 18) <= 1;
-                return rib ? PURPLE : SHELL;
+                return rib ? PURPLE : structuralShell();
             }
             return AIR;
         }

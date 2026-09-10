@@ -24,8 +24,10 @@ public final class CommandLiftSpineV2Plan implements FacilityZonePlan
     private static final String PLAN_VERSION = "command-lift-spine-v2-a5";
 
     private static final BlockState AIR = Blocks.AIR.defaultBlockState();
-    private static final BlockState SHELL =
-            Blocks.REINFORCED_DEEPSLATE.defaultBlockState();
+    private static BlockState structuralShell()
+    {
+        return com.projectseele.world.NervMaterials.structuralBlock().defaultBlockState();
+    }
     private static final BlockState FLOOR =
             Blocks.POLISHED_DEEPSLATE.defaultBlockState();
     private static final BlockState STRUCTURE =
@@ -111,7 +113,7 @@ public final class CommandLiftSpineV2Plan implements FacilityZonePlan
         if (x == 56 || x == 71 || z == -32 || z == 55
                 || y == -352 || y == -305)
         {
-            return Math.floorMod(x + y + z, 17) == 0 ? ORANGE : SHELL;
+            return Math.floorMod(x + y + z, 17) == 0 ? ORANGE : structuralShell();
         }
         return AIR;
     }

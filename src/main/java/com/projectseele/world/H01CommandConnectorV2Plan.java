@@ -14,8 +14,10 @@ public final class H01CommandConnectorV2Plan implements FacilityZonePlan
     private static final String PLAN_VERSION = "h01-command-v2-a1";
 
     private static final BlockState AIR = Blocks.AIR.defaultBlockState();
-    private static final BlockState SHELL =
-            Blocks.REINFORCED_DEEPSLATE.defaultBlockState();
+    private static BlockState structuralShell()
+    {
+        return com.projectseele.world.NervMaterials.structuralBlock().defaultBlockState();
+    }
     private static final BlockState FLOOR =
             Blocks.POLISHED_DEEPSLATE.defaultBlockState();
     private static final BlockState ORANGE =
@@ -84,25 +86,25 @@ public final class H01CommandConnectorV2Plan implements FacilityZonePlan
         }
         if (y == -326)
         {
-            return Math.floorMod(z, 6) == 0 ? LIGHT : SHELL;
+            return Math.floorMod(z, 6) == 0 ? LIGHT : structuralShell();
         }
         if (x == -8 || x == 7)
         {
             if (y >= -332 && y <= -327)
             {
-                return y == -330 ? GLASS : SHELL;
+                return y == -330 ? GLASS : structuralShell();
             }
-            return SHELL;
+            return structuralShell();
         }
         if (z == 76 || z == 95 || y == -340 || y == -325)
         {
-            return Math.floorMod(x + y + z, 13) == 0 ? ORANGE : SHELL;
+            return Math.floorMod(x + y + z, 13) == 0 ? ORANGE : structuralShell();
         }
         if (y >= -332 && y <= -327)
         {
             return AIR;
         }
-        return SHELL;
+        return structuralShell();
     }
 
     private boolean isPortTunnel(BlockPos position)

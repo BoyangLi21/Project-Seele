@@ -51,7 +51,7 @@ public final class NervMovingCarrierRenderer
                 Blocks.IRON_BLOCK.defaultBlockState(),
                 half - 0.5F, -0.27F, -half + 0.5F,
                 1.0F, 0.55F, inner);
-        BlockState underframe = Blocks.REINFORCED_DEEPSLATE
+        BlockState underframe = com.projectseele.world.NervMaterials.structuralBlock()
                 .defaultBlockState();
         block(blocks, poses, buffers, packedLight, underframe,
                 -6.2F, -0.72F, -half + 1.5F,

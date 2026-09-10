@@ -211,5 +211,6 @@
   "hud.projectseele.pilot_link_ready": "NEURAL LINK READY · Shift kneel / Z prone / V eject",
   "block.projectseele.nerv_office_chair": "NERV Office Chair",
   "block.projectseele.nerv_briefing_tile": "NERV Tactical Display",
-  "key.projectseele.un_eye_laser": "EVA-UN optical laser"
+  "key.projectseele.un_eye_laser": "EVA-UN optical laser",
+  "block.projectseele.nerv_structural_panel": "NERV Structural Panel"
 }

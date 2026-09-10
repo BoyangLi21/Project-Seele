@@ -16,8 +16,10 @@ public final class DogmaSpineV2Plan implements FacilityZonePlan
     private static final String PLAN_VERSION = "dogma-spine-v2-a2";
 
     private static final BlockState AIR = Blocks.AIR.defaultBlockState();
-    private static final BlockState SHELL =
-            Blocks.REINFORCED_DEEPSLATE.defaultBlockState();
+    private static BlockState structuralShell()
+    {
+        return com.projectseele.world.NervMaterials.structuralBlock().defaultBlockState();
+    }
     private static final BlockState STRUCTURE =
             Blocks.DEEPSLATE_TILES.defaultBlockState();
     private static final BlockState FLOOR =
@@ -97,7 +99,7 @@ public final class DogmaSpineV2Plan implements FacilityZonePlan
         if (x == -40 || x == 79 || z == 184 || z == 319
                 || y == -656 || y == -521)
         {
-            return Math.floorMod(y + z, 19) <= 1 ? RED : SHELL;
+            return Math.floorMod(y + z, 19) <= 1 ? RED : structuralShell();
         }
         return AIR;
     }
@@ -155,7 +157,7 @@ public final class DogmaSpineV2Plan implements FacilityZonePlan
                 && ((x >= -12 && x <= 44 && z >= 247 && z <= 266)
                 || (x >= -8 && x <= 8 && z >= 266 && z <= 319)))
         {
-            return Math.floorMod(x + z, 9) <= 1 ? LIGHT : SHELL;
+            return Math.floorMod(x + z, 9) <= 1 ? LIGHT : structuralShell();
         }
 
         // Repeated blast ribs and warning pylons create Central Dogma scale

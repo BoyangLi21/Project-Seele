@@ -24,8 +24,10 @@ public final class PublicLiftShaftV2Plan implements FacilityZonePlan
     private static final String PLAN_VERSION = "public-lift-shaft-v2-a2";
 
     private static final BlockState AIR = Blocks.AIR.defaultBlockState();
-    private static final BlockState SHELL =
-            Blocks.REINFORCED_DEEPSLATE.defaultBlockState();
+    private static BlockState structuralShell()
+    {
+        return com.projectseele.world.NervMaterials.structuralBlock().defaultBlockState();
+    }
     private static final BlockState STRUCTURE =
             Blocks.DEEPSLATE_TILES.defaultBlockState();
     private static final BlockState FLOOR =
@@ -215,7 +217,7 @@ public final class PublicLiftShaftV2Plan implements FacilityZonePlan
         if ((x == -9 || x == 8) && (z == 223 || z == 240)
                 && y >= -367 && y <= this.surfaceY + 14)
         {
-            return Math.floorMod(y + 368, 12) <= 1 ? ORANGE : SHELL;
+            return Math.floorMod(y + 368, 12) <= 1 ? ORANGE : structuralShell();
         }
         return null;
     }
@@ -275,7 +277,7 @@ public final class PublicLiftShaftV2Plan implements FacilityZonePlan
         {
             return ORANGE;
         }
-        return SHELL;
+        return structuralShell();
     }
 
     private boolean isPortTunnel(BlockPos position)

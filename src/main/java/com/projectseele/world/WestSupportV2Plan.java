@@ -24,8 +24,10 @@ public final class WestSupportV2Plan implements FacilityZonePlan
     private static final String PLAN_VERSION = "west-support-v2-a3";
 
     private static final BlockState AIR = Blocks.AIR.defaultBlockState();
-    private static final BlockState SHELL =
-            Blocks.REINFORCED_DEEPSLATE.defaultBlockState();
+    private static BlockState structuralShell()
+    {
+        return com.projectseele.world.NervMaterials.structuralBlock().defaultBlockState();
+    }
     private static final BlockState STRUCTURE =
             Blocks.DEEPSLATE_TILES.defaultBlockState();
     private static final BlockState FLOOR =
@@ -140,7 +142,7 @@ public final class WestSupportV2Plan implements FacilityZonePlan
         }
         if (y == -340)
         {
-            return Math.floorMod(x - z, 12) == 0 ? LIGHT : SHELL;
+            return Math.floorMod(x - z, 12) == 0 ? LIGHT : structuralShell();
         }
         if ((z == 24 || z == 75 || x == -208 || x == -161)
                 && y >= -360 && y < -340)
@@ -154,7 +156,7 @@ public final class WestSupportV2Plan implements FacilityZonePlan
             }
             // x=-208 is intentionally solid here. The civil-seam director
             // opens only the reviewed aperture after both receipts exist.
-            return Math.floorMod(y + 360, 8) == 0 ? ORANGE : SHELL;
+            return Math.floorMod(y + 360, 8) == 0 ? ORANGE : structuralShell();
         }
         if (y >= -360 && y < -340)
         {
@@ -250,11 +252,11 @@ public final class WestSupportV2Plan implements FacilityZonePlan
         }
         if (y == -400)
         {
-            return Math.floorMod(x + z, 9) == 0 ? LIGHT : SHELL;
+            return Math.floorMod(x + z, 9) == 0 ? LIGHT : structuralShell();
         }
         if (x == -180 || x == -161 || z == 54 || z == 75)
         {
-            return y == -405 ? ORANGE : SHELL;
+            return y == -405 ? ORANGE : structuralShell();
         }
         return AIR;
     }

@@ -15,8 +15,10 @@ import net.minecraft.world.level.block.state.BlockState;
  */
 public final class FacilityV2RouteGateDirector
 {
-    private static final BlockState CLOSED =
-            Blocks.REINFORCED_DEEPSLATE.defaultBlockState();
+    private static BlockState structuralClosed()
+    {
+        return com.projectseele.world.NervMaterials.structuralBlock().defaultBlockState();
+    }
     private static final BlockState OPEN = Blocks.AIR.defaultBlockState();
 
     private FacilityV2RouteGateDirector() {}
@@ -42,7 +44,7 @@ public final class FacilityV2RouteGateDirector
             boolean open = reciprocalCompletionReceiptsPresent(
                     data, manifest, port)
                     && routeUnlocked(data, port);
-            setAperture(level, port.aperture(), open ? OPEN : CLOSED);
+            setAperture(level, port.aperture(), open ? OPEN : structuralClosed());
         }
     }
 

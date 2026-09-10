@@ -22,8 +22,10 @@ public final class CommandSuiteV2Plan implements FacilityZonePlan
     private static final String PLAN_VERSION = "command-suite-v2-a4";
 
     private static final BlockState AIR = Blocks.AIR.defaultBlockState();
-    private static final BlockState SHELL =
-            Blocks.REINFORCED_DEEPSLATE.defaultBlockState();
+    private static BlockState structuralShell()
+    {
+        return com.projectseele.world.NervMaterials.structuralBlock().defaultBlockState();
+    }
     private static final BlockState FLOOR =
             Blocks.SMOOTH_STONE.defaultBlockState();
     private static final BlockState WALL =
@@ -108,7 +110,7 @@ public final class CommandSuiteV2Plan implements FacilityZonePlan
         if (x == 72 || x == 127 || z == -56 || z == 55
                 || y == -344 || y == -313)
         {
-            return Math.floorMod(x + y + z, 19) == 0 ? ORANGE : SHELL;
+            return Math.floorMod(x + y + z, 19) == 0 ? ORANGE : structuralShell();
         }
         return AIR;
     }

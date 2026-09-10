@@ -23,7 +23,7 @@ public final class FirstBattleClip
     public record BonePose(String[] names,Quaternionf[] rotations,Vector3f[] positions) {}
     public record CameraPose(Vec3 position,Vec3 target,float fov) {}
     private record Role(String[] bones,Quaternionf[][] rotations,Vector3f[][] positions,Map<String,Vec3[]> curves) {}
-    private record Data(float fps,Map<String,Role> roles,Vec3[] cameras,Vec3[] targets,float[] fov,Set<Integer> cuts) {}
+    private record Data(float fps,Map<String,Role> roles,Vec3[] cameras,Vec3[] targets,float[] fov,Set<Integer> cuts,String surfaceHash) {}
     private static final Data DATA=load();
     private static Vec3 vector(JsonArray p){return new Vec3(p.get(0).getAsDouble(),p.get(1).getAsDouble(),p.get(2).getAsDouble());}
     private static Vec3[] vectors(JsonArray rows)
@@ -32,10 +32,11 @@ public final class FirstBattleClip
     }
     private static Data load()
     {
-        Path local=Path.of("projectseele-local-maps/first_battle_r12.json");
-        if(Files.isRegularFile(local))
+        for(String revision:List.of("r14","r12"))
         {
-            try(var stream=Files.newInputStream(local)){return read(stream,"R12 private capture adaptation");}
+            Path local=Path.of("projectseele-local-maps/first_battle_"+revision+".json");
+            if(!Files.isRegularFile(local))continue;
+            try(var stream=Files.newInputStream(local)){return read(stream,revision+" private capture adaptation");}
             catch(Exception e){ProjectSeele.LOGGER.warn("Private first-battle clip rejected; using bundled sequence",e);}
         }
         try(var stream=FirstBattleClip.class.getResourceAsStream("/assets/projectseele/motion/first_battle_r10.json"))
@@ -91,7 +92,16 @@ public final class FirstBattleClip
                 int index=cut.getAsInt();if(index<=0||index>=count)throw new IllegalArgumentException("Invalid first-battle camera cut");cuts.add(index);
             }
             ProjectSeele.LOGGER.info("{} first battle loaded: fps={} frames={} durationTicks={}",source,fps,fov.length,DURATION_TICKS);
-            return new Data(fps,Map.copyOf(roles),positions,targets,fov,Set.copyOf(cuts));
+            String surfaceHash=root.has("surface_deformation_r14")?root.get("surface_deformation_r14").getAsString():"";
+            if(!surfaceHash.isEmpty()&&!surfaceHash.matches("[0-9a-f]{64}"))throw new IllegalArgumentException("Invalid surface cache fingerprint");
+            if(!surfaceHash.isEmpty())
+            {
+                Path cache=Path.of("projectseele-local-maps/sachiel_wrap_r14.bin");
+                if(!Files.isRegularFile(cache)||Files.size(cache)>96*1024*1024L)throw new IllegalArgumentException("Missing private surface performance");
+                String digest=HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(cache)));
+                if(!digest.equals(surfaceHash))throw new IllegalArgumentException("Private movie / surface mismatch");
+            }
+            return new Data(fps,Map.copyOf(roles),positions,targets,fov,Set.copyOf(cuts),surfaceHash);
     }
     private static void validateCurve(Vec3[] curve,int count)
     {
@@ -115,6 +125,7 @@ public final class FirstBattleClip
         }
     }
     public static boolean ready(){return DATA!=null;}
+    public static String surfaceHash(){return DATA==null?"":DATA.surfaceHash;}
     public static boolean hasCurve(boolean eva,String curve){return DATA!=null&&DATA.roles.get(eva?"eva":"angel").curves.containsKey(curve);}
     private static float frame(float seconds,int length){return Mth.clamp(seconds*DATA.fps,0,length-1);}
     private static Vec3 sample(Vec3[] values,float seconds)

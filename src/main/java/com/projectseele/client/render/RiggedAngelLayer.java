@@ -29,7 +29,7 @@ public final class RiggedAngelLayer<T extends GeoAnimatable> extends GeoRenderLa
     {
         super(renderer);this.resource=resource;
     }
-    public static void clearCache(){CACHE.clear();ATTEMPTED.clear();}
+    public static void clearCache(){CACHE.clear();ATTEMPTED.clear();SachielWrapSurface.clear();}
     public static boolean available(ResourceLocation resource){return load(resource)!=null;}
     private static Model load(ResourceLocation resource)
     {
@@ -56,6 +56,7 @@ public final class RiggedAngelLayer<T extends GeoAnimatable> extends GeoRenderLa
             for(int i=0;i<weights.length;i+=4)if(Math.abs(weights[i]+weights[i+1]+weights[i+2]+weights[i+3]-1)>1e-4)throw new IllegalArgumentException("Unnormalized skin weights");
             for(float v:vertices)if(!Float.isFinite(v))throw new IllegalArgumentException("Non-finite skin vertex");
             Model model=new Model(bones,vertices,indices,weights);CACHE.put(resource,model);
+            SachielWrapSurface.prepare(resource,vertices.length/8);
             ProjectSeele.LOGGER.info("R10 weighted Angel loaded: {} triangles={} bones={}",resource,vertices.length/24,bones.length);return model;
         }
         catch(Exception e){ProjectSeele.LOGGER.error("R10 weighted Angel rejected: {}",resource,e);return null;}
@@ -71,6 +72,30 @@ public final class RiggedAngelLayer<T extends GeoAnimatable> extends GeoRenderLa
         Model model=load(resource);if(model==null)return;
         Map<String,GeoBone> bones=new HashMap<>();collect(root,bones);
         Matrix4f inverseRoot=EvaRigTransforms.model(root).invert();
+        if(entity instanceof net.minecraft.world.entity.Entity worldEntity
+                &&entity instanceof com.projectseele.entity.FirstBattleSignals.Actor actor
+                &&!actor.isFirstBattleEva()&&actor.firstBattleSignals().active(worldEntity))
+        {
+            float seconds=actor.firstBattleSignals().time(worldEntity,partial);
+            var surface=SachielWrapSurface.frame(resource,model.vertices.length/8,seconds);
+            if(surface!=null)
+            {
+                var origin=com.projectseele.entity.FirstBattleClip.localPoint(actor.firstBattleSignals().spec(worldEntity),false,"root_blocks",seconds);
+                Vector3f p=new Vector3f(),n=new Vector3f();
+                Matrix4f auditWorld=com.projectseele.client.visual.SachielWrapR14Audit.ENABLED&&getRenderer() instanceof HybridAddonRenderer.MeshBackedRenderer<?> renderer?renderer.renderedMeshTransform(stack.last().pose(),worldEntity,partial):null;
+                for(int vertex=0;vertex<surface.vertexCount();vertex++)
+                {
+                    surface.sample(vertex,p,n);
+                    Vector3f authored=com.projectseele.client.visual.SachielWrapR14Audit.ENABLED&&vertex%(Math.max(1,surface.vertexCount()/16))==0?new Vector3f(p):null;
+                    p.sub((float)origin.x,(float)origin.y,(float)origin.z).div(5);
+                    inverseRoot.transformPosition(p);inverseRoot.transformDirection(n).normalize();
+                    if(authored!=null&&auditWorld!=null)com.projectseele.client.visual.SachielWrapR14Audit.sample(worldEntity,actor,auditWorld,p,authored);
+                    emit(target,stack,p,n,surface.u(vertex),surface.v(vertex),light,overlay);
+                    if(vertex%3==2)emit(target,stack,p,n,surface.u(vertex),surface.v(vertex),light,overlay);
+                }
+                return;
+            }
+        }
         Quaternionf[] real=new Quaternionf[model.bones.length],dual=new Quaternionf[model.bones.length];
         Matrix4f[] matrices=new Matrix4f[model.bones.length];boolean[] scaled=new boolean[model.bones.length];
         for(int i=0;i<real.length;i++)

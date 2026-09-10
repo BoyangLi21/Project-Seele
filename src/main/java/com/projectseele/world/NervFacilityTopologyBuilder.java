@@ -813,7 +813,7 @@ public final class NervFacilityTopologyBuilder
                 set(level, origin.offset(x, floorY + height, z),
                         Math.floorMod(x + z, 9) == 0
                                 ? Blocks.SEA_LANTERN.defaultBlockState()
-                                : Blocks.REINFORCED_DEEPSLATE
+                                : com.projectseele.world.NervMaterials.structuralBlock()
                                 .defaultBlockState());
             }
         }
@@ -1185,7 +1185,7 @@ public final class NervFacilityTopologyBuilder
                             floorY + CORRIDOR_CLEAR_HEIGHT + 1, z),
                     Math.floorMod(x - z, 13) == 0
                             ? Blocks.SEA_LANTERN.defaultBlockState()
-                            : Blocks.REINFORCED_DEEPSLATE.defaultBlockState());
+                            : com.projectseele.world.NervMaterials.structuralBlock().defaultBlockState());
         }
 
         for (long packed : cells)
@@ -1208,7 +1208,7 @@ public final class NervFacilityTopologyBuilder
                             y == 2 && Math.floorMod(x + z, 9) == 0
                                     ? Blocks.GRAY_STAINED_GLASS
                                     .defaultBlockState()
-                                    : Blocks.REINFORCED_DEEPSLATE
+                                    : com.projectseele.world.NervMaterials.structuralBlock()
                                     .defaultBlockState());
                 }
             }
@@ -1247,7 +1247,7 @@ public final class NervFacilityTopologyBuilder
                                 && (x == 0 || z == 0);
                         set(level, position, lightBand
                                 ? lift.accent()
-                                : Blocks.REINFORCED_DEEPSLATE
+                                : com.projectseele.world.NervMaterials.structuralBlock()
                                 .defaultBlockState());
                     }
                     else
@@ -1311,7 +1311,7 @@ public final class NervFacilityTopologyBuilder
                             : Blocks.POLISHED_DEEPSLATE.defaultBlockState());
             set(level, origin.offset(x, floorY + 5, z),
                     side == 0 ? Blocks.SEA_LANTERN.defaultBlockState()
-                            : Blocks.REINFORCED_DEEPSLATE.defaultBlockState());
+                            : com.projectseele.world.NervMaterials.structuralBlock().defaultBlockState());
         }
         for (int y = floorY; y <= floorY + 5; y++)
         {
@@ -1402,11 +1402,11 @@ public final class NervFacilityTopologyBuilder
                 && level.getBlockState(origin.offset(
                         lift.x() - LIFT_RADIUS, lift.minimumFloor() + 3,
                         lift.z() - LIFT_RADIUS))
-                .is(Blocks.REINFORCED_DEEPSLATE)
+                .is(com.projectseele.world.NervMaterials.STRUCTURAL_SHELL)
                 && level.getBlockState(origin.offset(
                         lift.x() + LIFT_RADIUS, lift.maximumFloor() + 3,
                         lift.z() + LIFT_RADIUS))
-                .is(Blocks.REINFORCED_DEEPSLATE);
+                .is(com.projectseele.world.NervMaterials.STRUCTURAL_SHELL);
     }
 
     private static void closeAllLiftDoors(ServerLevel level, BlockPos origin,

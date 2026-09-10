@@ -344,7 +344,7 @@ public final class EvaHangarBuilder
         BlockState floor =
                 Blocks.POLISHED_DEEPSLATE.defaultBlockState();
         BlockState support =
-                Blocks.REINFORCED_DEEPSLATE.defaultBlockState();
+                com.projectseele.world.NervMaterials.structuralBlock().defaultBlockState();
         BlockState wall =
                 Blocks.POLISHED_BLACKSTONE_BRICKS.defaultBlockState();
         BlockState window =
@@ -462,7 +462,7 @@ public final class EvaHangarBuilder
                                 || Math.floorMod(x, 8) == 0
                                 || Math.floorMod(z, 8) == 0;
                         set(level, bed.offset(x, y, z), beam
-                                ? Blocks.REINFORCED_DEEPSLATE
+                                ? com.projectseele.world.NervMaterials.structuralBlock()
                                         .defaultBlockState()
                                 : Blocks.POLISHED_DEEPSLATE
                                         .defaultBlockState());
@@ -501,7 +501,7 @@ public final class EvaHangarBuilder
                                 : Blocks.POLISHED_DEEPSLATE
                                         .defaultBlockState());
                 set(level, deck.below(),
-                        Blocks.REINFORCED_DEEPSLATE.defaultBlockState());
+                        com.projectseele.world.NervMaterials.structuralBlock().defaultBlockState());
                 for (int y = 1; y <= 4; y++)
                 {
                     if (Math.abs(lateral) < 3)
@@ -541,7 +541,7 @@ public final class EvaHangarBuilder
                         ? Blocks.SEA_LANTERN.defaultBlockState()
                         : Blocks.POLISHED_DEEPSLATE.defaultBlockState());
                 set(level, floor.below(),
-                        Blocks.REINFORCED_DEEPSLATE.defaultBlockState());
+                        com.projectseele.world.NervMaterials.structuralBlock().defaultBlockState());
                 for (int y = 1; y <= 4; y++)
                 {
                     clear(level, floor.above(y));
@@ -660,7 +660,7 @@ public final class EvaHangarBuilder
                 walkableRoutes++;
             }
             if (level.getBlockState(bed.offset(CORRIDOR_HALF_WIDTH, 68,
-                    HALF_DEPTH + 4)).is(Blocks.REINFORCED_DEEPSLATE))
+                    HALF_DEPTH + 4)).is(com.projectseele.world.NervMaterials.STRUCTURAL_SHELL))
             {
                 wideTransportTunnels++;
             }
@@ -1283,7 +1283,7 @@ public final class EvaHangarBuilder
                             ? Blocks.TINTED_GLASS.defaultBlockState()
                             : lampBand ? Blocks.SEA_LANTERN.defaultBlockState()
                             : (y % 9 == 0 ? accent
-                            : Blocks.REINFORCED_DEEPSLATE.defaultBlockState()));
+                            : com.projectseele.world.NervMaterials.structuralBlock().defaultBlockState()));
                 }
             }
         }
@@ -1416,7 +1416,7 @@ public final class EvaHangarBuilder
                 // Backing first: a ladder placed against air is removed by the
                 // neighbour-shape update that follows.
                 set(level, bed.offset(x, ladderY, REAR_GANTRY_Z_FROM_BED + 1),
-                        Blocks.REINFORCED_DEEPSLATE.defaultBlockState());
+                        com.projectseele.world.NervMaterials.structuralBlock().defaultBlockState());
                 set(level, bed.offset(x, ladderY, REAR_GANTRY_Z_FROM_BED),
                         Blocks.LADDER.defaultBlockState()
                                 .setValue(LadderBlock.FACING, Direction.NORTH));
@@ -1455,7 +1455,7 @@ public final class EvaHangarBuilder
                         set(level, position, y == 68
                                 && Math.floorMod(z, 8) == 0
                                 ? Blocks.SEA_LANTERN.defaultBlockState()
-                                : Blocks.REINFORCED_DEEPSLATE.defaultBlockState());
+                                : com.projectseele.world.NervMaterials.structuralBlock().defaultBlockState());
                     }
                     else
                     {
@@ -1521,7 +1521,7 @@ public final class EvaHangarBuilder
                 set(level, origin.offset(x, OBSERVATION_CEILING_Y, z),
                         Math.floorMod(x - z, 11) == 0
                                 ? Blocks.SEA_LANTERN.defaultBlockState()
-                                : Blocks.REINFORCED_DEEPSLATE.defaultBlockState());
+                                : com.projectseele.world.NervMaterials.structuralBlock().defaultBlockState());
                 for (int y = GALLERY_Y + 1;
                      y < OBSERVATION_CEILING_Y; y++)
                 {
@@ -1540,7 +1540,7 @@ public final class EvaHangarBuilder
                     else
                     {
                         set(level, position,
-                                Blocks.REINFORCED_DEEPSLATE.defaultBlockState());
+                                com.projectseele.world.NervMaterials.structuralBlock().defaultBlockState());
                     }
                 }
             }
@@ -1582,7 +1582,7 @@ public final class EvaHangarBuilder
                         Blocks.LADDER.defaultBlockState()
                                 .setValue(LadderBlock.FACING, Direction.SOUTH));
                 set(level, origin.offset(x, y, GALLERY_Z - 7),
-                        Blocks.REINFORCED_DEEPSLATE.defaultBlockState());
+                        com.projectseele.world.NervMaterials.structuralBlock().defaultBlockState());
             }
         }
     }
@@ -1760,7 +1760,7 @@ public final class EvaHangarBuilder
                     Blocks.LADDER.defaultBlockState()
                             .setValue(LadderBlock.FACING, Direction.SOUTH));
             set(level, origin.offset(ladderX, y, GALLERY_Z - 6),
-                    Blocks.REINFORCED_DEEPSLATE.defaultBlockState());
+                    com.projectseele.world.NervMaterials.structuralBlock().defaultBlockState());
         }
         for (int x = centreX - 5; x <= centreX + 5; x++)
         {

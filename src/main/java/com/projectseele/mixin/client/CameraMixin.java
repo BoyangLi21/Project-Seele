@@ -44,8 +44,10 @@ public abstract class CameraMixin
         if(!detached&&controlled!=null&&controlled.isPoweredOn()&&!controlled.isActivationCinematicActive())
         {
             Vec3 optical=controlled.getPilotCameraSeatPosition(subject,partialTick).add(0,subject.getEyeHeight(),0);
+            optical=com.projectseele.client.PilotOpticsContinuity.apply(controlled,partialTick,optical);
             this.setPosition(optical.x,optical.y,optical.z);return;
         }
+        if(controlled==null)com.projectseele.client.PilotOpticsContinuity.clear();
         if (detached
                 || !(subject.getVehicle() instanceof EntryPlugCarrierEntity plug))
         {

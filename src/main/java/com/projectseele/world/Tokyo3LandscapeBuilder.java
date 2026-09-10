@@ -177,7 +177,7 @@ public final class Tokyo3LandscapeBuilder
                 }
                 BlockState state = (x + z) % 32 == 0
                         ? Blocks.ORANGE_CONCRETE.defaultBlockState()
-                        : Blocks.REINFORCED_DEEPSLATE.defaultBlockState();
+                        : com.projectseele.world.NervMaterials.structuralBlock().defaultBlockState();
                 setUnlessShaft(level, origin, x, -RETAINING_DEPTH, z, state);
             }
         }
@@ -215,7 +215,7 @@ public final class Tokyo3LandscapeBuilder
         {
             BlockState state = y % 8 == 0
                     ? Blocks.ORANGE_CONCRETE.defaultBlockState()
-                    : Blocks.REINFORCED_DEEPSLATE.defaultBlockState();
+                    : com.projectseele.world.NervMaterials.structuralBlock().defaultBlockState();
             for (int x = -1; x <= 1; x++)
             {
                 for (int z = -1; z <= 1; z++)
@@ -296,7 +296,7 @@ public final class Tokyo3LandscapeBuilder
             {
                 BlockState state = y == 4 && step % 8 < 4
                         ? Blocks.ORANGE_CONCRETE.defaultBlockState()
-                        : Blocks.REINFORCED_DEEPSLATE.defaultBlockState();
+                        : com.projectseele.world.NervMaterials.structuralBlock().defaultBlockState();
                 set(level, origin.offset(x, ground + y, z), state);
             }
             if (step % 60 == 0)
@@ -390,7 +390,7 @@ public final class Tokyo3LandscapeBuilder
                     if (Math.abs(z) == 6 || y == 7)
                     {
                         set(level, position,
-                                Blocks.REINFORCED_DEEPSLATE.defaultBlockState());
+                                com.projectseele.world.NervMaterials.structuralBlock().defaultBlockState());
                     }
                     else
                     {
@@ -901,7 +901,7 @@ public final class Tokyo3LandscapeBuilder
     private static boolean isStructuralMaterial(BlockState state)
     {
         return state.is(Blocks.POLISHED_DEEPSLATE)
-                || state.is(Blocks.REINFORCED_DEEPSLATE)
+                || state.is(com.projectseele.world.NervMaterials.STRUCTURAL_SHELL)
                 || state.is(Blocks.ORANGE_CONCRETE);
     }
 

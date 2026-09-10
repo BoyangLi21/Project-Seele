@@ -623,16 +623,16 @@ public final class TerminalDogmaBuilder
                 set(level, origin.offset(x, floorY + 7, z),
                         Math.floorMod(z, 4) == 0
                                 ? Blocks.REDSTONE_LAMP.defaultBlockState()
-                                : Blocks.REINFORCED_DEEPSLATE.defaultBlockState());
+                                : com.projectseele.world.NervMaterials.structuralBlock().defaultBlockState());
             }
             for (int y = floorY + 1; y <= floorY + 6; y++)
             {
                 set(level, origin.offset(20, y, z),
                         y >= floorY + 2 && y <= floorY + 5
                                 ? Blocks.RED_STAINED_GLASS.defaultBlockState()
-                                : Blocks.REINFORCED_DEEPSLATE.defaultBlockState());
+                                : com.projectseele.world.NervMaterials.structuralBlock().defaultBlockState());
                 set(level, origin.offset(28, y, z),
-                        Blocks.REINFORCED_DEEPSLATE.defaultBlockState());
+                        com.projectseele.world.NervMaterials.structuralBlock().defaultBlockState());
             }
         }
 

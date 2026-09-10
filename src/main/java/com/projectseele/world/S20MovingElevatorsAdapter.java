@@ -299,7 +299,7 @@ public final class S20MovingElevatorsAdapter
             // x=9 is the measured reinforced-deepslate shaft wall on every
             // adjacent Y level; restore that exact continuation.
             level.setBlock(oldController,
-                    Blocks.REINFORCED_DEEPSLATE.defaultBlockState(), UPDATE);
+                    com.projectseele.world.NervMaterials.structuralBlock().defaultBlockState(), UPDATE);
         }
         for (int y = -488; y <= -486; y++)
         {
@@ -413,7 +413,7 @@ public final class S20MovingElevatorsAdapter
         // half-migrated compact cage silently fail installation every tick.
         return state.isAir()
                 || state.is(MovingElevators.elevator_block)
-                || state.is(Blocks.REINFORCED_DEEPSLATE)
+                || state.is(com.projectseele.world.NervMaterials.STRUCTURAL_SHELL)
                 || state.is(Blocks.DEEPSLATE_BRICKS)
                 || state.is(Blocks.DEEPSLATE_TILES)
                 || state.is(Blocks.POLISHED_DEEPSLATE)
@@ -935,7 +935,7 @@ public final class S20MovingElevatorsAdapter
                 || isMovingElevatorsBlock(state)
                 || state.is(com.projectseele.registry.ModBlocks
                         .CLEAR_GLASS.get())
-                || state.is(Blocks.REINFORCED_DEEPSLATE)
+                || state.is(com.projectseele.world.NervMaterials.STRUCTURAL_SHELL)
                 || state.is(Blocks.BLACK_CONCRETE)
                 || state.is(Blocks.ORANGE_CONCRETE)
                 || state.is(Blocks.IRON_BLOCK)

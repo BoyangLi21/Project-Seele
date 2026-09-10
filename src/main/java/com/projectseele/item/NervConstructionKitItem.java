@@ -120,7 +120,7 @@ public class NervConstructionKitItem extends Item
 
     private static void buildLaunchShaft(ServerLevel level, BlockPos centre, BlockState accent)
     {
-        BlockState wall = Blocks.REINFORCED_DEEPSLATE.defaultBlockState();
+        BlockState wall = com.projectseele.world.NervMaterials.structuralBlock().defaultBlockState();
         BlockState frame = Blocks.IRON_BLOCK.defaultBlockState();
         BlockState dark = Blocks.BLACK_CONCRETE.defaultBlockState();
         BlockState light = Blocks.SEA_LANTERN.defaultBlockState();
