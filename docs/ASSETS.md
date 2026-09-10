@@ -223,3 +223,9 @@ CMU 18_03、18_05／19_05，Bandai Namco Research dataset-1 的职业演员出�
 ## R13 背部插入口（2026-09-10）
 
 负责人提供的四张 TV 插入栓截图仅作本机造型和动作参考。原三机沿用私有 Tiger 模型的双圆点盖板和贴图，经几何拆分、归属修正、切孔及侧翻铰链适配后仍保存在私有包。UN 的背部服务盖和内部管道来自本项目原创模型；新夹具的齿圈、叉爪、驱动杆及软管为原创程序几何。公开数值接口记录每台机体的测量位置，完整过程及素材边界见 [R13](EVA_DORSAL_TV_R13.md)。
+
+## R15 工作人员与门（2026-09-11）
+
+`staff_misato`、`staff_ritsuko`、`staff_maya` 及六套通用 NERV／UN 制服由 `tools/build_staff_skins_r15.py` 原创绘制。Planet Minecraft 的候选角色皮肤下载未成功，未进入本轮素材。门的分缝、边框、识别条和状态指示为项目原创建模，使用原版白色混凝土纹理进行着色，没有复制该纹理文件。
+
+R15 战斗继续在 R12 私有动捕和角色几何基础上改编；混合派生动作仅保存在本机 `first_battle_r15.json`。录像是实际游戏画面，配原创合成音效离线混音。Distant Horizons、Embeddium、FerriteCore 来自各项目官方 Modrinth 分发，下载脚本固定版本并验证 SHA-512；第三方 JAR 不提交到仓库。详见 [R15](STAFF_WORLD_R15.md)。

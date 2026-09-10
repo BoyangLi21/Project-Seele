@@ -17,7 +17,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-WORLD_NAME = "SEELE_S20_RECOVERY_R28"
+WORLD_NAME = "SEELE_TV_WORLD_PREVIEW_20260906"
 MC_VERSION = "1.20.1"
 FORGE_VERSION = "47.4.10"
 
@@ -115,6 +115,8 @@ def required_mods() -> list[Path]:
         local / "supermartijn642configlib-1.1.8-forge-mc1.20.jar",
         local / "supermartijn642corelib-1.1.24-forge-mc1.20.1.jar",
         local / "MTR-forge-4.0.5+1.20.1.jar",
+        local / "superbwarfare-0.8.9.1-hotfix-mc1.20.1-993063bed-all.jar",
+        local / "kotlinforforge-4.12.0-all.jar",
     ]
     missing = [path for path in mods if not path.is_file()]
     if missing:
@@ -275,9 +277,9 @@ enforce-whitelist=true
 online-mode=true
 spawn-protection=0
 allow-flight=true
-view-distance=12
-simulation-distance=8
-entity-broadcast-range-percentage=150
+view-distance=6
+simulation-distance=5
+entity-broadcast-range-percentage=100
 network-compression-threshold=256
 max-tick-time=120000
 sync-chunk-writes=false
@@ -286,12 +288,11 @@ enable-command-block=false
 
 
 def jvm_args() -> str:
-    return """-Xms14G
--Xmx14G
+    return """-Xms2G
+-Xmx8G
 -XX:+UseG1GC
 -XX:+ParallelRefProcEnabled
 -XX:MaxGCPauseMillis=200
--XX:+DisableExplicitGC
 -XX:G1HeapRegionSize=16M
 -XX:G1ReservePercent=20
 -XX:InitiatingHeapOccupancyPercent=15
@@ -380,8 +381,8 @@ def validate_outputs(server_zip: Path, world_zip: Path, client_zip: Path) -> Non
         if not required.issubset(names):
             raise ValueError("Server archive is missing required root files")
         mod_names = [name for name in names if name.startswith("mods/") and name.endswith(".jar")]
-        if len(mod_names) != 9:
-            raise ValueError(f"Expected 9 server mods, found {len(mod_names)}")
+        if len(mod_names) != len(required_mods()):
+            raise ValueError(f"Server mod count mismatch: {len(mod_names)}")
         server_project_jar = project_jar_bytes(archive)
 
     with zipfile.ZipFile(world_zip) as archive:
@@ -390,6 +391,8 @@ def validate_outputs(server_zip: Path, world_zip: Path, client_zip: Path) -> Non
             raise ValueError("World import archive root/lock policy is invalid")
         if not any(name.startswith("dimensions/projectseele/geofront/") for name in names):
             raise ValueError("World import archive is missing the GeoFront dimension")
+        if "nerv_staff_r15.json" not in names:
+            raise ValueError("World import archive is missing the staff roster")
         if any("distanthorizons" in name.lower() for name in names):
             raise ValueError("World archive contains retired Distant Horizons cache")
 
@@ -406,8 +409,8 @@ def validate_outputs(server_zip: Path, world_zip: Path, client_zip: Path) -> Non
         if animation_path not in names:
             raise ValueError("Client archive is missing the R04 Unit-01 animation")
         mod_names = [name for name in names if name.startswith("mods/") and name.endswith(".jar")]
-        if len(mod_names) != 11:
-            raise ValueError(f"Expected 11 client mods, found {len(mod_names)}")
+        if len(mod_names) != len(required_mods()) + 2:
+            raise ValueError(f"Client mod count mismatch: {len(mod_names)}")
         client_project_jar = project_jar_bytes(archive)
         loose_animation = archive.read(animation_path)
     if hashlib.sha256(server_project_jar).digest() != hashlib.sha256(

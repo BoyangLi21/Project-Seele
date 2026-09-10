@@ -32,6 +32,7 @@ public class CommonEvents
                 EntryPlugCarrierEntity.createAttributes().build());
         event.put(ModEntities.TRAINING_PILOT.get(),
                 TrainingPilotEntity.createAttributes().build());
+        event.put(ModEntities.NERV_STAFF.get(),com.projectseele.entity.NervStaffEntity.createAttributes().build());
         event.put(ModEntities.SACHIEL.get(), com.projectseele.entity.SachielEntity.createAttributes().build());
         event.put(ModEntities.SHAMSHEL.get(), com.projectseele.entity.ShamshelEntity.createAttributes().build());
         event.put(ModEntities.ZERUEL.get(), com.projectseele.entity.ZeruelEntity.createAttributes().build());

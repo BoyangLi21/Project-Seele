@@ -87,6 +87,14 @@ public final class TrainingPilotEntity extends PathfinderMob
     }
 
     @Override
+    protected net.minecraft.world.InteractionResult mobInteract(net.minecraft.world.entity.player.Player player,net.minecraft.world.InteractionHand hand)
+    {
+        if(hand!=net.minecraft.world.InteractionHand.MAIN_HAND)return net.minecraft.world.InteractionResult.PASS;
+        if(player instanceof net.minecraft.server.level.ServerPlayer server)com.projectseele.world.NervStaffDialogue.pilot(server,this);
+        return net.minecraft.world.InteractionResult.sidedSuccess(level().isClientSide);
+    }
+
+    @Override
     public boolean removeWhenFarAway(double distance)
     {
         return false;

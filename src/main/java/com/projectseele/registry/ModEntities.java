@@ -213,6 +213,9 @@ public class ModEntities
                             .clientTrackingRange(12)
                             .build("training_pilot"));
 
+    public static final RegistryObject<EntityType<com.projectseele.entity.NervStaffEntity>> NERV_STAFF=ENTITY_TYPES.register("nerv_staff",
+            ()->EntityType.Builder.of(com.projectseele.entity.NervStaffEntity::new,MobCategory.MISC).sized(.6F,1.8F).clientTrackingRange(6).updateInterval(3).build("nerv_staff"));
+
     public static final RegistryObject<EntityType<SachielEntity>> SACHIEL = ENTITY_TYPES.register("sachiel",
             () -> EntityType.Builder.of(SachielEntity::new, MobCategory.MONSTER)
                     .sized(18.0F, 60.0F).fireImmune().clientTrackingRange(24).build("sachiel"));

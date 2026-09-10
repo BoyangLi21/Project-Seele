@@ -74,9 +74,9 @@ public final class NervHangarDoorRenderer
         VertexConsumer consumer = buffers.getBuffer(
                 RenderType.entityTranslucent(texture));
         logoHalf(poses, consumer, -12.0D - slide, -slide,
-                18.0D, 46.0D, -0.515D, 1.0F, 0.5F);
+                18.0D, 46.0D, -0.266D, 1.0F, 0.5F);
         logoHalf(poses, consumer, slide, 12.0D + slide,
-                18.0D, 46.0D, -0.515D, 0.5F, 0.0F);
+                18.0D, 46.0D, -0.266D, 0.5F, 0.0F);
     }
 
     private static void logoHalf(PoseStack poses, VertexConsumer consumer,
@@ -105,12 +105,7 @@ public final class NervHangarDoorRenderer
             int light, double x, double y, double z,
             float sx, float sy, float sz)
     {
-        poses.pushPose();
-        poses.translate(x, y, z);
-        poses.scale(sx, sy, sz);
-        Minecraft.getInstance().getBlockRenderer().renderSingleBlock(
-                DOOR, poses, buffers, light, OverlayTexture.NO_OVERLAY);
-        poses.popPose();
+        NervDoorFinish.leaf(poses,buffers,light,x,y,z,sx,sy,sz,true);
     }
 
     @Override

@@ -329,7 +329,7 @@ public final class S20MovingElevatorsAdapter
         return true;
     }
 
-    private static BlockPos controllerPosition(
+    static BlockPos controllerPosition(
             S20PhysicalElevatorDirector.LiftSpec spec,
             S20PhysicalElevatorDirector.Landing landing)
     {
@@ -939,7 +939,7 @@ public final class S20MovingElevatorsAdapter
                 || state.is(Blocks.BLACK_CONCRETE)
                 || state.is(Blocks.ORANGE_CONCRETE)
                 || state.is(Blocks.IRON_BLOCK)
-                || state.is(Blocks.POLISHED_DEEPSLATE);
+                || S20PhysicalElevatorDirector.isCabinFloor(state);
     }
 
     private static boolean isSurfaceLift(
@@ -1159,8 +1159,8 @@ public final class S20MovingElevatorsAdapter
             {
                 for (int dz = 0; dz < group.getCageSizeZ(); dz++)
                 {
-                    if (level.getBlockState(anchor.offset(dx, 0, dz))
-                            .is(Blocks.POLISHED_DEEPSLATE))
+                    if (S20PhysicalElevatorDirector.isCabinFloor(
+                            level.getBlockState(anchor.offset(dx, 0, dz))))
                     {
                         score++;
                     }
@@ -1307,8 +1307,8 @@ public final class S20MovingElevatorsAdapter
             {
                 for (int dz = 0; dz < group.getCageSizeZ(); dz++)
                 {
-                    if (!level.getBlockState(anchor.offset(dx, 0, dz))
-                            .is(Blocks.POLISHED_DEEPSLATE))
+                    if (!S20PhysicalElevatorDirector.isCabinFloor(
+                            level.getBlockState(anchor.offset(dx, 0, dz))))
                     {
                         return false;
                     }

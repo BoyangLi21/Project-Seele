@@ -31,7 +31,7 @@ public final class NervSlidingDoorRenderer
     public boolean shouldRender(NervSlidingDoorEntity entity,
             Frustum frustum, double cameraX, double cameraY, double cameraZ)
     {
-        return true;
+        return entity.distanceToSqr(cameraX,cameraY,cameraZ)<96*96&&frustum.isVisible(entity.getBoundingBox().inflate(3.2,2.2,3.2));
     }
 
     @Override
@@ -51,6 +51,7 @@ public final class NervSlidingDoorRenderer
         panel(poses, buffers, packedLight,
                 0.02D + slide, 0.0D, -0.09375D,
                 1.48F, 2.0F, 0.1875F);
+        NervDoorFinish.frame(poses,buffers,packedLight,1.5,2,door.getOpenProgress(partialTick)>=.82F);
         poses.popPose();
         super.render(door, yaw, partialTick, poses, buffers, packedLight);
     }
@@ -59,13 +60,7 @@ public final class NervSlidingDoorRenderer
             int light, double x, double y, double z,
             float sx, float sy, float sz)
     {
-        poses.pushPose();
-        poses.translate(x, y, z);
-        poses.scale(sx, sy, sz);
-        Minecraft.getInstance().getBlockRenderer().renderSingleBlock(
-                SILVER, poses, buffers, light,
-                OverlayTexture.NO_OVERLAY);
-        poses.popPose();
+        NervDoorFinish.leaf(poses,buffers,light,x,y,z,sx,sy,sz,false);
     }
 
     @Override

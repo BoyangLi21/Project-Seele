@@ -1302,7 +1302,7 @@ public final class S20PhysicalElevatorDirector
             for (int dz = -CABIN_RADIUS; dz <= CABIN_RADIUS; dz++)
             {
                 BlockPos position = centre.offset(dx, -1, dz);
-                if (level.getBlockState(position).equals(CABIN_FLOOR))
+                if (isCabinFloor(level.getBlockState(position)))
                 {
                     set(level, position, AIR);
                 }
@@ -2484,7 +2484,7 @@ public final class S20PhysicalElevatorDirector
             {
                 BlockState floor = level.getBlockState(
                         centre.offset(dx, -1, dz));
-                if (!floor.equals(CABIN_FLOOR)
+                if (!isCabinFloor(floor)
                         && !floor.is(MovingElevators.button_block))
                 {
                     return false;
@@ -2499,6 +2499,13 @@ public final class S20PhysicalElevatorDirector
             ServerLevel level, BlockPos centre)
     {
         return cabinFloorPresent(level, centre);
+    }
+
+    /** A material refresh must not make an existing authored car disappear. */
+    public static boolean isCabinFloor(BlockState state)
+    {
+        return state.equals(CABIN_FLOOR)
+                || state.is(com.projectseele.registry.ModBlocks.NERV_STRUCTURAL_PANEL.get());
     }
 
     /**
@@ -2639,7 +2646,7 @@ public final class S20PhysicalElevatorDirector
 
     private static boolean isCabinOwnedState(BlockState state)
     {
-        return state.equals(CABIN_FLOOR)
+        return isCabinFloor(state)
                 || state.equals(CABIN_WALL)
                 || state.equals(CABIN_ROOF)
                 || state.equals(CABIN_PANEL)

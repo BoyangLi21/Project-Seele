@@ -32,7 +32,7 @@ public final class FirstBattleClip
     }
     private static Data load()
     {
-        for(String revision:List.of("r14","r12"))
+        for(String revision:List.of("r15","r14","r12"))
         {
             Path local=Path.of("projectseele-local-maps/first_battle_"+revision+".json");
             if(!Files.isRegularFile(local))continue;

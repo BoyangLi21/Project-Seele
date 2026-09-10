@@ -78,6 +78,7 @@ public class ClientEvents
                 EntryPlugCarrierRenderer::new);
         event.registerEntityRenderer(ModEntities.TRAINING_PILOT.get(),
                 TrainingPilotRenderer::new);
+        event.registerEntityRenderer(ModEntities.NERV_STAFF.get(),com.projectseele.client.render.NervStaffRenderer::new);
         event.registerEntityRenderer(ModEntities.NERV_CARRIER_PLATFORM.get(),
                 NervCarrierPlatformRenderer::new);
         event.registerEntityRenderer(ModEntities.NERV_LIFT_CABIN.get(),

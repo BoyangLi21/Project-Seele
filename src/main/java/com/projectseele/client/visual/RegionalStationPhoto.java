@@ -58,6 +58,9 @@ public final class RegionalStationPhoto
                 if(++finishTicks>40)mc.stop();return;
             }
             if(++age<80)return;
+            // The walk audit temporarily owns the real player too. Let it
+            // restore that player before taking the photo itinerary snapshot.
+            if(MODE.equals("r10-world")&&!entered&&!com.projectseele.visual.RegionalSpatialAuditDriver.done)return;
             if(!entered)
             {
                 if(DETAIL)
@@ -81,7 +84,7 @@ public final class RegionalStationPhoto
                 }
                 entered=true;oldDistance=mc.options.renderDistance().get();oldGui=mc.options.hideGui;oldPause=mc.options.pauseOnLostFocus;oldCamera=mc.options.getCameraType();
                 Files.deleteIfExists(world.resolve("station_photo_ready.json"));
-                mc.options.pauseOnLostFocus=false;mc.options.renderDistance().set(R07?18:DETAIL?10:8);mc.options.hideGui=true;mc.options.setCameraType(net.minecraft.client.CameraType.FIRST_PERSON);mc.options.broadcastOptions();
+                mc.options.pauseOnLostFocus=false;mc.options.renderDistance().set(net.minecraft.util.Mth.clamp(Integer.getInteger("projectseele.photoRenderDistance",R07?18:DETAIL?10:8),4,24));mc.options.hideGui=true;mc.options.setCameraType(net.minecraft.client.CameraType.FIRST_PERSON);mc.options.broadcastOptions();
                 actionReady=VIEWS[view].action().isEmpty();
                 server.execute(()->{
                     var p=server.getPlayerList().getPlayers().get(0);oldPos=p.position();oldDimension=p.level().dimension();oldMode=p.gameMode.getGameModeForPlayer();oldYaw=p.getYRot();oldPitch=p.getXRot();oldFlying=p.getAbilities().flying;
@@ -164,7 +167,8 @@ public final class RegionalStationPhoto
             {
                 view++;sceneAge=0;frames=0;ready=false;captured=false;actionReady=VIEWS[view].action().isEmpty();server.execute(()->position(mc));
             }
-            if(Files.exists(world.resolve("regional_stop_requested"))||age>Math.max(2400,(VIEWS.length+3)*(R07?600:360))||(!MODE.equals("station-photo")&&captured&&view+1==VIEWS.length&&sceneAge>280))
+            int itineraryBudget=java.util.Arrays.stream(VIEWS).mapToInt(v->v.warmup()+140).sum()+1400;
+            if(Files.exists(world.resolve("regional_stop_requested"))||age>Math.max(2400,itineraryBudget)||(!MODE.equals("station-photo")&&captured&&view+1==VIEWS.length&&sceneAge>280))
             {
                 Files.deleteIfExists(world.resolve("regional_stop_requested"));finishing=true;
                 mc.options.hideGui=oldGui;mc.options.renderDistance().set(oldDistance);mc.options.pauseOnLostFocus=oldPause;mc.options.setCameraType(oldCamera);

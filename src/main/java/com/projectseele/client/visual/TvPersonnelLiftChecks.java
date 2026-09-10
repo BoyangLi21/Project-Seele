@@ -32,7 +32,7 @@ import java.util.Map;
 public final class TvPersonnelLiftChecks
 {
     private static final String MODE=System.getProperty("projectseele.tvWorldPreviewReview", "");
-    private static final boolean ENABLED = MODE.equals("lifts")||MODE.equals("lifts-surface")||MODE.equals("lifts-cages")||MODE.equals("lifts-commander");
+    private static final boolean ENABLED = MODE.equals("lifts")||MODE.equals("lifts-surface")||MODE.equals("lifts-cages")||MODE.equals("lifts-commander")||MODE.equals("lifts-command");
     private static final int FIRST_LIFT=MODE.equals("lifts-cages")?1:MODE.equals("lifts-surface")?3:0;
     private static final int LAST_LIFT=MODE.equals("lifts-cages")?3:Integer.MAX_VALUE;
     private static final List<String> TRACE = new ArrayList<>();
@@ -87,6 +87,7 @@ public final class TvPersonnelLiftChecks
             ServerPlayer player = server.getPlayerList().getPlayers().get(0);
             var specs = S20PhysicalElevatorDirector.s20Lifts(level);
             if(MODE.equals("lifts-commander"))specs=specs.stream().filter(spec->spec.id().equals(S20PhysicalElevatorDirector.COMMANDER_OFFICE_LIFT_ID)).toList();
+            if(MODE.equals("lifts-command"))specs=specs.stream().filter(spec->spec.id().equals(S20PhysicalElevatorDirector.commandRearLift().id())).toList();
             if (lift == Math.min(specs.size(),LAST_LIFT))
             {
                 log("COMPLETE lifts=" + (lift-FIRST_LIFT) + " firstLift="+FIRST_LIFT+" passengerTrips=" + totalTrips + " maxStep=" + maxStep);
@@ -122,7 +123,8 @@ public final class TvPersonnelLiftChecks
             ElevatorGroup group = controller.getGroup();
             if (!ready)
             {
-                require(!group.isMoving(), "starts at rest");
+                if(group.isMoving()){player.getAbilities().flying=true;player.onUpdateAbilities();return;}
+                player.getAbilities().flying=false;player.onUpdateAbilities();
                 int found = 0;
                 for (int floor = 0; floor < group.getFloorCount(); floor++)
                     if (group.isCageAvailableAt(floor, true, null))
@@ -134,7 +136,9 @@ public final class TvPersonnelLiftChecks
                 initial = source;
                 ROUTE.clear();
                 for (var stop : spec.stops()) if (stop.walkY() != source) ROUTE.add(stop.walkY());
-                ROUTE.add(initial);
+                int finalFloor=Integer.getInteger("projectseele.liftReturnY",initial);
+                require(spec.stops().stream().anyMatch(stop->stop.walkY()==finalFloor),"valid return floor");
+                if(ROUTE.isEmpty()||ROUTE.get(ROUTE.size()-1)!=finalFloor)ROUTE.add(finalFloor);
                 // Let the client acknowledge the setup teleport before the native
                 // car moves, especially on the long surface lift.
                 player.teleportTo(level,centre.getX()+.5,source,centre.getZ()+.5,0,0);

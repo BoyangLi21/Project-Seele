@@ -39,7 +39,7 @@ public final class NervLiftDoorRenderer
     public boolean shouldRender(NervLiftDoorEntity entity, Frustum frustum,
             double cameraX, double cameraY, double cameraZ)
     {
-        return true;
+        return entity.distanceToSqr(cameraX,cameraY,cameraZ)<144*144&&frustum.isVisible(entity.getBoundingBox().inflate(entity.getDoorWidth()+1,entity.getDoorHeight()+1,entity.getDoorWidth()+1));
     }
 
     @Override
@@ -68,6 +68,7 @@ public final class NervLiftDoorRenderer
         panel(poses, buffers, packedLight, material,
                 rightX, 0.0D, -0.09375D,
                 leafWidth, door.getDoorHeight(), 0.1875F);
+        NervDoorFinish.frame(poses,buffers,packedLight,half,door.getDoorHeight(),progress>=.82F);
         if (door.getDoorStyle() == NervLiftDoorEntity.STYLE_NERV_BLACK)
         {
             renderSplitLogo(poses, buffers, leftX, rightX, leafWidth,
@@ -81,13 +82,7 @@ public final class NervLiftDoorRenderer
             int light, BlockState material, double x, double y, double z,
             float sx, float sy, float sz)
     {
-        poses.pushPose();
-        poses.translate(x, y, z);
-        poses.scale(sx, sy, sz);
-        Minecraft.getInstance().getBlockRenderer().renderSingleBlock(
-                material, poses, buffers, light,
-                OverlayTexture.NO_OVERLAY);
-        poses.popPose();
+        NervDoorFinish.leaf(poses,buffers,light,x,y,z,sx,sy,sz,material==BLACK);
     }
 
     private static void renderSplitLogo(PoseStack poses,
@@ -105,9 +100,9 @@ public final class NervLiftDoorRenderer
         double y0 = Math.max(0.25D, height * 0.08D);
         double y1 = height - y0;
         logoHalf(poses, consumer, leftX, leftX + leafWidth,
-                y0, y1, -0.102D, 1.0F, 0.5F);
+                y0, y1, -0.108D, 1.0F, 0.5F);
         logoHalf(poses, consumer, rightX, rightX + leafWidth,
-                y0, y1, -0.102D, 0.5F, 0.0F);
+                y0, y1, -0.108D, 0.5F, 0.0F);
     }
 
     private static void logoHalf(PoseStack poses, VertexConsumer consumer,

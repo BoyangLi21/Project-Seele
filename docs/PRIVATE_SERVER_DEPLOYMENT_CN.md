@@ -4,14 +4,14 @@
 
 ## 一、服务器面板部署
 
-前提：Minecraft 1.20.1、Forge 47.4.10、Java 17。服务器有 18 GB 内存时，建议给 Java 设置 `-Xms14G -Xmx14G`，余下约 2 GB 留给系统和面板。
+前提：Minecraft 1.20.1、Forge 47.4.10、Java 17。当前包默认服务器堆 `-Xms2G -Xmx8G`、视距 6、模拟距离 5；再按实际并发与内存调整。不要添加 `DisableExplicitGC`，它与远景缓存使用的堆外内存回收不合适。
 
 1. 完全停止服务器，并先用面板做一次备份。
 2. 在文件管理页进入 `/home/container`。
 3. 上传 `Project_SEELE_Server_Files_*.zip`，解压并允许覆盖 `mods/`、`config/`、`projectseele-local-maps/`、`server.properties` 和 `user_jvm_args.txt`。
 4. 打开“导入存档”，上传 `Project_SEELE_World_Import_*.zip`。压缩包根目录已经是 `level.dat`，不要再手工套一层目录。
-5. 若面板把导入后的存档命名为别的名字，把 `server.properties` 的 `level-name` 改成实际目录名；默认值是 `SEELE_S20_RECOVERY_R28`。
-6. 在面板启动参数中确认 Java 17 与 14 GB 固定堆。部分面板不会读取 `user_jvm_args.txt`，此时以面板的内存设置为准。
+5. 若面板把导入后的存档命名为别的名字，把 `server.properties` 的 `level-name` 改成实际目录名；当前正式目录是 `SEELE_TV_WORLD_PREVIEW_20260906`。
+6. 在面板启动参数中确认 Java 17 与分配的堆。部分面板不会读取 `user_jvm_args.txt`，此时以面板的内存设置为准。
 7. 启动服务器。控制台应出现 `Project SEELE initialized`，并且不能有 `Missing mandatory dependencies`。
 8. 在控制台执行 `op <你的正版玩家名>`，然后只把两名开发者加入白名单。
 
@@ -23,9 +23,13 @@
 2. 给客户端分配 6–8 GB 内存。显卡驱动里确认 `javaw.exe` 使用独立显卡。
 3. 将 `Project_SEELE_Client_Pack_*.zip` 解压到该实例的 `.minecraft` 根目录，允许合并 `mods/`、`config/`、`resourcepacks/` 和 `projectseele-local-maps/`。
 4. 游戏内把 `eva_real_model` 资源包启用并置于最高优先级。
-5. 连接服务器地址 `mc9.r9mc.cn:50136`（若面板后来更换端口，以面板显示为准）。
+5. 连接服务器面板当前显示的地址与端口。
 
-客户端和服务器的五个模组版本必须一致：Project SEELE、GeckoLib、Ars Nouveau、Curios、Another Furniture。Create 与 Create: Connected 已退役，客户端和服务器都不得保留其 JAR。
+客户端和服务器必须使用同批次的公共模组：Project SEELE、GeckoLib、Ars Nouveau、Curios、Another Furniture、Moving Elevators 及两个 SuperMartijn 库、MTR、Superb Warfare、Kotlin for Forge。当前包为 11 个顶层服务器 JAR，另有模组内嵌依赖；不要另加这些依赖的冲突版本。Farsight 与 Cupboard 只在普通客户端包中；可选低配方案改用 Distant Horizons、Embeddium、FerriteCore。
+
+R15 的人员名单 `nerv_staff_r15.json`、区域迁移元数据 `regional_plan.json`、全部 `data/` 和各维度的 `entities/` 都要随存档迁移。只复制地形会丢失人员身份；漏掉区域迁移元数据会把控制系统指向旧机库坐标。
+
+低配与远景的使用方法见 [R15 人员、动作与远景记录](STAFF_WORLD_R15.md)。远景必须保留地下的多层结构，并先完成已有地图的缓存；不能把尚未生成的 LOD 缺面当成地图破损。当前打包器默认不带旧 DH 缓存，服务器可用 `PRE_EXISTING_ONLY` 从现有地图生成和发送远景，不会扩张新地形。
 
 ## 三、本轮人工验证
 
