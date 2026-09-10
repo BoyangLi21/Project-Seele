@@ -108,6 +108,9 @@ public final class LocalTriangleMeshLayer<T extends GeoAnimatable> extends GeoRe
 
         Matrix4f pose = poseStack.last().pose();
         Matrix3f normal = poseStack.last().normal();
+        if(com.projectseele.client.visual.EvaDorsalR13Audit.ENABLED&&!this.fullBright&&animatable instanceof EvaUnit01Entity eva
+                &&this.getRenderer() instanceof EvaUnit01Renderer renderer)
+            com.projectseele.client.visual.EvaDorsalR13Audit.capture(eva,bone.getName(),renderer.renderedMeshTransform(pose,eva,partialTick));
         if (animatable instanceof EvaUnit01Entity eva
                 && eva.getWeapon() == EvaUnit01Entity.WEAPON_RIFLE
                 && "cannon".equals(bone.getName())

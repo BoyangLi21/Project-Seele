@@ -17,6 +17,7 @@ import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Vector3f;
+import org.joml.Quaternionf;
 
 /** Original rail hoist: twin girders, reeved winches, four ropes and a two-axis plug chuck. */
 public final class PlugGantryRenderer
@@ -24,7 +25,7 @@ public final class PlugGantryRenderer
     private static final ResourceLocation PAINT=new ResourceLocation("minecraft","textures/block/white_concrete.png");
     private static final int GREEN=0x566a51, EDGE=0x8d9a86, STEEL=0xadb7bb, DARK=0x222d32, GOLD=0xb69347;
     private final PoseStack poses; private final VertexConsumer buffer; private final int light;private final BufferBuilder baking;
-    private static VertexBuffer TOP,YOKE,CHUCK;
+    private static VertexBuffer TOP,YOKE,CHUCK,JAW_LEFT,JAW_RIGHT;
     private PlugGantryRenderer(PoseStack poses, MultiBufferSource buffers, int light)
     {this.poses=poses;this.buffer=buffers.getBuffer(RenderType.entitySolid(PAINT));this.light=light;this.baking=null;}
     private PlugGantryRenderer(BufferBuilder builder){this.poses=new PoseStack();this.buffer=builder;this.light=15728880;this.baking=builder;}
@@ -36,7 +37,23 @@ public final class PlugGantryRenderer
         Vec3 lower=v(0,entity.getCraneBottomOffset(partial),0);
         EntryPlugCarrierEntity plug=entity.getCranePlug();
         com.projectseele.world.RigidTransform transform=plug==null?null:plug.getInterpolatedCanonicalTransform(partial);
-        if(transform!=null)lower=transform.transformPoint(EntryPlugKinematics.CRANE_ATTACHMENT_P).subtract(entity.getPosition(partial));
+        Quaternionf stowedRotation=new Quaternionf().rotationX((float)-Math.PI/2),rotation=new Quaternionf(stowedRotation);
+        Vec3 anchor=entity.hasCraneReference()?entity.getCraneReferenceAnchor():lower;
+        boolean coupled=transform!=null&&!(plug.getInsertionStage()==EntryPlugCarrierEntity.STAGE_EJECTING&&plug.getInsertionProgress()>=99);
+        if(transform!=null){anchor=transform.transformPoint(EntryPlugKinematics.CRANE_ATTACHMENT_P).subtract(entity.getPosition(partial));rotation=transform.rotation();}
+        else if(entity.hasCraneReference())rotation=entity.getCraneReferenceRotation();
+        float released=1;
+        if(coupled){lower=anchor;released=0;}
+        else if(transform!=null||entity.hasCraneReference())
+        {
+            double travel=Math.max(1,-2-anchor.y),linear=Math.max(0,Math.min(1,(lower.y-anchor.y)/travel));
+            double rise=travel*com.projectseele.entity.EvaDorsalMechanism.smooth((float)linear);
+            Vector3f forward=rotation.transform(new Vector3f(0,0,1));Vec3 axis=v(forward.x,forward.y,forward.z);
+            double axial=Math.min(rise,2*Math.max(.25,axis.y));
+            lower=anchor.add(axis.scale(axial/Math.max(.25,axis.y))).add(0,rise-axial,0);
+            released=(float)Math.max(0,Math.min(1,rise/.65));
+            rotation.slerp(stowedRotation,com.projectseele.entity.EvaDorsalMechanism.smooth((float)((rise-2)/Math.max(1,travel-2))));
+        }
         Vec3 yoke=lower.add(0,1.6,0);
         for(double x:new double[]{-2.4,2.4})for(double z:new double[]{-.78,.78})
         {
@@ -47,8 +64,13 @@ public final class PlugGantryRenderer
         // The gimbal centre and its rotating collar derive from the capsule's exact render transform.
         rod(yoke.add(-2.45,-.2,0),lower.add(-1.50,0,0),.17,STEEL);rod(yoke.add(2.45,-.2,0),lower.add(1.50,0,0),.17,STEEL);
         poses.pushPose();poses.translate(lower.x,lower.y,lower.z);
-        if(transform!=null)poses.mulPose(transform.rotation());
+        poses.mulPose(rotation);
         gpu(chuckMesh(),poses,light);
+        for(double side:new double[]{-1,1})
+        {
+            poses.pushPose();poses.translate(side*.55*released,0,0);gpu(jawMesh(side),poses,light);poses.popPose();
+            hose(side,released);
+        }
         poses.popPose();
     }
     private static VertexBuffer bake(java.util.function.Consumer<PlugGantryRenderer> author)
@@ -59,6 +81,11 @@ public final class PlugGantryRenderer
     private static VertexBuffer topMesh(){if(TOP==null)TOP=bake(PlugGantryRenderer::top);return TOP;}
     private static VertexBuffer yokeMesh(){if(YOKE==null)YOKE=bake(PlugGantryRenderer::yoke);return YOKE;}
     private static VertexBuffer chuckMesh(){if(CHUCK==null)CHUCK=bake(PlugGantryRenderer::chuck);return CHUCK;}
+    private static VertexBuffer jawMesh(double side)
+    {
+        if(side<0){if(JAW_LEFT==null)JAW_LEFT=bake(r->r.jaw(-1));return JAW_LEFT;}
+        if(JAW_RIGHT==null)JAW_RIGHT=bake(r->r.jaw(1));return JAW_RIGHT;
+    }
     private static void gpu(VertexBuffer mesh,PoseStack poses,int light)
     {
         var type=RenderType.debugQuads();type.setupRenderState();float illumination=.32F+.68F*Math.max((light>>4)&15,(light>>20)&15)/15F;
@@ -149,6 +176,40 @@ public final class PlugGantryRenderer
         housing(-.30,1.47,-.28,.60,.40,.58,.12,DARK);
         cylinder(v(0,1.67,.30),v(0,1.67,.42),.11,0,STEEL,32);
         cylinder(v(0,1.67,.421),v(0,1.67,.435),.076,0,0x395868,32);
+        // Toothed drive ring and axial actuator behind the plug tail.
+        for(int i=0;i<48;i++)
+        {
+            double a=2*Math.PI*i/48,b=a+.065;Vec3 r=v(Math.cos(a),Math.sin(a),0),s=v(Math.cos(b),Math.sin(b),0);
+            Vec3 p=r.scale(1.61).add(0,0,.12),q=s.scale(1.61).add(0,0,.12),u=s.scale(1.78).add(0,0,.12),w=r.scale(1.78).add(0,0,.12);
+            quad(p,q,u,w,DARK);quad(p.add(0,0,.18),w.add(0,0,.18),u.add(0,0,.18),q.add(0,0,.18),STEEL);quad(w,u,u.add(0,0,.18),w.add(0,0,.18),DARK);
+        }
+        cylinder(v(0,1.85,-.62),v(0,1.85,.90),.26,0,STEEL,40);
+        cylinder(v(0,1.85,-1.42),v(0,1.85,-.58),.09,0,0xd0d7d9,24);
+        housing(-.19,1.71,.86,.38,.28,.26,.06,DARK);
+    }
+    private void jaw(double side)
+    {
+        housing(side>0?1.58:-2.92,-1.32,-.48,1.34,2.74,.66,.28,GREEN);
+        for(double y:new double[]{-.94,.94})
+        {
+            cylinder(v(side*2.04,y,-.57),v(side*2.04,y,.28),.22,.085,DARK,32);
+            cylinder(v(side*2.04,y,-.62),v(side*2.04,y,.34),.085,0,STEEL,20);
+            rod(v(side*1.75,y,-.42),v(side*.75,y*.37,-1.10),.13,STEEL);
+            cylinder(v(side*.75,y*.37,-1.20),v(side*.75,y*.37,-.97),.17,0,DARK,24);
+        }
+        housing(side>0?1.76:-2.64,-.38,.20,.88,.76,.25,.15,EDGE);
+        for(int i=0;i<4;i++)box(side>0?1.84:-2.56,-.27+i*.15,.46,.72,.055,.04,DARK);
+    }
+    private void hose(double side,float released)
+    {
+        for(int line=0;line<2;line++)
+        {
+            Vec3 a=v(side*1.18,-.92+line*.23,.46),b=v(side*(2.35+.55*released),-1.78,.98),c=v(side*(3.20+.55*released),1.60,.85),d=v(side*(2.10+.55*released),1.20,.32);Vec3 previous=a;
+            for(int i=1;i<=18;i++)
+            {
+                double t=i/18D,u=1-t;Vec3 next=a.scale(u*u*u).add(b.scale(3*u*u*t)).add(c.scale(3*u*t*t)).add(d.scale(t*t*t));rod(previous,next,line==0?.070:.055,line==0?0x8e272c:DARK);previous=next;
+            }
+        }
     }
     /** Extruded chamfered casting, with an inset lid and machined edge. */
     private void housing(double x,double y,double z,double w,double h,double depth,double bevel,int colour)

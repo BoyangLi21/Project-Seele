@@ -2,6 +2,7 @@ package com.projectseele.world;
 
 import com.projectseele.entity.EvaScale;
 import com.projectseele.entity.EvaUnit01Entity;
+import com.projectseele.entity.EvaDorsalProfile;
 import net.minecraft.util.Mth;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
@@ -65,21 +66,9 @@ public final class EntryPlugKinematics
     public static final Vec3 CRANE_ATTACHMENT_P =
             modelMarker(0.0D, 0.0D, 48.5D);
 
-    /*
-     * Measured from the reviewed Tiger mesh rather than from the torso box:
-     * the symmetric pair of dorsal guide points behind the head is centred at
-     * model y=167.7 and rear z=23.6.  At the 5/16 block-per-unit render scale
-     * that puts the insertion axis 52.4 blocks above the entity origin.  The
-     * previous 50.5-block anchor was almost two blocks low and entered below
-     * the authored pair even though its rear depth was already correct.
-     */
-    public static final double SOCKET_HEIGHT_BLOCKS = 52.9D;
-    /*
-     * The measured guide pair is one block farther forward than the previous
-     * provisional anchor.  This mouth position and the 30-degree dorsal rake
-     * seat the capsule between those two points without crossing the chest.
-     */
-    public static final double SOCKET_REAR_BLOCKS = 4.35D;
+    /** Unit-01 compatibility values; per-airframe code uses its complete profile. */
+    public static final double SOCKET_HEIGHT_BLOCKS = EvaDorsalProfile.byVariant(1).centreBlocks().y;
+    public static final double SOCKET_REAR_BLOCKS = EvaDorsalProfile.byVariant(1).centreBlocks().z;
     private static final Vec3 WORLD_UP = new Vec3(0.0D, 1.0D, 0.0D);
     /** The bridge cradle holds the capsule almost horizontal (15 degrees). */
     private static final double DOCK_REAR_AXIS =
@@ -91,18 +80,18 @@ public final class EntryPlugKinematics
      * The matching rear anchor keeps the aggressively inserted tip behind the
      * torso centre plane instead of allowing it to cross the chest.
      */
-    private static final double SOCKET_REAR_AXIS = 0.5D;
-    private static final double SOCKET_UP_AXIS = 0.8660254037844386D;
 
     private EntryPlugKinematics() {}
 
     public static RigidTransform socketTransform(EvaUnit01Entity unit)
     {
         Vec3 rear = unit.getRearDirection();
-        RigidTransform orientation = verticalSocketOrientation(rear);
+        var profile=EvaDorsalProfile.of(unit);Vec3 marker=profile.centreBlocks();
+        RigidTransform orientation = verticalSocketOrientation(rear,profile);
         Vec3 origin = unit.position()
-                .add(rear.scale(SOCKET_REAR_BLOCKS))
-                .add(0.0D, SOCKET_HEIGHT_BLOCKS, 0.0D);
+                .add(rear.scale(marker.z))
+                .add(rear.cross(WORLD_UP).scale(marker.x))
+                .add(0.0D, marker.y, 0.0D);
         RigidTransform normal=new RigidTransform(origin,
                 orientation.qx(), orientation.qy(),
                 orientation.qz(), orientation.qw());
@@ -175,11 +164,11 @@ public final class EntryPlugKinematics
      * the two guide points behind the head. The horizontal rear vector fixes
      * roll, so all three cages present the hatch on the same side.
      */
-    private static RigidTransform verticalSocketOrientation(Vec3 rear)
+    private static RigidTransform verticalSocketOrientation(Vec3 rear,EvaDorsalProfile.Profile profile)
     {
         Vec3 horizontalRear = rear.multiply(1.0D, 0.0D, 1.0D).normalize();
-        Vec3 outward = horizontalRear.scale(SOCKET_REAR_AXIS)
-                .add(WORLD_UP.scale(SOCKET_UP_AXIS)).normalize();
+        Vec3 outward = horizontalRear.scale(profile.outwardModel().z)
+                .add(WORLD_UP.scale(profile.outwardModel().y)).normalize();
         Vec3 hatchUp = WORLD_UP.subtract(
                 outward.scale(WORLD_UP.dot(outward))).normalize();
         Vec3 right = hatchUp.cross(outward).normalize();

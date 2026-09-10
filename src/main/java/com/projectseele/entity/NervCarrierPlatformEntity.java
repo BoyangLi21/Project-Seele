@@ -17,6 +17,8 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.material.PushReaction;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
+import org.joml.Quaternionf;
+import org.joml.Vector3f;
 
 import com.projectseele.world.S20PhysicalElevatorDirector;
 
@@ -63,8 +65,26 @@ public final class NervCarrierPlatformEntity extends Entity
             SynchedEntityData.defineId(NervCarrierPlatformEntity.class,
                     EntityDataSerializers.INT);
     private static final EntityDataAccessor<Integer> DATA_CRANE_PLUG = SynchedEntityData.defineId(NervCarrierPlatformEntity.class,EntityDataSerializers.INT);
-    public void linkCranePlug(EntryPlugCarrierEntity plug){this.entityData.set(DATA_CRANE_PLUG,plug==null?-1:plug.getId());}
+    private static final EntityDataAccessor<Boolean> DATA_CRANE_REFERENCE = SynchedEntityData.defineId(NervCarrierPlatformEntity.class,EntityDataSerializers.BOOLEAN);
+    private static final EntityDataAccessor<Vector3f> DATA_CRANE_ANCHOR = SynchedEntityData.defineId(NervCarrierPlatformEntity.class,EntityDataSerializers.VECTOR3);
+    private static final EntityDataAccessor<Quaternionf> DATA_CRANE_ROTATION = SynchedEntityData.defineId(NervCarrierPlatformEntity.class,EntityDataSerializers.QUATERNION);
+    public void linkCranePlug(EntryPlugCarrierEntity plug)
+    {
+        boolean coupled=plug!=null&&!plug.isLockedToEva();
+        if(plug!=null&&(coupled||!hasCraneReference()))
+        {
+            var pose=plug.getCanonicalTransform();Vec3 anchor=pose.transformPoint(com.projectseele.world.EntryPlugKinematics.CRANE_ATTACHMENT_P).subtract(position());
+            if(coupled||(anchor.horizontalDistance()<12&&anchor.y<2&&anchor.y>-90))
+            {
+                entityData.set(DATA_CRANE_ANCHOR,new Vector3f((float)anchor.x,(float)anchor.y,(float)anchor.z));entityData.set(DATA_CRANE_ROTATION,pose.rotation());entityData.set(DATA_CRANE_REFERENCE,true);
+            }
+        }
+        this.entityData.set(DATA_CRANE_PLUG,coupled?plug.getId():-1);
+    }
     public EntryPlugCarrierEntity getCranePlug(){var e=level().getEntity(entityData.get(DATA_CRANE_PLUG));return e instanceof EntryPlugCarrierEntity p?p:null;}
+    public boolean hasCraneReference(){return entityData.get(DATA_CRANE_REFERENCE);}
+    public Vec3 getCraneReferenceAnchor(){var p=entityData.get(DATA_CRANE_ANCHOR);return new Vec3(p.x,p.y,p.z);}
+    public Quaternionf getCraneReferenceRotation(){return new Quaternionf(entityData.get(DATA_CRANE_ROTATION));}
     private static final int CONTROL_TIMEOUT_TICKS = 40;
     public static final int LIFT_IDLE_OPEN = 0;
     public static final int LIFT_DOOR_CLOSING = 1;
@@ -129,6 +149,9 @@ public final class NervCarrierPlatformEntity extends Entity
         this.entityData.define(DATA_RESTRAINT_GANTRY, false);
         this.entityData.define(DATA_PLUG_CRANE, false);
         this.entityData.define(DATA_CRANE_PLUG, -1);
+        this.entityData.define(DATA_CRANE_REFERENCE,false);
+        this.entityData.define(DATA_CRANE_ANCHOR,new Vector3f());
+        this.entityData.define(DATA_CRANE_ROTATION,new Quaternionf());
         this.entityData.define(DATA_CRANE_BOTTOM_OFFSET, -2000);
         this.entityData.define(DATA_LCL_LEVEL_MILLI, 0);
     }

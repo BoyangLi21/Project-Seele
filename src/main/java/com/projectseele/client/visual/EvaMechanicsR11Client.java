@@ -30,6 +30,11 @@ public final class EvaMechanicsR11Client
         {
             if(camera==null){camera=net.minecraft.world.entity.EntityType.ARMOR_STAND.create(mc.level);camera.setInvisible(true);}
             String view=EvaMechanicsR11Review.view;var origin=eva.getPosition(event.renderTickTime);var p=origin.add(view.equals("dorsal")?22:view.equals("combat")?70:45,view.equals("dorsal")?66:39,view.equals("dorsal")?-30:view.equals("combat")?30:48);if(view.equals("dorsal"))p=origin.add(new net.minecraft.world.phys.Vec3(22,63,-25).yRot((float)-Math.toRadians(eva.getYRot())));var target=origin.add(0,view.equals("dorsal")?54:view.equals("laser")?49:32,view.equals("combat")?24:0);
+            if(view.equals("dorsal"))
+            {
+                var socket=com.projectseele.world.EntryPlugKinematics.socketTransform(eva).translation();
+                p=socket.add(new net.minecraft.world.phys.Vec3(12,14,-17).yRot((float)-Math.toRadians(eva.getYRot())));target=socket.add(0,2,0);
+            }
             settledFrames=view.equals(framedView)?settledFrames+1:0;framedView=view;
             if(view.startsWith("crane"))
             {
@@ -40,6 +45,8 @@ public final class EvaMechanicsR11Client
                     p=hoist.add(detail?12:20,detail?6:8,detail?13:25);target=hoist.add(0,detail?0:-9,0);
                 }
             }
+            var obstruction=mc.level.clip(new net.minecraft.world.level.ClipContext(target,p,net.minecraft.world.level.ClipContext.Block.COLLIDER,net.minecraft.world.level.ClipContext.Fluid.NONE,mc.player));
+            if(obstruction.getType()!=net.minecraft.world.phys.HitResult.Type.MISS)p=obstruction.getLocation().subtract(p.subtract(target).normalize().scale(.65));
             var d=target.subtract(p);
             camera.setPos(p.x,p.y-camera.getEyeHeight(),p.z);camera.xo=camera.xOld=camera.getX();camera.yo=camera.yOld=camera.getY();camera.zo=camera.zOld=camera.getZ();camera.setYRot((float)Math.toDegrees(Math.atan2(-d.x,d.z)));camera.yRotO=camera.yHeadRot=camera.yHeadRotO=camera.getYRot();camera.setXRot((float)-Math.toDegrees(Math.atan2(d.y,d.horizontalDistance())));camera.xRotO=camera.getXRot();mc.options.hideGui=true;mc.options.setCameraType(net.minecraft.client.CameraType.FIRST_PERSON);mc.setCameraEntity(camera);
         }

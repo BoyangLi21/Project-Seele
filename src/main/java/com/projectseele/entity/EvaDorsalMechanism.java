@@ -30,7 +30,7 @@ public final class EvaDorsalMechanism
     public static void prepare(EvaUnit01Entity eva, int ticks)
     { set(eva, smooth((ticks-12)/22F), smooth(ticks/22F)); }
     public static void seal(EvaUnit01Entity eva, int ticks)
-    { set(eva, 1-smooth(ticks/26F), 1-smooth((ticks-30)/26F)); }
+    { set(eva, 1-smooth((ticks-12)/24F), 1-smooth((ticks-38)/22F)); }
     public static float open(EvaUnit01Entity eva) { return sample(eva, true); }
     public static float bow(EvaUnit01Entity eva) { return sample(eva, false); }
     public static boolean eyesEnabled(EvaUnit01Entity eva)

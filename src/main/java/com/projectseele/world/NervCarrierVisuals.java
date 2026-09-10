@@ -153,7 +153,7 @@ public final class NervCarrierVisuals
         // vanilla can interpolate the trolley's horizontal travel.
         crane.moveControlled(x, trolleyY, z);
         var plug=EntryPlugDirector.canonical(level,safeVariant);
-        crane.linkCranePlug(plug!=null&&!plug.isLockedToEva()?plug:null);
+        crane.linkCranePlug(plug);
 
         // Runtime reloads used to leave multiple opaque crane meshes at the
         // same anchor. Keep one deterministic owner per machine.

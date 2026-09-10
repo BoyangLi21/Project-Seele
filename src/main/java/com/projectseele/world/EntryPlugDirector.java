@@ -1238,7 +1238,7 @@ public final class EntryPlugDirector
             return;
         }
         if(ticks<=36)com.projectseele.entity.EvaDorsalMechanism.prepare(unit,ticks);
-        else if(ticks>=141)com.projectseele.entity.EvaDorsalMechanism.seal(unit,ticks-141);
+        else if(ticks>=137)com.projectseele.entity.EvaDorsalMechanism.seal(unit,ticks-137);
         RigidTransform pose = EntryPlugKinematics.insertionTransform(
                 unit, EntryPlugKinematics.cageDockTransform(rest),
                 1.0D - linear);
@@ -1249,7 +1249,13 @@ public final class EntryPlugDirector
                         * (1.0D - linear)));
         Vec3 craneEye = pose.transformPoint(
                 EntryPlugKinematics.CRANE_ATTACHMENT_P);
-        updateCables(level, variant, craneEye.y, craneEye.z, true);
+        double hookY=craneEye.y;
+        if(ticks<=36)
+        {
+            double stowed=hangarBed(level,variant).getY()+EvaHangarBuilder.craneRailAboveBed()-2;
+            hookY=stowed+(hookY-stowed)*smootherstep(ticks/36D);
+        }
+        updateCables(level, variant, hookY, craneEye.z, true);
         if (ticks >= EJECTION_TICKS)
         {
             int nextStage = plug.isVehicle()
@@ -1669,7 +1675,7 @@ public final class EntryPlugDirector
             previous = new CranePose(rest.z, rest.y);
         }
         CranePose stowed = new CranePose(previous.z(),
-                Math.min(trolleyY - 2, previous.bottomY() + 2));
+                Math.min(trolleyY - 2, previous.bottomY() + .5));
         poses[variant] = stowed;
         CRANE_SIGNATURE.remove(variant);
         NervCarrierVisuals.updatePlugCrane(level, variant,

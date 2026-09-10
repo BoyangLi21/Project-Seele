@@ -1384,10 +1384,9 @@ public final class EvaLogisticsDirector
                 unit.setNervLogisticsLocked(true);
                 int ticks = entry.ticks() + 1;
                 com.projectseele.entity.EvaDorsalMechanism.seal(unit,ticks);
-                // The hoist recovers continuously throughout this 60-tick
-                // mechanical lock phase. FacilityV2EvaRuntime advances its
-                // lower yoke by two blocks per call and becomes idempotent at
-                // the ceiling, leaving the launch/transfer lane unobstructed.
+                // Recover the coupling before the cover seals. The S20
+                // model hoist advances half a block per tick and eases its
+                // visible return; the lane is clear before locking ends.
                 EntryPlugDirector.ensureCraneStowed(level, variant);
                 if (!EntryPlugDirector.hasLaunchLock(level, variant, unit))
                 {

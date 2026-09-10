@@ -78,6 +78,7 @@ public final class FirstBattleClip
                     }
                 for(String required:List.of("root_blocks","eye_blocks","hand_l_blocks","hand_r_blocks"))
                     if(!curves.containsKey(required))throw new IllegalArgumentException("Missing first-battle curve "+required);
+                if(name.equals("eva"))adaptDorsalCurves(root,curves);
                 roles.put(name,new Role(bones,qs,ps,Map.copyOf(curves)));
             }
             var camera=root.getAsJsonObject("camera");var f=camera.getAsJsonArray("fov");float[] fov=new float[f.size()];for(int i=0;i<fov.length;i++)fov[i]=f.get(i).getAsFloat();
@@ -96,6 +97,22 @@ public final class FirstBattleClip
     {
         if(curve.length!=count)throw new IllegalArgumentException("First-battle curve length mismatch");
         for(Vec3 point:curve)if(!Double.isFinite(point.x)||!Double.isFinite(point.y)||!Double.isFinite(point.z))throw new IllegalArgumentException("Invalid first-battle curve point");
+    }
+    private static void adaptDorsalCurves(JsonObject root,Map<String,Vec3[]> curves)
+    {
+        if(root.has("dorsal_profile_version")&&root.get("dorsal_profile_version").getAsInt()>=13)return;
+        Vec3[] points=curves.get("socket_blocks"),outs=curves.get("socket_outward_blocks"),ups=curves.get("socket_up_blocks");
+        if(points==null||outs==null||ups==null)return;
+        var profile=EvaDorsalProfile.byVariant(1);Vec3 delta=profile.centreBlocks().subtract(0,52.9,4.35),oldN=new Vec3(0,.8660254037844386,.5),oldY=new Vec3(0,.5,-.8660254037844386);
+        Vec3 newN=profile.outwardModel(),newY=new Vec3(0,newN.z,-newN.y);
+        for(int i=0;i<points.length;i++)
+        {
+            Vec3 origin=points[i],out=outs[i].subtract(origin).normalize(),up=ups[i].subtract(origin).normalize();
+            if(out.lengthSqr()<.99||up.lengthSqr()<.99||Math.abs(out.dot(up))>.001)throw new IllegalArgumentException("Invalid authored dorsal basis");
+            Vec3 point=origin.add(up.scale(delta.dot(oldY))).add(out.scale(delta.dot(oldN))).add(up.cross(out).scale(-delta.x));
+            Vec3 outward=up.scale(newN.dot(oldY)).add(out.scale(newN.dot(oldN))).normalize(),hatchUp=up.scale(newY.dot(oldY)).add(out.scale(newY.dot(oldN))).normalize();
+            points[i]=point;outs[i]=point.add(outward.scale(2));ups[i]=point.add(hatchUp.scale(2));
+        }
     }
     public static boolean ready(){return DATA!=null;}
     public static boolean hasCurve(boolean eva,String curve){return DATA!=null&&DATA.roles.get(eva?"eva":"angel").curves.containsKey(curve);}

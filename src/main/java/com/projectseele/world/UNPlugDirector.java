@@ -82,6 +82,7 @@ public final class UNPlugDirector
         if(stage==EntryPlugCarrierEntity.STAGE_LOCKED&&atDock(eva))
         {
             if(tick<60){d.putInt("UNSequenceTicks",++tick);EvaDorsalMechanism.seal(eva,tick);}
+            hoist(level,eva,plug,Math.min(1,tick/48D));
             return;
         }
         if(stage==EntryPlugCarrierEntity.STAGE_ABORT_RETURNING)
@@ -102,10 +103,10 @@ public final class UNPlugDirector
     public static void extract(EntryPlugCarrierEntity plug,int ticks)
     {
         if(!(plug.getLinkedEva() instanceof EvaPrototypeEntity eva)||!(eva.level() instanceof ServerLevel level))return;
-        if(ticks<=36)EvaDorsalMechanism.prepare(eva,ticks);else if(ticks>=141)EvaDorsalMechanism.seal(eva,ticks-141);
+        if(ticks<=36)EvaDorsalMechanism.prepare(eva,ticks);else if(ticks>=137)EvaDorsalMechanism.seal(eva,ticks-137);
         double p=1-Math.max(0,Math.min(1,(ticks-36)/105D));RigidTransform next=EntryPlugKinematics.insertionTransform(eva,dock(eva),p);
         if(!clear(level,eva,plug,plug.getCanonicalTransform(),next))return;
-        plug.setCanonicalTransform(next);plug.setInsertionProgress((int)Math.round(p*100));plug.setCabinRecoveryProgress((int)Math.round(p*70));hoist(level,eva,plug);
+        plug.setCanonicalTransform(next);plug.setInsertionProgress((int)Math.round(p*100));plug.setCabinRecoveryProgress((int)Math.round(p*70));hoist(level,eva,plug,ticks<=36?1-EvaDorsalMechanism.smooth(ticks/36F):0);
         if(ticks>=197)
         {
             plug.transitionInsertionStage(EntryPlugCarrierEntity.STAGE_EJECTING,EntryPlugCarrierEntity.STAGE_SUSPENDED);
@@ -123,11 +124,14 @@ public final class UNPlugDirector
         return true;
     }
     private static void hoist(ServerLevel level,EvaPrototypeEntity eva,EntryPlugCarrierEntity plug)
+    {hoist(level,eva,plug,0);}
+    private static void hoist(ServerLevel level,EvaPrototypeEntity eva,EntryPlugCarrierEntity plug,double raised)
     {
         NervCarrierPlatformEntity crane=null;UUID id=CRANES.get(eva.getUUID());if(id!=null&&level.getEntity(id) instanceof NervCarrierPlatformEntity c)crane=c;
         Vec3 eye=plug.getCanonicalTransform().transformPoint(EntryPlugKinematics.CRANE_ATTACHMENT_P);double y=eva.getPersistentData().getDouble("UNHomeY")+73;
-        if(crane==null){crane=ModEntities.NERV_CARRIER_PLATFORM.get().create(level);if(crane==null)return;crane.configurePlugCrane(1,eye.y-y);crane.moveControlled(eye.x,y,eye.z);crane.linkCranePlug(plug);if(!level.addFreshEntity(crane))return;CRANES.put(eva.getUUID(),crane.getUUID());}
-        crane.configurePlugCrane(1,eye.y-y);crane.moveControlled(eye.x,y,eye.z);crane.linkCranePlug(plug);
+        double lower=eye.y+(y-2-eye.y)*Math.max(0,Math.min(1,raised));
+        if(crane==null){crane=ModEntities.NERV_CARRIER_PLATFORM.get().create(level);if(crane==null)return;crane.configurePlugCrane(1,lower-y);crane.moveControlled(eye.x,y,eye.z);crane.linkCranePlug(plug);if(!level.addFreshEntity(crane))return;CRANES.put(eva.getUUID(),crane.getUUID());}
+        crane.configurePlugCrane(1,lower-y);crane.moveControlled(eye.x,y,eye.z);crane.linkCranePlug(plug);
     }
     private UNPlugDirector() {}
 }
