@@ -40,7 +40,7 @@ public final class FirstBattleClient
     public static void releaseCamera(){restore();}
     @SubscribeEvent public static void renderClock(TickEvent.RenderTickEvent event)
     {
-        if(event.phase==TickEvent.Phase.START)com.projectseele.entity.FirstBattleSignals.beginClientFrame(System.nanoTime());
+        if(event.phase==TickEvent.Phase.START)com.projectseele.entity.FirstBattleSignals.beginClientFrame(System.nanoTime(),Minecraft.getInstance().isPaused());
     }
     private static void capture(EvaUnit01Entity eva,Camera camera)
     {

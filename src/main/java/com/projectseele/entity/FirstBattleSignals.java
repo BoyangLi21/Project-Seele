@@ -14,25 +14,15 @@ import org.joml.Vector3f;
 public final class FirstBattleSignals
 {
     private static long clientFrameNanos;
-    private static final java.util.Map<Entity,ClientClock> CLIENT_CLOCKS=new java.util.WeakHashMap<>();
-    private static final class ClientClock
-    {
-        int lastAge;
-        double from,to;
-        long at;
-        double value(long now){double mix=Math.max(0,Math.min(1,(now-at)/50_000_000D));return from+(to-from)*mix;}
-    }
-    public static void beginClientFrame(long now){clientFrameNanos=now;}
+    private static boolean clientPaused;
+    private static final java.util.Map<Entity,FirstBattleClock> CLIENT_CLOCKS=new java.util.WeakHashMap<>();
+    public static void beginClientFrame(long now,boolean paused){clientFrameNanos=now;clientPaused=paused;}
     public static long clientFrameTime(){return clientFrameNanos==0?System.nanoTime():clientFrameNanos;}
     private static float clientTime(Entity entity,int age)
     {
-        long now=clientFrameNanos==0?System.nanoTime():clientFrameNanos;ClientClock clock=CLIENT_CLOCKS.get(entity);
-        if(clock==null){clock=new ClientClock();clock.from=clock.to=age;clock.lastAge=age;clock.at=now;CLIENT_CLOCKS.put(entity,clock);}
-        if(age!=clock.lastAge)
-        {
-            double current=clock.value(now);clock.from=age<clock.lastAge||Math.abs(age-current)>6?age:current;clock.to=age;clock.lastAge=age;clock.at=now;
-        }
-        return (float)(clock.value(now)/20D);
+        long now=clientFrameNanos==0?System.nanoTime():clientFrameNanos;FirstBattleClock clock=CLIENT_CLOCKS.get(entity);
+        if(clock==null){clock=new FirstBattleClock(age,now);CLIENT_CLOCKS.put(entity,clock);}
+        return (float)(clock.sample(age,now,clientPaused)/20D);
     }
     public interface Actor
     {
@@ -75,6 +65,11 @@ public final class FirstBattleSignals
         public float time(Entity entity,float partial)
         {
             int tick=age(entity);Entity clockOwner=entity;
+            if(!active(entity))
+            {
+                if(entity.level().isClientSide)CLIENT_CLOCKS.remove(entity);
+                return Math.max(0,tick/20F);
+            }
             if("r10-choreography".equals(System.getProperty("projectseele.regionalBuild","")))return tick/20F;
             if(entity instanceof Actor actor&&!actor.isFirstBattleEva())
             {

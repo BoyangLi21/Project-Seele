@@ -818,16 +818,13 @@ public final class EvaCommandFeedClient
     {
         int width = image.getWidth();
         int height = image.getHeight();
-        int[] rgb = new int[width * height];
-        for (int y = 0; y < height; y++)
+        int[] rgb = image.getPixelsRGBA();
+        for (int i = 0; i < rgb.length; i++)
         {
-            for (int x = 0; x < width; x++)
-            {
-                int abgr = image.getPixelRGBA(x, y);
-                rgb[y * width + x] = (abgr & 0xFF) << 16
-                        | (abgr >> 8 & 0xFF) << 8
-                        | abgr >> 16 & 0xFF;
-            }
+            int abgr = rgb[i];
+            rgb[i] = (abgr & 0xFF) << 16
+                    | (abgr >> 8 & 0xFF) << 8
+                    | abgr >> 16 & 0xFF;
         }
         BufferedImage buffered = new BufferedImage(
                 width, height, BufferedImage.TYPE_INT_RGB);

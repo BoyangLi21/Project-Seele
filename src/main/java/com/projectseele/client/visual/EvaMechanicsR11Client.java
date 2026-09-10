@@ -15,6 +15,7 @@ import java.util.HashSet;
 public final class EvaMechanicsR11Client
 {
     private static boolean saved,pause,gui;private static int end,oldDistance;private static net.minecraft.client.CameraType cameraType;private static net.minecraft.world.entity.LivingEntity camera;private static Path folder;private static final Set<String> shots=new HashSet<>();
+    private static String framedView="";private static int settledFrames;
     @SubscribeEvent public static void tick(TickEvent.ClientTickEvent event)
     {
         if(!(EvaMechanicsR11Review.ENABLED||com.projectseele.visual.EvaCanonicalR11Review.ENABLED)||event.phase!=TickEvent.Phase.END)return;var mc=Minecraft.getInstance();if(mc.player==null||mc.level==null)return;
@@ -28,10 +29,21 @@ public final class EvaMechanicsR11Client
         if(event.phase==TickEvent.Phase.START)
         {
             if(camera==null){camera=net.minecraft.world.entity.EntityType.ARMOR_STAND.create(mc.level);camera.setInvisible(true);}
-            String view=EvaMechanicsR11Review.view;var origin=eva.getPosition(event.renderTickTime);var p=origin.add(view.equals("dorsal")?22:view.equals("combat")?70:45,view.equals("dorsal")?66:39,view.equals("dorsal")?-30:view.equals("combat")?30:48);if(view.equals("dorsal"))p=origin.add(new net.minecraft.world.phys.Vec3(22,63,-25).yRot((float)-Math.toRadians(eva.getYRot())));var target=origin.add(0,view.equals("dorsal")?54:view.equals("laser")?49:32,view.equals("combat")?24:0);var d=target.subtract(p);
+            String view=EvaMechanicsR11Review.view;var origin=eva.getPosition(event.renderTickTime);var p=origin.add(view.equals("dorsal")?22:view.equals("combat")?70:45,view.equals("dorsal")?66:39,view.equals("dorsal")?-30:view.equals("combat")?30:48);if(view.equals("dorsal"))p=origin.add(new net.minecraft.world.phys.Vec3(22,63,-25).yRot((float)-Math.toRadians(eva.getYRot())));var target=origin.add(0,view.equals("dorsal")?54:view.equals("laser")?49:32,view.equals("combat")?24:0);
+            settledFrames=view.equals(framedView)?settledFrames+1:0;framedView=view;
+            if(view.startsWith("crane"))
+            {
+                var cranes=mc.level.getEntitiesOfClass(com.projectseele.entity.NervCarrierPlatformEntity.class,eva.getBoundingBox().inflate(150),c->c.isPlugCrane()&&c.getCranePlug()!=null);
+                if(!cranes.isEmpty())
+                {
+                    var hoist=cranes.get(0).getPosition(event.renderTickTime);boolean detail=view.equals("crane_detail");
+                    p=hoist.add(detail?12:20,detail?6:8,detail?13:25);target=hoist.add(0,detail?0:-9,0);
+                }
+            }
+            var d=target.subtract(p);
             camera.setPos(p.x,p.y-camera.getEyeHeight(),p.z);camera.xo=camera.xOld=camera.getX();camera.yo=camera.yOld=camera.getY();camera.zo=camera.zOld=camera.getZ();camera.setYRot((float)Math.toDegrees(Math.atan2(-d.x,d.z)));camera.yRotO=camera.yHeadRot=camera.yHeadRotO=camera.getYRot();camera.setXRot((float)-Math.toDegrees(Math.atan2(d.y,d.horizontalDistance())));camera.xRotO=camera.getXRot();mc.options.hideGui=true;mc.options.setCameraType(net.minecraft.client.CameraType.FIRST_PERSON);mc.setCameraEntity(camera);
         }
-        else if(!EvaMechanicsR11Review.shot.isEmpty()&&(!(EvaMechanicsR11Review.shot.equals("eye_laser_contact")||EvaMechanicsR11Review.shot.equals("at_field_deflection"))||eva instanceof com.projectseele.entity.EvaPrototypeEntity un&&un.isEyeLaserActive()&&un.eyeLaserAge(event.renderTickTime)>=8.8F)&&shots.add(EvaMechanicsR11Review.shot))
+        else if(settledFrames>=2&&framedView.equals(EvaMechanicsR11Review.view)&&!EvaMechanicsR11Review.shot.isEmpty()&&(!(EvaMechanicsR11Review.shot.equals("eye_laser_contact")||EvaMechanicsR11Review.shot.equals("at_field_deflection"))||eva instanceof com.projectseele.entity.EvaPrototypeEntity un&&un.isEyeLaserActive()&&un.eyeLaserAge(event.renderTickTime)>=8.8F)&&shots.add(EvaMechanicsR11Review.shot))
         {try(var image=net.minecraft.client.Screenshot.takeScreenshot(mc.getMainRenderTarget())){image.writeToFile(folder.resolve(EvaMechanicsR11Review.shot+".png"));EvaMechanicsR11Review.captured.add(EvaMechanicsR11Review.shot);}catch(Exception e){throw new IllegalStateException(e);}}
     }
 }

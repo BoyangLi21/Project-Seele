@@ -10,7 +10,10 @@ import net.minecraft.world.phys.Vec3;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
 import java.io.InputStreamReader;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.*;
 
 /** One authored clock drives world roots, poses, sockets and shots. */
@@ -20,7 +23,7 @@ public final class FirstBattleClip
     public record BonePose(String[] names,Quaternionf[] rotations,Vector3f[] positions) {}
     public record CameraPose(Vec3 position,Vec3 target,float fov) {}
     private record Role(String[] bones,Quaternionf[][] rotations,Vector3f[][] positions,Map<String,Vec3[]> curves) {}
-    private record Data(float fps,Map<String,Role> roles,Vec3[] cameras,Vec3[] targets,float[] fov) {}
+    private record Data(float fps,Map<String,Role> roles,Vec3[] cameras,Vec3[] targets,float[] fov,Set<Integer> cuts) {}
     private static final Data DATA=load();
     private static Vec3 vector(JsonArray p){return new Vec3(p.get(0).getAsDouble(),p.get(1).getAsDouble(),p.get(2).getAsDouble());}
     private static Vec3[] vectors(JsonArray rows)
@@ -29,39 +32,73 @@ public final class FirstBattleClip
     }
     private static Data load()
     {
-        try(var stream=FirstBattleClip.class.getResourceAsStream("/assets/projectseele/motion/first_battle_r10.json"))
+        Path local=Path.of("projectseele-local-maps/first_battle_r12.json");
+        if(Files.isRegularFile(local))
         {
+            try(var stream=Files.newInputStream(local)){return read(stream,"R12 private capture adaptation");}
+            catch(Exception e){ProjectSeele.LOGGER.warn("Private first-battle clip rejected; using bundled sequence",e);}
+        }
+        try(var stream=FirstBattleClip.class.getResourceAsStream("/assets/projectseele/motion/first_battle_r10.json"))
+        {return read(stream,"R10 bundled");}
+        catch(Exception e){ProjectSeele.LOGGER.error("First-battle clip rejected",e);return null;}
+    }
+    private static Data read(InputStream stream,String source)throws Exception
+    {
             if(stream==null)throw new IllegalStateException("Missing first-battle authored clip");
             JsonObject root=JsonParser.parseReader(new InputStreamReader(stream,StandardCharsets.UTF_8)).getAsJsonObject();float fps=root.get("fps").getAsFloat();
+            if(fps!=30||root.get("duration_ticks").getAsInt()!=DURATION_TICKS)throw new IllegalArgumentException("First-battle clock mismatch");
+            int count=691;
             Map<String,Role> roles=new HashMap<>();
             for(String name:List.of("eva","angel"))
             {
                 var role=root.getAsJsonObject(name);var names=role.getAsJsonArray("bones");String[] bones=new String[names.size()];
                 for(int i=0;i<bones.length;i++)bones[i]=names.get(i).getAsString();
+                if(new HashSet<>(Arrays.asList(bones)).size()!=bones.length||!Arrays.asList(bones).contains("root"))throw new IllegalArgumentException("Invalid first-battle bone names");
                 var frames=role.getAsJsonArray("frames");Quaternionf[][] qs=new Quaternionf[frames.size()][bones.length];Vector3f[][] ps=new Vector3f[frames.size()][bones.length];
+                if(frames.size()!=count)throw new IllegalArgumentException("First-battle frame count mismatch");
                 for(int i=0;i<frames.size();i++)
                 {
                     var frame=frames.get(i).getAsJsonObject();var rotations=frame.getAsJsonArray("rotation_wxyz");var offsets=frame.getAsJsonObject("bone_position_xyz");
                     if(rotations.size()!=bones.length)throw new IllegalArgumentException("First-battle bone count mismatch");
                     for(int b=0;b<bones.length;b++)
                     {
-                        var q=rotations.get(b).getAsJsonArray();qs[i][b]=new Quaternionf(q.get(1).getAsFloat(),q.get(2).getAsFloat(),q.get(3).getAsFloat(),q.get(0).getAsFloat()).normalize();
+                        var q=rotations.get(b).getAsJsonArray();qs[i][b]=new Quaternionf(q.get(1).getAsFloat(),q.get(2).getAsFloat(),q.get(3).getAsFloat(),q.get(0).getAsFloat());
+                        if(!qs[i][b].isFinite()||qs[i][b].lengthSquared()<.5F)throw new IllegalArgumentException("Invalid first-battle quaternion");
+                        qs[i][b].normalize();
                         Vec3 p=bones[b].equals("root")?vector(frame.getAsJsonArray("root_m")).scale(112):offsets!=null&&offsets.has(bones[b])?vector(offsets.getAsJsonArray(bones[b])):Vec3.ZERO;
                         ps[i][b]=new Vector3f((float)p.x,(float)p.y,(float)p.z);
+                        if(!ps[i][b].isFinite())throw new IllegalArgumentException("Invalid first-battle translation");
                     }
                 }
                 Map<String,Vec3[]> curves=new HashMap<>();
-                for(String curve:List.of("root_blocks","eye_blocks","look_blocks","socket_blocks","socket_outward_blocks","socket_up_blocks","hand_l_blocks","hand_r_blocks","foot_l_blocks","foot_r_blocks","core_blocks","waist_blocks"))
-                    if(role.has(curve))curves.put(curve,vectors(role.getAsJsonArray(curve)));
+                for(String curve:List.of("root_blocks","eye_blocks","look_blocks","socket_blocks","socket_outward_blocks","socket_up_blocks","hand_l_blocks","hand_r_blocks","foot_l_blocks","foot_r_blocks","core_blocks","waist_blocks","rib_tip_blocks","rib_side_blocks"))
+                    if(role.has(curve))
+                    {
+                        Vec3[] rows=vectors(role.getAsJsonArray(curve));validateCurve(rows,count);curves.put(curve,rows);
+                    }
+                for(String required:List.of("root_blocks","eye_blocks","hand_l_blocks","hand_r_blocks"))
+                    if(!curves.containsKey(required))throw new IllegalArgumentException("Missing first-battle curve "+required);
                 roles.put(name,new Role(bones,qs,ps,Map.copyOf(curves)));
             }
             var camera=root.getAsJsonObject("camera");var f=camera.getAsJsonArray("fov");float[] fov=new float[f.size()];for(int i=0;i<fov.length;i++)fov[i]=f.get(i).getAsFloat();
-            ProjectSeele.LOGGER.info("R10 first battle loaded: fps={} frames={} durationTicks={}",fps,fov.length,DURATION_TICKS);
-            return new Data(fps,Map.copyOf(roles),vectors(camera.getAsJsonArray("position")),vectors(camera.getAsJsonArray("target")),fov);
-        }
-        catch(Exception e){ProjectSeele.LOGGER.error("First-battle clip rejected",e);return null;}
+            if(fov.length!=count)throw new IllegalArgumentException("First-battle camera length mismatch");
+            for(float angle:fov)if(!Float.isFinite(angle)||angle<20||angle>110)throw new IllegalArgumentException("Invalid first-battle field of view");
+            Vec3[] positions=vectors(camera.getAsJsonArray("position")),targets=vectors(camera.getAsJsonArray("target"));validateCurve(positions,count);validateCurve(targets,count);
+            Set<Integer> cuts=new HashSet<>();
+            if(camera.has("cuts"))for(var cut:camera.getAsJsonArray("cuts"))
+            {
+                int index=cut.getAsInt();if(index<=0||index>=count)throw new IllegalArgumentException("Invalid first-battle camera cut");cuts.add(index);
+            }
+            ProjectSeele.LOGGER.info("{} first battle loaded: fps={} frames={} durationTicks={}",source,fps,fov.length,DURATION_TICKS);
+            return new Data(fps,Map.copyOf(roles),positions,targets,fov,Set.copyOf(cuts));
+    }
+    private static void validateCurve(Vec3[] curve,int count)
+    {
+        if(curve.length!=count)throw new IllegalArgumentException("First-battle curve length mismatch");
+        for(Vec3 point:curve)if(!Double.isFinite(point.x)||!Double.isFinite(point.y)||!Double.isFinite(point.z))throw new IllegalArgumentException("Invalid first-battle curve point");
     }
     public static boolean ready(){return DATA!=null;}
+    public static boolean hasCurve(boolean eva,String curve){return DATA!=null&&DATA.roles.get(eva?"eva":"angel").curves.containsKey(curve);}
     private static float frame(float seconds,int length){return Mth.clamp(seconds*DATA.fps,0,length-1);}
     private static Vec3 sample(Vec3[] values,float seconds)
     {
@@ -99,7 +136,8 @@ public final class FirstBattleClip
     {
         if(DATA==null)return new CameraPose(spec.origin().add(0,45,-50),spec.origin().add(0,30,0),70);
         float f=frame(seconds,DATA.fov.length);int a=(int)f,b=Math.min(a+1,DATA.fov.length-1);
-        return new CameraPose(world(spec,sample(DATA.cameras,seconds)),world(spec,sample(DATA.targets,seconds)),Mth.lerp(f-a,DATA.fov[a],DATA.fov[b]));
+        float mix=DATA.cuts.contains(b)&&b!=a?0:f-a;
+        return new CameraPose(world(spec,DATA.cameras[a].lerp(DATA.cameras[b],mix)),world(spec,DATA.targets[a].lerp(DATA.targets[b],mix)),Mth.lerp(mix,DATA.fov[a],DATA.fov[b]));
     }
     public static void applyKinematics(Mob entity)
     {

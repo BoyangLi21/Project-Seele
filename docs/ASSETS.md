@@ -213,3 +213,9 @@ UN 徽记的矢量绘图来源为 [Wikimedia Commons / Emblem of the United Nati
 SBW 的七种载具模型覆写保留在 `run/resourcepacks/eva_real_model`。文字在实际装甲、机翼或舱框识别板上随骨架运动。白／黑色块只写入原图集中未被原有 UV 引用的位置，图集尺寸、原多边形和原 UV 引用不变；原模型、贴图及派生覆写不作为本项目 MIT 素材发布。两艘历史驱逐舰继续沿用 R08 私有导入及作者署名。
 
 本轮低姿态爬行属于在既有测量支撑姿态上的原创约束动作，不标为真人动捕原片。受击与机械音效复用项目已有原创合成资源。实际 TV 插入画面和线稿仅用于本机研究，未进入发行包。详见 [R11 记录](WORLD_MOTION_R11.md)。
+
+## R12 动捕改编与吊机细节（2026-09-10）
+
+CMU 18_03、18_05／19_05，Bandai Namco Research dataset-1 的职业演员出拳，以及 Haley Tuffles 的正蹬、跳跃、倒地、落地、受推和跪姿经本地骨架适配与接触修正组成 R12 演出。BNR 数据为 CC BY-NC 4.0，混合派生成品保存在本机 `run/projectseele-local-maps/first_battle_r12.json`，公共资源保留 R10 回退。源文件、许可和哈希索引由 `tools/prepare_human_sources_r12.py` 生成；完整出处、使用范围和真人／人工编排区分见 [R12](WORLD_MOTION_R12.md)。
+
+吊机的倒角铸件、端盖、走台、滑轮、液压支撑和夹爪为本项目原创几何。借助 Konecranes 的公开工业产品资料理解卷扬布局，没有导入其 CAD、图片或商标。电影音轨继续使用项目既有原创合成音效，验收视频的音频是按实机事件时刻混音的独立音轨。

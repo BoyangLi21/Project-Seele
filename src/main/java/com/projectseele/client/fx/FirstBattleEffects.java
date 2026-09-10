@@ -52,7 +52,9 @@ public final class FirstBattleEffects
             if(t>=15.35&&t<16.9)
             {
                 Vec3 hand=FirstBattleClip.localPoint(spec,true,"hand_r_blocks",t),world=FirstBattleClip.world(spec,hand);int light=LevelRenderer.getLightColor(mc.level,BlockPos.containing(world));
-                rib(pose,buffers.getBuffer(BONE),hand,light);drewBone=true;
+                Vec3 tip=FirstBattleClip.hasCurve(true,"rib_tip_blocks")?FirstBattleClip.localPoint(spec,true,"rib_tip_blocks",t):hand.add(0,-6.05,0);
+                Vec3 side=FirstBattleClip.hasCurve(true,"rib_side_blocks")?FirstBattleClip.localPoint(spec,true,"rib_side_blocks",t).subtract(hand):new Vec3(1,0,0);
+                rib(pose,buffers.getBuffer(BONE),hand,tip,side,light);drewBone=true;
             }
             pose.popPose();
         }
@@ -87,12 +89,12 @@ public final class FirstBattleEffects
     {
         for(Vec3 p:new Vec3[]{a,b,c,d,d,c,b,a})out.vertex(pose,(float)p.x,(float)p.y,(float)p.z).color(r,g,bcol,alpha).endVertex();
     }
-    private static Vec3 ribPoint(Vec3 hand,double t){return hand.add(.8*Math.sin(t*Math.PI),.4-6.05*t,.35*(1-t));}
-    private static void rib(PoseStack pose,VertexConsumer out,Vec3 hand,int light)
+    private static Vec3 ribPoint(Vec3 hand,Vec3 tip,Vec3 side,double t){return hand.lerp(tip,t).add(side.scale(.8*Math.sin(t*Math.PI)));}
+    private static void rib(PoseStack pose,VertexConsumer out,Vec3 hand,Vec3 tip,Vec3 outward,int light)
     {
         for(int i=0;i<7;i++)
         {
-            double t=i/7D,u=(i+1)/7D;Vec3 a=ribPoint(hand,t),b=ribPoint(hand,u),axis=b.subtract(a).normalize();Vec3 side=new Vec3(1,0,0);side=side.subtract(axis.scale(side.dot(axis))).normalize();Vec3 other=axis.cross(side).normalize();
+            double t=i/7D,u=(i+1)/7D;Vec3 a=ribPoint(hand,tip,outward,t),b=ribPoint(hand,tip,outward,u),axis=b.subtract(a).normalize();Vec3 side=outward.subtract(axis.scale(outward.dot(axis))).normalize();Vec3 other=axis.cross(side).normalize();
             double wa=.25*(1-t)+.025,wb=.25*(1-u)+.025;
             Vec3[] ring={side.add(other),side.subtract(other),side.scale(-1).subtract(other),other.subtract(side)};
             for(int face=0;face<4;face++)

@@ -52,7 +52,10 @@ public final class EvaMechanicsR11Review
                 if(age%20==0){JsonObject checkpoint=new JsonObject();checkpoint.add("checks",checks);checkpoint.add("trace",trace);Files.writeString(world.resolve("r11_mechanics_partial.json"),checkpoint.toString());}
             }
             if(phase==1&&tick>50&&tracked&&p!=null)
-            {shot="un_body";view="body";if(tick>80&&captured.contains("un_body")){plugId=p.getUUID();if(!p.boardPassenger(pilot))throw new IllegalStateException("UN boarding refused");phase=2;tick=0;}return;}
+            {
+                shot=tick>110?"crane_detail":tick>80?"crane_full":"un_body";view=tick>110?"crane_detail":tick>80?"crane":"body";
+                if(tick>140&&captured.contains("un_body")&&captured.contains("crane_full")&&captured.contains("crane_detail")){plugId=p.getUUID();if(!p.boardPassenger(pilot))throw new IllegalStateException("UN boarding refused");phase=2;tick=0;}return;
+            }
             if(phase==2)
             {
                 if(p==null)throw new IllegalStateException("dedicated capsule lost");

@@ -30,7 +30,7 @@ public final class FirstBattleR10Client
     private static long firstNanos,lastNanos;
     private static Path output;
     private static final JsonArray frames=new JsonArray();
-    private static final ThreadPoolExecutor WRITER=new ThreadPoolExecutor(1,1,0,TimeUnit.SECONDS,new ArrayBlockingQueue<>(3),r->{Thread t=new Thread(r,"r10-native-frames");t.setDaemon(true);return t;});
+    private static final ThreadPoolExecutor WRITER=new ThreadPoolExecutor(2,2,0,TimeUnit.SECONDS,new ArrayBlockingQueue<>(6),r->{Thread t=new Thread(r,"first-battle-native-frames");t.setDaemon(true);return t;});
     private static volatile String writeFailure="";
 
     @SubscribeEvent public static void tick(TickEvent.ClientTickEvent event)
@@ -83,8 +83,8 @@ public final class FirstBattleR10Client
         if(entity instanceof EvaUnit01Entity eva){frame.addProperty("scene_seconds",eva.firstBattleSignals().time(eva,event.renderTickTime));frame.addProperty("active",eva.isFirstBattleActive());frame.addProperty("hero_yaw",eva.yBodyRot);var other=mc.level.getEntity(eva.firstBattleSignals().partner(eva));if(other instanceof net.minecraft.world.entity.LivingEntity living)frame.addProperty("angel_yaw",living.yBodyRot);}
         frames.add(frame);
         WRITER.execute(()->{try(image){
-            int w=image.getWidth(),h=image.getHeight();int[] rgb=new int[w*h];
-            for(int y=0;y<h;y++)for(int x=0;x<w;x++){int c=image.getPixelRGBA(x,y);rgb[y*w+x]=(c&255)<<16|((c>>8)&255)<<8|((c>>16)&255);}
+            int w=image.getWidth(),h=image.getHeight();int[] rgb=image.getPixelsRGBA();
+            for(int i=0;i<rgb.length;i++){int c=rgb[i];rgb[i]=(c&255)<<16|((c>>8)&255)<<8|((c>>16)&255);}
             var buffered=new java.awt.image.BufferedImage(w,h,java.awt.image.BufferedImage.TYPE_INT_RGB);buffered.setRGB(0,0,w,h,rgb,0,w);javax.imageio.ImageIO.write(buffered,"jpg",output.resolve(name).toFile());
         }catch(Exception failure){writeFailure=failure.toString();ProjectSeele.LOGGER.error("R10 frame write failed",failure);}});
     }
