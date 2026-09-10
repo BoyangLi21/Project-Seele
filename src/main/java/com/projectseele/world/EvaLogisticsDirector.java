@@ -1383,6 +1383,7 @@ public final class EvaLogisticsDirector
             {
                 unit.setNervLogisticsLocked(true);
                 int ticks = entry.ticks() + 1;
+                com.projectseele.entity.EvaDorsalMechanism.seal(unit,ticks);
                 // The hoist recovers continuously throughout this 60-tick
                 // mechanical lock phase. FacilityV2EvaRuntime advances its
                 // lower yoke by two blocks per call and becomes idempotent at

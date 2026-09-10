@@ -98,6 +98,7 @@ import software.bernie.geckolib.util.GeckoLibUtil;
  */
 public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBattleSignals.Actor
 {
+    private static final boolean DORSAL_SIGNALS_READY=EvaDorsalMechanism.bootstrap() && EvaTerrainSupport.bootstrap();
     private static final FirstBattleSignals.SignalSet FIRST_BATTLE=new FirstBattleSignals.SignalSet(EvaUnit01Entity.class);
     @Override public FirstBattleSignals.SignalSet firstBattleSignals(){return FIRST_BATTLE;}
     @Override public boolean isFirstBattleEva(){return true;}
@@ -375,6 +376,8 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
     private float rifleCrouchPrevious,riflePronePrevious,rifleReadyPrevious,rifleRecoilPrevious;
     private final float[] rifleSignalPrevious=new float[8],rifleSignalCurrent=new float[8];
     private final int[] rifleSignalTicks=new int[8];
+    private final EvaPoseSignalClock[] poseSignalClocks={new EvaPoseSignalClock(),new EvaPoseSignalClock(),new EvaPoseSignalClock(),new EvaPoseSignalClock(),new EvaPoseSignalClock(),new EvaPoseSignalClock(),new EvaPoseSignalClock(),new EvaPoseSignalClock()};
+    private final EvaPoseSignalClock actionSignalClock=new EvaPoseSignalClock();
     private float rifleStanceVelocity;
     private boolean rifleStanceInitialized;
     private double riflePreviousX=Double.NaN,riflePreviousZ;
@@ -674,6 +677,8 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
     {
         super.defineSynchedData();
         FIRST_BATTLE.define(this.entityData);
+        EvaDorsalMechanism.define(this.entityData);
+        EvaTerrainSupport.define(this.entityData);
         this.entityData.define(DATA_WEAPON, WEAPON_KNIFE);
         this.entityData.define(DATA_ARMAMENT_MASK, this.intrinsicArmamentMask());
         this.entityData.define(DATA_AT_ON, false);
@@ -749,6 +754,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
     {
         super.addAdditionalSaveData(tag);
         FIRST_BATTLE.save(this,tag);
+        EvaDorsalMechanism.save(this,tag);
         tag.putInt("SeeleWeapon", this.getWeapon());
         tag.putInt("SeeleArmamentMask", this.getArmamentMask());
         tag.putBoolean("SeeleCrucified", this.isCrucified());
@@ -794,6 +800,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
     public void readAdditionalSaveData(CompoundTag tag)
     {
         super.readAdditionalSaveData(tag);
+        EvaDorsalMechanism.load(this,tag);
         var gravity=this.getAttribute(ForgeMod.ENTITY_GRAVITY.get());
         if(gravity!=null&&Math.abs(gravity.getBaseValue()-.08D)<.000001D)
             gravity.setBaseValue(AIRFRAME_GRAVITY);
@@ -1117,8 +1124,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
     private float rifleSignal(int i,EntityDataAccessor<Float> key,float p)
     {
         if(!this.level().isClientSide)return this.entityData.get(key);
-        float delta=rifleSignalCurrent[i]-rifleSignalPrevious[i];if(i==4){if(delta>.5F)delta-=1;if(delta<-.5F)delta+=1;}
-        return rifleSignalPrevious[i]+delta*Mth.clamp(this.tickCount-rifleSignalTicks[i]+p,0,1);
+        return poseSignalClocks[i].sample(FirstBattleSignals.clientFrameTime());
     }
     public float rifleCrouchBlend(float p){return rifleSignal(0,DATA_RIFLE_CROUCH,p);}
     public float rifleProneBlend(float p){return rifleSignal(1,DATA_RIFLE_PRONE,p);}
@@ -1154,7 +1160,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
             this.entityData.set(DATA_RIFLE_MOVE,move);this.entityData.set(DATA_RIFLE_RUN,run);
             if(moving)
             {
-                double stride=this.isPilotCrouching()?15D:Mth.lerp(run,25.8334D,31.3944D);
+                double stride=this.isPilotProne()?12D:this.isPilotCrouching()?15D:Mth.lerp(run,25.8334D,31.3944D);
                 double sign=dx*this.getForward().x+dz*this.getForward().z<0?-1:1;
                 float phase=this.entityData.get(DATA_RIFLE_GAIT)+(float)(sign*distance/stride);phase-=Mth.floor(phase);this.entityData.set(DATA_RIFLE_GAIT,phase);
             }
@@ -2190,9 +2196,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
     private float liveActionProgress(float partialTick)
     {
         if (!this.level().isClientSide) return this.entityData.get(DATA_LIVE_ACTION_PHASE);
-        float interpolation = Mth.clamp(this.tickCount - this.clientActionPhaseTick
-                + partialTick, 0.0F, 1.0F);
-        return Mth.lerp(interpolation, this.clientActionPhasePrevious, this.clientActionPhase);
+        return actionSignalClock.sample(FirstBattleSignals.clientFrameTime());
     }
 
     private float ordinaryAttackDurationTicks(int stage)
@@ -2952,24 +2956,21 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
             // Damage sourced directly from the Unit: Angel A.T. Fields
             // treat EVA contact as neutralized and let it through.
             boolean field=target instanceof Angel angel&&angel.getAtField()>0;
-            boolean accepted=target.hurt(this.damageSources().mobAttack(this), damage);
+            boolean accepted=com.projectseele.event.EvaHitFeedback.hurt(target,this.damageSources().mobAttack(this),damage,fxCenter,target.position().subtract(this.position()).normalize());
             if(!accepted&&!field)continue;
             if(!anyHit)EvaMovementSounds.play(this,fxCenter,field?ModSounds.EVA_AT_PRESSURE.get():knife?ModSounds.EVA_KNIFE_CUT.get():ModSounds.EVA_IMPACT.get(),field?.9F:1.5F,1);
             if(!accepted){anyHit=true;continue;}
             target.knockback(knockback, this.getX() - target.getX(), this.getZ() - target.getZ());
             anyHit = true;
             // Impact burst on the body actually struck.
-            Vec3 hit = target.position().add(0.0D, target.getBbHeight() * 0.55D, 0.0D);
-            serverLevel.sendParticles(ParticleTypes.CRIT, hit.x, hit.y, hit.z, 26, 1.4D, 1.4D, 1.4D, 0.55D);
-            serverLevel.sendParticles(knife || lance ? ParticleTypes.ENCHANTED_HIT : ParticleTypes.DAMAGE_INDICATOR,
-                    hit.x, hit.y, hit.z, 14, 1.0D, 1.0D, 1.0D, 0.2D);
+            if(field)com.projectseele.fx.AtFieldFX.ripple(serverLevel,fxCenter,this.getForward());
         }
         // The swing arc itself: a fan of sweep across the strike front.
         Vec3 side = this.getForward().yRot((float) Math.toRadians(90.0D));
-        for (int i = -2; i <= 2; i++)
+        for (int i = -1; i <= 1; i++)
         {
             Vec3 p = fxCenter.add(side.scale(i * 1.6D));
-            serverLevel.sendParticles(ParticleTypes.SWEEP_ATTACK, p.x, p.y, p.z, 1, 0.0D, 0.0D, 0.0D, 0.0D);
+            if(!anyHit)serverLevel.sendParticles(ParticleTypes.CLOUD,p.x,p.y,p.z,1,0,0,0,.02);
         }
         if (knife)
         {
@@ -3040,7 +3041,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
         {
             return;
         }
-        if (!crouching && !this.hasStandingRoom())
+        if ((!crouching||this.isPilotProne()) && !this.hasPoseRoom(crouching?CROUCH_HEIGHT:NORMAL_HEIGHT))
         {
             pilot.displayClientMessage(Component.translatable("msg.projectseele.cannot_stand"), true);
             return;
@@ -3212,7 +3213,6 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
             // than dropping them at the airframe's feet. They then sneak to
             // dismount and climb down from the plug.
             if (this.level() instanceof ServerLevel serverLevel
-                    && !this.isExperimentalUnit()
                     && this.isEntryPlugInserted()
                     && EntryPlugDirector.ejectPilotToPlug(
                             serverLevel, this.getUnitVariant(), this, pilot))
@@ -3255,8 +3255,8 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
         if (entityHit != null)
         {
             end = entityHit.getLocation();
-            entityHit.getEntity().hurt(pilot.damageSources().playerAttack(pilot),
-                    SeeleConfig.EVA_RIFLE_DAMAGE.get().floatValue());
+            com.projectseele.event.EvaHitFeedback.hurt((LivingEntity)entityHit.getEntity(),pilot.damageSources().playerAttack(pilot),
+                    SeeleConfig.EVA_RIFLE_DAMAGE.get().floatValue(),end,shotDirection);
         }
 
         SeeleNetwork.CHANNEL.send(PacketDistributor.TRACKING_ENTITY_AND_SELF.with(() -> this),
@@ -3722,9 +3722,9 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
         }
     }
 
-    private boolean isPilotControlLocked()
+    protected boolean isPilotControlLocked()
     {
-        return this.isFirstBattleActive() || this.isNervLogisticsLocked() || this.getActivationTicks() > 20
+        return EvaDorsalMechanism.bow(this) > .001F || EvaDorsalMechanism.open(this) > .001F || this.isFirstBattleActive() || this.isNervLogisticsLocked() || this.getActivationTicks() > 20
                 || this.isLaunchSequenceActive()
                 || this.isPowerDepleted() || this.isBerserk()
                 || this.berserkRecoveryTicks > 0;
@@ -3732,9 +3732,14 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
 
     private boolean hasStandingRoom()
     {
+        return this.hasPoseRoom(NORMAL_HEIGHT);
+    }
+
+    private boolean hasPoseRoom(double height)
+    {
         double halfWidth = NORMAL_WIDTH * 0.5D;
         AABB standing = new AABB(this.getX() - halfWidth, this.getY(), this.getZ() - halfWidth,
-                this.getX() + halfWidth, this.getY() + NORMAL_HEIGHT, this.getZ() + halfWidth);
+                this.getX() + halfWidth, this.getY() + height, this.getZ() + halfWidth);
         return this.level().noCollision(this, standing);
     }
 
@@ -3836,6 +3841,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
         float preservedYaw = this.getYRot();
         float preservedPitch = this.getXRot();
         super.aiStep();
+        EvaTerrainSupport.tick(this);
         if (preserveUnpilotedFacing)
         {
             // BodyRotationControl runs inside super.aiStep(). Restore the
@@ -5657,16 +5663,34 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
         boolean moving = Math.abs(input.x) + Math.abs(input.z) > 0.01D;
         float deadZone = moving ? PILOT_BODY_MOVING_DEAD_ZONE
                 : PILOT_BODY_IDLE_DEAD_ZONE;
+        boolean longHull=this.rifleStanceInitialized && this.entityData.get(DATA_RIFLE_STANCE)>1.05F;
+        if(longHull)deadZone=0;
         float maxTurn = moving ? PILOT_BODY_MOVING_TURN_PER_TICK
                 : PILOT_BODY_IDLE_TURN_PER_TICK;
         float delta = Mth.wrapDegrees(player.getYRot() - previousBodyYaw);
         float remaining = Math.max(0.0F, Math.abs(delta) - deadZone);
         float turn = Math.copySign(Math.min(remaining, maxTurn), delta);
         float bodyYaw = previousBodyYaw + turn;
+        if(longHull)
+        {
+            // A long capsule can translate through a passage yet cannot rotate
+            // through its side wall. Keep mouse look free and limit only the hull.
+            if(!hasHullTurningRoom(bodyYaw))
+            {
+                float low=0,high=1;
+                for(int i=0;i<9;i++)
+                {
+                    float mid=(low+high)*.5F;
+                    if(hasHullTurningRoom(previousBodyYaw+turn*mid))low=mid;else high=mid;
+                }
+                bodyYaw=previousBodyYaw+turn*low;
+            }
+        }
         // Preserve the previous tick for render interpolation. Assigning both
         // values to the camera yaw made the sixty-block chassis teleport under
         // the pilot whenever the mouse moved.
         this.setRot(bodyYaw, 0.0F);
+        if(longHull)this.setBoundingBox(stanceBounds(bodyYaw));
         this.yRotO = previousBodyYaw;
         this.yBodyRotO = previousBodyYaw;
         this.yHeadRotO = previousBodyYaw;
@@ -5868,39 +5892,74 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
         }
         float synchronizationSpeed = EvaPilotCapability.mobilityMultiplier(
                 this.getPilotSynchronization());
-        if (this.isPilotCrouching())
-        {
-            return CROUCH_SPEED * synchronizationSpeed;
-        }
-        if (this.isPilotProne())
-        {
-            return PRONE_SPEED * synchronizationSpeed;
-        }
         float variantSpeed = switch (this.getUnitVariant())
         {
             case UNIT_00 -> this.isPilotSprinting() ? 0.65F : 0.36F;
             case UNIT_02 -> this.isPilotSprinting() ? 0.90F : 0.48F;
             default -> this.isPilotSprinting() ? SPRINT_SPEED : WALK_SPEED;
         };
-        return variantSpeed * synchronizationSpeed;
+        float stance=this.rifleStanceInitialized?this.entityData.get(DATA_RIFLE_STANCE):this.isPilotProne()?3:this.isPilotCrouching()?1:0;
+        float speed=stance<=1?Mth.lerp(stance,variantSpeed,CROUCH_SPEED):Mth.lerp(Mth.clamp((stance-1)/2,0,1),CROUCH_SPEED,PRONE_SPEED);
+        return speed * synchronizationSpeed;
     }
 
     @Override
     public EntityDimensions getDimensions(Pose pose)
     {
         EntityDimensions dimensions = super.getDimensions(pose);
-        if(this.rifleStanceInitialized&&this.getWeapon()==WEAPON_RIFLE&&this.getVisualPose()==VISUAL_NORMAL)
+        if(this.rifleStanceInitialized&&this.getVisualPose()==VISUAL_NORMAL&&!this.isFirstBattleActive())
         {
             float stance=this.entityData.get(DATA_RIFLE_STANCE);
             float low=Mth.clamp((stance-1)/2,0,1);
             float height=stance<=1?Mth.lerp(stance,NORMAL_HEIGHT,CROUCH_HEIGHT):Mth.lerp(low,CROUCH_HEIGHT,PRONE_HEIGHT);
-            return EntityDimensions.scalable(Mth.lerp(low,NORMAL_WIDTH,PRONE_WIDTH),height);
+            return EntityDimensions.scalable(Mth.lerp(low,NORMAL_WIDTH,28F),height);
         }
         if (this.proneDimensions)
         {
             return EntityDimensions.scalable(PRONE_WIDTH, PRONE_HEIGHT);
         }
         return this.crouchingDimensions ? EntityDimensions.scalable(NORMAL_WIDTH, CROUCH_HEIGHT) : dimensions;
+    }
+
+    @Override
+    protected AABB makeBoundingBox()
+    {
+        return stanceBounds(this.getYRot());
+    }
+
+    @Override
+    public void updateFluidHeightAndDoFluidPushing(java.util.function.Predicate<net.minecraft.world.level.material.FluidState> predicate)
+    {
+        if(this.isNervLogisticsLocked()||this.isLaunchSequenceActive()||this.hasActiveCarrierMotion()||this.isFirstBattleActive())
+        {
+            // Rails and restraints own this transform. Vanilla's human-scale
+            // fluid scan traversed every voxel of three 60-metre wet airframes
+            // each tick even though its current impulse was immediately erased.
+            this.forgeFluidTypeHeight.clear();this.fluidHeight.clear();return;
+        }
+        super.updateFluidHeightAndDoFluidPushing(predicate);
+    }
+
+    private AABB stanceBounds(float bodyYaw)
+    {
+        AABB normal=super.makeBoundingBox();
+        if(!this.rifleStanceInitialized||this.getVisualPose()!=VISUAL_NORMAL||this.isFirstBattleActive()||this.isNervLogisticsLocked()||this.isLaunchSequenceActive())return normal;
+        float low=Mth.clamp((this.entityData.get(DATA_RIFLE_STANCE)-1)/2,0,1);
+        if(low<=.001F)return normal;
+        // Actual terminal stance spans about 26 x 60 blocks. A square 48-block
+        // footprint blocked walls beside the body and did not describe its length.
+        double halfWidth=Mth.lerp(low,NORMAL_WIDTH,28)/2D,halfLength=Mth.lerp(low,NORMAL_WIDTH,62)/2D;
+        double yaw=Math.toRadians(bodyYaw),c=Math.abs(Math.cos(yaw)),s=Math.abs(Math.sin(yaw));
+        double x=c*halfWidth+s*halfLength,z=s*halfWidth+c*halfLength;
+        return new AABB(this.getX()-x,normal.minY,this.getZ()-z,this.getX()+x,normal.maxY,this.getZ()+z);
+    }
+
+    private boolean hasHullTurningRoom(float yaw)
+    {
+        AABB b=stanceBounds(yaw);
+        // Leave lateral clearance for the next movement tick. Deflating the
+        // sides admitted a thin wall overlap and vanilla then blocked sliding.
+        return this.level().noCollision(this,new AABB(b.minX-.08,b.minY+.02,b.minZ-.08,b.maxX+.08,b.maxY-.02,b.maxZ+.08));
     }
 
     @Override
@@ -5915,7 +5974,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
         {
             java.util.List<EntityDataAccessor<Float>> keys=java.util.List.of(DATA_RIFLE_CROUCH,DATA_RIFLE_PRONE,DATA_RIFLE_READY,DATA_RIFLE_RECOIL,DATA_RIFLE_GAIT,DATA_RIFLE_MOVE,DATA_RIFLE_RUN,DATA_RIFLE_STANCE);
             int index=keys.indexOf(key);
-            if(index>=0){float value=this.entityData.get(keys.get(index));rifleSignalPrevious[index]=this.tickCount<2?value:rifleSignalCurrent[index];rifleSignalCurrent[index]=value;rifleSignalTicks[index]=this.tickCount;}
+            if(index>=0){float value=this.entityData.get(keys.get(index));rifleSignalPrevious[index]=this.tickCount<2?value:rifleSignalCurrent[index];rifleSignalCurrent[index]=value;rifleSignalTicks[index]=this.tickCount;if(poseSignalClocks!=null)poseSignalClocks[index].accept(value,index==4,false);}
         }
         if (DATA_LIVE_ACTION_PHASE.equals(key))
         {
@@ -5924,6 +5983,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
                     ? phase : this.clientActionPhase;
             this.clientActionPhase = phase;
             this.clientActionPhaseTick = this.tickCount;
+            if(this.level().isClientSide&&actionSignalClock!=null)actionSignalClock.accept(phase,false,true);
         }
         if (DATA_CROUCHING.equals(key) || DATA_PRONE.equals(key))
         {
@@ -6031,10 +6091,13 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
     {
         if(this.isFirstBattleActive()&&FirstBattleClip.ready())
             return FirstBattleClip.point(FIRST_BATTLE.spec(this),true,"eye_blocks",FIRST_BATTLE.time(this,partial)).subtract(0,passenger.getEyeHeight(),0);
+        if(this instanceof EvaPrototypeEntity un&&un.isEyeLaserActive())return EvaUNOptics.eye(un,partial).subtract(0,passenger.getEyeHeight(),0);
         if(this.getWeapon()==WEAPON_RIFLE&&this.isPoweredOn()&&this.getVisualPose()==VISUAL_NORMAL
                 &&!this.isVisuallyAirborneForRender()&&EvaBodyPose.hasSupportedStances())
             return EvaRifleKinematics.sample(this,partial,this.getAimDirectionForPoseCapture()).eye()
                     .subtract(0,passenger.getEyeHeight(),0);
+        if((this.getWeapon()==WEAPON_FISTS||this.getWeapon()==WEAPON_KNIFE)&&this.isPoweredOn()&&this.getVisualPose()==VISUAL_NORMAL&&!this.isVisuallyAirborneForRender()&&!this.hasLiveActionForRender(partial)&&EvaBodyPose.hasTerrainStances())
+            return EvaBodyPose.opticalEye(this,partial).subtract(0,passenger.getEyeHeight(),0);
         // The pilot rides at the animated rig's head socket. First person sees
         // the same world entity and the same evaluated bones as third person.
         float rad = (float) Math.toRadians(this.yBodyRot);

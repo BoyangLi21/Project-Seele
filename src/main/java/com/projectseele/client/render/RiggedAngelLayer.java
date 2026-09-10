@@ -118,7 +118,6 @@ public final class RiggedAngelLayer<T extends GeoAnimatable> extends GeoRenderLa
     }
     private static void emit(VertexConsumer target,PoseStack stack,Vector3f p,Vector3f n,float u,float v,int light,int overlay)
     {
-        target.vertex(stack.last().pose(),p.x,p.y,p.z).color(255,255,255,255).uv(u,v).overlayCoords(overlay).uv2(light)
-                .normal(stack.last().normal(),n.x,n.y,n.z).endVertex();
+        MeshVertexWriter.emit(target,stack.last().pose(),stack.last().normal(),p.x,p.y,p.z,u,v,light,overlay,n.x,n.y,n.z);
     }
 }

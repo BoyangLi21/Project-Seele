@@ -255,7 +255,7 @@ public final class EntryPlugKinematics
             plugInSocket = new RigidTransform(
                     new Vec3(0.0D, 0.0D,
                             -LOCK_DEPTH_BLOCKS * phase),
-                    0.0F, 0.0F, 0.0F, 1.0F);
+                    0.0F, 0.0F, (float)Math.sin(Math.PI*phase), (float)Math.cos(Math.PI*phase));
         }
         return socket.compose(plugInSocket);
     }

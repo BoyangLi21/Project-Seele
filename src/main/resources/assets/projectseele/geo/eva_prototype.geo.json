@@ -688,6 +688,33 @@
             0.87469
           ],
           "parent": "hand_r"
+        },
+        {
+          "name": "dorsal_liner",
+          "parent": "torso_upper",
+          "pivot": [
+            0.0,
+            169.28,
+            13.92
+          ]
+        },
+        {
+          "name": "dorsal_leaf_l",
+          "parent": "torso_upper",
+          "pivot": [
+            -7.2,
+            169.28,
+            13.92
+          ]
+        },
+        {
+          "name": "dorsal_leaf_r",
+          "parent": "torso_upper",
+          "pivot": [
+            7.2,
+            169.28,
+            13.92
+          ]
         }
       ]
     }

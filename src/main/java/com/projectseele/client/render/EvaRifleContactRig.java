@@ -119,7 +119,7 @@ public final class EvaRifleContactRig
         // Lean the gaze toward the existing sight line. This never moves the weapon.
         var head=model.getBone("head").orElseThrow();var headWorld=new Quaternionf(f.headRotation());
         EvaRigTransforms.rotate(head,EvaRigTransforms.rotation(EvaRigTransforms.parent(head,root)).invert().mul(headWorld));
-        if(!head.isHidden())EvaHeadClearance.apply(eva,head,root,gun,headWorld,right,forward,partial);
+        if(!head.isHidden()&&!(eva instanceof com.projectseele.entity.EvaPrototypeEntity un&&un.isEyeLaserActive()))EvaHeadClearance.apply(eva,head,root,gun,headWorld,right,forward,partial);
         var shoulder=EvaRigTransforms.point(model.getBone("arm_r").orElseThrow(),EvaRigTransforms.pivot(model.getBone("arm_r").orElseThrow()),root);
         if(LAST.size()>32)LAST.clear();LAST.put(eva.getId(),new Witness(f.muzzle(),re,le,-1,f.stock(),new Vec3(shoulder.x,shoulder.y,shoulder.z)));
         rotations.addAll(Set.of("neck","head","arm_r","forearm_r","wrist_r","hand_r","arm_l","forearm_l","wrist_l","hand_l","cannon"));

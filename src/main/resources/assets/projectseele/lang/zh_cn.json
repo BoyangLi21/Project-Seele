@@ -184,8 +184,8 @@
   "block.projectseele.nerv_strip_light": "NERV 嵌入式灯具",
   "block.projectseele.station_tactile_path": "车站导向盲道",
   "block.projectseele.station_tactile_warning": "车站警示盲道",
-  "entity.projectseele.eva_prototype": "未命名 EVA 试验机",
-  "hud.projectseele.role_experimental": "未命名试验机",
+  "entity.projectseele.eva_prototype": "EVA-UN",
+  "hud.projectseele.role_experimental": "EVA-UN",
   "block.projectseele.nerv_pyramid_panel": "NERV 金字塔深色饰面",
   "block.projectseele.nerv_pyramid_marking": "NERV 金字塔标识饰面",
   "subtitles.projectseele.eva_foot_concrete": "EVA 重步",
@@ -208,5 +208,6 @@
   "block.projectseele.nerv_medical_panel": "NERV 医疗监护面板",
   "hud.projectseele.pilot_link_ready": "神经连接完成 · Shift 蹲姿 / Z 卧倒 / V 弹出",
   "block.projectseele.nerv_office_chair": "NERV 工作椅",
-  "block.projectseele.nerv_briefing_tile": "NERV 作战地图屏"
+  "block.projectseele.nerv_briefing_tile": "NERV 作战地图屏",
+  "key.projectseele.un_eye_laser": "EVA-UN 眼部激光"
 }

@@ -33,16 +33,47 @@ public class SachielEntity extends Monster implements Angel, GeoEntity, SiegeAnc
 {
     private static final FirstBattleSignals.SignalSet FIRST_BATTLE=new FirstBattleSignals.SignalSet(SachielEntity.class);
     private static final net.minecraft.network.syncher.EntityDataAccessor<Float> FIELD=net.minecraft.network.syncher.SynchedEntityData.defineId(SachielEntity.class,net.minecraft.network.syncher.EntityDataSerializers.FLOAT);
+    private static final net.minecraft.network.syncher.EntityDataAccessor<Integer> STRIKE_AGE=net.minecraft.network.syncher.SynchedEntityData.defineId(SachielEntity.class,net.minecraft.network.syncher.EntityDataSerializers.INT);
+    private static final net.minecraft.network.syncher.EntityDataAccessor<Integer> STRIKE_MODE=net.minecraft.network.syncher.SynchedEntityData.defineId(SachielEntity.class,net.minecraft.network.syncher.EntityDataSerializers.INT);
+    private static final net.minecraft.network.syncher.EntityDataAccessor<org.joml.Vector3f> STRIKE_AIM=net.minecraft.network.syncher.SynchedEntityData.defineId(SachielEntity.class,net.minecraft.network.syncher.EntityDataSerializers.VECTOR3);
+    private final EvaPoseSignalClock strikeClock=new EvaPoseSignalClock();private boolean strikeHit;private LivingEntity strikeTarget;
+    public boolean isStrikeActive(){return entityData.get(STRIKE_AGE)>=0;}
+    public int strikeMode(){return entityData.get(STRIKE_MODE);}
+    public float strikeAge(float partial){return level().isClientSide?strikeClock.sample(FirstBattleSignals.clientFrameTime()):entityData.get(STRIKE_AGE);}
+    public Vec3 strikeAim(){return new Vec3(entityData.get(STRIKE_AIM));}
+    @Override public void onSyncedDataUpdated(net.minecraft.network.syncher.EntityDataAccessor<?> key){super.onSyncedDataUpdated(key);if(key.equals(STRIKE_AGE)&&strikeClock!=null&&level().isClientSide)strikeClock.accept(entityData.get(STRIKE_AGE),false,true);}
+    @Override public boolean doHurtTarget(net.minecraft.world.entity.Entity entity){return entity instanceof LivingEntity living&&beginStrike(living,1);}
+    public boolean beginStrike(LivingEntity target,int mode)
+    {
+        if(level().isClientSide||isStrikeActive()||isFirstBattleActive()||!target.isAlive())return false;
+        strikeTarget=target;strikeHit=false;entityData.set(STRIKE_MODE,mode);entityData.set(STRIKE_AIM,target.position().add(0,target.getBbHeight()*.84,0).toVector3f());entityData.set(STRIKE_AGE,0);getNavigation().stop();return true;
+    }
+    private void tickStrike()
+    {
+        int age=entityData.get(STRIKE_AGE)+1;entityData.set(STRIKE_AGE,age);getNavigation().stop();setDeltaMovement(getDeltaMovement().multiply(.45,1,.45));
+        if(age>=16&&age<=27&&!strikeHit&&strikeTarget!=null&&strikeTarget.isAlive())
+        {
+            var f=SachielStrike.sample(this,1);Vec3 start=strikeMode()==2?f.hand():f.hand().subtract(f.direction().scale(4));Vec3 tip=strikeMode()==2?f.tip():f.hand().add(f.direction().scale(2));
+            var wall=level().clip(new net.minecraft.world.level.ClipContext(start,tip,net.minecraft.world.level.ClipContext.Block.COLLIDER,net.minecraft.world.level.ClipContext.Fluid.NONE,this));
+            var contact=strikeTarget.getBoundingBox().inflate(1.1).clip(start,wall.getLocation());
+            if(contact.isPresent())
+            {
+                strikeHit=true;boolean hit=com.projectseele.event.EvaHitFeedback.hurt(strikeTarget,damageSources().mobAttack(this),strikeMode()==2?55:(float)getAttributeValue(Attributes.ATTACK_DAMAGE),contact.get(),f.direction());
+                if(hit){strikeTarget.push(f.direction().x*.65,.16,f.direction().z*.65);playSound(com.projectseele.registry.ModSounds.EVA_IMPACT.get(),1.1F,.7F);}
+            }
+        }
+        if(age>=42){entityData.set(STRIKE_AGE,-1);strikeTarget=null;}
+    }
     private boolean firstBattleUsed,firstBattleDeathResolved;
     private float firstBattlePreviousField;
     @Override public FirstBattleSignals.SignalSet firstBattleSignals(){return FIRST_BATTLE;}
     @Override public boolean isFirstBattleEva(){return false;}
     public boolean isFirstBattleActive(){return FIRST_BATTLE.active(this);}
     public boolean hasUsedFirstBattle(){return firstBattleUsed;}
-    @Override protected void defineSynchedData(){super.defineSynchedData();FIRST_BATTLE.define(this.entityData);this.entityData.define(FIELD,900F);}
+    @Override protected void defineSynchedData(){super.defineSynchedData();FIRST_BATTLE.define(this.entityData);this.entityData.define(FIELD,900F);this.entityData.define(STRIKE_AGE,-1);this.entityData.define(STRIKE_MODE,0);this.entityData.define(STRIKE_AIM,new org.joml.Vector3f());}
     public void beginFirstBattle(FirstBattleSignals.Spec spec,int partner)
     {
-        firstBattlePreviousField=atField;firstBattleUsed=true;selfDestructTicks=-1;this.getNavigation().stop();FIRST_BATTLE.begin(this,spec,partner,-1);setFirstBattleField(900);
+        entityData.set(STRIKE_AGE,-1);strikeTarget=null;firstBattlePreviousField=atField;firstBattleUsed=true;selfDestructTicks=-1;this.getNavigation().stop();FIRST_BATTLE.begin(this,spec,partner,-1);setFirstBattleField(900);
     }
     public void endFirstBattle(){if(isFirstBattleActive())FIRST_BATTLE.end(this);}
     public void recoverFirstBattle(){endFirstBattle();setFirstBattleField(firstBattlePreviousField);}
@@ -117,6 +148,7 @@ public class SachielEntity extends Monster implements Angel, GeoEntity, SiegeAnc
             }
             return;
         }
+        if(isStrikeActive()){if(spearCooldown>0)spearCooldown--;tickStrike();return;}
         LivingEntity target = this.getTarget();
         if ((target == null || !target.isAlive()) && this.siegeBeacon != null)
         {
@@ -137,9 +169,7 @@ public class SachielEntity extends Monster implements Angel, GeoEntity, SiegeAnc
             if (this.distanceToSqr(target) > 100.0D && this.distanceToSqr(target) < 3600.0D
                     && this.hasLineOfSight(target))
             {
-                target.hurt(this.damageSources().mobAttack(this), 55.0F);
-                target.push((target.getX() - this.getX()) * 0.12D, 0.55D,
-                        (target.getZ() - this.getZ()) * 0.12D);
+                beginStrike(target,2);
             }
         }
         if (this.getHealth() <= this.getMaxHealth() * 0.14F)
@@ -217,6 +247,7 @@ public class SachielEntity extends Monster implements Angel, GeoEntity, SiegeAnc
     public void readAdditionalSaveData(CompoundTag tag)
     {
         super.readAdditionalSaveData(tag);
+        entityData.set(STRIKE_AGE,-1);strikeTarget=null;strikeHit=false;
         atField=tag.contains("SachielAtField")?tag.getFloat("SachielAtField"):900;this.entityData.set(FIELD,atField);
         selfDestructTicks=tag.contains("SachielSelfDestruct")?tag.getInt("SachielSelfDestruct"):-1;firstBattleUsed=tag.getBoolean("FirstBattleUsed");firstBattleDeathResolved=tag.getBoolean("FirstBattleDeathResolved");firstBattlePreviousField=tag.getFloat("FirstBattlePreviousField");FIRST_BATTLE.restore(this,tag);
         this.siegeBeacon = tag.contains("SiegeBeacon")

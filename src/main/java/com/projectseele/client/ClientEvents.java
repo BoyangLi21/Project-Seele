@@ -147,6 +147,7 @@ public class ClientEvents
         event.register(Keybinds.CANCEL_LAUNCH);
         event.register(Keybinds.SELF_LAUNCH);
         event.register(Keybinds.COMMANDER_POSE);
+        event.register(Keybinds.UN_EYE_LASER);
         event.register(Keybinds.ULTRAMAN_TRANSFORM);
     }
 
@@ -157,6 +158,7 @@ public class ClientEvents
         {
             LocalTriangleMeshLayer.clearCache();
             RiggedAngelLayer.clearCache();
+            com.projectseele.client.render.EvaFootPlacement.clear();
             LocalVisualAssetFingerprint.clearCache();
             EvaPoseGraph.reload(resourceManager);
             EvaSkinnedMeshRuntime.reload(resourceManager);

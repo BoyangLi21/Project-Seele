@@ -55,7 +55,8 @@ public final class EvaBodyPose
     {
         try
         {
-            Path path=Path.of("projectseele-local-maps/eva_body_r06.json");
+            Path path=Path.of("projectseele-local-maps/eva_body_r11.json");
+            if(!Files.isRegularFile(path))path=Path.of("projectseele-local-maps/eva_body_r06.json");
             if(!Files.isRegularFile(path))path=Path.of("projectseele-local-maps/eva_body_r05.json");
             JsonObject all;
             if(Files.isRegularFile(path))all=JsonParser.parseString(Files.readString(path)).getAsJsonObject();
@@ -135,7 +136,14 @@ public final class EvaBodyPose
         return out[0].mul(out[1]);
     }
     public static boolean hasSupportedStances(){if(data==null)reload();return data.clips().containsKey("rifle_stance");}
+    public static boolean hasTerrainStances(){if(data==null)reload();return data.clips().containsKey("unarmed_stance");}
     public static Vector3f eyePoint(int variant){if(data==null)reload();return new Vector3f(data.eyes().get(variant));}
+    public static Vector3f eyePoint(EvaUnit01Entity eva){return eva.isExperimentalUnit()?new Vector3f(EvaUNOptics.LENS):eyePoint(eva.getUnitVariant());}
+    public static net.minecraft.world.phys.Vec3 opticalEye(EvaUnit01Entity eva,float partial)
+    {
+        var body=sample(eva,partial);body.rotations.get("head").rotateY((float)Math.toRadians(-eva.pilotHeadYawForRender(partial))).rotateX((float)Math.toRadians(-eva.pilotHeadPitchForRender(partial)));body.dirty();
+        var p=new Matrix4f(EvaRifleKinematics.world(eva,partial)).mul(body.matrix("head")).transformPosition(eyePoint(eva));return new net.minecraft.world.phys.Vec3(p.x,p.y,p.z);
+    }
     public static Sample sample(EvaUnit01Entity entity,float partial)
     {
         if(data==null)reload();Data d=data;int variant=entity.getUnitVariant();float phase=entity.rifleGaitPhase(partial);phase-=Mth.floor(phase);
@@ -146,11 +154,18 @@ public final class EvaBodyPose
         Sample body;
         if(supported)
         {
-            body=clip(d,variant,"rifle_stance",stance/3);
+            boolean armed=entity.getWeapon()==EvaUnit01Entity.WEAPON_RIFLE;
+            body=clip(d,variant,!armed&&d.clips().containsKey("unarmed_stance")?"unarmed_stance":"rifle_stance",stance/3);
+            if(stance<.001F)body=mix(clip(d,variant,"idle",idlePhase),body,move);
             float supportWeight=Mth.clamp((stance-1)/.5F,0,1);
             supportWeight=supportWeight*supportWeight*(3-2*supportWeight);
             float mobility=move*(1-supportWeight);
             if(mobility>0)body=mix(body,mix(gait,clip(d,variant,"crouch_walk",phase),Math.min(1,stance)),mobility);
+            if(stance>2.5F&&move>0&&d.clips().containsKey("prone_crawl"))
+            {
+                float t=Mth.clamp((stance-2.5F)*2,0,1);t=t*t*(3-2*t);
+                body=mix(body,clip(d,variant,"prone_crawl",phase),move*t);
+            }
         }
         else
         {
@@ -191,10 +206,10 @@ public final class EvaBodyPose
             body.positions.get("root").y-=floor;body.dirty();
         }
         for(var b:body.rig.values())if(b.name().contains("_axis_"))body.rotations.put(b.name(),new Quaternionf(b.bindRotation()));
-        for(var e:d.grip().entrySet())if(e.getKey().startsWith("finger_")&&body.rig.containsKey(e.getKey()))
+        for(var e:d.grip().entrySet())if(entity.getWeapon()==EvaUnit01Entity.WEAPON_RIFLE&&e.getKey().startsWith("finger_")&&body.rig.containsKey(e.getKey()))
         {
             var c=e.getValue().getAsJsonObject();if(c.has("rotation")){var v=first(c.get("rotation")).mul(Mth.DEG_TO_RAD);body.rotations.put(e.getKey(),new Quaternionf().rotationZYX(v.z,-v.y,-v.x));}
         }
-        body.dirty();return body;
+        EvaTerrainSupport.apply(entity,body);EvaImpactResponse.applyBody(body,entity,partial);body.dirty();return body;
     }
 }

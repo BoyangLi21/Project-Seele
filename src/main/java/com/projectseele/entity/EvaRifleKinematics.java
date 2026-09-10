@@ -61,7 +61,7 @@ public final class EvaRifleKinematics
         Vec3 pocket=shoulder.add(bodyRight.scale(lateralOffset)).add(bodyForward.scale(forwardOffset)).add(0,pocketY,0);
         Vector3f headPoint=new Matrix4f(world).mul(body.matrix("head")).transformPosition(new Vector3f(body.rig.get("head").pivot()));
         Vec3 joint=new Vec3(headPoint.x,headPoint.y,headPoint.z);
-        Vector3f eyeLocal=EvaBodyPose.eyePoint(entity.getUnitVariant()).sub(body.rig.get("head").pivot()).mul(EvaScale.RENDER_SCALE);
+        Vector3f eyeLocal=EvaBodyPose.eyePoint(entity).sub(body.rig.get("head").pivot()).mul(EvaScale.RENDER_SCALE);
         Quaternionf baseHead=facing(optical),head=new Quaternionf(baseHead);
         Vector3f initialEye=baseHead.transform(new Vector3f(eyeLocal));
         Vec3 eye=joint.add(initialEye.x,initialEye.y,initialEye.z);

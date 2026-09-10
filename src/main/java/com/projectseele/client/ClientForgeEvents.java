@@ -255,6 +255,7 @@ public final class ClientForgeEvents
                 send(ServerboundEvaControlPacket.ACTION_SELF_LAUNCH);
             }
         }
+        while(Keybinds.UN_EYE_LASER.consumeClick())if(eva instanceof com.projectseele.entity.EvaPrototypeEntity)send(ServerboundEvaControlPacket.ACTION_UN_EYE_LASER);
         while (Keybinds.COMMANDER_POSE.consumeClick())
         {
             if (player.isPassenger())

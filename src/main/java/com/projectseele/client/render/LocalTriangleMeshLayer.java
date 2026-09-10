@@ -152,13 +152,8 @@ public final class LocalTriangleMeshLayer<T extends GeoAnimatable> extends GeoRe
         float x = -(values[index] + part.pivotX()) / 16.0F;
         float y = (values[index + 1] + part.pivotY()) / 16.0F;
         float z = (values[index + 2] + part.pivotZ()) / 16.0F;
-        buffer.vertex(pose, x, y, z)
-                .color(255, 255, 255, 255)
-                .uv(values[index + 3], values[index + 4])
-                .overlayCoords(packedOverlay)
-                .uv2(packedLight)
-                .normal(normal, -values[index + 5], values[index + 6], values[index + 7])
-                .endVertex();
+        MeshVertexWriter.emit(buffer,pose,normal,x,y,z,values[index+3],values[index+4],
+                packedLight,packedOverlay,-values[index+5],values[index+6],values[index+7]);
     }
 
     public static void clearCache()
@@ -268,14 +263,8 @@ public final class LocalTriangleMeshLayer<T extends GeoAnimatable> extends GeoRe
         float x = -(absoluteX - mesh.centreX()) / 16.0F;
         float y = (absoluteY - mesh.minimumY()) / 16.0F;
         float z = (absoluteZ - mesh.centreZ()) / 16.0F;
-        buffer.vertex(pose, x, y, z)
-                .color(255, 255, 255, 255)
-                .uv(values[index + 3], values[index + 4])
-                .overlayCoords(packedOverlay)
-                .uv2(packedLight)
-                .normal(normal, -values[index + 5], values[index + 6],
-                        values[index + 7])
-                .endVertex();
+        MeshVertexWriter.emit(buffer,pose,normal,x,y,z,values[index+3],values[index+4],
+                packedLight,packedOverlay,-values[index+5],values[index+6],values[index+7]);
     }
 
     public static String captureTag(ResourceLocation meshResource)

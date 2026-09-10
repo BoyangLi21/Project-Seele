@@ -124,7 +124,7 @@ public final class EntryPlugCarrierRenderer
                 == EntryPlugCarrierEntity.STAGE_FIELD_EJECTING
                 || stage == EntryPlugCarrierEntity.STAGE_FIELD_LANDED;
         model.getBone("plug_crane_collar").ifPresent(bone ->
-                bone.setHidden(fieldEjected));
+                bone.setHidden(true));
     }
 
     @Override
@@ -149,12 +149,14 @@ public final class EntryPlugCarrierRenderer
 
     private static ResourceLocation unitTexture(EntryPlugCarrierEntity entity)
     {
+        if(entity.isIndependentUNPlug())return resource("textures/entity/entry_plug_un.png");
         int variant = Math.max(0, Math.min(2, entity.getAssignedVariant()));
         return LOCAL_TEXTURES[variant];
     }
 
     private static ResourceLocation unitMesh(EntryPlugCarrierEntity entity)
     {
+        if(entity.isIndependentUNPlug())return resource("mesh/entry_plug_un.mesh.json");
         int variant = Math.max(0, Math.min(2, entity.getAssignedVariant()));
         return MESHES[variant];
     }

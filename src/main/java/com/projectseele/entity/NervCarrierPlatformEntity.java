@@ -62,6 +62,9 @@ public final class NervCarrierPlatformEntity extends Entity
     private static final EntityDataAccessor<Integer> DATA_LCL_LEVEL_MILLI =
             SynchedEntityData.defineId(NervCarrierPlatformEntity.class,
                     EntityDataSerializers.INT);
+    private static final EntityDataAccessor<Integer> DATA_CRANE_PLUG = SynchedEntityData.defineId(NervCarrierPlatformEntity.class,EntityDataSerializers.INT);
+    public void linkCranePlug(EntryPlugCarrierEntity plug){this.entityData.set(DATA_CRANE_PLUG,plug==null?-1:plug.getId());}
+    public EntryPlugCarrierEntity getCranePlug(){var e=level().getEntity(entityData.get(DATA_CRANE_PLUG));return e instanceof EntryPlugCarrierEntity p?p:null;}
     private static final int CONTROL_TIMEOUT_TICKS = 40;
     public static final int LIFT_IDLE_OPEN = 0;
     public static final int LIFT_DOOR_CLOSING = 1;
@@ -125,6 +128,7 @@ public final class NervCarrierPlatformEntity extends Entity
         this.entityData.define(DATA_RESTRAINT_PROGRESS, 0);
         this.entityData.define(DATA_RESTRAINT_GANTRY, false);
         this.entityData.define(DATA_PLUG_CRANE, false);
+        this.entityData.define(DATA_CRANE_PLUG, -1);
         this.entityData.define(DATA_CRANE_BOTTOM_OFFSET, -2000);
         this.entityData.define(DATA_LCL_LEVEL_MILLI, 0);
     }

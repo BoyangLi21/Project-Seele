@@ -206,6 +206,7 @@ public final class EntryPlugCarrierEntity extends PathfinderMob
     {
         super.defineSynchedData();
         this.entityData.define(DATA_VARIANT, EvaUnit01Entity.UNIT_01);
+        this.entityData.define(DATA_INDEPENDENT_UN,false);
         this.entityData.define(DATA_STAGE, STAGE_SUSPENDED);
         this.entityData.define(DATA_STAGE_EPOCH, 0);
         this.entityData.define(DATA_PROGRESS, 0);
@@ -223,6 +224,10 @@ public final class EntryPlugCarrierEntity extends PathfinderMob
         this.entityData.define(DATA_SHELL_VISIBLE, true);
         this.entityData.define(DATA_ABORT_REQUESTED, false);
     }
+
+    private static final net.minecraft.network.syncher.EntityDataAccessor<Boolean> DATA_INDEPENDENT_UN=net.minecraft.network.syncher.SynchedEntityData.defineId(EntryPlugCarrierEntity.class,net.minecraft.network.syncher.EntityDataSerializers.BOOLEAN);
+    public boolean isIndependentUNPlug(){return entityData.get(DATA_INDEPENDENT_UN);}
+    public void assignIndependentEva(EvaPrototypeEntity eva){entityData.set(DATA_INDEPENDENT_UN,true);hostEvaUuid=eva.getUUID();entityData.set(DATA_HOST_EVA_ID,eva.getId());}
 
     public boolean hasCanonicalPose()
     {
@@ -384,7 +389,7 @@ public final class EntryPlugCarrierEntity extends PathfinderMob
 
     public int getAssignedVariant()
     {
-        return this.entityData.get(DATA_VARIANT);
+        return this.isIndependentUNPlug()?-1:this.entityData.get(DATA_VARIANT);
     }
 
     public void assignVariant(int variant)
@@ -823,7 +828,7 @@ public final class EntryPlugCarrierEntity extends PathfinderMob
         {
             return InteractionResult.SUCCESS;
         }
-        if (!this.isHatchOpen() || this.getInsertionStage() != STAGE_SUSPENDED
+        if ((isIndependentUNPlug() && getLinkedEva()!=null && getLinkedEva().isNervLogisticsLocked()) || !this.isHatchOpen() || this.getInsertionStage() != STAGE_SUSPENDED
                 || this.isVehicle() || player.isPassenger())
         {
             player.displayClientMessage(Component.literal(
@@ -1099,6 +1104,13 @@ public final class EntryPlugCarrierEntity extends PathfinderMob
     @Nullable
     private Vec3 formalDockBoardingAnchor()
     {
+        if(isIndependentUNPlug())
+        {
+            EvaUnit01Entity host=getLinkedEva();
+            if(host instanceof EvaPrototypeEntity un && com.projectseele.world.UNPlugDirector.atDock(un))
+                return com.projectseele.world.UNPlugDirector.dock(un).transformPoint(EntryPlugKinematics.HATCH_PORTAL_CENTRE_P).add(0,-1.6,0);
+            return null;
+        }
         if (!(this.level() instanceof ServerLevel server))
         {
             return null;
@@ -1419,6 +1431,7 @@ public final class EntryPlugCarrierEntity extends PathfinderMob
     public void addAdditionalSaveData(CompoundTag tag)
     {
         super.addAdditionalSaveData(tag);
+        tag.putBoolean("IndependentUN",isIndependentUNPlug());
         tag.putInt("EvaVariant", this.getAssignedVariant());
         tag.putInt("InsertionStage", this.getInsertionStage());
         tag.putInt("InsertionEpoch", this.getInsertionEpoch());
@@ -1449,6 +1462,7 @@ public final class EntryPlugCarrierEntity extends PathfinderMob
     public void readAdditionalSaveData(CompoundTag tag)
     {
         super.readAdditionalSaveData(tag);
+        entityData.set(DATA_INDEPENDENT_UN,tag.getBoolean("IndependentUN"));
         if (tag.contains("EvaVariant"))
         {
             this.assignVariant(tag.getInt("EvaVariant"));

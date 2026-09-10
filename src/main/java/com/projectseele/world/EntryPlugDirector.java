@@ -35,12 +35,12 @@ import net.minecraft.world.phys.Vec3;
 /** Owns the external entry plug from the overhead rack to the dorsal socket. */
 public final class EntryPlugDirector
 {
-    public static final int INSERTION_TICKS = 120;
+    public static final int INSERTION_TICKS = 190;
     /** Brief hard hold at the upper dock so the crane/yoke can settle before
      * the capsule starts its swept insertion path. */
-    private static final int INSERTION_SETTLE_TICKS = 6;
+    private static final int INSERTION_SETTLE_TICKS = 36;
     /** Ticks the crane takes to draw a seated capsule back out to its cage. */
-    public static final int EJECTION_TICKS = 105;
+    public static final int EJECTION_TICKS = 197;
     /** Pyrotechnic extraction, ballistic clearance and landing. */
     public static final int FIELD_EJECTION_TICKS = 70;
     private static final Map<ResourceKey<Level>, Map<Integer, UUID>>
@@ -518,6 +518,7 @@ public final class EntryPlugDirector
     public static void claimBoardedPlug(ServerLevel level,
                                         EntryPlugCarrierEntity boarded)
     {
+        if(boarded.isIndependentUNPlug())return;
         int variant = boarded.getAssignedVariant();
         EntryPlugCarrierEntity former = canonical(level, variant);
         if (former != null && former != boarded
@@ -614,6 +615,7 @@ public final class EntryPlugDirector
         // Drive translation and orientation from one eased clock. Rotating the
         // capsule in place for twelve ticks at the ceiling looked like a
         // mechanical twitch even though its centre was stationary.
+        com.projectseele.entity.EvaDorsalMechanism.prepare(unit,ticks);
         double linear = insertionProgress(ticks);
         RigidTransform pose = EntryPlugKinematics.insertionTransform(
                 unit, cageDockTransform(unit), linear);
@@ -1025,6 +1027,8 @@ public final class EntryPlugDirector
             progress = Math.max(0, progress - 1);
         }
         double linear = progress / 100.0D;
+        float hold=com.projectseele.entity.EvaDorsalMechanism.smooth(progress/28F);
+        com.projectseele.entity.EvaDorsalMechanism.set(unit,Math.min(com.projectseele.entity.EvaDorsalMechanism.open(unit),hold),Math.min(com.projectseele.entity.EvaDorsalMechanism.bow(unit),hold));
         RigidTransform pose = EntryPlugKinematics.insertionTransform(
                 unit, cageDockTransform(unit), linear);
         plug.setCanonicalTransform(pose);
@@ -1113,7 +1117,7 @@ public final class EntryPlugDirector
         {
             return false;
         }
-        boolean inHangar = isInsideAssignedCage(level, unit, variant);
+        boolean inHangar = unit instanceof com.projectseele.entity.EvaPrototypeEntity un ? UNPlugDirector.atDock(un) : isInsideAssignedCage(level, unit, variant);
         Vec3 socket = unit.getEntryPlugSocketPosition();
         Vec3 outward = unit.getForward()
                 .multiply(-1.0D, 0.0D, -1.0D).normalize();
@@ -1132,7 +1136,7 @@ public final class EntryPlugDirector
                         ? ridden : unit.getLockedEntryPlug();
         if (plug == null)
         {
-            plug = canonical(level, variant);
+            plug = unit.isExperimentalUnit()?null:canonical(level, variant);
         }
         if (plug == null)
         {
@@ -1220,6 +1224,7 @@ public final class EntryPlugDirector
      */
     public static void tickEjection(EntryPlugCarrierEntity plug, int ticks)
     {
+        if(plug.isIndependentUNPlug()){UNPlugDirector.extract(plug,ticks);return;}
         if (!(plug.level() instanceof ServerLevel level))
         {
             return;
@@ -1227,11 +1232,13 @@ public final class EntryPlugDirector
         int variant = plug.getAssignedVariant();
         EvaUnit01Entity unit = EvaLogisticsDirector.canonicalUnit(level, variant);
         Vec3 rest = plugRestPosition(level, variant);
-        double linear = Mth.clamp(ticks / (double) EJECTION_TICKS, 0.0D, 1.0D);
+        double linear = Mth.clamp((ticks-36) / 105.0D, 0.0D, 1.0D);
         if (unit == null)
         {
             return;
         }
+        if(ticks<=36)com.projectseele.entity.EvaDorsalMechanism.prepare(unit,ticks);
+        else if(ticks>=141)com.projectseele.entity.EvaDorsalMechanism.seal(unit,ticks-141);
         RigidTransform pose = EntryPlugKinematics.insertionTransform(
                 unit, EntryPlugKinematics.cageDockTransform(rest),
                 1.0D - linear);
@@ -1243,7 +1250,7 @@ public final class EntryPlugDirector
         Vec3 craneEye = pose.transformPoint(
                 EntryPlugKinematics.CRANE_ATTACHMENT_P);
         updateCables(level, variant, craneEye.y, craneEye.z, true);
-        if (linear >= 1.0D)
+        if (ticks >= EJECTION_TICKS)
         {
             int nextStage = plug.isVehicle()
                     ? EntryPlugCarrierEntity.STAGE_OCCUPIED
@@ -1737,6 +1744,7 @@ public final class EntryPlugDirector
     private static void remember(ServerLevel level, int variant,
                                  EntryPlugCarrierEntity plug)
     {
+        if(plug.isIndependentUNPlug())return;
         CACHED_PLUGS.computeIfAbsent(level.dimension(), ignored -> new HashMap<>())
                 .put(variant, plug.getUUID());
         EvaFleetSavedData data = EvaFleetSavedData.get(level.getServer());

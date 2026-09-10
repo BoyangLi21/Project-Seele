@@ -150,7 +150,7 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
         this.addRenderLayer(new LocalTriangleMeshLayer<>(this,
                 EvaUnit01Renderer::meshResourceForEntity,
                 entity -> entity.isExperimentalUnit()?new ResourceLocation(ProjectSeele.MODID,"textures/entity/eva_prototype_eyes.png"):eyeTextureResourceForVariant(entity.getUnitVariant()),
-                (entity, bone) -> !this.pilotView && entity.isPoweredOn()
+                (entity, bone) -> !this.pilotView && com.projectseele.entity.EvaDorsalMechanism.eyesEnabled(entity)
                         && "head".equals(bone.getName()), true));
         this.addRenderLayer(new LocalTriangleMeshLayer<>(this,
                 EvaUnit01Renderer::knifeMeshResource,
@@ -175,7 +175,8 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
                 (entity, bone) -> entity.getWeapon() == EvaUnit01Entity.WEAPON_LANCE
                         && "lance".equals(bone.getName())));
         this.addRenderLayer(new LocalTriangleMeshLayer<>(this,
-                entity -> ENTRY_PLUG_MESH, entity -> ENTRY_PLUG_TEXTURE,
+                entity -> entity.isExperimentalUnit()?new ResourceLocation(ProjectSeele.MODID,"mesh/entry_plug_un.mesh.json"):ENTRY_PLUG_MESH,
+                entity -> entity.isExperimentalUnit()?new ResourceLocation(ProjectSeele.MODID,"textures/entity/entry_plug_un.png"):ENTRY_PLUG_TEXTURE,
                 (entity, bone) -> !this.pilotView
                         && isEntryHardwareVisible(entity, bone.getName())));
         this.shadowRadius = 5.4F;

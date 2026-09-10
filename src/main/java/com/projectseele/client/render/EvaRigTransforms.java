@@ -46,7 +46,17 @@ final class EvaRigTransforms
     static double solveArm(GeoBone upper,GeoBone lower,GeoBone wrist,GeoBone hand,String side,
                            Vector3f target,Quaternionf handRotation,Vector3f pole,Matrix4f root)
     {
-        var centre=elbow(side);var shoulder=point(upper,pivot(upper),root);
+        return solveChain(upper,lower,wrist,hand,elbow(side),target,handRotation,pole,root);
+    }
+    static double solveLeg(GeoBone upper,GeoBone lower,GeoBone ankle,GeoBone foot,Vector3f target,Quaternionf rotation,Vector3f pole,Matrix4f root)
+    {
+        return solveChain(upper,lower,ankle,foot,pivot(lower).add(0,11.4F/16,0),target,rotation,pole,root);
+    }
+    static double solveGenericArm(GeoBone upper,GeoBone lower,GeoBone hand,Vector3f target,Quaternionf rotation,Vector3f pole,Matrix4f root)
+    {return solveChain(upper,lower,hand,hand,pivot(lower),target,rotation,pole,root);}
+    private static double solveChain(GeoBone upper,GeoBone lower,GeoBone wrist,GeoBone hand,Vector3f centre,Vector3f target,Quaternionf handRotation,Vector3f pole,Matrix4f root)
+    {
+        var shoulder=point(upper,pivot(upper),root);
         float scale=root.getScale(new Vector3f()).y;var u=new Vector3f(centre).sub(pivot(upper));var v=pivot(hand).sub(centre);
         float a=u.length()*scale,b=v.length()*scale;var direction=new Vector3f(target).sub(shoulder);float length=direction.length();
         if(length<1e-6F)direction.set(0,-1,0);else direction.div(length);

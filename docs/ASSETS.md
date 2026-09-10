@@ -202,3 +202,14 @@ R07 的两艘简化原创舰体已被本机私有导入替换。实际使用的�
 ## R09 金字塔饰面（2026-09-09）
 
 新增金字塔外墙和标识方块的模型由 `tools/build_r09_pyramid_materials.py` 构造，引用原版 black/red concrete 纹理，没有复制原版纹理文件。南面经典 NERV 叶片与字标使用本机已经存在的 `run/projectseele-local-maps/nerv_logo.png` 提取方块遮罩，受限于分辨率省略微小格言；原图、遮罩、含图案的存档及导出图保持本机私有，没有将 NERV 位图加入公开资源包。单向窗渲染与旧存档兼容处理为本项目代码。造型和布局研究见 [R09](WORLD_REFINEMENT_R09.md) 与 [TV 对照](TV_LAYOUT_REFERENCE_R08.md)。
+
+
+## R11 EVA-UN、工业吊机与识别图样（2026-09-10）
+
+EVA-UN 的分层黑金装甲、单目、真实背部机械及吊机由项目程序构造。原三机的局部背部切孔仅作用于本机私有网格；不把第三方网格加入公开资源。原创试验机的公开模型、70 骨动作接口和新增机械节点继续由项目维护。
+
+UN 徽记的矢量绘图来源为 [Wikimedia Commons / Emblem of the United Nations](https://commons.wikimedia.org/wiki/File:Emblem_of_the_United_Nations.svg)，Joowwww 绘制、Colohisto 清理，来源页为 PD-self。参照 [UN 官方徽记说明](https://www.un.org/en/about-us/un-emblem-and-flag)。该图样用于试验机的几何徽记和本机军事场景标志，来源与派生记录见 `artifacts/world_motion_r11/references/un_asset.json`。
+
+SBW 的七种载具模型覆写保留在 `run/resourcepacks/eva_real_model`。文字在实际装甲、机翼或舱框识别板上随骨架运动。白／黑色块只写入原图集中未被原有 UV 引用的位置，图集尺寸、原多边形和原 UV 引用不变；原模型、贴图及派生覆写不作为本项目 MIT 素材发布。两艘历史驱逐舰继续沿用 R08 私有导入及作者署名。
+
+本轮低姿态爬行属于在既有测量支撑姿态上的原创约束动作，不标为真人动捕原片。受击与机械音效复用项目已有原创合成资源。实际 TV 插入画面和线稿仅用于本机研究，未进入发行包。详见 [R11 记录](WORLD_MOTION_R11.md)。

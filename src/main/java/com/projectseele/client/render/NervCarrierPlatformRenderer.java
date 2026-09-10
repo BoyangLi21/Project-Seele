@@ -199,50 +199,7 @@ public final class NervCarrierPlatformRenderer
                                  MultiBufferSource buffers,
                                  int packedLight)
     {
-        BlockState frame = Blocks.IRON_BLOCK.defaultBlockState();
-        BlockState carriage = Blocks.POLISHED_BLACKSTONE.defaultBlockState();
-        BlockState cable = Blocks.CHAIN.defaultBlockState();
-        BlockState copper = Blocks.CUT_COPPER.defaultBlockState();
-        BlockState accent = switch (entity.getUnitVariant())
-        {
-            case 0 -> Blocks.ORANGE_CONCRETE.defaultBlockState();
-            case 2 -> Blocks.RED_CONCRETE.defaultBlockState();
-            default -> Blocks.PURPLE_CONCRETE.defaultBlockState();
-        };
-        float bottom = entity.getCraneBottomOffset(partialTick);
-
-        // Ceiling bridge and compact powered trolley.
-        renderBlock(poses, buffers, packedLight, frame,
-                -6.5F, -0.10F, -1.35F, 13.0F, 0.55F, 0.55F);
-        renderBlock(poses, buffers, packedLight, frame,
-                -6.5F, -0.10F, 0.80F, 13.0F, 0.55F, 0.55F);
-        renderBlock(poses, buffers, packedLight, carriage,
-                -2.0F, -0.45F, -1.10F, 4.0F, 0.80F, 2.20F);
-        renderBlock(poses, buffers, packedLight, copper,
-                -3.5F, -0.78F, -0.32F, 7.0F, 0.32F, 0.64F);
-
-        // Paired hoist lines terminate in the lower spreader; no free cable,
-        // floating piston or independently painted stone remains in-world.
-        float cableTop = -0.75F;
-        float cableHeight = Math.max(0.25F, cableTop - bottom - 0.45F);
-        for (float x : new float[] {-3.0F, 3.0F})
-        {
-            renderBlock(poses, buffers, packedLight, cable,
-                    x - 0.12F, bottom + 0.45F, -0.12F,
-                    0.24F, cableHeight, 0.24F);
-            renderBlock(poses, buffers, packedLight, copper,
-                    x - 0.40F, bottom + 0.10F, -0.40F,
-                    0.80F, 0.45F, 0.80F);
-        }
-        renderBlock(poses, buffers, packedLight, frame,
-                -4.25F, bottom - 0.12F, -1.10F,
-                8.50F, 0.42F, 0.55F);
-        renderBlock(poses, buffers, packedLight, frame,
-                -4.25F, bottom - 0.12F, 0.55F,
-                8.50F, 0.42F, 0.55F);
-        renderBlock(poses, buffers, packedLight, accent,
-                -1.30F, bottom - 0.42F, -0.70F,
-                2.60F, 0.70F, 1.40F);
+        PlugGantryRenderer.render(entity,partialTick,poses,buffers,packedLight);
     }
 
     /** Opposed shoulder and hip restraints which fold into the side towers. */

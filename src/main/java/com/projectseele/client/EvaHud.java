@@ -364,6 +364,11 @@ public final class EvaHud
 
         // Weapon line.
         String weapon=gui.getFont().plainSubstrByWidth(Component.translatable(eva.getWeaponTranslationKey()).getString(),width/2-20);
+        if(eva instanceof com.projectseele.entity.EvaPrototypeEntity un)
+        {
+            String status=un.isEyeLaserActive()?"OPTIC / CHARGING":un.eyeLaserCooldown()>0?String.format("OPTIC / %.1fs",un.eyeLaserCooldown()/20F):"K / OPTIC READY";
+            guiGraphics.drawString(gui.getFont(),status,width-10-gui.getFont().width(status),height-51,0xFFCCB879);
+        }
         guiGraphics.drawString(gui.getFont(),weapon,width-10-gui.getFont().width(weapon),height-38,0xFFE4C68A);
 
         String stanceKey = eva.isShieldBraced() ? "hud.projectseele.stance_shield"

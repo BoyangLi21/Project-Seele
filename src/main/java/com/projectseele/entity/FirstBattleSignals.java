@@ -23,6 +23,7 @@ public final class FirstBattleSignals
         double value(long now){double mix=Math.max(0,Math.min(1,(now-at)/50_000_000D));return from+(to-from)*mix;}
     }
     public static void beginClientFrame(long now){clientFrameNanos=now;}
+    public static long clientFrameTime(){return clientFrameNanos==0?System.nanoTime():clientFrameNanos;}
     private static float clientTime(Entity entity,int age)
     {
         long now=clientFrameNanos==0?System.nanoTime():clientFrameNanos;ClientClock clock=CLIENT_CLOCKS.get(entity);

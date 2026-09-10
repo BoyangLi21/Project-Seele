@@ -170,6 +170,8 @@ public final class EvaPoseGraph
         EvaPoseTransition.rememberGecko(model);
         EvaMotionEngineV2.BoneWrites motionWrites = EvaMotionEngineV2.apply(
                 entity, model, partialTick);
+        var locomotion=EvaLocomotionRig.apply(entity,model,partialTick);
+        if(!locomotion.rotationBones().isEmpty())motionWrites=locomotion;
 
         if (!motionWrites.rotationBones().contains("aim_pitch"))
         {
@@ -199,12 +201,20 @@ public final class EvaPoseGraph
                 head.setRotZ(head.getRotZ());
             });
         }
+        var impact=EvaImpactPose.apply(entity,model,partialTick);
+        if(!impact.rotationBones().isEmpty())
+        {Set<String> r=new LinkedHashSet<>(motionWrites.rotationBones());r.addAll(impact.rotationBones());motionWrites=new EvaMotionEngineV2.BoneWrites(Set.copyOf(r),motionWrites.positionBones(),"MOTION_ENGINE_LIVE_ACTION");}
         EvaMotionEngineV2.BoneWrites transitions = EvaPoseTransition.apply(
                 entity, model, partialTick);
         var jointWrites=entity.getMotionLabPhysicsPreview()==0&&!entity.isFirstBattleActive()?EvaArmArticulation.apply(model):EvaMotionEngineV2.BoneWrites.empty();
         var firearm=EvaRifleContactRig.apply(entity,model,partialTick,modelToWorld);
+        var terrain=EvaFootPlacement.apply(entity,model,partialTick,modelToWorld);
+        var optics=EvaUNLaserPose.apply(entity,model,modelToWorld);
+        var dorsal=EvaDorsalPose.apply(entity,model);
         Set<String> jointR=new LinkedHashSet<>(jointWrites.rotationBones());jointR.addAll(firearm.rotationBones());
         Set<String> jointP=new LinkedHashSet<>(jointWrites.positionBones());jointP.addAll(firearm.positionBones());
+        jointR.addAll(terrain.rotationBones());jointP.addAll(terrain.positionBones());
+        jointR.addAll(optics.rotationBones());jointR.addAll(dorsal.rotationBones());
         firearm=new EvaMotionEngineV2.BoneWrites(Set.copyOf(jointR),Set.copyOf(jointP),"MOTION_ENGINE_LIVE_ACTION");
         if(!firearm.rotationBones().isEmpty())
         {

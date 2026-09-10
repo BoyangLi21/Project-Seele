@@ -22,6 +22,7 @@ public final class LocalVisualAssetFingerprint
             "eva_unit02", new MeshContract(5_770, 43, true),
             "mass_production_eva", new MeshContract(4_901, 15, false),
             "eva_prototype", new MeshContract(98_722, 46, false));
+    private static final Map<String,MeshContract> R11_CONTRACTS=Map.of("eva_unit00",new MeshContract(6994,46,true),"eva_unit01",new MeshContract(7454,46,true),"eva_unit02",new MeshContract(7244,46,true),"eva_prototype",new MeshContract(86855,49,false));
     private static final Map<String, Fingerprint> CACHE = new ConcurrentHashMap<>();
 
     private LocalVisualAssetFingerprint() {}
@@ -60,7 +61,7 @@ public final class LocalVisualAssetFingerprint
         String meshTag = LocalTriangleMeshLayer.captureTag(mesh);
         MeshContract contract = CONTRACTS.get(assetName);
         boolean meshMatches = contract != null
-                && contract.matches(meshTag, mesh);
+                && (contract.matches(meshTag, mesh) || R11_CONTRACTS.containsKey(assetName) && R11_CONTRACTS.get(assetName).matches(meshTag,mesh));
         boolean valid = complete && sameSource && meshMatches;
         String reason = !complete ? "missing-resource"
                 : !sameSource ? "mixed-resource-packs"
