@@ -125,6 +125,8 @@ public final class NervCarrierPlatformEntity extends Entity
     private float clientLclPreviousLevel;
     private float clientLclCurrentLevel;
     private boolean clientLclLevelInitialized;
+    private float clientRestraintPrevious,clientRestraintCurrent;
+    private boolean clientRestraintInitialized;
 
     public NervCarrierPlatformEntity(
             EntityType<? extends NervCarrierPlatformEntity> type, Level level)
@@ -189,6 +191,11 @@ public final class NervCarrierPlatformEntity extends Entity
     public float getRestraintProgress()
     {
         return this.entityData.get(DATA_RESTRAINT_PROGRESS) / 1000.0F;
+    }
+
+    public float getRestraintProgress(float partial)
+    {
+        return clientRestraintInitialized?net.minecraft.util.Mth.lerp(partial,clientRestraintPrevious,clientRestraintCurrent):getRestraintProgress();
     }
 
     /**
@@ -622,6 +629,9 @@ public final class NervCarrierPlatformEntity extends Entity
         }
         if (this.level().isClientSide && this.isRestraintGantry())
         {
+            float restraint=getRestraintProgress();
+            if(!clientRestraintInitialized){clientRestraintPrevious=clientRestraintCurrent=restraint;clientRestraintInitialized=true;}
+            else{clientRestraintPrevious=clientRestraintCurrent;clientRestraintCurrent=restraint;}
             float synced = this.entityData.get(DATA_LCL_LEVEL_MILLI)
                     / 1000.0F;
             if (!this.clientLclLevelInitialized)

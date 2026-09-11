@@ -759,16 +759,24 @@ public final class EntryPlugDirector
                 current.minZ);
         BlockPos max = BlockPos.containing(current.maxX, current.maxY,
                 current.maxZ);
+        boolean modern=FacilityV2EvaRuntime.ready(level,variant);
+        BlockPos origin=RegionalFacilityLayout.evaOrigin(level);
+        BlockPos cage=hangarBed(level,variant);
         for (BlockPos position : BlockPos.betweenClosed(min, max))
         {
+            BlockState state=level.getBlockState(position);
+            var shape=state.getCollisionShape(level,position);
+            // Most of the swept box is air. Air cannot obstruct a capsule and
+            // must not trigger repeated filesystem-backed layout resolution.
+            if(shape.isEmpty())continue;
             // The active trolley/yoke/collar is the mechanism carrying this
             // capsule and is repositioned immediately after the accepted
             // motion step. It must not interlock against itself.
-            boolean craneCell = FacilityV2EvaRuntime.ready(level, variant)
+            boolean craneCell = modern
                     ? FacilityV2EvaRuntime.isPlugCraneCell(
                             level, variant, craneEye.y, craneEye.z, position)
                     : EvaHangarBuilder.isPlugCraneCell(
-                            RegionalFacilityLayout.evaOrigin(level),
+                            origin,
                             variant, craneEye.y, craneEye.z, position);
             if (craneCell
                     || EvaHangarBuilder.isActivePlugCraneCell(
@@ -776,7 +784,6 @@ public final class EntryPlugDirector
             {
                 continue;
             }
-            BlockState state = level.getBlockState(position);
             /*
              * A restart loses the process-local crane frame cache while the
              * last visible yoke remains persisted in the save.  Its vertical
@@ -787,16 +794,11 @@ public final class EntryPlugDirector
              * real cage walls and floors fail-closed while preventing the
              * capsule from interlocking against the machine carrying it.
              */
-            if (isPersistedCraneHardware(level, variant, position, state))
+            if (isPersistedCraneHardware(cage, position, state))
             {
                 continue;
             }
-            if (state.getCollisionShape(level, position).isEmpty())
-            {
-                continue;
-            }
-            for (AABB local : state.getCollisionShape(level, position)
-                    .toAabbs())
+            for (AABB local : shape.toAabbs())
             {
                 AABB solid = local.move(position);
                 double before = intersectionVolume(previous, solid);
@@ -939,10 +941,9 @@ public final class EntryPlugDirector
     }
 
     private static boolean isPersistedCraneHardware(
-            ServerLevel level, int variant, BlockPos position,
+            BlockPos bed, BlockPos position,
             BlockState state)
     {
-        BlockPos bed = hangarBed(level, variant);
         int dx = position.getX() - bed.getX();
         int dy = position.getY() - bed.getY();
         int dz = position.getZ() - bed.getZ();

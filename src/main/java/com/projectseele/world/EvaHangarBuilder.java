@@ -1151,7 +1151,7 @@ public final class EvaHangarBuilder
                 }
                 else
                 {
-                    set(level, position, transportFloor(position, origin, variant));
+                    set(level, position, transportFloor(level, position, origin, variant));
                 }
             }
         }
@@ -1197,7 +1197,7 @@ public final class EvaHangarBuilder
                 }
                 else
                 {
-                    set(level, position, transportFloor(position, origin, variant));
+                    set(level, position, transportFloor(level, position, origin, variant));
                 }
             }
         }
@@ -1241,7 +1241,7 @@ public final class EvaHangarBuilder
                     BlockPos position = new BlockPos(
                             hangar.getX() + dx, hangar.getY(), z);
                     set(level, position,
-                            transportFloor(position, origin, variant));
+                            transportFloor(level, position, origin, variant));
                 }
             }
         }
@@ -1438,7 +1438,7 @@ public final class EvaHangarBuilder
             for (int x = -CORRIDOR_HALF_WIDTH; x <= CORRIDOR_HALF_WIDTH; x++)
             {
                 BlockPos floor = new BlockPos(bed.getX() + x, bed.getY(), z);
-                set(level, floor, transportFloor(floor, origin, variant));
+                set(level, floor, transportFloor(level, floor, origin, variant));
                 // Inside the audited launch column, extend only the carrier
                 // rail. A tunnel roof here used to cap all three shafts.
                 if (z > shaftPortalZ)
@@ -2453,7 +2453,7 @@ public final class EvaHangarBuilder
         return result.isEmpty() ? "ok" : result.toString();
     }
 
-    private static BlockState transportFloor(BlockPos position, BlockPos origin,
+    private static BlockState transportFloor(ServerLevel level, BlockPos position, BlockPos origin,
                                              int variant)
     {
         BlockPos hangar = hangarBed(origin, variant);
@@ -2463,6 +2463,12 @@ public final class EvaHangarBuilder
             return Blocks.LODESTONE.defaultBlockState();
         }
         int relativeX = position.getX() - hangar.getX();
+        if(TvLaunchFacility.enabled(level))
+        {
+            if(Math.abs(relativeX)==5)return ModBlocks.NERV_MACHINE_EDGE.get().defaultBlockState();
+            if(Math.abs(relativeX)<=10&&Math.floorMod(position.getZ()-hangar.getZ(),6)==0)return ModBlocks.NERV_MACHINE_PANEL.get().defaultBlockState();
+            return ModBlocks.NERV_FLOOR_PANEL.get().defaultBlockState();
+        }
         if (Math.abs(relativeX) == 5)
         {
             // The original black-on-black basalt rails disappeared into the
@@ -2486,6 +2492,7 @@ public final class EvaHangarBuilder
 
     private static BlockState personnelDeck(ServerLevel level,BlockState accent,boolean marked)
     {
+        if(TvLaunchFacility.enabled(level))return (marked?ModBlocks.NERV_MACHINE_EDGE:ModBlocks.NERV_MACHINE_PANEL).get().defaultBlockState();
         if(!RegionalFacilityLayout.migrated(level.getServer()))return marked?accent:Blocks.IRON_BLOCK.defaultBlockState();
         // These decks are maintained on login and during bridge operation;
         // an offline cosmetic patch alone would be overwritten immediately.

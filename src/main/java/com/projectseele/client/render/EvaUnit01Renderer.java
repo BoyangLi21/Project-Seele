@@ -223,7 +223,7 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
             // has no independent entity, packet clock or culling lifetime.
             NervMovingCarrierRenderer.render(poseStack, bufferSource,
                     nervFloodlit ? LightTexture.FULL_BRIGHT : packedLight,
-                    entity.getUnitVariant());
+                    entity,partialTick);
         }
         boolean recording = EvaPoseRuntimeRecorder.wants(entity);
         if (recording)

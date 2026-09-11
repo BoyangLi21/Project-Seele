@@ -54,12 +54,7 @@ public final class NervHangarDoorRenderer
         int facilityLight = LightTexture.FULL_BRIGHT;
         double slide = door.getOpenProgress(partialTick) * 17.0D;
         poses.pushPose();
-        panel(poses, buffers, facilityLight,
-                -16.5D - slide, 0.0D, -0.25D,
-                16.5F, 65.0F, 0.5F);
-        panel(poses, buffers, facilityLight,
-                slide, 0.0D, -0.25D,
-                16.5F, 65.0F, 0.5F);
+        TvFacilityMeshes.pressureDoors(poses,facilityLight,door.getOpenProgress(partialTick));
         splitLogo(poses, buffers, slide);
         poses.popPose();
         super.render(door, yaw, partialTick, poses, buffers, packedLight);
@@ -74,9 +69,9 @@ public final class NervHangarDoorRenderer
         VertexConsumer consumer = buffers.getBuffer(
                 RenderType.entityTranslucent(texture));
         logoHalf(poses, consumer, -12.0D - slide, -slide,
-                18.0D, 46.0D, -0.266D, 1.0F, 0.5F);
+                18.0D, 46.0D, -0.61D, 1.0F, 0.5F);
         logoHalf(poses, consumer, slide, 12.0D + slide,
-                18.0D, 46.0D, -0.266D, 0.5F, 0.0F);
+                18.0D, 46.0D, -0.61D, 0.5F, 0.0F);
     }
 
     private static void logoHalf(PoseStack poses, VertexConsumer consumer,
@@ -85,10 +80,10 @@ public final class NervHangarDoorRenderer
     {
         Matrix4f matrix = poses.last().pose();
         Matrix3f normal = poses.last().normal();
-        vertex(consumer, matrix, normal, x0, y0, z, u0, 1.0F);
-        vertex(consumer, matrix, normal, x1, y0, z, u1, 1.0F);
-        vertex(consumer, matrix, normal, x1, y1, z, u1, 0.0F);
         vertex(consumer, matrix, normal, x0, y1, z, u0, 0.0F);
+        vertex(consumer, matrix, normal, x1, y1, z, u1, 0.0F);
+        vertex(consumer, matrix, normal, x1, y0, z, u1, 1.0F);
+        vertex(consumer, matrix, normal, x0, y0, z, u0, 1.0F);
     }
 
     private static void vertex(VertexConsumer consumer, Matrix4f pose,

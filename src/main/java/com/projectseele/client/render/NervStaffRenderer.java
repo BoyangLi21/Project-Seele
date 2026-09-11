@@ -24,10 +24,10 @@ public final class NervStaffRenderer extends MobRenderer<NervStaffEntity,PlayerM
     {
         super(context,new StaffModel(context.bakeLayer(ModelLayers.PLAYER),false),.35F);regular=model;slim=new StaffModel(context.bakeLayer(ModelLayers.PLAYER_SLIM),true);
     }
-    @Override public ResourceLocation getTextureLocation(NervStaffEntity entity){return new ResourceLocation("projectseele","textures/entity/staff_"+entity.skin()+".png");}
+    @Override public ResourceLocation getTextureLocation(NervStaffEntity entity){return NervStaffSkins.forStaff(entity).texture();}
     @Override public void render(NervStaffEntity entity,float yaw,float partial,PoseStack pose,MultiBufferSource buffers,int light)
     {
-        model=java.util.Set.of("misato","ritsuko","maya").contains(entity.skin())?slim:regular;super.render(entity,yaw,partial,pose,buffers,light);
+        model=NervStaffSkins.forStaff(entity).slim()?slim:regular;super.render(entity,yaw,partial,pose,buffers,light);
     }
     @Override protected boolean shouldShowName(NervStaffEntity entity){return super.shouldShowName(entity)&&entity.distanceToSqr(net.minecraft.client.Minecraft.getInstance().player)<144;}
 }

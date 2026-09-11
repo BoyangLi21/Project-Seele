@@ -38,6 +38,7 @@ public final class NervCarrierPlatformRenderer
         {
             return;
         }
+        if(entity.isRestraintGantry()||entity.isPlugCrane())packedLight=net.minecraft.client.renderer.LightTexture.FULL_BRIGHT;
         if (entity.isPlugCrane())
         {
             renderPlugCrane(entity, partialTick, poses, buffers, packedLight);
@@ -74,8 +75,7 @@ public final class NervCarrierPlatformRenderer
                 renderLclSurface(entity, partialTick, poses, buffers,
                         packedLight);
             }
-            renderWetCageRestraints(entity, poses, buffers, packedLight,
-                    accent);
+            TvFacilityMeshes.cage(poses,packedLight,entity.getRestraintProgress(partialTick));
             super.render(entity, yaw, partialTick, poses, buffers,
                     packedLight);
             return;
@@ -143,15 +143,18 @@ public final class NervCarrierPlatformRenderer
                                   int packedLight)
     {
         float level = entity.getLclVisualLevel(partialTick);
-        float fraction = Math.abs(level - Math.round(level));
-        if (level <= 0.01F || fraction <= 0.01F)
+        if (level <= 0.01F)
         {
             return;
         }
-        renderBlock(poses, buffers, packedLight,
-                Blocks.ORANGE_STAINED_GLASS.defaultBlockState(),
-                -19.0F, level + 0.90F, -26.0F,
-                38.0F, 0.10F, 52.0F);
+        // TV wet cages have a dark wine-coloured, nearly opaque cooling bath.
+        // Its exact surface follows the same synchronized hydraulic level.
+        // The underlying LCL physics and every drainage interlock are retained.
+        var out=buffers.getBuffer(net.minecraft.client.renderer.RenderType.entityTranslucent(
+                new ResourceLocation("minecraft","textures/block/white_concrete.png")));
+        float y=level+.93F;
+        for(float[] p:new float[][]{{-19.5F,26.5F,0,1},{19.5F,26.5F,1,1},{19.5F,-26.5F,1,0},{-19.5F,-26.5F,0,0}})
+            out.vertex(poses.last().pose(),p[0],y,p[1]).color(132,59,91,250).uv(p[2],p[3]).overlayCoords(OverlayTexture.NO_OVERLAY).uv2(15728880).normal(poses.last().normal(),0,1,0).endVertex();
     }
 
     /**

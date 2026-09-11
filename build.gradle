@@ -159,6 +159,21 @@ minecraft {
             if (project.hasProperty('regionalBuild')) {
                 property 'projectseele.regionalBuild', project.property('regionalBuild')
             }
+            if (project.hasProperty('tvFacilityProfile')) {
+                jvmArgs '-XX:StartFlightRecording=filename=D:/eva/artifacts/tv_facilities_r16/native_profile.jfr,settings=profile,dumponexit=true,maxsize=128m'
+            }
+            if (project.hasProperty('tvTransitCapture')) {
+                property 'projectseele.tvTransitCapture', 'true'
+            }
+            if (project.hasProperty('tvExteriorService')) {
+                property 'projectseele.exteriorService', project.property('tvExteriorService')
+            }
+            if (project.hasProperty('nativeCapture')) {
+                property 'projectseele.nativeCapture', 'true'
+            }
+            if (project.hasProperty('tvNpcCapture')) {
+                property 'projectseele.tvNpcCapture', 'true'
+            }
             if (project.hasProperty('photoRenderDistance')) {
                 property 'projectseele.photoRenderDistance', project.property('photoRenderDistance')
             }
@@ -182,8 +197,10 @@ minecraft {
             // play. Keep the user's requested 6G heap on every client launch;
             // restricting it to capture-only runs silently left the desktop
             // test BAT at 4G and allowed the light engine to exhaust the heap.
-            jvmArgs project.hasProperty('lowEndClient') ? '-Xms1G' : '-Xms2G',
-                    project.hasProperty('lowEndClient') ? '-Xmx4G' : '-Xmx6G', '-XX:+UseG1GC',
+            def clientMaxHeap = (project.findProperty('clientHeap') ?: (project.hasProperty('lowEndClient') ? '4G' : '6G')).toString()
+            if (!(clientMaxHeap ==~ /[1-9][0-9]*[mMgG]/)) throw new GradleException('clientHeap must be a positive JVM memory size, such as 4G')
+            jvmArgs project.hasProperty('clientHeap') || project.hasProperty('lowEndClient') ? '-Xms1G' : '-Xms2G',
+                    '-Xmx' + clientMaxHeap, '-XX:+UseG1GC',
                     '-XX:MaxGCPauseMillis=80'
             if (project.hasProperty('visualCapturePose')) {
                 property 'projectseele.visualCapturePose', project.property('visualCapturePose')
@@ -305,7 +322,7 @@ dependencies {
     }
     // Client-only retained-chunk renderer. It is intentionally absent from
     // server packs and avoids LOD artefacts in the deep GeoFront dimension.
-    if (!project.hasProperty('distantHorizons') && localFarsight.exists() && localCupboard.exists()) {
+    if (!project.hasProperty('distantHorizons') && !project.hasProperty('nativeCapture') && localFarsight.exists() && localCupboard.exists()) {
         runtimeOnly fg.deobf('local:cupboard:1.20.1-3.9')
         runtimeOnly fg.deobf('local:farsight:1.20.1-5.1')
     }
@@ -313,7 +330,7 @@ dependencies {
     if (project.hasProperty('distantHorizons')) {
         runtimeOnly fg.deobf('local:DistantHorizons:3.2.0-b-1.20.1-fabric-forge')
     }
-    if (project.hasProperty('lowEndClient')) {
+    if (project.hasProperty('lowEndClient') || project.hasProperty('optimizedClient')) {
         runtimeOnly fg.deobf('local:embeddium:0.3.31+mc1.20.1')
         runtimeOnly fg.deobf('local:ferritecore:6.0.1-forge')
     }

@@ -27,6 +27,15 @@ public final class ModBlocks
     public static final RegistryObject<Block> NERV_WALL_PANEL=finish("nerv_wall_panel",Blocks.IRON_BLOCK,0);
     public static final RegistryObject<Block> NERV_STRUCTURAL_PANEL=BLOCKS.register("nerv_structural_panel",
             ()->new Block(BlockBehaviour.Properties.copy(Blocks.REINFORCED_DEEPSLATE)));
+    public static final RegistryObject<Block> NERV_MACHINE_PANEL=structuralFinish("nerv_machine_panel");
+    public static final RegistryObject<Block> NERV_SHAFT_PANEL=structuralFinish("nerv_shaft_panel");
+    public static final RegistryObject<Block> NERV_MACHINE_EDGE=structuralFinish("nerv_machine_edge");
+    public static final RegistryObject<Block> NERV_MACHINE_HAZARD=structuralFinish("nerv_machine_hazard");
+
+    private static RegistryObject<Block> structuralFinish(String name)
+    {
+        return BLOCKS.register(name,()->new Block(BlockBehaviour.Properties.copy(Blocks.REINFORCED_DEEPSLATE)));
+    }
     public static final RegistryObject<Block> NERV_WALL_DATUM=finish("nerv_wall_datum",Blocks.IRON_BLOCK,0);
     public static final RegistryObject<Block> NERV_FLOOR_PANEL=finish("nerv_floor_panel",Blocks.SMOOTH_STONE,0);
     public static final RegistryObject<Block> NERV_HAZARD_PAVING=finish("nerv_hazard_paving",Blocks.SMOOTH_STONE,0);

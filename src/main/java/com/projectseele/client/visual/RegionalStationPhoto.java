@@ -21,7 +21,8 @@ public final class RegionalStationPhoto
 {
     private static final String MODE=System.getProperty("projectseele.regionalBuild","");
     private static final boolean R10_MODELS=MODE.equals("r10-models")||MODE.equals("r10-choreography");
-    private static final boolean R07=MODE.equals("r07-photos")||MODE.equals("r10-world")||R10_MODELS,DETAIL=R07||MODE.equals("detail-photos");
+    private static final boolean R16=MODE.equals("r16-photos");
+    private static final boolean R07=MODE.equals("r07-photos")||MODE.equals("r10-world")||R10_MODELS||R16,DETAIL=R07||MODE.equals("detail-photos");
     private static final boolean ENABLED=MODE.equals("station-photo")||MODE.equals("quality-photos")||DETAIL;
     private record View(String file,Vec3 position,float yaw,float pitch,String action,int warmup,
                         java.util.List<net.minecraft.core.BlockPos> requiredSections)
@@ -48,7 +49,7 @@ public final class RegionalStationPhoto
         if(!ENABLED||event.phase!=TickEvent.Phase.END)return;
         Minecraft mc=Minecraft.getInstance();if(mc.player==null||mc.getSingleplayerServer()==null)return;
         var server=mc.getSingleplayerServer();Path world=server.getWorldPath(LevelResource.ROOT).normalize();
-        if(!world.getFileName().toString().equals(R10_MODELS?"SEELE_ANGEL_MODEL_REVIEW_R10":"SEELE_TV_WORLD_PREVIEW_20260906"))return;
+        if(!world.getFileName().toString().equals(R16?"SEELE_TV_FACILITIES_R16":R10_MODELS?"SEELE_ANGEL_MODEL_REVIEW_R10":"SEELE_TV_WORLD_PREVIEW_20260906"))return;
         try
         {
             if(finishing)

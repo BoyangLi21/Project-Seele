@@ -2,6 +2,10 @@
   "replace": false,
   "values": [
     "minecraft:reinforced_deepslate",
-    "projectseele:nerv_structural_panel"
+    "projectseele:nerv_structural_panel",
+    "projectseele:nerv_machine_panel",
+    "projectseele:nerv_shaft_panel",
+    "projectseele:nerv_machine_edge",
+    "projectseele:nerv_machine_hazard"
   ]
 }

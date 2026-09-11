@@ -13,6 +13,7 @@
     "EvaSmallObstacleMixin"
   ],
   "client": [
+    "client.NativeImagePixelsAccessor",
     "client.CameraMixin",
     "client.AbstractClientPlayerSkinMixin",
     "client.MinecraftRenderTargetMixin",

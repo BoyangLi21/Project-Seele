@@ -25,7 +25,7 @@ public final class PlugGantryRenderer
     private static final ResourceLocation PAINT=new ResourceLocation("minecraft","textures/block/white_concrete.png");
     private static final int GREEN=0x566a51, EDGE=0x8d9a86, STEEL=0xadb7bb, DARK=0x222d32, GOLD=0xb69347;
     private final PoseStack poses; private final VertexConsumer buffer; private final int light;private final BufferBuilder baking;
-    private static VertexBuffer TOP,YOKE,CHUCK,JAW_LEFT,JAW_RIGHT;
+    private static VertexBuffer TOP,YOKE,CHUCK,JAW_LEFT,JAW_RIGHT,HOSES_CLOSED,HOSES_OPEN,ROPE,SHEAVE,LINKS;
     private PlugGantryRenderer(PoseStack poses, MultiBufferSource buffers, int light)
     {this.poses=poses;this.buffer=buffers.getBuffer(RenderType.entitySolid(PAINT));this.light=light;this.baking=null;}
     private PlugGantryRenderer(BufferBuilder builder){this.poses=new PoseStack();this.buffer=builder;this.light=15728880;this.baking=builder;}
@@ -57,20 +57,23 @@ public final class PlugGantryRenderer
         Vec3 yoke=lower.add(0,1.6,0);
         for(double x:new double[]{-2.4,2.4})for(double z:new double[]{-.78,.78})
         {
-            Vec3 end=yoke.add(x,0,z);rod(v(x,-.7,z),end,.065,STEEL);
-            cylinder(end.add(0,-.12,-.20),end.add(0,-.12,.20),.25,.10,DARK,16);
+            Vec3 end=yoke.add(x,0,z);gpuRope(v(x,-.7,z),end,.065);
+            poses.pushPose();poses.translate(end.x,end.y,end.z);gpu(sheaveMesh(),poses,light);poses.popPose();
         }
         poses.pushPose();poses.translate(yoke.x,yoke.y,yoke.z);gpu(yokeMesh(),poses,light);poses.popPose();
         // The gimbal centre and its rotating collar derive from the capsule's exact render transform.
-        rod(yoke.add(-2.45,-.2,0),lower.add(-1.50,0,0),.17,STEEL);rod(yoke.add(2.45,-.2,0),lower.add(1.50,0,0),.17,STEEL);
+        poses.pushPose();poses.translate(lower.x,lower.y,lower.z);gpu(linksMesh(),poses,light);poses.popPose();
         poses.pushPose();poses.translate(lower.x,lower.y,lower.z);
         poses.mulPose(rotation);
         gpu(chuckMesh(),poses,light);
         for(double side:new double[]{-1,1})
         {
             poses.pushPose();poses.translate(side*.55*released,0,0);gpu(jawMesh(side),poses,light);poses.popPose();
-            hose(side,released);
         }
+        // Parked and coupled hoses are rigid. Keep the exact procedural curve
+        // only during the short jaw-release interval, with no quantized motion.
+        if(released==0||released==1)gpu(hoseMesh(released==1),poses,light);
+        else for(double side:new double[]{-1,1})hose(side,released);
         poses.popPose();
     }
     private static VertexBuffer bake(java.util.function.Consumer<PlugGantryRenderer> author)
@@ -85,6 +88,18 @@ public final class PlugGantryRenderer
     {
         if(side<0){if(JAW_LEFT==null)JAW_LEFT=bake(r->r.jaw(-1));return JAW_LEFT;}
         if(JAW_RIGHT==null)JAW_RIGHT=bake(r->r.jaw(1));return JAW_RIGHT;
+    }
+    private static VertexBuffer hoseMesh(boolean open)
+    {
+        if(open){if(HOSES_OPEN==null)HOSES_OPEN=bake(r->{r.hose(-1,1);r.hose(1,1);});return HOSES_OPEN;}
+        if(HOSES_CLOSED==null)HOSES_CLOSED=bake(r->{r.hose(-1,0);r.hose(1,0);});return HOSES_CLOSED;
+    }
+    private static VertexBuffer sheaveMesh(){if(SHEAVE==null)SHEAVE=bake(r->r.cylinder(v(0,-.12,-.20),v(0,-.12,.20),.25,.10,DARK,16));return SHEAVE;}
+    private static VertexBuffer linksMesh(){if(LINKS==null)LINKS=bake(r->{r.rod(v(-2.45,1.4,0),v(-1.50,0,0),.17,STEEL);r.rod(v(2.45,1.4,0),v(1.50,0,0),.17,STEEL);});return LINKS;}
+    private void gpuRope(Vec3 a,Vec3 b,double radius)
+    {
+        if(ROPE==null)ROPE=bake(r->r.cylinder(v(0,0,0),v(0,1,0),1,0,STEEL,12));Vec3 delta=b.subtract(a);double length=delta.length();if(length<1e-6)return;
+        poses.pushPose();poses.translate(a.x,a.y,a.z);poses.mulPose(new Quaternionf().rotationTo(new Vector3f(0,1,0),new Vector3f((float)(delta.x/length),(float)(delta.y/length),(float)(delta.z/length))));poses.scale((float)radius,(float)length,(float)radius);gpu(ROPE,poses,light);poses.popPose();
     }
     private static void gpu(VertexBuffer mesh,PoseStack poses,int light)
     {

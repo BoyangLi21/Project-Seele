@@ -1642,10 +1642,10 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
         {
             return false;
         }
-        // Reserve one full second for the physical NERV hatch to retract.
-        // The previous <=20 value let ascent preflight run on the very next
-        // entity tick, while the weather seal still occupied upperBed+1.
-        int releaseTicks = 40;
+        // Preflight starts with 20 activation ticks remaining. The TV surface
+        // shutter needs 18 stagger ticks + 30 motion ticks, then reconciliation.
+        int releaseTicks = this.level() instanceof ServerLevel launchLevel
+                &&com.projectseele.world.TvLaunchFacility.enabled(launchLevel)?80:40;
         this.launchCommandReleased = true;
         this.entityData.set(DATA_ACTIVATION_TICKS, releaseTicks);
         this.entityData.set(DATA_LAUNCH_TICKS, releaseTicks);

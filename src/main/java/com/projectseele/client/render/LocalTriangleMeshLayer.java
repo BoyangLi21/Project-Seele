@@ -44,6 +44,7 @@ public final class LocalTriangleMeshLayer<T extends GeoAnimatable> extends GeoRe
 {
     private static final Map<ResourceLocation, MeshData> CACHE = new HashMap<>();
     private static final Set<ResourceLocation> LOAD_ATTEMPTED = new HashSet<>();
+    private static final Set<Class<?>> GPU_DIAGNOSTICS = new HashSet<>();
     private final Function<T, ResourceLocation> meshSelector;
     private final Function<T, ResourceLocation> textureSelector;
     private final BiPredicate<T, GeoBone> partVisibility;
@@ -131,6 +132,13 @@ public final class LocalTriangleMeshLayer<T extends GeoAnimatable> extends GeoRe
                     values,stride,part.pivotX(),part.pivotY(),part.pivotZ(),renderer.renderedMeshTransform(pose,eva,partialTick));
         int vertexLight = this.fullBright
                 ? LightTexture.FULL_BRIGHT : packedLight;
+        if(GPU_DIAGNOSTICS.add(animatable.getClass()))com.projectseele.ProjectSeele.LOGGER.info(
+                "Rigid mesh dispatch: entity={} rigid={} buffer={} texture={}",animatable.getClass().getSimpleName(),values==part.vertices(),targetBuffer.getClass().getName(),this.textureSelector!=null);
+        if(values==part.vertices()&&this.textureSelector!=null
+                &&(targetBuffer instanceof com.mojang.blaze3d.vertex.BufferBuilder
+                    ||targetBuffer.getClass().getName().equals("me.jellysquid.mods.sodium.client.render.vertex.buffer.SodiumBufferBuilder"))
+                &&RigidCapsuleGpu.draw(part,values,stride,part.pivotX(),part.pivotY(),part.pivotZ(),
+                this.textureSelector.apply(animatable),poseStack,vertexLight,packedOverlay))return;
         for (int index = 0; index + stride * 3 <= values.length; index += stride * 3)
         {
             emitVertex(targetBuffer, pose, normal, values, index, part,
@@ -161,6 +169,7 @@ public final class LocalTriangleMeshLayer<T extends GeoAnimatable> extends GeoRe
 
     public static void clearCache()
     {
+        RigidCapsuleGpu.clear();
         CACHE.clear();
         LOAD_ATTEMPTED.clear();
         EvaHeadClearance.clear();
