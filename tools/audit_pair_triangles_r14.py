@@ -19,6 +19,12 @@ for item in json.loads((folder/'manifest.json').read_text()):
  for role in ['hero','angel']:
   vs=data[role];trees.append(BVHTree.FromPolygons(vs,np.arange(len(vs)).reshape(-1,3),all_triangles=True,epsilon=0))
  candidates=trees[0].overlap(trees[1]);overlap=exact_pairs(candidates,data['hero'],data['angel']);names=json.loads((folder/'hero_parts.json').read_text()) if (folder/'hero_parts.json').exists() else [];parts=Counter(names[h] for h,a in overlap) if names else {};rows.append(dict(time=item['time'],pairs=len(overlap),bvh_candidates=len(candidates),examples=overlap[:12],hero_parts=dict(parts),angel_triangles=sorted({a for h,a in overlap})))
+ examples={}
+ if names:
+  for h,a in overlap:
+   group=examples.setdefault(names[h],[])
+   if len(group)<3:group.append([h,a])
+ rows[-1]['part_examples']=examples
  print(item['name'],len(overlap),flush=True)
 (folder.parent/('triangle_'+label+'.json')).write_text(json.dumps(rows,indent=2));print('Cross-actor triangle overlap frames',sum(x['pairs']>0 for x in rows),flush=True)
 (folder.parent/('triangle_'+label+'_source.json')).write_text((folder/'source.json').read_text())

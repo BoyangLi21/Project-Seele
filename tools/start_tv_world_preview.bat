@@ -7,4 +7,5 @@ if not exist "run\saves\SEELE_TV_WORLD_PREVIEW_20260906\level.dat" (
     exit /b 1
 )
 if not exist "%JAVA_HOME%\bin\java.exe" set "JAVA_HOME=C:\Users\liboy\jdks\jdk-17.0.19+10"
-call gradlew.bat --offline runClient -PstrictHighDetail=true -PquickPlayWorld=SEELE_TV_WORLD_PREVIEW_20260906
+set "PYTHONUTF8=1"
+python tools\launch_rendered_client_r17.py

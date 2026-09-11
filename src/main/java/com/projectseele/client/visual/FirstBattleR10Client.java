@@ -24,6 +24,7 @@ import java.util.concurrent.*;
 public final class FirstBattleR10Client
 {
     private static boolean initialized,closing;
+    private static boolean warmedCamera;
     private static boolean oldPause,oldGui;
     private static int oldDistance,serial,closeTicks;
     private static CameraType oldCamera;
@@ -49,6 +50,8 @@ public final class FirstBattleR10Client
             FirstBattleR10Review.clientTracked=entity instanceof EvaUnit01Entity;
             FirstBattleR10Review.clientMounted=entity!=null&&EvaPilotResolver.controlTarget(mc.player)==entity;
             FirstBattleR10Review.clientCameraRestored=!FirstBattleClient.active()&&mc.options.getCameraType()==CameraType.FIRST_PERSON;
+            if(FirstBattleR10Review.warming){warmedCamera=true;mc.options.setCameraType(CameraType.THIRD_PERSON_BACK);}
+            else if(warmedCamera){warmedCamera=false;mc.options.setCameraType(CameraType.FIRST_PERSON);}
             if(FirstBattleR10Review.actionSerial!=serial)
             {
                 serial=FirstBattleR10Review.actionSerial;SeeleNetwork.CHANNEL.sendToServer(new ServerboundEvaControlPacket(FirstBattleR10Review.action));
@@ -79,13 +82,12 @@ public final class FirstBattleR10Client
         var mc=Minecraft.getInstance();var image=Screenshot.takeScreenshot(mc.getMainRenderTarget());
         int index=FirstBattleR10Review.clientFrames++;String name=String.format("frame_%05d.jpg",index);
         JsonObject frame=new JsonObject();frame.addProperty("file",name);frame.addProperty("seconds",(now-firstNanos)/1e9);
+        frame.addProperty("fps",mc.getFps());
         var entity=mc.level.getEntity(FirstBattleR10Review.heroId);
         if(entity instanceof EvaUnit01Entity eva){frame.addProperty("scene_seconds",eva.firstBattleSignals().time(eva,event.renderTickTime));frame.addProperty("active",eva.isFirstBattleActive());frame.addProperty("hero_yaw",eva.yBodyRot);var other=mc.level.getEntity(eva.firstBattleSignals().partner(eva));if(other instanceof net.minecraft.world.entity.LivingEntity living)frame.addProperty("angel_yaw",living.yBodyRot);}
         frames.add(frame);
         WRITER.execute(()->{try(image){
-            int w=image.getWidth(),h=image.getHeight();int[] rgb=image.getPixelsRGBA();
-            for(int i=0;i<rgb.length;i++){int c=rgb[i];rgb[i]=(c&255)<<16|((c>>8)&255)<<8|((c>>16)&255);}
-            var buffered=new java.awt.image.BufferedImage(w,h,java.awt.image.BufferedImage.TYPE_INT_RGB);buffered.setRGB(0,0,w,h,rgb,0,w);javax.imageio.ImageIO.write(buffered,"jpg",output.resolve(name).toFile());
+            NativeReviewFrames.writeJpeg(image,output.resolve(name));
         }catch(Exception failure){writeFailure=failure.toString();ProjectSeele.LOGGER.error("R10 frame write failed",failure);}});
     }
     private FirstBattleR10Client() {}

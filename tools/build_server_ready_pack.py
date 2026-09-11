@@ -117,6 +117,9 @@ def required_mods() -> list[Path]:
         local / "MTR-forge-4.0.5+1.20.1.jar",
         local / "superbwarfare-0.8.9.1-hotfix-mc1.20.1-993063bed-all.jar",
         local / "kotlinforforge-4.12.0-all.jar",
+        local / "DistantHorizons-3.2.0-b-1.20.1-fabric-forge.jar",
+        local / "ferritecore-6.0.1-forge.jar",
+        local / "modernfix-forge-5.27.83+mc1.20.1.jar",
     ]
     missing = [path for path in mods if not path.is_file()]
     if missing:
@@ -211,6 +214,11 @@ def copy_configs(destination: Path, *, client: bool) -> None:
         source = source_root / name
         if source.is_file():
             copy_file(source, destination / name)
+    from configure_rendering_r17 import targets
+    files,_=targets(destination.parent,'client' if client else 'server')
+    for rel,content in files.items():
+        path=destination.parent/rel;path.parent.mkdir(parents=True,exist_ok=True)
+        path.write_text(content,encoding='utf8')
 
 
 def write_text(path: Path, text: str) -> None:
@@ -277,9 +285,9 @@ enforce-whitelist=true
 online-mode=true
 spawn-protection=0
 allow-flight=true
-view-distance=6
-simulation-distance=5
-entity-broadcast-range-percentage=100
+view-distance=18
+simulation-distance=8
+entity-broadcast-range-percentage=125
 network-compression-threshold=256
 max-tick-time=120000
 sync-chunk-writes=false
@@ -289,7 +297,7 @@ enable-command-block=false
 
 def jvm_args() -> str:
     return """-Xms2G
--Xmx8G
+-Xmx16G
 -XX:+UseG1GC
 -XX:+ParallelRefProcEnabled
 -XX:MaxGCPauseMillis=200
@@ -320,8 +328,7 @@ def build_client(root: Path, guide: str) -> None:
     copy_local_maps_without_commander_skin(root / "projectseele-local-maps")
     local = ROOT / ".Codex" / "local-mods"
     client_only = (
-        local / "cupboard-1.20.1-3.9.jar",
-        local / "farsight-1.20.1-5.1.jar",
+        local / "embeddium-0.3.31+mc1.20.1.jar",
     )
     missing = [path for path in client_only if not path.is_file()]
     if missing:
@@ -355,6 +362,19 @@ def build_world(root: Path) -> None:
     )
     if not (root / "level.dat").is_file():
         raise FileNotFoundError("World import root does not contain level.dat")
+    # Keep retired/unverified caches out. A reviewed, closed R17 database can
+    # accompany the world so a remote server need not rebuild it at first join.
+    source=ROOT/"run"/"saves"/WORLD_NAME
+    marker=source/"lod_cache_r17.json"
+    certified=json.loads(marker.read_text(encoding="utf8")) if marker.exists() else {}
+    databases=certified.get("databases",[])
+    valid=bool(databases) and all((source/r["path"]).is_file()
+        and (source/r["path"]).resolve().is_relative_to(source.resolve())
+        and sha256(source/r["path"])==r["sha256"] for r in databases)
+    if valid:
+        for row in databases:copy_file(source/row["path"],root/row["path"])
+    elif (root/"lod_cache_r17.json").exists():
+        (root/"lod_cache_r17.json").unlink()
 
 
 def validate_outputs(server_zip: Path, world_zip: Path, client_zip: Path) -> None:
@@ -393,8 +413,14 @@ def validate_outputs(server_zip: Path, world_zip: Path, client_zip: Path) -> Non
             raise ValueError("World import archive is missing the GeoFront dimension")
         if "nerv_staff_r15.json" not in names:
             raise ValueError("World import archive is missing the staff roster")
-        if any("distanthorizons" in name.lower() for name in names):
-            raise ValueError("World archive contains retired Distant Horizons cache")
+        caches={name for name in names if "distanthorizons" in name.lower()}
+        certified=json.loads(archive.read("lod_cache_r17.json")) if "lod_cache_r17.json" in names else {}
+        expected={row["path"] for row in certified.get("databases",[])}
+        if caches!=expected:
+            raise ValueError("World archive contains an uncertified or incomplete LOD cache")
+        for row in certified.get("databases",[]):
+            if hashlib.sha256(archive.read(row["path"])).hexdigest()!=row["sha256"]:
+                raise ValueError("Packaged LOD cache checksum mismatch")
 
     with zipfile.ZipFile(client_zip) as archive:
         names = set(archive.namelist())
@@ -409,7 +435,7 @@ def validate_outputs(server_zip: Path, world_zip: Path, client_zip: Path) -> Non
         if animation_path not in names:
             raise ValueError("Client archive is missing the R04 Unit-01 animation")
         mod_names = [name for name in names if name.startswith("mods/") and name.endswith(".jar")]
-        if len(mod_names) != len(required_mods()) + 2:
+        if len(mod_names) != len(required_mods()) + 1:
             raise ValueError(f"Client mod count mismatch: {len(mod_names)}")
         client_project_jar = project_jar_bytes(archive)
         loose_animation = archive.read(animation_path)

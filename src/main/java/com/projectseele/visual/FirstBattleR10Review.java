@@ -30,7 +30,8 @@ import java.util.UUID;
 public final class FirstBattleR10Review
 {
     public static final boolean ENABLED="r10-firstbattle".equals(System.getProperty("projectseele.regionalBuild",""));
-    public static volatile boolean clientTracked,clientMounted,clientCameraRestored,finished,reloadRequested,captureMovie;
+    private static final boolean MOVIE_ONLY=Boolean.getBoolean("projectseele.firstBattleMovieOnly");
+    public static volatile boolean clientTracked,clientMounted,clientCameraRestored,finished,reloadRequested,captureMovie,warming;
     public static volatile int heroId,action=-1,actionSerial,forward;
     public static volatile int clientFrames,droppedFrames;
     private static int age,stage,ticks,stageStart;
@@ -57,7 +58,7 @@ public final class FirstBattleR10Review
     }
     private static void write(Path world,boolean passed,String failure)throws Exception
     {
-        JsonObject result=new JsonObject();result.addProperty("passed",passed);result.add("checks",checks);result.addProperty("captured_frames",clientFrames);result.addProperty("dropped_frames",droppedFrames);result.addProperty("failure",failure);
+        JsonObject result=new JsonObject();result.addProperty("passed",passed);result.add("checks",checks);result.addProperty("captured_frames",clientFrames);result.addProperty("dropped_frames",droppedFrames);result.addProperty("failure",failure);result.addProperty("clip_sha256",FirstBattleClip.fingerprint());
         Files.writeString(world.resolve("r10_first_battle_review.json"),result.toString());
     }
     @SubscribeEvent public static void tick(TickEvent.ServerTickEvent event)
@@ -78,22 +79,26 @@ public final class FirstBattleR10Review
                     Path previous=world.resolve("r10_first_battle_review.json");if(Files.exists(previous))checks.addAll(JsonParser.parseString(Files.readString(previous)).getAsJsonObject().getAsJsonArray("checks"));
                     var expected=JsonParser.parseString(Files.readString(resume)).getAsJsonObject();heroUuid=UUID.fromString(expected.get("hero").getAsString());pilotHealth=expected.get("pilot_health").getAsFloat();hullHealth=expected.get("hull_health").getAsFloat();stage=20;ticks=0;return;
                 }
+                data.active=null;data.setDirty();
                 level.getGameRules().getRule(GameRules.RULE_DOMOBSPAWNING).set(false,server);level.getGameRules().getRule(GameRules.RULE_MOBGRIEFING).set(false,server);level.getGameRules().getRule(GameRules.RULE_DAYLIGHT).set(false,server);level.setDayTime(6000);
                 var old=new java.util.ArrayList<Mob>();for(var e:level.getAllEntities())if(e instanceof Mob mob)old.add(mob);for(var e:old)e.discard();
                 for(BlockPos p:BlockPos.betweenClosed(-144,-61,-64,144,-61,240))level.setBlock(p,Blocks.GRAY_CONCRETE.defaultBlockState(),2);
                 for(int z=-64;z<=240;z++)for(int x:new int[]{-32,32})level.setBlock(new BlockPos(x,-61,z),Blocks.WHITE_CONCRETE.defaultBlockState(),2);
                 hero=ModEntities.EVA_UNIT01.get().create(level);hero.prepareForMotionLab();hero.setNoGravity(false);hero.moveTo(0,-60,0,0,0);hero.yBodyRot=hero.yHeadRot=0;hero.setOnGround(true);level.addFreshEntity(hero);heroUuid=hero.getUUID();heroId=hero.getId();
                 pilot.teleportTo(level,0,-59,-18,0,0);pilot.setHealth(pilot.getMaxHealth());pilot.getFoodData().setFoodLevel(20);pilot.getCapability(EvaPilotCapability.DATA).ifPresent(c->c.setSynchronization(100));
+                if(MOVIE_ONLY){hero.setNoAi(true);angel=enemy(level);warming=true;}
                 stage=1;ticks=0;return;
             }
             ticks++;
             if(stage==1)
             {
-                if(ticks>240)throw new IllegalStateException("Client tracking or mounted chain deadline");
+                int warmup=MOVIE_ONLY?1200:20;
+                if(ticks>warmup+300)throw new IllegalStateException("Client tracking or mounted chain deadline");
                 if(ticks>20&&clientTracked&&EvaPilotResolver.controlTarget(pilot)!=hero){check("native_boarding",hero.boardFromExternalPlug(pilot,100),"real mounted pilot");ticks=0;return;}
-                if(ticks>45&&clientMounted)
+                if(MOVIE_ONLY&&ticks%200==0)ProjectSeele.LOGGER.info("R18 MOVIE WARMUP ticks={} tracked={} mounted={} alive={} pos={}",ticks,clientTracked,clientMounted,hero.isAlive(),hero.position());
+                if(ticks>(MOVIE_ONLY?1200:45)&&clientMounted)
                 {
-                    hero.setDeltaMovement(Vec3.ZERO);angel=enemy(level);pilotHealth=pilot.getHealth();hullHealth=hero.getHealth();request(com.projectseele.network.ServerboundEvaControlPacket.ACTION_MELEE);stage=2;ticks=0;captureMovie=true;return;
+                    warming=false;hero.setNoAi(false);hero.setDeltaMovement(Vec3.ZERO);if(angel==null||!angel.isAlive())angel=enemy(level);angel.setFirstBattleField(0);angel.setHealth(angel.getMaxHealth()*.32F+1);pilotHealth=pilot.getHealth();hullHealth=hero.getHealth();request(com.projectseele.network.ServerboundEvaControlPacket.ACTION_MELEE);stage=2;ticks=0;captureMovie=true;return;
                 }
             }
             else if(stage==2)
@@ -122,7 +127,7 @@ public final class FirstBattleR10Review
             else if(stage==4)
             {
                 if(ticks==30){check("camera_restored",clientCameraRestored,"pilot camera returned");position=hero.position();forward=1;}
-                if(ticks==65){forward=0;check("movement_after_film",hero.position().subtract(position).horizontalDistanceSqr()>4,"real W input moves the same EVA");stage=5;forceEncounter(level);}
+                if(ticks==65){forward=0;check("movement_after_film",hero.position().subtract(position).horizontalDistanceSqr()>4,"real W input moves the same EVA");if(MOVIE_ONLY){write(world,true,"");finished=true;return;}stage=5;forceEncounter(level);}
             }
             else if(stage==5)
             {

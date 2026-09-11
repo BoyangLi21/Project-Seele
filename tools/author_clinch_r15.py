@@ -8,17 +8,18 @@ import finalize_first_battle_r12 as f
 from preview_first_battle_r12 import angel_pose
 b=a.b;eva=a.eva;U=a.UNIT;OUT=b.ROOT/'artifacts/staff_world_r15';START=482;END=558
 def main():
- ap=argparse.ArgumentParser();ap.add_argument('--install',action='store_true');args=ap.parse_args();OUT.mkdir(parents=True,exist_ok=True)
+ global OUT
+ ap=argparse.ArgumentParser();ap.add_argument('--install',action='store_true');ap.add_argument('--source',type=Path,default=b.ROOT/'run/projectseele-local-maps/first_battle_r14.json');ap.add_argument('--output-root',type=Path,default=OUT);ap.add_argument('--output-name',default='first_battle_r15.json');ap.add_argument('--lateral-detour',type=float,default=20);ap.add_argument('--keep-hero-arms',action='store_true');args=ap.parse_args();OUT=args.output_root;OUT.mkdir(parents=True,exist_ok=True)
  if args.install:
   src=OUT/'first_battle_r15.json';report=json.loads((OUT/'clinch_validation.json').read_text());assert report['passed'] and report['sha256']==hashlib.sha256(src.read_bytes()).hexdigest()
   target=b.ROOT/'run/projectseele-local-maps/first_battle_r15.json';temp=target.with_suffix('.tmp');shutil.copy2(src,temp);temp.replace(target);print('Verified R15 clinch installed');return
- d=json.loads((b.ROOT/'run/projectseele-local-maps/first_battle_r14.json').read_text());d.pop('surface_deformation_r14',None)
+ d=json.loads(args.source.read_text());d.pop('surface_deformation_r14',None)
  heroes=[eva.decode(x,d['eva']['bones']) for x in d['eva']['frames']];angels=[angel_pose(x,d['angel']['bones']) for x in d['angel']['frames']];start=a.clone(angels[START],True);ar0=np.array(d['angel']['root_blocks'][START]);hip0=b.angel_world(start,ar0,'torso_lower');records=[];bends={}
  hstart=a.clone(heroes[START-1]);hend=a.clone(heroes[END])
  for i in range(START,END+1):
   t=i/30;hero=heroes[i];hr=np.array(d['eva']['root_blocks'][i]);weight=b.smooth((t-16.12)/.85);contact=b.smooth((t-17.65)/.75)
   for n in hero.q:
-   if n.startswith(('arm_','forearm_','hand_','wrist_','finger_')):hero.setq(n,b.qmix(hstart.q[n],hend.q[n],b.smooth((t-START/30)/1.1)))
+   if not args.keep_hero_arms and n.startswith(('arm_','forearm_','hand_','wrist_','finger_')):hero.setq(n,b.qmix(hstart.q[n],hend.q[n],b.smooth((t-START/30)/1.1)))
   standing,_,_=a.take('grab_b',170+(t-16.3)*35,True)
   standing.setq('root',R.from_euler('x',-.08))
   standing.setq('torso_upper',R.from_rotvec(standing.q['torso_upper'].as_rotvec()*.4))
@@ -28,7 +29,7 @@ def main():
   ease=b.smooth((t-START/30)/.23)
   for side,sign in [('l',-1),('r',1)]:
    q0=R.from_matrix(start.matrix('foot_'+side)[:3,:3]);q=b.qmix(q0,R.identity(),weight);feet=a.actors['grab_b',True].feet[side]
-   stride=strides[side];goal=hr+[7+sign*5.5,-np.min(q.apply(feet)[:,1])*U+3*np.sin(np.pi*stride),20+34*(1-stride)];old=b.angel_world(start,ar0,'foot_'+side);plant=b.smooth((t-16.08)/.85);goal=b.mix(old,goal,plant);goal[0]+=sign*20*np.sin(np.pi*plant)*(1-.5*b.smooth((plant-.3)/.3))
+   stride=strides[side];goal=hr+[7+sign*5.5,-np.min(q.apply(feet)[:,1])*U+3*np.sin(np.pi*stride),20+34*(1-stride)];old=b.angel_world(start,ar0,'foot_'+side);plant=b.smooth((t-16.08)/.85);goal=b.mix(old,goal,plant);goal[0]+=sign*args.lateral_detour*np.sin(np.pi*plant)*(1-.5*b.smooth((plant-.3)/.3))
    pole=b.mix([sign,0,0],[sign*.2,0,-1],plant)
    direction=a.retarget.unit((goal-ar)/U-pose.point('leg_'+side));bend=a.retarget.unit(pole-direction*np.dot(pole,direction),(sign,0,0))
    if side not in bends:
@@ -80,5 +81,5 @@ def main():
  for i in range(END+1,583):
   for key in ['position','target']:d['camera'][key][i]=b.mix(d['camera'][key][END],d['camera'][key][i],b.smooth((i-END)/(583-END))).tolist()
  d['reference']='R15 anatomical clinch: capture-led recoil, planted two-step approach, then upper-arm restraint. Authored adaptation; the distorted vertex-morph mantle is retired.'
- p=OUT/'first_battle_r15.json';p.write_text(json.dumps(d,separators=(',',':')),encoding='utf8');(OUT/'clinch_audit.json').write_text(json.dumps(dict(sha256=hashlib.sha256(p.read_bytes()).hexdigest(),contacts=records),indent=2));print('R15 clinch authored; visual and triangle review required',flush=True)
+ p=OUT/args.output_name;p.write_text(json.dumps(d,separators=(',',':')),encoding='utf8');(OUT/'clinch_audit.json').write_text(json.dumps(dict(sha256=hashlib.sha256(p.read_bytes()).hexdigest(),contacts=records),indent=2));print('Rigid clinch authored; visual and triangle review required',flush=True)
 if __name__=='__main__':main()

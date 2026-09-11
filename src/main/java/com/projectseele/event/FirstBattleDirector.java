@@ -129,7 +129,7 @@ public final class FirstBattleDirector
                 if(record.age==107)CrossExplosionFX.spawn(level,FirstBattleClip.point(record.spec,false,"eye_blocks",seconds),.30F);
                 if(record.age==160){Vec3 p=FirstBattleClip.point(record.spec,false,"hand_r_blocks",seconds);sound(level,p,ModSounds.EVA_ARMOR_IMPACT.get(),1.5F);chips(level,p,true);}
                 if(record.age==184){Vec3 p=FirstBattleClip.point(record.spec,true,"foot_l_blocks",seconds);sound(level,p,ModSounds.EVA_IMPACT.get(),1.8F);chips(level,p,false);}
-                if(record.age==234)sound(level,eva.position(),ModSounds.EVA_LAND.get(),2.1F);
+                if(record.age==FirstBattleClip.landingTick())sound(level,eva.position(),ModSounds.EVA_LAND.get(),2.1F);
                 if(record.age==307){Vec3 p=FirstBattleClip.point(record.spec,true,"hand_r_blocks",seconds);sound(level,p,ModSounds.EVA_ARMOR_IMPACT.get(),1.4F);chips(level,p,true);}
                 if(record.age==255||record.age==283||record.age==321)
                 {

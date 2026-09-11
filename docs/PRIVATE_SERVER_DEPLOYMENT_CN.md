@@ -4,7 +4,7 @@
 
 ## 一、服务器面板部署
 
-前提：Minecraft 1.20.1、Forge 47.4.10、Java 17。当前包默认服务器堆 `-Xms2G -Xmx8G`、视距 6、模拟距离 5；再按实际并发与内存调整。不要添加 `DisableExplicitGC`，它与远景缓存使用的堆外内存回收不合适。
+前提：Minecraft 1.20.1、Forge 47.4.10、Java 17。按本项目的服务器内存充足方案，当前包默认服务器堆 `-Xms2G -Xmx16G`、真实区块视距 18、模拟距离 8；远景另外由 Distant Horizons 生成和发送。面板内存设置应与此对应。不要添加 `DisableExplicitGC`，它与远景缓存使用的堆外内存回收不合适。
 
 1. 完全停止服务器，并先用面板做一次备份。
 2. 在文件管理页进入 `/home/container`。
@@ -25,11 +25,11 @@
 4. 游戏内把 `eva_real_model` 资源包启用并置于最高优先级。
 5. 连接服务器面板当前显示的地址与端口。
 
-客户端和服务器必须使用同批次的公共模组：Project SEELE、GeckoLib、Ars Nouveau、Curios、Another Furniture、Moving Elevators 及两个 SuperMartijn 库、MTR、Superb Warfare、Kotlin for Forge。当前包为 11 个顶层服务器 JAR，另有模组内嵌依赖；不要另加这些依赖的冲突版本。Farsight 与 Cupboard 只在普通客户端包中；可选低配方案改用 Distant Horizons、Embeddium、FerriteCore。
+客户端和服务器必须使用同批次的公共模组：Project SEELE、GeckoLib、Ars Nouveau、Curios、Another Furniture、Moving Elevators 及两个 SuperMartijn 库、MTR、Superb Warfare、Kotlin for Forge、Distant Horizons、FerriteCore 和 ModernFix。当前服务器为 14 个顶层 JAR，客户端再增加 Embeddium，共 15 个。远景现在默认启用；不再混装 Farsight 与 Cupboard。其余内嵌依赖不需要另外安装。
 
 R15 的人员名单 `nerv_staff_r15.json`、区域迁移元数据 `regional_plan.json`、全部 `data/` 和各维度的 `entities/` 都要随存档迁移。只复制地形会丢失人员身份；漏掉区域迁移元数据会把控制系统指向旧机库坐标。
 
-低配与远景的使用方法见 [R15 人员、动作与远景记录](STAFF_WORLD_R15.md)。远景必须保留地下的多层结构，并先完成已有地图的缓存；不能把尚未生成的 LOD 缺面当成地图破损。当前打包器默认不带旧 DH 缓存，服务器可用 `PRE_EXISTING_ONLY` 从现有地图生成和发送远景，不会扩张新地形。
+当前默认是高画质远景方案，旧 R15 低配启动器仅作为历史可选项。客户端默认 128 区块远景、至少 18 区块近景、完整粒子和纹理细节；远景使用 EXTREME 水平与 VERY_HIGH 垂直细节，减少建筑过早变成大色块的现象。显卡负责绘制，服务器负责实体／交通／世界模拟及远景生成，客户端仍需处理输入和可见网格。两端保持 Distant Generation 开启，服务器采用 `PRE_EXISTING_ONLY`，不会为远景扩张新地形。地下多层结构保留，关闭会使动态机身淡出的 `DOUBLE_PASS` 过渡。
 
 ## 三、本轮人工验证
 

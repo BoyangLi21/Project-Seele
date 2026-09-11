@@ -159,6 +159,15 @@ minecraft {
             if (project.hasProperty('regionalBuild')) {
                 property 'projectseele.regionalBuild', project.property('regionalBuild')
             }
+            if (project.hasProperty('firstBattleReviewClip')) {
+                property 'projectseele.firstBattleReviewClip', project.file(project.property('firstBattleReviewClip')).absolutePath
+            }
+            if (project.hasProperty('firstBattleMovieOnly')) {
+                property 'projectseele.firstBattleMovieOnly', 'true'
+            }
+            if (project.hasProperty('farViewOnly')) {
+                property 'projectseele.farViewOnly', project.property('farViewOnly')
+            }
             if (project.hasProperty('tvFacilityProfile')) {
                 jvmArgs '-XX:StartFlightRecording=filename=D:/eva/artifacts/tv_facilities_r16/native_profile.jfr,settings=profile,dumponexit=true,maxsize=128m'
             }
@@ -332,7 +341,10 @@ dependencies {
     }
     if (project.hasProperty('lowEndClient') || project.hasProperty('optimizedClient')) {
         runtimeOnly fg.deobf('local:embeddium:0.3.31+mc1.20.1')
+    }
+    if (project.hasProperty('lowEndClient') || project.hasProperty('optimizedClient') || project.hasProperty('distantHorizons')) {
         runtimeOnly fg.deobf('local:ferritecore:6.0.1-forge')
+        runtimeOnly fg.deobf('local:modernfix-forge:5.27.83+mc1.20.1')
     }
     // Mixin annotation processor: generates our refmap at compile time.
     annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
@@ -430,4 +442,62 @@ tasks.register('verifyEvaVideoCodec', JavaExec) {
 }
 tasks.named('check').configure {
     dependsOn 'verifyEvaVideoCodec'
+}
+
+tasks.register('verifyBiomeCornerCache', JavaExec) {
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.projectseele.util.BiomeCornerCacheTest'
+    workingDir = file('.Codex/biome-cache-test')
+    doFirst { workingDir.mkdirs() }
+}
+tasks.named('check').configure { dependsOn 'verifyBiomeCornerCache' }
+
+// Compile/prepare with ForgeGradle, then release the build JVM before playing.
+// Export only explicitly changed environment values, not the user's full env.
+['Client', 'Server'].each { side ->
+    tasks.register("write${side}LaunchR17") {
+        dependsOn 'classes', "prepareRun${side}"
+        doLast {
+            def launch = tasks.named("run${side}", JavaExec).get()
+            // ForgeGradle's MinecraftRunTask resolves these inside exec(),
+            // so merely reading JavaExec.commandLine returns only `java`.
+            // Reuse the pinned plugin's token expansion without executing it.
+            def run = launch.runConfig.get()
+            def generator = net.minecraftforge.gradle.common.util.runs.RunConfigGenerator
+            def generate = { String name, Object... values ->
+                def method = generator.declaredMethods.find { it.name == name }
+                if (method == null) throw new GradleException("ForgeGradle no longer exposes ${name}")
+                method.accessible = true
+                method.invoke(null, values)
+            }
+            def classes = generate('mapModClassesToGradle', project, run)
+            def tokens = generate('configureTokensLazy', project, run, classes,
+                launch.minecraftArtifacts, launch.runtimeClasspathArtifacts)
+            launch.workingDir = file(run.workingDirectory)
+            launch.workingDir.mkdirs()
+            launch.args(generate('getArgsStream', run, tokens, false).toArray())
+            run.jvmArgs.each { launch.jvmArgs(run.replace(tokens, it)) }
+            if (run.client) launch.additionalClientArgs.get().each { launch.jvmArgs(run.replace(tokens, it)) }
+            run.environment.each { key, value -> launch.environment(key, run.replace(tokens, value)) }
+            run.properties.each { key, value -> launch.systemProperty(key, run.replace(tokens, value)) }
+            run.allSources.each { launch.classpath(it.runtimeClasspath) }
+            def inherited = System.getenv()
+            def env = launch.environment.findAll { key, value -> value.toString() != inherited.get(key) }
+            def jvm = generate('getJvmArgsStream', run,
+                run.client ? launch.additionalClientArgs.get() : [], tokens).toArray().toList()
+            if (!jvm.any { it.startsWith('-Xmx') }) throw new GradleException('Missing configured heap in exported JVM arguments')
+            def command = [launch.javaLauncher.get().executablePath.asFile.absolutePath] + jvm + ['-Dfile.encoding=UTF-8'] +
+                ['-cp', launch.classpath.asPath, run.main] + launch.args
+            if (!run.main || launch.classpath.empty) throw new GradleException('Incomplete ForgeGradle launch configuration')
+            def target = file(".Codex/${side.toLowerCase()}-launch-r17.json")
+            target.parentFile.mkdirs()
+            target.setText(groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson([
+                command: command.collect { it.toString() },
+                environment: env.collectEntries { key, value -> [(key): value.toString()] },
+                workingDirectory: launch.workingDir.absolutePath
+            ])), 'UTF-8')
+            logger.lifecycle("Prepared ${side.toLowerCase()} launch: ${target}")
+        }
+    }
 }

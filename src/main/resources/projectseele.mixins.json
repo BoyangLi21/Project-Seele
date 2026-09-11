@@ -5,6 +5,7 @@
   "refmap": "projectseele.refmap.json",
   "minVersion": "0.8",
   "mixins": [
+    "BiomeManagerMixin",
     "MovingElevatorGroupAccessMixin",
     "MovingElevatorRemoteAccessor",
     "TransportPassengerDiagnosticsMixin",
@@ -13,6 +14,7 @@
     "EvaSmallObstacleMixin"
   ],
   "client": [
+    "client.SbwOverlayTraceMixin",
     "client.NativeImagePixelsAccessor",
     "client.CameraMixin",
     "client.AbstractClientPlayerSkinMixin",

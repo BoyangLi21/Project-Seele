@@ -682,7 +682,7 @@ if /i "%~1"=="visual" (
     rem fallback body when the active ResourceManager sees a stale/mixed pack.
     rem Keep the huge transparent GeoFront sphere responsive without touching
     rem the strict Tigerar1 EVA mesh or texture path.
-    python tools\apply_client_performance_profile.py
+    python tools\configure_rendering_r17.py --ensure-local
     if errorlevel 1 (
         echo SEELE manual performance profile could not be applied.
         pause
@@ -707,7 +707,7 @@ if /i "%~1"=="visual" (
     echo                  car has 4 buttons and a floor readout
     echo ------------------------------------------------------------
     echo.
-    call gradlew.bat runClient -PstrictHighDetail=true -PquickPlayWorld=!SEELE_VISUAL_WORLD!
+    python tools\launch_rendered_client_r17.py --world "!SEELE_VISUAL_WORLD!"
     set "SEELE_CLIENT_RESULT=!ERRORLEVEL!"
     if "!SEELE_LIVE_POLICY!"=="1" "%SEELE_POWERSHELL%" -NoProfile -ExecutionPolicy Bypass -File "tools\start_eva_live_physics.ps1" -Mode Stop
     if not "!SEELE_CLIENT_RESULT!"=="0" exit /b !SEELE_CLIENT_RESULT!

@@ -23,7 +23,8 @@ public final class FirstBattleClip
     public record BonePose(String[] names,Quaternionf[] rotations,Vector3f[] positions) {}
     public record CameraPose(Vec3 position,Vec3 target,float fov) {}
     private record Role(String[] bones,Quaternionf[][] rotations,Vector3f[][] positions,Map<String,Vec3[]> curves) {}
-    private record Data(float fps,Map<String,Role> roles,Vec3[] cameras,Vec3[] targets,float[] fov,Set<Integer> cuts,String surfaceHash) {}
+    private record Data(float fps,Map<String,Role> roles,Vec3[] cameras,Vec3[] targets,float[] fov,Set<Integer> cuts,String surfaceHash,int landingTick) {}
+    private static String loadedFingerprint="";
     private static final Data DATA=load();
     private static Vec3 vector(JsonArray p){return new Vec3(p.get(0).getAsDouble(),p.get(1).getAsDouble(),p.get(2).getAsDouble());}
     private static Vec3[] vectors(JsonArray rows)
@@ -32,16 +33,30 @@ public final class FirstBattleClip
     }
     private static Data load()
     {
-        for(String revision:List.of("r15","r14","r12"))
+        String review=System.getProperty("projectseele.firstBattleReviewClip","");
+        if(!review.isEmpty()&&"r10-firstbattle".equals(System.getProperty("projectseele.regionalBuild","")))
+        {
+            try{return readLocal(Path.of(review),"isolated candidate review");}
+            catch(Exception e){throw new IllegalStateException("Requested battle candidate could not load",e);}
+        }
+        for(String revision:List.of("r18","r15","r14","r12"))
         {
             Path local=Path.of("projectseele-local-maps/first_battle_"+revision+".json");
             if(!Files.isRegularFile(local))continue;
-            try(var stream=Files.newInputStream(local)){return read(stream,revision+" private capture adaptation");}
+            try{return readLocal(local,revision+" private capture adaptation");}
             catch(Exception e){ProjectSeele.LOGGER.warn("Private first-battle clip rejected; using bundled sequence",e);}
         }
         try(var stream=FirstBattleClip.class.getResourceAsStream("/assets/projectseele/motion/first_battle_r10.json"))
         {return read(stream,"R10 bundled");}
         catch(Exception e){ProjectSeele.LOGGER.error("First-battle clip rejected",e);return null;}
+    }
+    private static Data readLocal(Path path,String source)throws Exception
+    {
+        byte[] bytes=Files.readAllBytes(path);
+        Data result=read(new java.io.ByteArrayInputStream(bytes),source);
+        loadedFingerprint=java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(bytes));
+        ProjectSeele.LOGGER.info("First-battle loaded clip fingerprint {}",loadedFingerprint);
+        return result;
     }
     private static Data read(InputStream stream,String source)throws Exception
     {
@@ -101,7 +116,9 @@ public final class FirstBattleClip
                 String digest=HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(Files.readAllBytes(cache)));
                 if(!digest.equals(surfaceHash))throw new IllegalArgumentException("Private movie / surface mismatch");
             }
-            return new Data(fps,Map.copyOf(roles),positions,targets,fov,Set.copyOf(cuts),surfaceHash);
+            int landing=root.has("landing_tick")?root.get("landing_tick").getAsInt():234;
+            if(landing<0||landing>=DURATION_TICKS)throw new IllegalArgumentException("Invalid landing cue");
+            return new Data(fps,Map.copyOf(roles),positions,targets,fov,Set.copyOf(cuts),surfaceHash,landing);
     }
     private static void validateCurve(Vec3[] curve,int count)
     {
@@ -126,6 +143,8 @@ public final class FirstBattleClip
     }
     public static boolean ready(){return DATA!=null;}
     public static String surfaceHash(){return DATA==null?"":DATA.surfaceHash;}
+    public static int landingTick(){return DATA==null?234:DATA.landingTick;}
+    public static String fingerprint(){return loadedFingerprint;}
     public static boolean hasCurve(boolean eva,String curve){return DATA!=null&&DATA.roles.get(eva?"eva":"angel").curves.containsKey(curve);}
     private static float frame(float seconds,int length){return Mth.clamp(seconds*DATA.fps,0,length-1);}
     private static Vec3 sample(Vec3[] values,float seconds)
