@@ -22,8 +22,12 @@ def mark(masks,x0,y0,z0,x1,y1,z1):
 
 
 def main():
-    parser=argparse.ArgumentParser();parser.add_argument('--quality',action='store_true');parser.add_argument('--airborne',action='store_true');parser.add_argument('--airfield-profile',action='store_true');parser.add_argument('--samples');parser.add_argument('--report-dir',type=Path);args=parser.parse_args()
-    samples=json.loads((OUT/'transit2/track_samples.json').read_text(encoding='utf-8'))
+    parser=argparse.ArgumentParser();parser.add_argument('--quality',action='store_true');parser.add_argument('--airborne',action='store_true');parser.add_argument('--airfield-profile',action='store_true');parser.add_argument('--samples');parser.add_argument('--report-dir',type=Path);parser.add_argument('--world',type=Path,default=WORLD);parser.add_argument('--exclude-gate-stairs',action='store_true');args=parser.parse_args()
+    samples=json.loads(Path(args.samples or OUT/'transit2/track_samples.json').read_text(encoding='utf-8'))
+    deployed={}
+    if args.exclude_gate_stairs:
+        for gate in json.loads((args.world/'regional_boarding_gates.json').read_text(encoding='utf8'))['gates']:
+            for x,y,z,state in gate['stairs']:deployed[int(x),int(y),int(z)]=state
     result_folder=ROOT/'artifacts/world_quality_r02' if args.quality else OUT
     if args.quality:
         samples+=json.loads((result_folder/'estate_transit_draft/track_samples.json').read_text(encoding='utf-8'))
@@ -50,13 +54,19 @@ def main():
         rails[rail['id']]=(masks,floor)
         for cx,cz,sy in masks.keys()|floor.keys():selected[cx,cz].add(sy)
     measured={}
-    for cx,cz,sy,pal,idx in iter_selected_sections(WORLD,DIM,selected):measured[cx,cz,sy]=(pal,idx.reshape(16,16,16))
+    for cx,cz,sy,pal,idx in iter_selected_sections(args.world,DIM,selected):measured[cx,cz,sy]=(pal,idx.reshape(16,16,16))
     result=[]
     for name,(masks,floors) in rails.items():
-        collisions=Counter();unsupported=0;examples=[]
+        collisions=Counter();unsupported=0;examples=[];dynamic=[]
         for key,mask in masks.items():
             if key not in measured:raise RuntimeError(f'Unmeasured railway envelope {name} {key}')
             pal,a=measured[key];bad=mask & ~np.asarray([free(s) for s in pal])[a]
+            if deployed and bad.any():
+                cx,cz,sy=key
+                for y,z,x in np.argwhere(bad):
+                    pos=(cx*16+int(x),sy*16+int(y),cz*16+int(z))
+                    if deployed.get(pos)==pal[a[y,z,x]]:
+                        bad[y,z,x]=False;dynamic.append(list(pos))
             if not bad.any():continue
             values,counts=np.unique(a[bad],return_counts=True);collisions.update({pal[v]:int(c) for v,c in zip(values,counts)})
             if len(examples)<12:
@@ -72,11 +82,13 @@ def main():
                 if not supported:
                     unsupported+=1
                     if len(examples)<12:examples.append([x,y-1,z,'no bed within three metres'])
-        result.append(dict(id=name,obstructed_cells=sum(collisions.values()),unsupported_center_cells=unsupported,states=dict(collisions),examples=examples))
+        result.append(dict(id=name,obstructed_cells=sum(collisions.values()),unsupported_center_cells=unsupported,states=dict(collisions),examples=examples,known_retractable_stairs=dynamic))
         if collisions or unsupported:print('CLEARANCE FAIL',name,sum(collisions.values()),unsupported,examples[:2],flush=True)
     report=dict(rails=len(result),passed=sum(r['obstructed_cells']==0 and r['unsupported_center_cells']==0 for r in result),results=result,
         envelope='AIRBORNE: native generated curves, +/-17, y+1..11' if args.airborne else 'TRAIN: centre +/-1, y+1..4; AIRPLANE: +/-17 square, y+2..10 sampled every 2m (overlapping conservative wing envelopes)')
     report['airfield_profile']=args.airfield_profile
+    report['world']=str(args.world)
+    report['retractable_stairs_require_runtime_check']=args.exclude_gate_stairs
     if args.airborne:report['sample_source']=str(source)
     destination=args.report_dir or result_folder;destination.mkdir(parents=True,exist_ok=True)
     (destination/('flight_clearance.json' if args.airborne else 'transit_clearance_profile.json' if args.airfield_profile else 'transit_clearance.json')).write_text(json.dumps(report,indent=2),encoding='utf-8')

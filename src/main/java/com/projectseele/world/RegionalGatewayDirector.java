@@ -87,7 +87,7 @@ public final class RegionalGatewayDirector
             if (!level.getBlockState(pos).is(MovingElevators.elevator_block))
                 level.setBlock(pos, MovingElevators.elevator_block.defaultBlockState().setValue(ControllerBlock.FACING, Direction.EAST), 18);
             if (level.getBlockEntity(pos) instanceof ControllerBlockEntity controller)
-                controller.setFloorName(y == UPPER ? "TOKYO-3 / CENTRAL GATE" : "GEOFRONT / ARRIVAL STATION");
+                controller.setFloorName(y == UPPER ? "NERV 地面入口" : "地下都市 · 入构站");
         }
         ElevatorGroup group = group(level);
         if (group == null || group.getFloorCount() != 2 || group.isMoving()) return false;
@@ -97,7 +97,7 @@ public final class RegionalGatewayDirector
         while (group.getCageHeightOffset() > -1 && group.canDecreaseCageHeightOffset()) group.decreaseCageHeightOffset();
         if (group.getCageWidth() != 15 || group.getCageDepth() != 15 || group.getCageHeight() != 9)
             throw new IllegalStateException("Regional lift requires Moving Elevators maxCabinHorizontalSize=15");
-        group.setTargetSpeed(4.25);
+        group.setTargetSpeed(0.85);
         RUNTIMES.get(level).ready = true;
         ProjectSeele.LOGGER.info("REGIONAL GATE READY nativeCar={}x{}x{} anchor={} floors={}",
                 group.getCageSizeX(), group.getCageSizeY(), group.getCageSizeZ(), group.getCageAnchorBlockPos(UPPER), group.getFloorCount());

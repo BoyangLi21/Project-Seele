@@ -168,6 +168,13 @@ public final class EvaPoseGraph
             return Snapshot.empty();
         }
         EvaPoseTransition.rememberGecko(model);
+        if(entity.isNervLogisticsLocked())
+        {
+            // The dormant clip only keys the upper body. Explicitly release
+            // residual lower-body animation when the airframe enters its rack.
+            for(String name:new String[]{"root","torso_lower","leg_l","leg_r","shin_l","shin_r","foot_l","foot_r","toe_l","toe_r","aim_pitch"})
+                model.getBone(name).ifPresent(b->{b.setRotX(0);b.setRotY(0);b.setRotZ(0);b.setPosX(0);b.setPosY(0);b.setPosZ(0);});
+        }
         EvaMotionEngineV2.BoneWrites motionWrites = EvaMotionEngineV2.apply(
                 entity, model, partialTick);
         var locomotion=EvaLocomotionRig.apply(entity,model,partialTick);
@@ -189,7 +196,7 @@ public final class EvaPoseGraph
                 aimPitch.setRotZ(aimPitch.getRotZ());
             });
         }
-        if (entity.getPilotEntity() != null
+        if (entity.getPilotEntity() != null && !entity.isNervLogisticsLocked()
                 && !motionWrites.rotationBones().contains("head"))
         {
             model.getBone("head").ifPresent(head ->

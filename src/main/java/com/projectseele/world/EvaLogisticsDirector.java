@@ -1807,6 +1807,7 @@ public final class EvaLogisticsDirector
     private static void setCarrier(ServerLevel level, int variant,
                                    BlockPos centre, boolean present)
     {
+        if(FacilityLayoutR20.active(level.getServer()))return;
         if (FacilityV2EvaRuntime.ready(level, variant))
         {
             FacilityV2EvaRuntime.setCarrier(
@@ -1821,6 +1822,7 @@ public final class EvaLogisticsDirector
     private static void ensureTransportGuideway(ServerLevel level, int variant,
                                                 BlockPos start, BlockPos end)
     {
+        if(FacilityLayoutR20.active(level.getServer()))return;
         if (FacilityV2EvaRuntime.ready(level, variant))
         {
             FacilityV2EvaRuntime.ensureTransportGuideway(
@@ -1835,6 +1837,7 @@ public final class EvaLogisticsDirector
     private static void restoreStaticCarrier(
             ServerLevel level, int variant, BlockPos centre)
     {
+        if(FacilityLayoutR20.active(level.getServer()))return;
         // The surface head is closed by NervSiloDoorEntity at Y+1.  A second
         // 29x29 carrier at the logical Y=79 anchor is redundant, obstructs
         // the shaft and used to leave a visible centre block after opening.
@@ -1920,13 +1923,15 @@ public final class EvaLogisticsDirector
                                        boolean outbound)
     {
         double dx = end.getX() - start.getX();
+        double dy = end.getY() - start.getY();
         double dz = end.getZ() - start.getZ();
         int duration = Math.max(80, Mth.ceil(
-                Math.sqrt(dx * dx + dz * dz)
+                Math.sqrt(dx * dx + dy * dy + dz * dz)
                         / HORIZONTAL_BLOCKS_PER_TICK));
         int ticks = Math.min(duration, entry.ticks() + 1);
         double progress = smoothCarrierProgress(ticks / (double) duration);
         double exactX = Mth.lerp(progress, start.getX(), end.getX());
+        double exactY = CarrierGuidePath.height(Vec3.atLowerCornerOf(start),Vec3.atLowerCornerOf(end),progress);
         double exactZ = Mth.lerp(progress, start.getZ(), end.getZ());
         int carrierZ = Mth.floor(exactZ + 0.5D);
         if (entry.ticks() == 0)
@@ -1949,9 +1954,9 @@ public final class EvaLogisticsDirector
                             end.getZ() + 0.5D), duration);
         }
         NervCarrierVisuals.update(level, unit, exactX + 0.5D,
-                start.getY(), exactZ + 0.5D);
+                exactY, exactZ + 0.5D);
         unit.setNervLogisticsLocked(true);
-        unit.moveOnNervCarrier(exactX + 0.5D, start.getY() + 1.0D,
+        unit.moveOnNervCarrier(exactX + 0.5D, exactY + 1.0D,
                 exactZ + 0.5D, EvaUnit01Entity.SILO_BAY_YAW);
         if (ticks < duration)
         {
@@ -2333,7 +2338,11 @@ public final class EvaLogisticsDirector
             if (!level.areEntitiesLoaded(ChunkPos.asLong(hangarBed(level, variant)))
                     || !level.areEntitiesLoaded(ChunkPos.asLong(lowerLiftBed(level, variant)))
                     || !level.areEntitiesLoaded(ChunkPos.asLong(surfaceLiftBed(level, variant)))
-                    || !level.areEntitiesLoaded(ChunkPos.asLong(TrainingPilotDirector.requestedStandby(level, variant))))
+                    || !level.areEntitiesLoaded(ChunkPos.asLong(BlockPos.containing(EntryPlugDirector.plugRestPosition(level, variant)))))
+            {
+                return false;
+            }
+            if (!level.areEntitiesLoaded(ChunkPos.asLong(TrainingPilotDirector.requestedStandby(level, variant))))
             {
                 return false;
             }
@@ -2377,9 +2386,10 @@ public final class EvaLogisticsDirector
     /** Temporary tickets cover station terrain and the separately saved pilot. */
     private static void loadVariantStations(ServerLevel level, int variant)
     {
-        PerformanceCounters.recordSyncChunkLoads(4);
+        PerformanceCounters.recordSyncChunkLoads(5);
         for (BlockPos station : List.of(hangarBed(level, variant),
                 lowerLiftBed(level, variant), surfaceLiftBed(level, variant),
+                BlockPos.containing(EntryPlugDirector.plugRestPosition(level, variant)),
                 TrainingPilotDirector.requestedStandby(level, variant)))
         {
             ChunkPos chunk = new ChunkPos(station);

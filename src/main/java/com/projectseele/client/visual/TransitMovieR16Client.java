@@ -37,7 +37,7 @@ public final class TransitMovieR16Client
         if(!initialized)
         {
             initialized=true;oldGui=mc.options.hideGui;oldFov=mc.options.fov().get();oldCamera=mc.options.getCameraType();mc.options.hideGui=true;mc.options.fov().set(76);
-            folder=mc.gameDirectory.toPath().resolve("../artifacts/tv_facilities_r16/transit_"+System.getProperty("projectseele.regionalBuild")+"_"+System.currentTimeMillis()).normalize();
+            String mode=System.getProperty("projectseele.regionalBuild");folder=mc.gameDirectory.toPath().resolve((mode.startsWith("r20-")?"../artifacts/world_rebuild_r20/transit/native_movie_":"../artifacts/tv_facilities_r16/transit_")+mode+"_"+System.currentTimeMillis()).normalize();
             try{Files.createDirectories(folder);}catch(Exception e){throw new IllegalStateException(e);}
         }
         view=RegionalTransitRidingChecks.movieView();

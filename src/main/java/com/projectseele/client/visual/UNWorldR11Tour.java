@@ -17,8 +17,9 @@ import java.util.*;
 public final class UNWorldR11Tour
 {
     private static final boolean BENCH="r19-worldtour-bench".equals(System.getProperty("projectseele.regionalBuild",""));
+    private static final boolean R20="r20-worldtour".equals(System.getProperty("projectseele.regionalBuild",""));
     private static final boolean BOARDS_TOUR="r19-boards-tour".equals(System.getProperty("projectseele.regionalBuild",""));
-    private static final boolean R19=BENCH||BOARDS_TOUR||"r19-worldtour".equals(System.getProperty("projectseele.regionalBuild",""));
+    private static final boolean R19=R20||BENCH||BOARDS_TOUR||"r19-worldtour".equals(System.getProperty("projectseele.regionalBuild",""));
     public static final boolean ENABLED=R19||"r11-worldtour".equals(System.getProperty("projectseele.regionalBuild",""));
     private static JsonArray shots;private static final JsonArray receipt=new JsonArray();private static int age,index,settle,end,oldDistance;private static boolean requested,done,oldPause,oldGui,ready;
     private static Vec3 eye,target;private static Path folder;private static net.minecraft.client.CameraType oldCamera;
@@ -29,13 +30,13 @@ public final class UNWorldR11Tour
     {
         if(!ENABLED||event.phase!=TickEvent.Phase.END||BOARDS_TOUR&&!com.projectseele.visual.WorldRepairR19Review.finished)return;var mc=Minecraft.getInstance();if(mc.player==null||mc.level==null||mc.getSingleplayerServer()==null)return;
         String world=mc.getSingleplayerServer().getWorldPath(LevelResource.ROOT).normalize().getFileName().toString();
-        if(R19?!world.equals("SEELE_R19_NATIVE_REVIEW"):!world.equals("SEELE_R11_CANONICAL_ACCEPTANCE")&&!world.equals("SEELE_TV_WORLD_PREVIEW_20260906"))throw new IllegalStateException("Native tour world boundary");
+        if(R19?!world.equals(R20?"SEELE_R20_REVIEW":"SEELE_R19_NATIVE_REVIEW"):!world.equals("SEELE_R11_CANONICAL_ACCEPTANCE")&&!world.equals("SEELE_TV_WORLD_PREVIEW_20260906"))throw new IllegalStateException("Native tour world boundary");
         if(++age<100)return;
         try
         {
             if(shots==null)
             {
-                shots=JsonParser.parseString(Files.readString(mc.gameDirectory.toPath().resolve("projectseele-local-maps/"+(R19?"r19":"r11")+"_worldtour.json"))).getAsJsonArray();folder=mc.gameDirectory.toPath().resolve((R19?"../artifacts/world_repair_r19/native_tour_":"../artifacts/world_motion_r11/world_native_")+System.currentTimeMillis()).normalize();Files.createDirectories(folder);
+                shots=JsonParser.parseString(Files.readString(mc.gameDirectory.toPath().resolve("projectseele-local-maps/"+(R20?"r20":R19?"r19":"r11")+"_worldtour.json"))).getAsJsonArray();folder=mc.gameDirectory.toPath().resolve((R20?"../artifacts/world_rebuild_r20/native_tour_":R19?"../artifacts/world_repair_r19/native_tour_":"../artifacts/world_motion_r11/world_native_")+System.currentTimeMillis()).normalize();Files.createDirectories(folder);
                 oldDistance=mc.options.renderDistance().get();oldPause=mc.options.pauseOnLostFocus;oldGui=mc.options.hideGui;oldCamera=mc.options.getCameraType();mc.options.renderDistance().set(BENCH?32:12);mc.options.broadcastOptions();mc.options.pauseOnLostFocus=false;mc.player.connection.sendCommand("gamemode spectator");
             }
             if(done)

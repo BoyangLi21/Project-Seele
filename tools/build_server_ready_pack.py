@@ -325,6 +325,7 @@ def build_server(root: Path, guide: str) -> None:
     write_text(root / "server.properties", server_properties())
     write_text(root / "user_jvm_args.txt", jvm_args())
     write_text(root / "README_SERVER_CN.txt", guide)
+    copy_file(ROOT / "docs" / "MANUAL_ACCEPTANCE_R20.md", root / "R20_TEST_GUIDE_CN.md")
     write_text(
         root / "PRIVATE_USE_ONLY.txt",
         "本包仅供两名受邀开发者在私人服务器测试。禁止公开上传或再分发其中的第三方资源。",
@@ -351,6 +352,7 @@ def build_client(root: Path, guide: str) -> None:
         root / "resourcepacks" / "eva_real_model",
     )
     write_text(root / "README_CLIENT_CN.txt", guide)
+    copy_file(ROOT / "docs" / "MANUAL_ACCEPTANCE_R20.md", root / "R20_TEST_GUIDE_CN.md")
     write_text(
         root / "PRIVATE_USE_ONLY.txt",
         "本包包含本地测试模型与贴图，只能私下发给受邀开发者，禁止公开上传或再分发。",

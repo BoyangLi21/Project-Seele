@@ -76,14 +76,6 @@ public final class NervCarrierPlatformRenderer
                         packedLight);
             }
             TvFacilityMeshes.cage(poses,packedLight,entity.getRestraintProgress(partialTick));
-            var serviceAnchor=entity.blockPosition().offset(21,0,42);
-            if(entity.level().hasChunkAt(serviceAnchor)&&entity.level().getBlockState(serviceAnchor).is(com.projectseele.registry.ModBlocks.NERV_MACHINE_HAZARD.get()))
-            {
-                poses.pushPose();
-                poses.translate(serviceAnchor.getX()-entity.getX(),serviceAnchor.getY()-entity.getY(),serviceAnchor.getZ()-entity.getZ());
-                TvFacilityMeshes.draw("r19_buttress_services",poses,packedLight);
-                poses.popPose();
-            }
             super.render(entity, yaw, partialTick, poses, buffers,
                     packedLight);
             return;

@@ -4,8 +4,8 @@ from pathlib import Path
 import nbtlib
 import regional_voxels as vox
 
-def main(relative):
-    root=(vox.ROOT/'artifacts/world_repair_r19').resolve()
+def main(relative,*,artifact_root=None):
+    root=(Path(artifact_root) if artifact_root is not None else vox.ROOT/'artifacts/world_repair_r19').resolve()
     folder=(root/relative).resolve()
     if not folder.is_relative_to(root):raise ValueError('Plan must remain inside the R19 artifact directory')
     if not (root/'baseline.json').exists():raise RuntimeError('Cold baseline is required')

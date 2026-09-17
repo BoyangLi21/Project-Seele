@@ -51,7 +51,7 @@ public final class S20MovingElevatorsAdapter
     private static final double TARGET_SPEED = 0.85D;
     /** Human-approved half-speed setting for the three-stop x=93 hangar lift. */
     private static final double COMPACT_CAGE_TARGET_SPEED = 0.425D;
-    private static final double SURFACE_TARGET_SPEED = 4.25D;
+    private static final double SURFACE_TARGET_SPEED = 0.85D;
     private static final int UPDATE =
             Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE;
     private static final long ACCESS_WINDOW_TICKS = 600L;
@@ -330,10 +330,11 @@ public final class S20MovingElevatorsAdapter
         return true;
     }
 
-    static BlockPos controllerPosition(
+    public static BlockPos controllerPosition(
             S20PhysicalElevatorDirector.LiftSpec spec,
             S20PhysicalElevatorDirector.Landing landing)
     {
+        if(spec.id().equals(NervLiftPassengerSync.GATEWAY))return RegionalGatewayDirector.controllerPos(landing.walkY());
         /*
          * The controller must never share a plane with either landing door.
          * The previous hard-coded west position was inside every WEST-facing
@@ -1304,15 +1305,18 @@ public final class S20MovingElevatorsAdapter
     public static boolean validCommandCageSource(
             Level level, ElevatorGroup group, BlockPos anchor)
     {
-        S20PhysicalElevatorDirector.LiftSpec spec =
-                S20PhysicalElevatorDirector.commandRearLift();
-        BlockPos base = controllerPosition(spec, spec.lower());
-        if (!level.dimension().location().toString().equals("projectseele:geofront")
-                || group.x != base.getX() || group.z != base.getZ()
-                || group.facing != controllerFacing(spec))
+        if (!(level instanceof ServerLevel serverLevel)
+                || !level.dimension().location().toString().equals("projectseele:geofront"))
         {
             return true;
         }
+        S20PhysicalElevatorDirector.LiftSpec spec = NervLiftPassengerSync.managedLifts(serverLevel).stream()
+                .filter(candidate -> {
+                    BlockPos base = controllerPosition(candidate,candidate.lower());
+                    return group.x==base.getX() && group.z==base.getZ()
+                            && group.facing==controllerFacing(candidate);
+                }).findFirst().orElse(null);
+        if(spec==null)return true;
         for (S20PhysicalElevatorDirector.Landing landing : spec.stops())
         {
             if (!captureMatchesLanding(group, anchor, landing.cabinCentre()))
@@ -1323,8 +1327,9 @@ public final class S20MovingElevatorsAdapter
             {
                 for (int dz = 0; dz < group.getCageSizeZ(); dz++)
                 {
-                    if (!S20PhysicalElevatorDirector.isCabinFloor(
-                            level.getBlockState(anchor.offset(dx, 0, dz))))
+                    BlockState floor = level.getBlockState(anchor.offset(dx,0,dz));
+                    if (!S20PhysicalElevatorDirector.isCabinFloor(floor)
+                            && !(group.getCageSizeX()>7 && floor.is(Blocks.SMOOTH_STONE)))
                     {
                         return false;
                     }

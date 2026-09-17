@@ -559,7 +559,7 @@ public final class IntegratedNervMapBuilder
         if (!FacilityWorldPolicy.isS22Coastal(level.getServer()))
         {
             if (RegionalFacilityLayout.migrated(level.getServer()))
-                return createLiftLinks(TOKYO3_ORIGIN.offset(0,0,-256), RegionalFacilityLayout.evaOrigin(level));
+                return createLiftLinks(TOKYO3_ORIGIN.offset(0,0,-256), RegionalFacilityLayout.launchOrigin(level));
             return LIFT_LINKS;
         }
         return createLiftLinks(tokyo3Origin(level), geoFrontOrigin(level));

@@ -35,6 +35,7 @@ public final class S20EvaPlantDirector
 
     public static void tick(MinecraftServer server)
     {
+        if(FacilityLayoutR20.active(server))return;
         if (!FacilityWorldPolicy.isS20Rebuild(server)
                 || server.getTickCount() % PHASE_INTERVAL_TICKS != 0)
         {

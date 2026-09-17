@@ -47,13 +47,16 @@ public final class TvFacilityMeshes
         catch(Exception e){ProjectSeele.LOGGER.error("TV facility machinery resource rejected",e);}
     }
     public static void draw(String part,PoseStack poses,int light)
+    {draw(part,poses,light,1);}
+    private static void draw(String part,PoseStack poses,int light,float opacity)
     {
         load();VertexBuffer mesh=PARTS.get(part);if(mesh==null)return;
         var type=RenderType.debugQuads();type.setupRenderState();
         float illumination=.40F+.60F*Math.max((light>>4)&15,(light>>20)&15)/15F;
-        RenderSystem.setShaderColor(illumination,illumination,illumination,1);
+        if(opacity<.999F){RenderSystem.enableBlend();RenderSystem.defaultBlendFunc();RenderSystem.depthMask(false);}
+        RenderSystem.setShaderColor(illumination,illumination,illumination,opacity);
         mesh.bind();mesh.drawWithShader(poses.last().pose(),RenderSystem.getProjectionMatrix(),GameRenderer.getPositionColorShader());VertexBuffer.unbind();
-        RenderSystem.setShaderColor(1,1,1,1);type.clearRenderState();
+        RenderSystem.setShaderColor(1,1,1,1);if(opacity<.999F)RenderSystem.depthMask(true);type.clearRenderState();
     }
     private static float ramp(float value,float a,float b){return EvaDorsalMechanism.smooth((value-a)/(b-a));}
     public static void cage(PoseStack poses,int light,float closed)
@@ -80,9 +83,19 @@ public final class TvFacilityMeshes
     }
     public static void carrier(PoseStack poses,int light,EvaUnit01Entity unit,float partial)
     {
-        draw("carrier_deck",poses,light);draw("carrier_spine",poses,light);
+        float opacity=1;var mc=Minecraft.getInstance();
+        if(mc.player!=null&&!mc.options.getCameraType().isFirstPerson()
+                &&com.projectseele.world.EvaPilotResolver.controlTarget(mc.player)==unit)
+        {
+            // A wall can push the chase camera into the opaque back pallet.
+            // Fade only this pilot's close occluder; other observers retain
+            // the complete machinery and its normal depth rendering.
+            double distance=mc.gameRenderer.getMainCamera().getPosition().distanceTo(unit.carrierRenderPosition(partial).add(0,30,0));
+            opacity=(float)net.minecraft.util.Mth.clamp((distance-17)/23,.10,1);
+        }
+        draw("carrier_deck",poses,light);draw("carrier_spine",poses,light,opacity);
         float release=unit.getLaunchPhase()==EvaUnit01Entity.LAUNCH_CLEAR?ramp(1-(unit.getLaunchTicks()-partial)/18F,0,1):0;
-        poses.pushPose();poses.translate(0,0,-3*release);draw("carrier_clamp",poses,light);poses.popPose();
+        poses.pushPose();poses.translate(0,0,-3*release);draw("carrier_clamp",poses,light,opacity);poses.popPose();
     }
     public static void pressureDoors(PoseStack poses,int light,float open)
     {

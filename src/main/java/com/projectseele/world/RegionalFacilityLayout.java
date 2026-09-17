@@ -33,7 +33,13 @@ public final class RegionalFacilityLayout
     }
     public static BlockPos evaOrigin(ServerLevel level)
     {
-        return shiftEva(level,IntegratedNervMapBuilder.geoFrontOrigin(level));
+        return shiftEva(level,IntegratedNervMapBuilder.geoFrontOrigin(level))
+                .offset(0,0,FacilityLayoutR20.cageShiftZ(level.getServer()));
+    }
+    public static BlockPos launchOrigin(ServerLevel level)
+    {
+        return shiftEva(level,IntegratedNervMapBuilder.geoFrontOrigin(level))
+                .above(FacilityLayoutR20.launchRise(level.getServer()));
     }
     public static BlockPos shiftEva(ServerLevel level,BlockPos original)
     {

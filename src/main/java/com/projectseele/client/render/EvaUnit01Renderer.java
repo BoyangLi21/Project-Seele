@@ -217,7 +217,8 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
         boolean nervFloodlit = entity.isNervLogisticsLocked()
                 || entity instanceof com.projectseele.entity.EvaPrototypeEntity prototype && prototype.isInsideTestHangar()
                 || entity.getLaunchPhase() == EvaUnit01Entity.LAUNCH_ASCENT;
-        if (entity.hasActiveCarrierMotion())
+        if (entity.hasActiveCarrierMotion()
+                || entity.isNervLogisticsLocked() && !entity.isExperimentalUnit() && entity.getY() < 0)
         {
             // The deck is one rigid piece of the rendered EVA assembly.  It
             // has no independent entity, packet clock or culling lifetime.
@@ -256,24 +257,10 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
         {
             return base;
         }
-        /*
-         * The local pilot camera is the empirically verified smooth reference
-         * during logistics.  Anchor the complete EVA/deck render assembly to
-         * that same interpolated passenger and preserve their current rigid
-         * offset.  This cancels any tick boundary disagreement between the
-         * airframe's network history and its nested ride chain.
-         */
-        LivingEntity pilot = entity.getPilotEntity();
-        Vec3 exact;
-        if (pilot != null)
-        {
-            Vec3 rigidOffset = entity.position().subtract(pilot.position());
-            exact = pilot.getPosition(partialTick).add(rigidOffset);
-        }
-        else
-        {
-            exact = entity.sampleCarrierMotion(partialTick);
-        }
+        // Body, rack and third-person camera share one analytic mechanical
+        // frame. A rider's independently corrected packet history must not
+        // move the entire sixty-block assembly back and forth.
+        Vec3 exact = entity.carrierRenderPosition(partialTick);
         // EntityRenderDispatcher is fed LevelRenderer's xOld/yOld/zOld
         // interpolation, not Entity.getPosition(partial)'s xo/yo/zo path.
         // Subtract the exact baseline the dispatcher will add.

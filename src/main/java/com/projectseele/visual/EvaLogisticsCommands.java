@@ -275,7 +275,7 @@ public final class EvaLogisticsCommands
         BlockPos target;
         if (FacilityWorldPolicy.isS20Rebuild(level.getServer()))
         {
-            target = IntegratedNervMapBuilder.GEOFRONT_ORIGIN.offset(
+            target = com.projectseele.world.RegionalFacilityLayout.evaOrigin(level).offset(
                     0, EvaHangarBuilder.GALLERY_Y + 1,
                     EvaHangarBuilder.GALLERY_Z - 1);
         }

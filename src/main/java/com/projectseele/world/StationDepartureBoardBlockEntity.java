@@ -14,12 +14,12 @@ public final class StationDepartureBoardBlockEntity extends BlockEntity
 {
     private BlockPos platform = BlockPos.ZERO;
     private String station = "", route = "";
-    private List<String> rows = List.of("運行情報を確認中");
+    private List<String> rows = List.of("正在读取运行信息");
     private boolean warned;
     private long linkedPlatformId = -1, nativeClock;
     private List<Long> departures = List.of();
     public StationDepartureBoardBlockEntity(BlockPos pos, BlockState state) { super(ModBlockEntities.STATION_DEPARTURE_BOARD.get(),pos,state); }
-    public String title() { return route + "  発車案内 / JST"; }
+    public String title() { return route + "  发车信息 · 北京时间"; }
     public String station() { return station; }
     public List<String> rows() { return rows; }
     public long linkedPlatformId() { return linkedPlatformId; }

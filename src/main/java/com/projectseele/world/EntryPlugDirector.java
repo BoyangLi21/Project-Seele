@@ -1720,7 +1720,7 @@ public final class EntryPlugDirector
                 RegionalFacilityLayout.evaOrigin(level), variant);
     }
 
-    private static Vec3 plugRestPosition(ServerLevel level, int variant)
+    public static Vec3 plugRestPosition(ServerLevel level, int variant)
     {
         if (FacilityV2EvaRuntime.ready(level, variant))
         {

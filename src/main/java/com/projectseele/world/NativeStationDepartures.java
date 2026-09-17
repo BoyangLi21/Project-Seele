@@ -16,7 +16,7 @@ import java.util.HashMap;
 public final class NativeStationDepartures
 {
     public record Snapshot(long platformId, long clock, List<Long> departures, List<String> rows) {}
-    private static final DateTimeFormatter CLOCK = DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.of("Asia/Tokyo"));
+    private static final DateTimeFormatter CLOCK = DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.of("Asia/Shanghai"));
     private record Cached(long until, Snapshot snapshot) {}
     private static final Map<Object,Map<BlockPos,Cached>> CACHE = new WeakHashMap<>();
     private static Object call(Object object, String method) throws ReflectiveOperationException
@@ -31,7 +31,7 @@ public final class NativeStationDepartures
     public static Snapshot read(BlockPos centre) throws ReflectiveOperationException
     {
         Object simulator = RegionalNativeTransitInspection.simulator();
-        if (simulator == null) return new Snapshot(-1, 0, List.of(), List.of("運行情報を確認中"));
+        if (simulator == null) return new Snapshot(-1, 0, List.of(), List.of("正在读取运行信息"));
         var cache = CACHE.computeIfAbsent(simulator, ignored -> new HashMap<>());
         long moment = System.nanoTime();Cached cached = cache.get(centre);
         if (cached != null && cached.until() > moment) return cached.snapshot();
@@ -45,7 +45,7 @@ public final class NativeStationDepartures
             double next = dx*dx + dy*dy*4 + dz*dz;
             if (next < distance) { nearest = platform;distance = next; }
         }
-        if (nearest == null) return new Snapshot(-1, 0, List.of(), List.of("この乗り場の運行情報はありません"));
+        if (nearest == null) return new Snapshot(-1, 0, List.of(), List.of("本站台暂无运行信息"));
         long id = ((Number)call(nearest, "getId")).longValue();
         Class<?> longs = Class.forName("org.mtr.libraries.it.unimi.dsi.fastutil.longs.LongImmutableList");
         Object ids = longs.getConstructor(long[].class).newInstance((Object)new long[]{id});
@@ -62,11 +62,11 @@ public final class NativeStationDepartures
             if (route.isBlank()) route = shortName(arrival, "getRouteName", 10);
             String destination = shortName(arrival, "getDestination", 15);
             long seconds = Math.max(0, (departure - now) / 1000);
-            String eta = seconds <= 30 ? "まもなく" : "約" + ((seconds + 59) / 60) + "分";
+            String eta = seconds <= 30 ? "即将进站" : "约" + ((seconds + 59) / 60) + "分钟";
             rows.add(CLOCK.format(Instant.ofEpochMilli(departure)) + "  " + route + "  " + destination + "  " + eta);
             times.add(departure);
         }
-        if (rows.isEmpty()) rows.add("現在、発車予定はありません");
+        if (rows.isEmpty()) rows.add("当前暂无待发班次");
         Snapshot snapshot = new Snapshot(id, now, List.copyOf(times), List.copyOf(rows));
         cache.put(centre.immutable(), new Cached(moment + 1_000_000_000L, snapshot));
         return snapshot;

@@ -266,7 +266,9 @@ public final class S20PhysicalElevatorDirector
         }
         return List.of(commandRearLift(), observationHangarLift(),
                 oldCommandToCompactCageLift(), surfaceTransitLift(level),
-                commanderOfficeLift()).stream().map(spec -> RegionalFacilityLayout.personnelLift(level,spec)).toList();
+                commanderOfficeLift()).stream()
+                .filter(spec -> !FacilityLayoutR20.active(level.getServer()) || !spec.id().equals(OBSERVATION_HANGAR_LIFT_ID))
+                .map(spec -> RegionalFacilityLayout.personnelLift(level,spec)).toList();
     }
 
     private static LiftSpec transform(ServerLevel level, LiftSpec spec)

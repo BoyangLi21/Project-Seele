@@ -418,6 +418,8 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
             SynchedEntityData.defineId(EvaUnit01Entity.class, EntityDataSerializers.BOOLEAN);
     private static final EntityDataAccessor<Boolean> DATA_NERV_LOGISTICS_LOCKED =
             SynchedEntityData.defineId(EvaUnit01Entity.class, EntityDataSerializers.BOOLEAN);
+    private static final EntityDataAccessor<Float> DATA_NERV_LOGISTICS_YAW =
+            SynchedEntityData.defineId(EvaUnit01Entity.class, EntityDataSerializers.FLOAT);
     private static final EntityDataAccessor<Integer> DATA_VISUAL_POSE =
             SynchedEntityData.defineId(EvaUnit01Entity.class, EntityDataSerializers.INT);
     private static final EntityDataAccessor<Integer> DATA_LAUNCH_PHASE =
@@ -708,6 +710,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
         this.entityData.define(DATA_ACTIVATION_TICKS, 0);
         this.entityData.define(DATA_ENTRY_PLUG_INSERTED, false);
         this.entityData.define(DATA_NERV_LOGISTICS_LOCKED, false);
+        this.entityData.define(DATA_NERV_LOGISTICS_YAW, SILO_BAY_YAW);
         this.entityData.define(DATA_VISUAL_POSE, VISUAL_NORMAL);
         this.entityData.define(DATA_LAUNCH_PHASE, LAUNCH_IDLE);
         this.entityData.define(DATA_LAUNCH_TICKS, 0);
@@ -764,6 +767,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
             tag.putUUID("SeeleLockedEntryPlug", this.lockedEntryPlugUuid);
         }
         tag.putBoolean("SeeleNervLogisticsLocked", this.isNervLogisticsLocked());
+        tag.putFloat("SeeleNervLogisticsYaw", this.entityData.get(DATA_NERV_LOGISTICS_YAW));
         tag.putInt("SeelePowerTicks", this.getPowerTicks());
         tag.putBoolean("SeeleUmbilicalSevered", this.isUmbilicalSevered());
         tag.putFloat("SeelePilotSynchronization", this.getPilotSynchronization());
@@ -829,6 +833,8 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
         this.entryPlugLinkFaultLogged = false;
         this.entityData.set(DATA_NERV_LOGISTICS_LOCKED,
                 tag.getBoolean("SeeleNervLogisticsLocked"));
+        this.entityData.set(DATA_NERV_LOGISTICS_YAW,
+                tag.contains("SeeleNervLogisticsYaw") ? tag.getFloat("SeeleNervLogisticsYaw") : this.getYRot());
         this.entityData.set(DATA_POWER_TICKS, tag.contains("SeelePowerTicks")
                 ? Mth.clamp(tag.getInt("SeelePowerTicks"), 0, this.getPowerCapacityTicks())
                 : 0);
@@ -1522,6 +1528,10 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
     {
         if (!this.level().isClientSide)
         {
+            if (locked && !this.isNervLogisticsLocked())
+            {
+                this.entityData.set(DATA_NERV_LOGISTICS_YAW, this.getYRot());
+            }
             this.entityData.set(DATA_NERV_LOGISTICS_LOCKED, locked);
             if (locked)
             {
@@ -1796,7 +1806,10 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
         this.setPos(x, y, z);
         this.setDeltaMovement(Vec3.ZERO);
         this.setRot(yaw, 0.0F);
+        this.entityData.set(DATA_NERV_LOGISTICS_YAW, yaw);
         this.yRotO = this.yBodyRot = this.yHeadRot = yaw;
+        this.yBodyRotO = this.yHeadRotO = yaw;
+        this.xRotO = 0.0F;
         this.fallDistance = 0.0F;
         this.setNoGravity(true);
         this.hasImpulse = true;
@@ -1868,9 +1881,9 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
                 Mth.lerp(eased,
                         this.entityData.get(DATA_CARRIER_FROM_X),
                         this.entityData.get(DATA_CARRIER_TO_X)),
-                Mth.lerp(eased,
-                        this.entityData.get(DATA_CARRIER_FROM_Y),
-                        this.entityData.get(DATA_CARRIER_TO_Y)),
+                com.projectseele.world.CarrierGuidePath.height(
+                        new Vec3(this.entityData.get(DATA_CARRIER_FROM_X),this.entityData.get(DATA_CARRIER_FROM_Y),this.entityData.get(DATA_CARRIER_FROM_Z)),
+                        new Vec3(this.entityData.get(DATA_CARRIER_TO_X),this.entityData.get(DATA_CARRIER_TO_Y),this.entityData.get(DATA_CARRIER_TO_Z)),eased),
                 Mth.lerp(eased,
                         this.entityData.get(DATA_CARRIER_FROM_Z),
                         this.entityData.get(DATA_CARRIER_TO_Z)));
@@ -1879,6 +1892,14 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
     public boolean hasActiveCarrierMotion()
     {
         return this.entityData.get(DATA_CARRIER_MOTION_ACTIVE);
+    }
+
+    /** One render-time frame, matching vanilla's previous/current tick convention. */
+    public Vec3 carrierRenderPosition(float partialTick)
+    {
+        return this.hasActiveCarrierMotion()
+                ? this.sampleCarrierMotion(partialTick - 1.0F)
+                : this.getPosition(partialTick);
     }
 
     private void endCarrierMotion()
@@ -3842,6 +3863,17 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
         float preservedPitch = this.getXRot();
         super.aiStep();
         EvaTerrainSupport.tick(this);
+        if (this.isNervLogisticsLocked())
+        {
+            // Vanilla body/head control also runs for nested entry-plug
+            // passengers. Keep the mechanical frame authoritative on both
+            // sides; mouse look belongs to the pilot camera, not the rack.
+            float railYaw = this.entityData.get(DATA_NERV_LOGISTICS_YAW);
+            this.setRot(railYaw, 0.0F);
+            this.yRotO = this.yBodyRot = this.yBodyRotO = railYaw;
+            this.yHeadRot = this.yHeadRotO = railYaw;
+            this.xRotO = 0.0F;
+        }
         if (preserveUnpilotedFacing)
         {
             // BodyRotationControl runs inside super.aiStep(). Restore the
@@ -6100,6 +6132,14 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
     {
         if(this.isFirstBattleActive()&&FirstBattleClip.ready())
             return FirstBattleClip.point(FIRST_BATTLE.spec(this),true,"eye_blocks",FIRST_BATTLE.time(this,partial)).subtract(0,passenger.getEyeHeight(),0);
+        if(this.isNervLogisticsLocked()||this.hasActiveCarrierMotion())
+        {
+            // The transport fixture owns this pose. A walking/rifle optical
+            // socket must not introduce motion into a mechanically held EVA.
+            Vec3 root=this.hasActiveCarrierMotion()?this.carrierRenderPosition(partial):this.getPosition(partial);
+            double yaw=Math.toRadians(this.getYRot()),forward=EvaScale.fromLegacy(1);
+            return root.add(-Math.sin(yaw)*forward,EvaScale.fromLegacy(24.63)-passenger.getEyeHeight(),Math.cos(yaw)*forward);
+        }
         if(this instanceof EvaPrototypeEntity un&&un.isEyeLaserActive())return EvaUNOptics.eye(un,partial).subtract(0,passenger.getEyeHeight(),0);
         if(this.getWeapon()==WEAPON_RIFLE&&this.isPoweredOn()&&this.getVisualPose()==VISUAL_NORMAL
                 &&!this.isVisuallyAirborneForRender()&&EvaBodyPose.hasSupportedStances())

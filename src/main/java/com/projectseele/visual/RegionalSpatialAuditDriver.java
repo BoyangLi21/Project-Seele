@@ -30,13 +30,15 @@ import java.util.*;
 @Mod.EventBusSubscriber(modid=ProjectSeele.MODID)
 public final class RegionalSpatialAuditDriver
 {
-    private static final boolean COMBINED="r10-world".equals(System.getProperty("projectseele.regionalBuild",""));
-    private static final boolean R19="r19-collision".equals(System.getProperty("projectseele.regionalBuild",""));
+    private static final boolean COMBINED=Set.of("r10-world","r20-civil-annex").contains(System.getProperty("projectseele.regionalBuild",""));
+    private static final boolean R20=Set.of("r20-collision","r20-civil-annex").contains(System.getProperty("projectseele.regionalBuild",""));
+    private static final boolean R19=R20||"r19-collision".equals(System.getProperty("projectseele.regionalBuild",""));
     private static final boolean ENABLED=R19||COMBINED||"collision-audit".equals(System.getProperty("projectseele.regionalBuild",""));
     private static final TicketType<ChunkPos> TICKET=TicketType.create("projectseele_spatial_audit",Comparator.comparingLong(ChunkPos::toLong),100);
     private static final Gson GSON=new GsonBuilder().setPrettyPrinting().create();
     private static final JsonArray RESULTS=new JsonArray();
     private static JsonArray cases;
+    private static JsonArray generation;private static int generated;
     private static FakePlayer player;
     private static int age,index,wait,steps,stalled,settled,stepLimit;
     public static volatile boolean done;
@@ -45,6 +47,7 @@ public final class RegionalSpatialAuditDriver
     private static JsonArray route;
     private static int waypoint;
     private static double distance,maxRise,fallSpeed;
+    private static int doorInteractions;
     private static final JsonArray TRACE=new JsonArray();
     private static ServerLevel activeLevel;
     private static final Map<BlockPos,BlockState> RESTORE=new LinkedHashMap<>();
@@ -72,13 +75,20 @@ public final class RegionalSpatialAuditDriver
     {
         if(!ENABLED||done||event.phase!=TickEvent.Phase.END)return;
         var server=event.getServer();Path world=server.getWorldPath(LevelResource.ROOT).normalize();
-        if(!world.getFileName().toString().equals(R19?"SEELE_R19_NATIVE_REVIEW":"SEELE_TV_WORLD_PREVIEW_20260906"))throw new IllegalStateException("Wrong quality audit world");
+        if(!world.getFileName().toString().equals(R20?"SEELE_R20_REVIEW":R19?"SEELE_R19_NATIVE_REVIEW":"SEELE_TV_WORLD_PREVIEW_20260906"))throw new IllegalStateException("Wrong quality audit world");
         ServerLevel level=server.getLevel(FacilitySchemaV2.DIMENSION);
         try
         {
             if(++age<100)return;
             if(cases==null)
             {
+                if(R20&&Files.isRegularFile(world.resolve("r20_generate_chunks.json")))
+                {
+                    if(generation==null)generation=JsonParser.parseString(Files.readString(world.resolve("r20_generate_chunks.json"))).getAsJsonArray();
+                    for(int n=0;n<2&&generated<generation.size();n++,generated++){var q=generation.get(generated).getAsJsonArray();level.getChunk(q.get(0).getAsInt(),q.get(1).getAsInt());}
+                    if(generated<generation.size())return;
+                    Files.writeString(world.resolve("r20_generated_chunks_result.json"),generation.toString());
+                }
                 player=FakePlayerFactory.get(level,new GameProfile(UUID.fromString("9bc3f5d1-2e80-4a10-8986-965c47c87e61"),"[SEELE audit]"));
                 player.setGameMode(GameType.SURVIVAL);player.getAbilities().flying=false;player.noPhysics=false;
                 player.setMaxUpStep(.6F);
@@ -142,7 +152,7 @@ public final class RegionalSpatialAuditDriver
                 for(int j=1;j<route.size();j++)length+=vector(route.get(j).getAsJsonArray()).distanceTo(vector(route.get(j-1).getAsJsonArray()));
                 stepLimit=Math.max(2000,(int)Math.ceil(length/.12)+route.size()*100);
                 TRACE.asList().clear();positioned=true;
-                activeLevel=level;RESTORE.clear();
+                activeLevel=level;RESTORE.clear();doorInteractions=0;
                 if(test.has("interactBlocks"))
                 {
                     // Imported multi-height shutters are functional entrances too.
@@ -203,6 +213,7 @@ public final class RegionalSpatialAuditDriver
                 if(amount==0 && player.onGround() && Math.abs(now.y-old.y)<.0001)settled++;else settled=0;
                 if(distance>=.18 && Math.hypot(now.x-old.x,now.z-old.z)<.0001)stalled++;else stalled=0;
                 if(steps%4==0||stalled>0)TRACE.add(position(now));
+                if(stalled==1&&openReachableDoor()){stalled=0;continue;}
                 if(stalled>=8){finish(test,"blocked_by_native_collision");break;}
                 if(steps>stepLimit){finish(test,"timeout");break;}
             }
@@ -215,10 +226,45 @@ public final class RegionalSpatialAuditDriver
             done=true;server.halt(false);
         }
     }
+    private static boolean openReachableDoor()
+    {
+        // A cold save may have ordinary doors closed. Exercise the player's
+        // real right-click action; never turn a collision block into air.
+        boolean opened=false;var centre=player.blockPosition();
+        for(BlockPos p:BlockPos.betweenClosed(centre.offset(-1,0,-1),centre.offset(1,1,1)))
+        {
+            var state=activeLevel.getBlockState(p);String name=BuiltInRegistries.BLOCK.getKey(state.getBlock()).getPath();
+            if(!(name.endsWith("_door")||name.endsWith("shutter")||name.endsWith("fence_gate")))continue;
+            var property=state.getProperties().stream().filter(k->k.getName().equals("open")).findFirst();
+            if(property.isEmpty()||!state.getValue(property.get()).toString().equals("false"))continue;
+            for(BlockPos q:BlockPos.betweenClosed(p.offset(-1,-1,-1),p.offset(1,2,1)))RESTORE.putIfAbsent(q.immutable(),activeLevel.getBlockState(q));
+            state.use(activeLevel,player,net.minecraft.world.InteractionHand.MAIN_HAND,new net.minecraft.world.phys.BlockHitResult(Vec3.atCenterOf(p),net.minecraft.core.Direction.NORTH,p,false));
+            var after=activeLevel.getBlockState(p);
+            if(state.is(net.minecraft.world.level.block.Blocks.IRON_DOOR)&&after.getValue(property.get()).toString().equals("false"))
+            {
+                BlockPos nearest=null;double distance=Double.MAX_VALUE;
+                for(BlockPos q:BlockPos.betweenClosed(p.offset(-2,-1,-2),p.offset(2,2,2)))
+                {
+                    var button=activeLevel.getBlockState(q);
+                    if(!(button.getBlock() instanceof net.minecraft.world.level.block.ButtonBlock)||button.getValue(net.minecraft.world.level.block.ButtonBlock.POWERED))continue;
+                    double d=Vec3.atCenterOf(q).distanceToSqr(player.getEyePosition());
+                    if(d<9&&d<distance){nearest=q.immutable();distance=d;}
+                }
+                if(nearest!=null)
+                {
+                    var q=nearest;RESTORE.putIfAbsent(q,activeLevel.getBlockState(q));
+                    activeLevel.getBlockState(q).use(activeLevel,player,net.minecraft.world.InteractionHand.MAIN_HAND,new net.minecraft.world.phys.BlockHitResult(Vec3.atCenterOf(q),net.minecraft.core.Direction.NORTH,q,false));
+                    after=activeLevel.getBlockState(p);
+                }
+            }
+            if(after.hasProperty(property.get())&&after.getValue(property.get()).toString().equals("true")){opened=true;doorInteractions++;}
+        }
+        return opened;
+    }
     private static void finish(JsonObject test,String status)
     {
         JsonObject result=test.deepCopy();result.addProperty("status",status);result.add("actual",position(player.position()));
-        result.addProperty("waypointsReached",waypoint);
+        result.addProperty("waypointsReached",waypoint);result.addProperty("nativeDoorInteractions",doorInteractions);
         result.addProperty("maxRise",maxRise);result.addProperty("playerStep",player.maxUpStep());result.add("trace",TRACE.deepCopy());RESULTS.add(result);
         ProjectSeele.LOGGER.info("SPATIAL WALK {} {} actual={} target={}",test.get("id").getAsString(),status,player.position(),end);
         RESTORE.forEach((pos,state)->activeLevel.setBlock(pos,state,3));RESTORE.clear();

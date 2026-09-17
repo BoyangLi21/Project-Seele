@@ -28,12 +28,24 @@ public abstract class CameraMixin
     @Shadow
     protected abstract void setPosition(double x, double y, double z);
     @Shadow protected abstract void setRotation(float yaw,float pitch);
+    @Shadow private double getMaxZoom(double desired){throw new AssertionError();}
+    @org.spongepowered.asm.mixin.Unique private int projectseele$carrierCameraId=-1;
+    @org.spongepowered.asm.mixin.Unique private double projectseele$carrierZoom;
+    @org.spongepowered.asm.mixin.Unique private double projectseele$carrierPivotHeight;
+    @org.spongepowered.asm.mixin.Unique private long projectseele$carrierFrame;
+    @org.spongepowered.asm.mixin.Unique private boolean projectseele$loosePlugCamera;
 
     @Inject(method = "setup", at = @At("TAIL"))
     private void projectseele$smoothEntryPlugCamera(BlockGetter level,
             Entity subject, boolean detached, boolean mirrored,
             float partialTick, CallbackInfo callback)
     {
+        var factory=com.projectseele.client.visual.FactoryR20Client.cameraView();
+        if(factory!=null)
+        {
+            Vec3 p=factory.position(),d=factory.target().subtract(p);this.setPosition(p.x,p.y,p.z);
+            this.setRotation((float)Math.toDegrees(Math.atan2(-d.x,d.z)),(float)-Math.toDegrees(Math.atan2(d.y,d.horizontalDistance())));return;
+        }
         var exterior=com.projectseele.client.visual.TransitExteriorR16Client.cameraView();
         if(exterior!=null)
         {
@@ -47,6 +59,62 @@ public abstract class CameraMixin
             this.setRotation((float)Math.toDegrees(Math.atan2(-d.x,d.z)),(float)-Math.toDegrees(Math.atan2(d.y,d.horizontalDistance())));return;
         }
         EvaUnit01Entity controlled=EvaPilotResolver.controlTarget(subject);
+        if(detached&&subject.getVehicle() instanceof EntryPlugCarrierEntity loose&&!loose.isLockedToEva())
+        {
+            long now=System.nanoTime();double dt=Math.min(.1,Math.max(0,(now-projectseele$carrierFrame)/1e9));
+            Vec3 pivot=loose.getInterpolatedPilotEyePosition(partialTick);
+            this.setPosition(pivot.x,pivot.y,pivot.z);
+            // The modelled pressure leaves project beyond their thin block
+            // interlock. Keep the orbit off the visible leaf as well.
+            double available=Math.max(.25,this.getMaxZoom(4)-2.0);
+            int key=-loose.getId()-2;
+            if(projectseele$carrierCameraId!=key)projectseele$carrierZoom=available;
+            else projectseele$carrierZoom=Math.min(available,projectseele$carrierZoom+net.minecraft.util.Mth.clamp(available-projectseele$carrierZoom,-16*dt,12*dt));
+            projectseele$carrierCameraId=key;projectseele$carrierFrame=now;projectseele$loosePlugCamera=true;
+            Camera camera=(Camera)(Object)this;Vec3 p=pivot.add(Vec3.directionFromRotation(camera.getXRot(),camera.getYRot()).scale(-projectseele$carrierZoom));
+            this.setPosition(p.x,p.y,p.z);return;
+        }
+        boolean lockedCapsule=!(subject.getVehicle() instanceof EntryPlugCarrierEntity capsule)||capsule.isLockedToEva();
+        if (detached && controlled != null && (controlled.hasActiveCarrierMotion()||controlled.isNervLogisticsLocked()&&lockedCapsule))
+        {
+            // Both collision rays and orbit originate at the analytic optical
+            // frame. Translating an already-clipped rider camera still shook
+            // when the rider and EVA crossed a packet boundary separately.
+            long now=System.nanoTime();
+            double dt=Math.min(.1,Math.max(0,(now-projectseele$carrierFrame)/1e9));
+            Vec3 base=controlled.hasActiveCarrierMotion()?controlled.carrierRenderPosition(partialTick):controlled.getPosition(partialTick);
+            if(projectseele$carrierCameraId!=controlled.getId())projectseele$carrierPivotHeight=Math.max(25,Math.min(55,(subject.getVehicle() instanceof EntryPlugCarrierEntity plug?plug.getInterpolatedPilotEyePosition(partialTick):subject.getEyePosition(partialTick)).y-base.y));
+            else projectseele$carrierPivotHeight+=(30-projectseele$carrierPivotHeight)*(1-Math.exp(-1.5*dt));
+            Vec3 pivot=base.add(0,projectseele$carrierPivotHeight,0);
+            this.setPosition(pivot.x,pivot.y,pivot.z);
+            double available=Math.max(.25,this.getMaxZoom(4)-2.0);
+            double anticipated=available;
+            if(controlled.hasActiveCarrierMotion())
+            {
+                // Read the already synchronized mechanical path ahead. A
+                // descending camera contracts before reaching the surface
+                // slab instead of jumping thirty metres on its first hit.
+                for(float ahead:new float[]{8,20,36})
+                {
+                    Vec3 future=controlled.sampleCarrierMotion(partialTick-1+ahead).add(0,projectseele$carrierPivotHeight,0);
+                    this.setPosition(future.x,future.y,future.z);anticipated=Math.min(anticipated,Math.max(.25,this.getMaxZoom(4)-2.0));
+                }
+                this.setPosition(pivot.x,pivot.y,pivot.z);
+            }
+            if(projectseele$carrierCameraId!=controlled.getId()&&!projectseele$loosePlugCamera)projectseele$carrierZoom=available;
+            else
+            {
+                double difference=anticipated-projectseele$carrierZoom;
+                projectseele$carrierZoom+=net.minecraft.util.Mth.clamp(difference,-24*dt,12*dt);
+                projectseele$carrierZoom=Math.min(projectseele$carrierZoom,available);
+            }
+            projectseele$carrierCameraId=controlled.getId();projectseele$carrierFrame=now;projectseele$loosePlugCamera=false;
+            Camera camera=(Camera)(Object)this;
+            Vec3 position=pivot.add(Vec3.directionFromRotation(camera.getXRot(),camera.getYRot()).scale(-projectseele$carrierZoom));
+            this.setPosition(position.x, position.y, position.z);
+            return;
+        }
+        projectseele$carrierCameraId=-1;projectseele$loosePlugCamera=false;
         if(!detached&&controlled!=null&&controlled.isPoweredOn()&&!controlled.isActivationCinematicActive())
         {
             Vec3 optical=controlled.getPilotCameraSeatPosition(subject,partialTick).add(0,subject.getEyeHeight(),0);
