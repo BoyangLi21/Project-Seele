@@ -4564,7 +4564,16 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
             int remainingTicks = this.getLaunchTicks() - 1;
             if (remainingTicks <= 0)
             {
-                this.finishTransferredSortie(this.launchLockedYaw);
+                // The R16 telescopic leaves take longer than the arrival sync
+                // timer. Releasing human control on that timer alone restores
+                // gravity over an open shaft; dummy standby hid the failure.
+                this.entityData.set(DATA_LAUNCH_TICKS, 0);
+                if (this.level() instanceof ServerLevel serverLevel
+                        && NervSiloDoorEntity.hasClosedSurfaceSupport(
+                                serverLevel, this.sortieDestinationBed))
+                {
+                    this.finishTransferredSortie(this.launchLockedYaw);
+                }
             }
             else
             {

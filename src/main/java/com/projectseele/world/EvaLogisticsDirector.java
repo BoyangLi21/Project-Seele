@@ -1533,7 +1533,7 @@ public final class EvaLogisticsDirector
                     // descent. Human pilots remain fully released.
                     unit.setNervLogisticsLocked(true);
                     unit.moveOnNervCarrier(surface.getX() + 0.5D,
-                            surface.getY() + 1.0D, surface.getZ() + 0.5D,
+                            surface.getY() + 2.0D, surface.getZ() + 0.5D,
                             EvaUnit01Entity.SILO_BAY_YAW);
                 }
                 else

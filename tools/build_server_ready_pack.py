@@ -40,7 +40,7 @@ def validate_private_eva_mesh_contracts() -> None:
             source,
         )
     }
-    for name in ("eva_unit00", "eva_unit01", "eva_unit02"):
+    for name in ("eva_unit00", "eva_unit01", "eva_unit02", "eva_prototype"):
         expected = contracts.get(name)
         if expected is None:
             raise ValueError(f"Missing Java mesh contract for {name}")
@@ -117,7 +117,6 @@ def required_mods() -> list[Path]:
         local / "MTR-forge-4.0.5+1.20.1.jar",
         local / "superbwarfare-0.8.9.1-hotfix-mc1.20.1-993063bed-all.jar",
         local / "kotlinforforge-4.12.0-all.jar",
-        local / "DistantHorizons-3.2.0-b-1.20.1-fabric-forge.jar",
         local / "ferritecore-6.0.1-forge.jar",
         local / "modernfix-forge-5.27.83+mc1.20.1.jar",
     ]
@@ -214,11 +213,22 @@ def copy_configs(destination: Path, *, client: bool) -> None:
         source = source_root / name
         if source.is_file():
             copy_file(source, destination / name)
-    from configure_rendering_r17 import targets
-    files,_=targets(destination.parent,'client' if client else 'server')
-    for rel,content in files.items():
-        path=destination.parent/rel;path.parent.mkdir(parents=True,exist_ok=True)
-        path.write_text(content,encoding='utf8')
+    if client:
+        for name in ('embeddium-options.json','xaerominimap.txt','xaeroworldmap.txt','xaerohud.txt'):
+            source=source_root/name
+            if source.is_file():copy_file(source,destination/name)
+        # Only portable project defaults: do not distribute the operator's
+        # account preferences, private addresses or other resource packs.
+        settings={'renderDistance':'24','simulationDistance':'8','mipmapLevels':'4',
+            'graphicsMode':'1','particles':'0','entityDistanceScaling':'1.0',
+            'resourcePacks':'["vanilla","mod_resources","file/eva_real_model"]',
+            'key_gui.xaero_new_waypoint':'key.keyboard.n',
+            'key_gui.xaero_enlarge_map':'key.keyboard.backslash',
+            'key_gui.xaero_zoom_in':'key.keyboard.right.bracket',
+            'key_gui.xaero_zoom_out':'key.keyboard.left.bracket',
+            'key_gui.xaero_toggle_manual_cave_mode':'key.keyboard.f8',
+            'key_gui.xaero_open_settings':'key.keyboard.unknown'}
+        (destination.parent/'options.txt').write_text(''.join(f'{k}:{v}\n' for k,v in settings.items()),encoding='utf8')
 
 
 def write_text(path: Path, text: str) -> None:
@@ -285,7 +295,7 @@ enforce-whitelist=true
 online-mode=true
 spawn-protection=0
 allow-flight=true
-view-distance=18
+view-distance=24
 simulation-distance=8
 entity-broadcast-range-percentage=125
 network-compression-threshold=256
@@ -327,9 +337,8 @@ def build_client(root: Path, guide: str) -> None:
     copy_configs(root / "config", client=True)
     copy_local_maps_without_commander_skin(root / "projectseele-local-maps")
     local = ROOT / ".Codex" / "local-mods"
-    client_only = (
-        local / "embeddium-0.3.31+mc1.20.1.jar",
-    )
+    client_only = [local / "embeddium-0.3.31+mc1.20.1.jar"]
+    client_only.extend(local / row['filename'] for row in json.loads((ROOT/'tools/client_navigation_r19.json').read_text()))
     missing = [path for path in client_only if not path.is_file()]
     if missing:
         raise FileNotFoundError(
@@ -358,23 +367,12 @@ def build_world(root: Path) -> None:
             "DistantHorizons.sqlite",
             "DistantHorizons.sqlite-shm",
             "DistantHorizons.sqlite-wal",
+            "lod_cache_r17.json",
         ),
     )
     if not (root / "level.dat").is_file():
         raise FileNotFoundError("World import root does not contain level.dat")
-    # Keep retired/unverified caches out. A reviewed, closed R17 database can
-    # accompany the world so a remote server need not rebuild it at first join.
-    source=ROOT/"run"/"saves"/WORLD_NAME
-    marker=source/"lod_cache_r17.json"
-    certified=json.loads(marker.read_text(encoding="utf8")) if marker.exists() else {}
-    databases=certified.get("databases",[])
-    valid=bool(databases) and all((source/r["path"]).is_file()
-        and (source/r["path"]).resolve().is_relative_to(source.resolve())
-        and sha256(source/r["path"])==r["sha256"] for r in databases)
-    if valid:
-        for row in databases:copy_file(source/row["path"],root/row["path"])
-    elif (root/"lod_cache_r17.json").exists():
-        (root/"lod_cache_r17.json").unlink()
+    # R19 retires the LOD cache after observed underground transparency errors.
 
 
 def validate_outputs(server_zip: Path, world_zip: Path, client_zip: Path) -> None:
@@ -435,8 +433,11 @@ def validate_outputs(server_zip: Path, world_zip: Path, client_zip: Path) -> Non
         if animation_path not in names:
             raise ValueError("Client archive is missing the R04 Unit-01 animation")
         mod_names = [name for name in names if name.startswith("mods/") and name.endswith(".jar")]
-        if len(mod_names) != len(required_mods()) + 1:
+        navigation_count=len(json.loads((ROOT/'tools/client_navigation_r19.json').read_text()))
+        if len(mod_names) != len(required_mods()) + 1 + navigation_count:
             raise ValueError(f"Client mod count mismatch: {len(mod_names)}")
+        if any('distanthorizons' in name.lower() or 'acedium' in name.lower() or 'farsight' in name.lower() for name in names):
+            raise ValueError('An unapproved terrain renderer entered the default client pack')
         client_project_jar = project_jar_bytes(archive)
         loose_animation = archive.read(animation_path)
     if hashlib.sha256(server_project_jar).digest() != hashlib.sha256(

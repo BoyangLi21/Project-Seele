@@ -39,7 +39,7 @@ public final class UNPlugDirector
         CompoundTag d=eva.getPersistentData();EntryPlugCarrierEntity plug=capsule(eva);
         if(!d.hasUUID("UNPlug"))
         {
-            boolean lab=System.getProperty("projectseele.regionalBuild","").equals("r11-mechanics")&&d.getBoolean("UNMechanicsLab");
+            boolean lab=java.util.Set.of("r11-mechanics","r19-un").contains(System.getProperty("projectseele.regionalBuild",""))&&d.getBoolean("UNMechanicsLab");
             if(!lab&&(!eva.isInsideTestHangar()||eva.position().distanceTo(HOME)>4))return;
             d.putDouble("UNHomeX",eva.getX());d.putDouble("UNHomeY",eva.getY());d.putDouble("UNHomeZ",eva.getZ());d.putFloat("UNHomeYaw",eva.getYRot());
             plug=ModEntities.ENTRY_PLUG_CARRIER.get().create(level);if(plug==null)return;

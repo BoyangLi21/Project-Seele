@@ -186,8 +186,8 @@
   "block.projectseele.nerv_strip_light": "NERV Recessed Strip Light",
   "block.projectseele.station_tactile_path": "Station Tactile Guide",
   "block.projectseele.station_tactile_warning": "Station Tactile Warning",
-  "entity.projectseele.eva_prototype": "EVA-UN",
-  "hud.projectseele.role_experimental": "EVA-UN",
+  "entity.projectseele.eva_prototype": "EVA-UN-00",
+  "hud.projectseele.role_experimental": "EVA-UN-00",
   "block.projectseele.nerv_pyramid_panel": "NERV Pyramid Facade",
   "block.projectseele.nerv_pyramid_marking": "NERV Pyramid Marking",
   "subtitles.projectseele.eva_foot_concrete": "EVA heavy footstep",
@@ -216,5 +216,12 @@
   "block.projectseele.nerv_machine_panel": "Cage Olive Plating",
   "block.projectseele.nerv_shaft_panel": "Catapult Blue Plating",
   "block.projectseele.nerv_machine_edge": "Machinery Edge Plating",
-  "block.projectseele.nerv_machine_hazard": "Red Hazard Plating"
+  "block.projectseele.nerv_machine_hazard": "Red Hazard Plating",
+  "block.projectseele.station_seat": "Station moulded seat",
+  "block.projectseele.residential_chair": "Apartment dining chair",
+  "block.projectseele.military_seat": "UN workshop seat",
+  "block.projectseele.station_departure_board": "Live railway departure display",
+  "block.projectseele.street_light_head": "Roadway LED luminaire",
+  "block.projectseele.road_asphalt_slab": "Asphalt road slab",
+  "block.projectseele.road_marking_slab": "Road marking slab"
 }

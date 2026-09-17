@@ -2,7 +2,7 @@
 import json,gzip
 from pathlib import Path
 import numpy as np
-from scipy.ndimage import binary_dilation,label
+from scipy.ndimage import binary_dilation,label,find_objects
 import scan_regional_completion as scan
 from regional_voxels import ROOT,WORLD
 from quality_structures import Station
@@ -76,8 +76,9 @@ def main():
         result=dict(area=name,bounds=[lo.tolist(),hi.tolist()],counts={k:int(v.sum()) for k,v in masks.items()},components={})
         for k,v in masks.items():
             groups,count=label(v);components=[]
-            for i in range(1,count+1):
-                y,z,x=np.nonzero(groups==i);points=np.column_stack((x+lo[0],y+lo[1],z+lo[2]));components.append(dict(cells=len(x),min=points.min(0).tolist(),max=points.max(0).tolist()))
+            for i,box in enumerate(find_objects(groups),1):
+                if box is None:continue
+                y,z,x=np.nonzero(groups[box]==i);points=np.column_stack((x+lo[0]+box[2].start,y+lo[1]+box[0].start,z+lo[2]+box[1].start));components.append(dict(cells=len(x),min=points.min(0).tolist(),max=points.max(0).tolist()))
             result['components'][k]=sorted(components,key=lambda c:-c['cells'])
         np.savez_compressed(OUT/(name+'.npz'),blocks=blocks,palette=np.array(pal),lo=lo,hi=hi,space=space,context=context,held=held,ports=ports,**masks)
         reports.append(result);print(name,result['counts'],flush=True)

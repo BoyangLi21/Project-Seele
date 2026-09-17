@@ -32,6 +32,13 @@ public class ModItems
     public static final RegistryObject<Item> NERV_STORAGE_PANEL=ITEMS.register("nerv_storage_panel",()->new BlockItem(ModBlocks.NERV_STORAGE_PANEL.get(),new Item.Properties()));
     public static final RegistryObject<Item> NERV_MEDICAL_PANEL=ITEMS.register("nerv_medical_panel",()->new BlockItem(ModBlocks.NERV_MEDICAL_PANEL.get(),new Item.Properties()));
     public static final RegistryObject<Item> NERV_OFFICE_CHAIR=ITEMS.register("nerv_office_chair",()->new BlockItem(ModBlocks.NERV_OFFICE_CHAIR.get(),new Item.Properties()));
+    public static final RegistryObject<Item> ROAD_ASPHALT_SLAB=ITEMS.register("road_asphalt_slab",()->new BlockItem(ModBlocks.ROAD_ASPHALT_SLAB.get(),new Item.Properties()));
+    public static final RegistryObject<Item> ROAD_MARKING_SLAB=ITEMS.register("road_marking_slab",()->new BlockItem(ModBlocks.ROAD_MARKING_SLAB.get(),new Item.Properties()));
+    public static final RegistryObject<Item> STREET_LIGHT_HEAD=ITEMS.register("street_light_head",()->new BlockItem(ModBlocks.STREET_LIGHT_HEAD.get(),new Item.Properties()));
+    public static final RegistryObject<Item> STATION_SEAT=ITEMS.register("station_seat",()->new BlockItem(ModBlocks.STATION_SEAT.get(),new Item.Properties()));
+    public static final RegistryObject<Item> RESIDENTIAL_CHAIR=ITEMS.register("residential_chair",()->new BlockItem(ModBlocks.RESIDENTIAL_CHAIR.get(),new Item.Properties()));
+    public static final RegistryObject<Item> MILITARY_SEAT=ITEMS.register("military_seat",()->new BlockItem(ModBlocks.MILITARY_SEAT.get(),new Item.Properties()));
+    public static final RegistryObject<Item> STATION_DEPARTURE_BOARD=ITEMS.register("station_departure_board",()->new BlockItem(ModBlocks.STATION_DEPARTURE_BOARD.get(),new Item.Properties()));
     public static final RegistryObject<Item> NERV_BRIEFING_TILE=ITEMS.register("nerv_briefing_tile",()->new BlockItem(ModBlocks.NERV_BRIEFING_TILE.get(),new Item.Properties()));
     public static final RegistryObject<Item> NERV_WALL_DATUM=ITEMS.register("nerv_wall_datum",()->new BlockItem(ModBlocks.NERV_WALL_DATUM.get(),new Item.Properties()));
     public static final RegistryObject<Item> NERV_FLOOR_PANEL=ITEMS.register("nerv_floor_panel",()->new BlockItem(ModBlocks.NERV_FLOOR_PANEL.get(),new Item.Properties()));

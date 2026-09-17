@@ -24,7 +24,8 @@
     "client.PlayerModelGendoPoseMixin",
     "client.MovingElevatorDisplayMixin",
     "client.MovingElevatorPanelMixin",
-    "client.TransportPassengerPacketDiagnosticsMixin"
+    "client.TransportPassengerPacketDiagnosticsMixin",
+    "client.AircraftPositionSmoothingMixin"
   ],
   "injectors": {
     "defaultRequire": 1

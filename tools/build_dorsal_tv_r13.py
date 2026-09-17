@@ -41,15 +41,22 @@ def world(part):
 def packed(v,pivot):
     values=np.array(v).reshape(-1,8).copy();values[:,:3]-=pivot;return dict(pivot=np.asarray(pivot).tolist(),vertices=np.round(values,6).ravel().tolist())
 
-def main():
+def main(models=None,source_root=None,target_root=None,frame_overrides=None,manifest_path=None):
     manifest=[]
+    destination=Path(target_root) if target_root is not None else TARGET
+    source=Path(source_root) if source_root is not None else BACK
     for model,spec in SPECS.items():
-        original=json.loads((ROOT/'artifacts/world_motion_r11/dorsal'/(model+'_uncut.mesh.json')).read_text());mesh=json.loads((BACK/'mesh'/(model+'.mesh.json')).read_text());geo=json.loads((BACK/'geo'/(model+'.geo.json')).read_text());parts=mesh['parts'];bones=geo['minecraft:geometry'][0]['bones'];bones[:]=[b for b in bones if not b['name'].startswith('dorsal_')]
+        if models is not None and model not in models:continue
+        original_path=source/'mesh'/(model+'.mesh.json') if source_root is not None else ROOT/'artifacts/world_motion_r11/dorsal'/(model+'_uncut.mesh.json')
+        original=json.loads(original_path.read_text());mesh=json.loads((source/'mesh'/(model+'.mesh.json')).read_text());geo=json.loads((source/'geo'/(model+'.geo.json')).read_text());parts=mesh['parts'];bones=geo['minecraft:geometry'][0]['bones'];bones[:]=[b for b in bones if not b['name'].startswith('dorsal_')]
         for name in list(parts):
             if name.startswith('dorsal_'):del parts[name]
         for name in ['torso_upper','neck']:
             if name in original['parts']:parts[name]=original['parts'][name]
         C=np.array(spec['mouth_centre_model']);C[0]=0;N=np.array(spec['outward_model']);N/=np.linalg.norm(N);X=np.array([1.,0,0]);Y=np.cross(N,X);half=spec['cover_half_width']
+        fixed=(frame_overrides or {}).get(model)
+        if fixed is not None:
+            assert np.allclose(C,fixed['centre'],atol=1e-5) and np.allclose(N,fixed['outward'],atol=1e-5)
         if model!='eva_prototype':
             head=world(original['parts']['head']);body_ids=np.array(spec['head_triangles_reparent_to_torso']);nape_ids=np.array(spec['nape_component_faces']);nape=head[nape_ids]
             planes=[(X,half),(-X,half),(-np.array([0,1.,0]),-spec['cover_min_y']),(-np.array([0,0,1.]),-7.8),(-N,-N@C+3.4)]
@@ -71,9 +78,10 @@ def main():
         if 'torso_lower' in parts:
             _,lower=partition(world(parts['torso_lower']),bore);parts['torso_lower']=packed(lower,parts['torso_lower']['pivot'])
         depth=float(((cover[:,:,:3]-C)@N).min());hinge=C-X*(half*(1.50 if model!='eva_prototype' else 1)+.08)+Y*2+N*min(-4.,depth-.6)
+        if fixed is not None:hinge=np.asarray(fixed['hinge'],float)
         bones.extend([dict(name='dorsal_cover',parent='torso_upper',pivot=hinge.round(6).tolist()),dict(name='dorsal_liner',parent='torso_upper',pivot=C.round(6).tolist())])
         parts['dorsal_cover']=packed(cover,hinge);parts['dorsal_liner']=packed([],C)
-        image=np.asarray(Image.open(BACK/'textures/entity'/(model+'.png')).convert('RGB'));targets={'steel':[135,143,148],'ivory':[190,190,165],'dark':[20,23,26],'red':[116,25,28],'gold':[164,134,58]};uv={}
+        image=np.asarray(Image.open(source/'textures/entity'/(model+'.png')).convert('RGB'));targets={'steel':[135,143,148],'ivory':[190,190,165],'dark':[20,23,26],'red':[116,25,28],'gold':[164,134,58]};uv={}
         for name,colour in targets.items():
             y,x=np.unravel_index(np.sum((image.astype(float)-colour)**2,2).argmin(),image.shape[:2]);uv[name]=np.array([(x+.5)/image.shape[1],(y+.5)/image.shape[0]])
         def tri(a,b,c,material,bone='dorsal_liner'):
@@ -116,7 +124,7 @@ def main():
         mesh.pop('r11_dorsal_socket',None);mesh['r13_dorsal_socket']=dict(centre=C.round(6).tolist(),outward=N.round(8).tolist(),hinge=hinge.round(6).tolist(),hinge_axis=Y.round(8).tolist(),open_angle_degrees=-105,radius_model=RADIUS,source_markers=spec['mark_centres'],reparented_head_triangles=len(spec.get('head_triangles_reparent_to_torso',[])),bore_triangles_removed=len(cut))
         mesh['triangleCount']=sum(len(p['vertices'])//24 for p in parts.values())
         for category,data in [('mesh',mesh),('geo',geo)]:
-            folder=TARGET/category;folder.mkdir(parents=True,exist_ok=True);(folder/(model+'.'+category+'.json')).write_text(json.dumps(data,separators=(',',':')),encoding='utf-8')
+            folder=destination/category;folder.mkdir(parents=True,exist_ok=True);(folder/(model+'.'+category+'.json')).write_text(json.dumps(data,separators=(',',':')),encoding='utf-8')
         record=dict(model=model,triangles=mesh['triangleCount'],cover_triangles=len(parts['dorsal_cover']['vertices'])//24,**mesh['r13_dorsal_socket']);manifest.append(record);print(model,'cover',record['cover_triangles'],'total',record['triangles'],'staged only')
-    (OUT/'candidate_manifest.json').write_text(json.dumps(manifest,indent=2),encoding='utf-8')
+    (Path(manifest_path) if manifest_path is not None else OUT/'candidate_manifest.json').write_text(json.dumps(manifest,indent=2),encoding='utf-8')
 if __name__=='__main__':main()

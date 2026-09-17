@@ -4,7 +4,7 @@
 
 ## 一、服务器面板部署
 
-前提：Minecraft 1.20.1、Forge 47.4.10、Java 17。按本项目的服务器内存充足方案，当前包默认服务器堆 `-Xms2G -Xmx16G`、真实区块视距 18、模拟距离 8；远景另外由 Distant Horizons 生成和发送。面板内存设置应与此对应。不要添加 `DisableExplicitGC`，它与远景缓存使用的堆外内存回收不合适。
+前提：Minecraft 1.20.1、Forge 47.4.10、Java 17。按本项目的服务器内存充足方案，当前包默认服务器堆 `-Xms2G -Xmx16G`、真实区块视距 24、模拟距离 8；R19 默认不再安装 LOD 远景模组。面板内存设置应与此对应。不要添加 `DisableExplicitGC`，它与远景缓存使用的堆外内存回收不合适。
 
 1. 完全停止服务器，并先用面板做一次备份。
 2. 在文件管理页进入 `/home/container`。
@@ -25,11 +25,13 @@
 4. 游戏内把 `eva_real_model` 资源包启用并置于最高优先级。
 5. 连接服务器面板当前显示的地址与端口。
 
-客户端和服务器必须使用同批次的公共模组：Project SEELE、GeckoLib、Ars Nouveau、Curios、Another Furniture、Moving Elevators 及两个 SuperMartijn 库、MTR、Superb Warfare、Kotlin for Forge、Distant Horizons、FerriteCore 和 ModernFix。当前服务器为 14 个顶层 JAR，客户端再增加 Embeddium，共 15 个。远景现在默认启用；不再混装 Farsight 与 Cupboard。其余内嵌依赖不需要另外安装。
+客户端和服务器必须使用同批次的公共模组：Project SEELE、GeckoLib、Ars Nouveau、Curios、Another Furniture、Moving Elevators 及两个 SuperMartijn 库、MTR、Superb Warfare、Kotlin for Forge、FerriteCore 和 ModernFix。当前服务器为 13 个顶层 JAR；客户端再增加 Embeddium、Xaero’s Minimap 与 Xaero’s World Map，共 16 个。升级旧实例时，先备份并移走旧的 DistantHorizons、Farsight、Cupboard JAR；直接覆盖压缩包不会删除旧 JAR。其余内嵌依赖不需要另外安装。
 
 R15 的人员名单 `nerv_staff_r15.json`、区域迁移元数据 `regional_plan.json`、全部 `data/` 和各维度的 `entities/` 都要随存档迁移。只复制地形会丢失人员身份；漏掉区域迁移元数据会把控制系统指向旧机库坐标。
 
-当前默认是高画质远景方案，旧 R15 低配启动器仅作为历史可选项。客户端默认 128 区块远景、至少 18 区块近景、完整粒子和纹理细节；远景使用 EXTREME 水平与 VERY_HIGH 垂直细节，减少建筑过早变成大色块的现象。显卡负责绘制，服务器负责实体／交通／世界模拟及远景生成，客户端仍需处理输入和可见网格。两端保持 Distant Generation 开启，服务器采用 `PRE_EXISTING_ONLY`，不会为远景扩张新地形。地下多层结构保留，关闭会使动态机身淡出的 `DOUBLE_PASS` 过渡。
+R19 使用真实区块绘制：默认 24 区块（约 384 米）视距、8 区块模拟距离，保留原有材质和完整模型。独显负责绘制；服务器负责世界、实体、交通与机械模拟，客户端仍需解码区块、构建可见网格和处理输入。服务器内存更多不代表客户端可以无限增加视距。
+
+在远端服务器上部署后，可同时将服务器 `view-distance` 和客户端视距逐步提高到 32，再观察复杂城区帧时间。不要把模拟距离同步调高。Acedium 0.2.7-beta 在本机确实启用了 RTX3070 Ti，但六个视角的收益不一致且出现 OpenGL 缓冲区错误，因此未加入默认包。详细实测见 `docs/WORLD_REPAIR_R19.md`。
 
 ## 三、本轮人工验证
 

@@ -35,7 +35,7 @@ set "OPENBLAS_NUM_THREADS=1"
 
 echo Project SEELE - current TV world, local manual acceptance
 echo World: SEELE_TV_WORLD_PREVIEW_20260906
-echo Client heap: 6 GB. Far rendering: enabled.
+echo Client heap: 6 GB. Exact terrain: 24 chunks. LOD: disabled.
 echo Guide: %CD%\docs\MANUAL_ACCEPTANCE_20260916.md
 echo Close any other Minecraft instance using this world before starting.
 echo.

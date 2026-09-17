@@ -22,7 +22,8 @@ import java.util.function.Consumer;
 @Mod.EventBusSubscriber(modid = ProjectSeele.MODID, value = Dist.CLIENT)
 public final class RegionalTransitRidingChecks
 {
-    private static final String MODE=System.getProperty("projectseele.regionalBuild","");
+    private static final boolean R19=System.getProperty("projectseele.regionalBuild","").equals("r19-flight-riding");
+    private static final String MODE=R19?"flight-riding":System.getProperty("projectseele.regionalBuild","");
     private static final boolean PORT=MODE.equals("port-boarding");
     private static final boolean ENABLED=PORT||MODE.equals("transit-riding")||MODE.equals("flight-riding")||MODE.equals("circle-riding")||MODE.equals("train-boarding")||MODE.equals("bay-boarding");
     private static final List<String> TRACE=new ArrayList<>();
@@ -44,6 +45,8 @@ public final class RegionalTransitRidingChecks
     private static Vec3 start, previous;
     private static long previousMotionNanos;
     private static double previousCarrierSpeed;
+    private static double previousVisualProgress=Double.NaN,maxFrameStep,maxSampleSeconds,minVisualAdvance;
+    private static java.lang.reflect.Field visualProgressField;
     private static Vec3 boardingInterior;
     private static double travel, highestY;
     private static GameType savedMode;
@@ -86,7 +89,8 @@ public final class RegionalTransitRidingChecks
         }
         if(mc.player==null || mc.level==null || mc.getSingleplayerServer()==null)return;
         var server=mc.getSingleplayerServer();var world=server.getWorldPath(LevelResource.ROOT).normalize();
-        if(!world.getFileName().toString().equals("SEELE_TV_WORLD_PREVIEW_20260906")
+        if(R19?!world.getFileName().toString().equals("SEELE_R19_NATIVE_REVIEW"):
+                !world.getFileName().toString().equals("SEELE_TV_WORLD_PREVIEW_20260906")
                 &&!(TransitMovieR16Client.ENABLED&&world.getFileName().toString().equals("SEELE_TV_FACILITIES_R16")))throw new IllegalStateException("Wrong transit review save");
         try
         {
@@ -165,7 +169,7 @@ public final class RegionalTransitRidingChecks
                 {
                     require(!(Boolean)riding.getMethod("isRiding",long.class).invoke(null,vehicleId),"native dismount completed");
                     mc.options.keyShift.setDown(false);mode++;timer=0;boarded=false;dispatchRequested=false;boardingAligned=false;nativeBoardingTicks=0;boardingYaw=0;serverVehicleIds=java.util.Set.of();
-                    if(mode==(MODE.equals("train-boarding")?3:MODE.equals("bay-boarding")||TransitMovieR16Client.ENABLED&&MODE.equals("flight-riding")?4:SERVICES.length))
+                    if(mode==(MODE.equals("train-boarding")?3:MODE.equals("bay-boarding")||R19||TransitMovieR16Client.ENABLED&&MODE.equals("flight-riding")?4:SERVICES.length))
                     {
                         Files.writeString(world.resolve(PORT?"r07_port_riding_checks.txt":"regional_transit_riding_checks.txt"),String.join("\n",TRACE)+"\nCOMPLETE "+(PORT?(TransitMovieR16Client.ENABLED?"P1 native passenger initialization, full trip and harbor arrival":"P1 natural boarding, full trip and harbor arrival"):MODE.equals("flight-riding")?(TransitMovieR16Client.ENABLED?"F1 round trip":"F1 round trip and C1 circuit"):MODE.equals("circle-riding")?"C1 circuit":MODE.equals("bay-boarding")?"Bay aircraft natural boarding and taxi travel":MODE.equals("train-boarding")?"U1/S1/S2 natural boarding and passenger travel":"U1/S1/S2 trains, F1 round trip and C1 circuit")+" passenger rides\n");
                         Files.deleteIfExists(world.resolve("regional_transit_riding_failure.txt"));
@@ -188,22 +192,35 @@ public final class RegionalTransitRidingChecks
                 }
                 boolean nativeRiding=(Boolean)riding.getMethod("isRiding",long.class).invoke(null,vehicleId);
                 require(nativeRiding,"native rider remains attached");
-                if(++ridingTicks<60){start=mc.player.position();previous=start;previousMotionNanos=System.nanoTime();return;}
+                if(++ridingTicks<60){start=mc.player.position();previous=start;previousMotionNanos=System.nanoTime();previousVisualProgress=Double.NaN;return;}
                 Vec3 pos=mc.player.position();double step=pos.distanceTo(previous);
                 if(mode==3&&(ridingTicks%20==0||step>=15))log("FLIGHT position="+pos+" previous="+previous+" step="+step+" vehicle="+vehicleState());
                 Object motionVehicle=currentVehicle();require(motionVehicle!=null,"native passenger vehicle remains streamed");
                 double speed=(Double)call(motionVehicle,"getSpeed");long now=System.nanoTime();
+                if(R19)
+                {
+                    Object visual=motionVehicle.getClass().getField("persistentVehicleData").get(motionVehicle);
+                    if(visualProgressField==null){visualProgressField=visual.getClass().getDeclaredField("smoothedRailProgress");visualProgressField.setAccessible(true);}
+                    double progress=visualProgressField.getDouble(visual);
+                    if(Double.isFinite(previousVisualProgress)&&speed>.001)
+                    {
+                        double advance=progress-previousVisualProgress;minVisualAdvance=Math.min(minVisualAdvance,advance);
+                        require(advance>=-.05,"aircraft visual progress must not rewind while moving: "+advance);
+                    }
+                    previousVisualProgress=progress;
+                }
                 if(step>1e-5)
                 {
                     double seconds=(now-previousMotionNanos)/1e9;
                     // A render stall can combine several seconds of native
                     // travel into one sample. Verify against the actual car
                     // and elapsed motion, rather than treating that as a warp.
-                    if(TransitMovieR16Client.ENABLED)
-                        require(step<Math.max(15,Math.max(speed,previousCarrierSpeed)*1000*seconds*2+5),"recorded passenger movement matches elapsed native speed");
+                    if(TransitMovieR16Client.ENABLED||R19)
+                        require(step<Math.max(15,Math.max(speed,previousCarrierSpeed)*1000*seconds*2+5),"recorded passenger movement matches elapsed native speed: step="+step+" seconds="+seconds);
                     else require(step<15,"native passenger movement continuity "+step+" from="+previous+" to="+pos+" vehicle="+vehicleState());
                     if(step>=15)log("CAPTURE GAP seconds="+seconds+" passenger="+step);
                     previousCarrierSpeed=speed;previousMotionNanos=now;
+                    maxFrameStep=Math.max(maxFrameStep,step);maxSampleSeconds=Math.max(maxSampleSeconds,seconds);
                 }
                 previous=pos;travel+=step;highestY=Math.max(highestY,pos.y);
                 if(ridingTicks%100==0)log("RIDE "+SERVICES[mode]+" distance="+Math.round(travel)+" position="+pos+" "+vehicleState());
@@ -246,7 +263,13 @@ public final class RegionalTransitRidingChecks
                     });
                 }
                 require(serverRegistered || ridingTicks<300,"server passenger registration timeout");
-                if(passed && serverRegistered){log("PASS "+SERVICES[mode]+" native client motion and server passenger registration");dismountTicks=60;}
+                if(passed && serverRegistered)
+                {
+                    log("PASS "+SERVICES[mode]+" native client motion and server passenger registration");
+                    if(R19)Files.writeString(world.resolve("r19_flight_metrics.json"),new com.google.gson.Gson().toJson(java.util.Map.of(
+                            "passed",true,"travel",travel,"maxSampleMovement",maxFrameStep,"maxSampleSeconds",maxSampleSeconds,"minimumVisualProgressDelta",minVisualAdvance,"nativePassengerRegistration",true,"oppositeAirportStop",flightVisitedOther)));
+                    dismountTicks=60;
+                }
                 return;
             }
             if(alignTicks>0){alignTicks--;return;}

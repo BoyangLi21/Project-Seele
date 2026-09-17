@@ -6,10 +6,10 @@ from scipy.spatial.transform import Rotation as R
 
 ROOT=Path(__file__).resolve().parents[1];OUT=ROOT/'artifacts/dorsal_tv_r13'
 
-def hits(triangles,origins,direction):
+def hits(triangles,origins,direction,max_distance=54):
     a,b,c=triangles[:,0],triangles[:,1],triangles[:,2];e1=b-a;e2=c-a;p=np.cross(direction,e2);det=(e1*p).sum(1);safe=abs(det)>1e-7;inverse=np.where(safe,1/np.where(safe,det,1),0);result=[]
     for origin in origins:
-        delta=origin-a;u=(delta*p).sum(1)*inverse;q=np.cross(delta,e1);v=(q*direction).sum(1)*inverse;t=(q*e2).sum(1)*inverse;result.append(bool((safe&(u>=-1e-6)&(v>=-1e-6)&(u+v<=1+1e-6)&(t>=0)&(t<54)).any()))
+        delta=origin-a;u=(delta*p).sum(1)*inverse;q=np.cross(delta,e1);v=(q*direction).sum(1)*inverse;t=(q*e2).sum(1)*inverse;result.append(bool((safe&(u>=-1e-6)&(v>=-1e-6)&(u+v<=1+1e-6)&(t>=0)&(t<max_distance)).any()))
     return np.array(result)
 
 def main():

@@ -1,13 +1,19 @@
 """Read back every designed road column, including physical headroom and height."""
 import json,math,argparse
+from pathlib import Path
 from collections import defaultdict,Counter
 import numpy as np
 from query_blocks import iter_selected_sections,AIR
 from regional_voxels import WORLD,DIM,ROOT
 OUT=ROOT/'artifacts/world_quality_r02'
 
-def audit(source='road_surfaces.npz',report_name='road_actual_audit.json'):
+def audit(source='road_surfaces.npz',report_name='road_actual_audit.json',output_dir=None,override=None):
     a=np.load(OUT/source);h=a['height2'];mask=a['mask'].copy();ox,oz=map(int,a['origin'])
+    if override is not None:
+        patch=np.load(override);px,pz=map(int,patch['origin']);ph=patch['after'];pm=patch['mask']
+        target=h[pz-oz:pz-oz+ph.shape[0],px-ox:px-ox+ph.shape[1]]
+        if target.shape!=ph.shape:raise ValueError('Road override leaves measured road catalogue')
+        target[pm]=ph[pm]
     # A newly authored station replaces street space with platforms and ramps.
     # Those volumes have their own native collision/boarding cases.
     if source=='road_surfaces.npz' and (OUT/'estate_stations').exists() and list((OUT/'estate_stations').glob('applied_*/receipt.json')):
@@ -50,7 +56,8 @@ def audit(source='road_surfaces.npz',report_name='road_actual_audit.json'):
         delta=abs(actual[az:bz,ax:bx]-actual[az+dz:bz+dz,ax+dx:bx+dx])
         for zz,xx in zip(*np.nonzero(m&(delta>1))):jumps.append([int(xx+ax+ox),int(zz+az+oz),dx,dz,int(delta[zz,xx])/2])
     report=dict(columns=int(mask.sum()),errors=dict(counts),height_jumps=len(jumps),bad=bad,jumps=jumps)
-    (OUT/report_name).write_text(json.dumps(report,ensure_ascii=False),encoding='utf-8')
+    folder=OUT if output_dir is None else Path(output_dir);folder.mkdir(parents=True,exist_ok=True)
+    (folder/report_name).write_text(json.dumps(report,ensure_ascii=False),encoding='utf-8')
     print(json.dumps({k:v for k,v in report.items() if k not in ('bad','jumps')},ensure_ascii=False),flush=True)
     print(json.dumps(bad[:16],ensure_ascii=False,indent=2),flush=True)
 

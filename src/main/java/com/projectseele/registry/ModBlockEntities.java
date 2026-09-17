@@ -23,4 +23,6 @@ public final class ModBlockEntities
             BLOCK_ENTITY_TYPES.register("one_way_glass",()->BlockEntityType.Builder.of(com.projectseele.world.OneWayGlassBlockEntity::new,ModBlocks.ONE_WAY_GLASS.get()).build(null));
 
     private ModBlockEntities() {}
+    public static final RegistryObject<BlockEntityType<com.projectseele.world.StationDepartureBoardBlockEntity>> STATION_DEPARTURE_BOARD=
+            BLOCK_ENTITY_TYPES.register("station_departure_board",()->BlockEntityType.Builder.of(com.projectseele.world.StationDepartureBoardBlockEntity::new,ModBlocks.STATION_DEPARTURE_BOARD.get()).build(null));
 }

@@ -1,0 +1,20 @@
+{
+  "variants": {
+    "facing=south": {
+      "model": "projectseele:block/station_departure_board",
+      "y": 0
+    },
+    "facing=north": {
+      "model": "projectseele:block/station_departure_board",
+      "y": 180
+    },
+    "facing=east": {
+      "model": "projectseele:block/station_departure_board",
+      "y": 270
+    },
+    "facing=west": {
+      "model": "projectseele:block/station_departure_board",
+      "y": 90
+    }
+  }
+}

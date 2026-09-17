@@ -20,7 +20,8 @@ import java.nio.file.*;
 @Mod.EventBusSubscriber(modid=ProjectSeele.MODID)
 public final class EvaMechanicsR11Review
 {
-    public static final boolean ENABLED="r11-mechanics".equals(System.getProperty("projectseele.regionalBuild",""));
+    public static final boolean R19="r19-un".equals(System.getProperty("projectseele.regionalBuild",""));
+    public static final boolean ENABLED=R19||"r11-mechanics".equals(System.getProperty("projectseele.regionalBuild",""));
     public static final java.util.Set<String> captured=java.util.concurrent.ConcurrentHashMap.newKeySet();
     public static volatile int actor,age;public static volatile boolean tracked,finished;public static volatile String shot="",view="body";
     private static final net.minecraft.server.level.TicketType<net.minecraft.world.level.ChunkPos> TARGET_TICKET=net.minecraft.server.level.TicketType.create("r11_mechanics_target",java.util.Comparator.comparingLong(net.minecraft.world.level.ChunkPos::toLong),80);
@@ -30,9 +31,10 @@ public final class EvaMechanicsR11Review
     @SubscribeEvent public static void tick(TickEvent.ServerTickEvent event)
     {
         if(!ENABLED||finished||event.phase!=TickEvent.Phase.END)return;var server=event.getServer();if(server.getPlayerList().getPlayers().isEmpty()||++age<70)return;
-        world=server.getWorldPath(LevelResource.ROOT).normalize();if(!world.getFileName().toString().equals("SEELE_MECHANICS_REVIEW_R11"))throw new IllegalStateException("R11 mechanics requires disposable lab");
+        world=server.getWorldPath(LevelResource.ROOT).normalize();if(!world.getFileName().toString().equals(R19?"SEELE_UN_R19_REVIEW":"SEELE_MECHANICS_REVIEW_R11"))throw new IllegalStateException("UN mechanics requires disposable lab");
         ServerLevel l=server.overworld();try
         {
+            if(age>1800)throw new IllegalStateException("UN mechanics deadline in phase "+phase);
             if(phase==0)
             {
                 pilot=server.getPlayerList().getPlayers().get(0);pilot.stopRiding();pilot.setGameMode(net.minecraft.world.level.GameType.SURVIVAL);pilot.getCapability(com.projectseele.capability.EvaPilotCapability.DATA).ifPresent(c->c.setSynchronization(100));server.setFlightAllowed(true);server.setDifficulty(net.minecraft.world.Difficulty.NORMAL,true);
@@ -53,7 +55,10 @@ public final class EvaMechanicsR11Review
             }
             if(phase==1&&tick>50&&tracked&&p!=null)
             {
-                shot=tick>110?"crane_detail":tick>80?"crane_full":"un_body";view=tick>110?"crane_detail":tick>80?"crane":"body";
+                // Asset warming can consume the old fixed screenshot windows.
+                // Request each view until the actual client confirms capture.
+                shot=!captured.contains("un_body")?"un_body":!captured.contains("crane_full")?"crane_full":"crane_detail";
+                view=shot.equals("un_body")?"body":shot.equals("crane_full")?"crane":"crane_detail";
                 if(tick>140&&captured.contains("un_body")&&captured.contains("crane_full")&&captured.contains("crane_detail")){plugId=p.getUUID();if(!p.boardPassenger(pilot))throw new IllegalStateException("UN boarding refused");phase=2;tick=0;}return;
             }
             if(phase==2)

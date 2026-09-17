@@ -16,10 +16,14 @@ from query_blocks import iter_selected_sections,AIR
 from regional_voxels import ROOT,WORLD,DIM
 
 OUT=ROOT/'artifacts/tv_facilities_r16/maps';OUT.mkdir(parents=True,exist_ok=True)
+REVISION='R16'
 FONT=FontProperties(fname='C:/Windows/Fonts/msyh.ttc');BG='#131e26';INK='#e9e2cd';GOLD='#e4ba73';MUTED='#9eafb0'
 EMPTY=AIR|{'minecraft:light','minecraft:barrier','projectseele:geofront_skyweave'}
 def colour(state):
  s=state.split('[')[0]
+ if s=='projectseele:lcl':return (211,120,31)
+ if s=='projectseele:road_asphalt_slab':return (32,38,43)
+ if s=='projectseele:road_marking_slab':return (202,207,196)
  palette=[('lcl',(123,60,85)),('water',(43,83,102)),('leaves',(65,98,76)),('grass',(91,115,83)),('fern',(91,115,83)),('podzol',(92,91,67)),('dirt',(112,104,82)),('sand',(184,171,126)),('snow',(225,226,216)),('log',(90,78,64)),('planks',(142,127,99)),('machine_panel',(101,114,96)),('shaft_panel',(59,70,91)),('machine_edge',(155,163,152)),('structural_panel',(59,66,68)),('pyramid',(42,48,52)),('black_concrete',(32,38,43)),('white_concrete',(202,207,196)),('light_gray',(157,165,159)),('gray_concrete',(104,114,112)),('cyan',(83,124,125)),('blue',(54,78,105)),('green',(79,102,71)),('red',(135,69,63)),('orange',(174,111,60)),('yellow',(193,160,80)),('sea_lantern',(206,224,210)),('strip_light',(206,224,210)),('glass',(109,153,157)),('iron',(154,165,168)),('hazard',(173,127,66)),('floor_panel',(143,154,149)),('wall_panel',(187,193,184)),('deepslate',(66,75,79)),('blackstone',(55,63,66)),('stone',(108,120,119)),('bricks',(118,101,92))]
  for word,c in palette:
   if word in s:return c
@@ -82,9 +86,9 @@ def surface(main,base):
  for i,x,z in markers:bx.text(x,z,str(i),ha='center',va='center',fontsize=10,color=INK,bbox=dict(boxstyle='circle,pad=.25',fc=BG,ec=GOLD,lw=1.2))
  fig.text(.78,.273,'1 管制与人员区     2 军机防护库\n3 装甲车辆整备     4 EVA-UN 试验机库\n5 跑道与滑行道     6 基地入口\n周界设有防御岗楼与巡逻岗位',fontproperties=FONT,fontsize=10,color=INK,linespacing=1.9)
  loc=fig.add_axes([.78,.835,.18,.072]);loc.set_facecolor('#1a2930');loc.plot([-120,6442],[220,-6320],color=GOLD,lw=.9,ls='--');loc.scatter([-120,6442],[220,-6320],c=[INK,GOLD],s=20);loc.set_xlim(-3100,7200);loc.set_ylim(1800,-7000);loc.set_xticks([]);loc.set_yticks([]);loc.text(-2700,-5800,'同一坐标系\n基地在主城东北约 9 千格',fontproperties=FONT,fontsize=8,color=INK)
- caption(fig,.084,'R16 · 当前存档方块顶面测绘。基地另附放大图；右上小图表示实际相对位置。')
+ caption(fig,.084,REVISION+' · 当前存档方块顶面测绘。基地另附放大图；右上小图表示实际相对位置。')
  caption(fig,.055,'暗色斜纹为尚未测得完整区块的范围；活动车辆、人物与机械用位置标注表示。底图不使用远景缓存。')
- fig.savefig(OUT/'surface_map_r16.png',dpi=175,facecolor=BG);plt.close(fig)
+ fig.savefig(OUT/('surface_map_'+REVISION.lower()+'.png'),dpi=175,facecolor=BG);plt.close(fig)
 
 def underground(main,cages,dogma):
  fig=plt.figure(figsize=(18,12),facecolor=BG);fig.text(.04,.956,'地下区域总图',fontproperties=FONT,fontsize=28,color=INK);fig.text(.04,.921,'GEOFRONT  /  NERV HEADQUARTERS  /  EVA CAGES  /  TERMINAL DOGMA',fontsize=11,color=GOLD)
@@ -97,9 +101,9 @@ def underground(main,cages,dogma):
  cx.annotate('转运 → 弹射井',xy=(30,-36),xytext=(30,-58),fontproperties=FONT,fontsize=8,color=INK,ha='center',arrowprops=dict(arrowstyle='->',color=GOLD))
  dx=fig.add_axes([.775,.20,.19,.28]);canvas(dx,dogma);dx.set_title('Terminal Dogma',fontsize=15,color=INK,pad=12);dx.set_xlabel('剖切上限 Y=-566',fontproperties=FONT,color=MUTED,fontsize=9)
  label(dx,'莉莉丝 / 红十字架',(30.5,355.5),(65,420),8);label(dx,'封印区入口',(12,285),(-20,239),8)
- caption(fig,.082,'R16 · 主图投影地下暴露表面；右侧分层图剖开上方围护，以显示作业层和深层封印室。')
+ caption(fig,.082,REVISION+' · 主图投影地下暴露表面；右侧分层图剖开上方围护，以显示作业层和深层封印室。')
  caption(fig,.055,'大指挥室、会客厅与原有单向窗保留。金字塔、机库、发射区及深层设施均位于地下；地表出口见地上图。')
- fig.savefig(OUT/'underground_map_r16.png',dpi=175,facecolor=BG);plt.close(fig)
+ fig.savefig(OUT/('underground_map_'+REVISION.lower()+'.png'),dpi=175,facecolor=BG);plt.close(fig)
 
 def main():
  with (WORLD/'session.lock').open('r+b') as lock:

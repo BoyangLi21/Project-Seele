@@ -158,6 +158,30 @@ public final class NervSiloDoorEntity extends Entity
         }
     }
 
+    /** The pilot can be released only after the actual surface seal bears weight. */
+    public static boolean hasClosedSurfaceSupport(ServerLevel level, BlockPos surfaceBed)
+    {
+        BlockPos centre = surfaceBed.above();
+        Set<Long> sealed = SEALED.get(level);
+        if (sealed == null || !sealed.contains(centre.asLong()))
+        {
+            return false;
+        }
+        BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
+        for (int x = -PHYSICAL_RADIUS; x <= PHYSICAL_RADIUS; x++)
+        {
+            for (int z = -PHYSICAL_RADIUS; z <= PHYSICAL_RADIUS; z++)
+            {
+                cursor.set(centre.getX() + x, centre.getY(), centre.getZ() + z);
+                if (!level.hasChunkAt(cursor) || !level.getBlockState(cursor).equals(PHYSICAL_HATCH))
+                {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
     private static void reconcilePlane(ServerLevel level,int variant,BlockPos surfaceBed,float targetOpen,int stage)
     {
         Vec3 centre = new Vec3(surfaceBed.getX() + 0.5D,

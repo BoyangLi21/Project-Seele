@@ -1,7 +1,7 @@
-"""Normal TV client: current build, persistent far view, no resident build JVM."""
+"""Normal TV client: exact terrain by default, no resident build JVM."""
 from pathlib import Path
 import argparse,json,os,subprocess,sys
-from configure_rendering_r17 import ensure_local
+from configure_exact_rendering_r19 import ensure_local
 
 ROOT=Path(__file__).resolve().parents[1]
 DEFAULT_WORLD='SEELE_TV_WORLD_PREVIEW_20260906'
@@ -32,14 +32,18 @@ def run_prepared(path,env=None):
     return subprocess.call([command[0],'@'+str(args.resolve())],cwd=d['workingDirectory'],env=child)
 
 def main():
-    ap=argparse.ArgumentParser();ap.add_argument('--world',default=DEFAULT_WORLD);ap.add_argument('--heap',default='6G');ap.add_argument('--review');ap.add_argument('--prepare-only',action='store_true');ap.add_argument('--prepared-file',type=Path);ap.add_argument('--native-capture',action='store_true');ap.add_argument('--battle-clip',type=Path);ap.add_argument('--far-view');ap.add_argument('--movie-only',action='store_true');a=ap.parse_args()
+    ap=argparse.ArgumentParser();ap.add_argument('--world',default=DEFAULT_WORLD);ap.add_argument('--heap',default='6G');ap.add_argument('--review');ap.add_argument('--prepare-only',action='store_true');ap.add_argument('--prepared-file',type=Path);ap.add_argument('--native-capture',action='store_true');ap.add_argument('--battle-clip',type=Path);ap.add_argument('--far-view');ap.add_argument('--movie-only',action='store_true');ap.add_argument('--gpu-terrain',action='store_true');a=ap.parse_args()
     if a.prepared_file:return run_prepared(a.prepared_file,java_environment()[1])
     if not (ROOT/'run/saves'/a.world/'level.dat').is_file():raise FileNotFoundError('The selected world is not installed')
     if not (ROOT/'run/resourcepacks/eva_real_model/pack.mcmeta').is_file():raise FileNotFoundError('The private EVA resource pack is not installed')
     java,env=java_environment();prefer_discrete_gpu(java)
-    subprocess.run([sys.executable,'tools/fetch_renderer_mods_r17.py'],cwd=ROOT,env=env,check=True)
+    subprocess.run([sys.executable,'tools/fetch_client_mods_r19.py'],cwd=ROOT,env=env,check=True)
     ensure_local(ROOT/'run')
-    command=[str(ROOT/'gradlew.bat'),'--no-daemon','writeClientLaunchR17','-PstrictHighDetail=true','-PoptimizedClient','-PnativeCapture' if a.native_capture else '-PdistantHorizons','-PclientHeap='+a.heap,'-PquickPlayWorld='+a.world]
+    command=[str(ROOT/'gradlew.bat'),'--no-daemon','writeClientLaunchR17','-PstrictHighDetail=true','-PoptimizedClient','-PexactTerrain','-PclientNavigation','-PclientHeap='+a.heap,'-PquickPlayWorld='+a.world]
+    if a.gpu_terrain:
+        from fetch_gpu_client_r19 import ensure_local as ensure_gpu
+        ensure_gpu();command.append('-PgpuTerrain')
+    if a.native_capture:command.append('-PnativeCapture')
     if a.review:command.append('-PregionalBuild='+a.review)
     if a.battle_clip:command.append('-PfirstBattleReviewClip='+str(a.battle_clip.resolve()))
     if a.far_view:command.append('-PfarViewOnly='+a.far_view)

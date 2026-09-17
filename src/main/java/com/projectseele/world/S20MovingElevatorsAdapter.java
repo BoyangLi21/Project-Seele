@@ -26,6 +26,7 @@ import net.minecraft.world.level.block.ButtonBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.AttachFace;
+import net.minecraft.world.phys.Vec3;
 
 import java.util.HashSet;
 import java.util.HashMap;
@@ -615,7 +616,12 @@ public final class S20MovingElevatorsAdapter
             {
                 continue;
             }
+            // Calling the car from inside the restricted landing is egress.
+            // Requiring the admission card here trapped occupants who had
+            // already arrived in Dogma and then put the card away.
+            boolean leavingRestrictedLanding = localLandingEgress(player, landing);
             if (isSecureLift(spec) && restrictedLanding(spec, landing)
+                    && !leavingRestrictedLanding
                     && !accessUnlocked(level, spec))
             {
                 boolean hasCard = hasHighestClearanceCard(player);
@@ -645,6 +651,12 @@ public final class S20MovingElevatorsAdapter
                 return true;
             }
             ElevatorGroup group = target.getGroup();
+            BlockState physicalButton = level.getBlockState(clicked);
+            if (physicalButton.getBlock() instanceof ButtonBlock)
+            {
+                physicalButton.use(level, player, net.minecraft.world.InteractionHand.MAIN_HAND,
+                        new net.minecraft.world.phys.BlockHitResult(Vec3.atCenterOf(clicked), landing.exit(), clicked, false));
+            }
             if (!group.isMoving()
                     && S20PhysicalElevatorDirector.hasAuthoredCabinAt(
                     level, landing.cabinCentre()))
@@ -657,10 +669,14 @@ public final class S20MovingElevatorsAdapter
                 clearDepartureDoorInterlock(level, spec);
                 S20PhysicalElevatorDirector.synchronizeMovingElevatorDoors(
                         level, spec, landing.walkY(), false);
+                player.displayClientMessage(Component.literal("电梯已在本层 / LIFT HERE"), true);
                 return true;
             }
             synchronizeDoorsForDeparture(level, spec);
             group.onDisplayPress(target.getFloorLevel(), 0, player);
+            player.displayClientMessage(Component.literal(group.isMoving()
+                    ? "呼梯已受理，请在层门外等候 / LIFT CALLED"
+                    : "电梯尚未出发，请检查层门与轿厢状态 / LIFT NOT READY"), true);
             level.playSound(null, clicked, SoundEvents.STONE_BUTTON_CLICK_ON,
                     SoundSource.BLOCKS, 0.65F, 1.35F);
             return true;
@@ -1504,6 +1520,13 @@ public final class S20MovingElevatorsAdapter
                 ModItems.TERMINAL_DOGMA_ACCESS_CARD.get()));
     }
 
+    private static boolean localLandingEgress(Player player,
+            S20PhysicalElevatorDirector.Landing landing)
+    {
+        return player != null && Math.abs(player.getY() - landing.walkY()) < 5.0D
+                && player.position().distanceToSqr(Vec3.atBottomCenterOf(landing.cabinCentre())) < 144.0D;
+    }
+
     /**
      * Checks the floor selected on the Moving Elevators display.  Ordinary
      * floors, including the downward return from Ikari's office, never need a
@@ -1546,6 +1569,13 @@ public final class S20MovingElevatorsAdapter
                         || !restrictedLanding(spec, landing))
                 {
                     continue;
+                }
+                // The native group mixin repeats this guard after the fixed
+                // call button has accepted it. Admit only the same local
+                // egress request; do not open a global access window.
+                if (floorOffset == 0 && localLandingEgress(player, landing))
+                {
+                    return true;
                 }
                 if (hasHighestClearanceCard(player))
                 {

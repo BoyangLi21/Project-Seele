@@ -4,7 +4,7 @@ from pathlib import Path
 from PIL import Image,ImageDraw,ImageFont
 ROOT=Path(__file__).resolve().parents[1];A=ROOT/'src/main/resources/assets/projectseele'
 def save(p,d):p.parent.mkdir(parents=True,exist_ok=True);p.write_text(json.dumps(d,ensure_ascii=False,indent=2)+'\n',encoding='utf8')
-def cube(lo,hi,tex):return {'from':lo,'to':hi,'faces':{f:{'texture':tex} for f in ['north','south','east','west','up','down']}}
+def cube(lo,hi,tex):return {'from':lo,'to':hi,'faces':{f:{'texture':tex,'uv':[0,0,16,16]} for f in ['north','south','east','west','up','down']}}
 elements=[cube([4,0,4],[12,2,12],'#metal'),cube([7,2,7],[9,8,9],'#metal'),cube([2,8,2],[14,11,14],'#fabric'),cube([2,10,12],[14,19,15],'#fabric'),cube([1,10,3],[3,13,13],'#metal'),cube([13,10,3],[15,13,13],'#metal')]
 save(A/'models/block/nerv_office_chair.json',dict(parent='minecraft:block/block',textures=dict(particle='minecraft:block/gray_wool',fabric='minecraft:block/gray_wool',metal='minecraft:block/black_concrete'),elements=elements))
 save(A/'blockstates/nerv_office_chair.json',dict(variants={f'facing={f}':dict(model='projectseele:block/nerv_office_chair',y=r) for f,r in [('north',0),('east',90),('south',180),('west',270)]}))

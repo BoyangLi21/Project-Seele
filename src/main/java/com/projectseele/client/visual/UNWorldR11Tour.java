@@ -16,21 +16,27 @@ import java.util.*;
 @Mod.EventBusSubscriber(modid=ProjectSeele.MODID,value=Dist.CLIENT)
 public final class UNWorldR11Tour
 {
-    public static final boolean ENABLED="r11-worldtour".equals(System.getProperty("projectseele.regionalBuild",""));
+    private static final boolean BENCH="r19-worldtour-bench".equals(System.getProperty("projectseele.regionalBuild",""));
+    private static final boolean BOARDS_TOUR="r19-boards-tour".equals(System.getProperty("projectseele.regionalBuild",""));
+    private static final boolean R19=BENCH||BOARDS_TOUR||"r19-worldtour".equals(System.getProperty("projectseele.regionalBuild",""));
+    public static final boolean ENABLED=R19||"r11-worldtour".equals(System.getProperty("projectseele.regionalBuild",""));
     private static JsonArray shots;private static final JsonArray receipt=new JsonArray();private static int age,index,settle,end,oldDistance;private static boolean requested,done,oldPause,oldGui,ready;
     private static Vec3 eye,target;private static Path folder;private static net.minecraft.client.CameraType oldCamera;
+    private static final java.util.List<Double> frameTimes=new java.util.ArrayList<>();
+    private static long previousFrame;
+    private static int warmup=180;
     @SubscribeEvent public static void tick(TickEvent.ClientTickEvent event)
     {
-        if(!ENABLED||event.phase!=TickEvent.Phase.END)return;var mc=Minecraft.getInstance();if(mc.player==null||mc.level==null||mc.getSingleplayerServer()==null)return;
+        if(!ENABLED||event.phase!=TickEvent.Phase.END||BOARDS_TOUR&&!com.projectseele.visual.WorldRepairR19Review.finished)return;var mc=Minecraft.getInstance();if(mc.player==null||mc.level==null||mc.getSingleplayerServer()==null)return;
         String world=mc.getSingleplayerServer().getWorldPath(LevelResource.ROOT).normalize().getFileName().toString();
-        if(!world.equals("SEELE_R11_CANONICAL_ACCEPTANCE")&&!world.equals("SEELE_TV_WORLD_PREVIEW_20260906"))throw new IllegalStateException("R11 tour world boundary");
+        if(R19?!world.equals("SEELE_R19_NATIVE_REVIEW"):!world.equals("SEELE_R11_CANONICAL_ACCEPTANCE")&&!world.equals("SEELE_TV_WORLD_PREVIEW_20260906"))throw new IllegalStateException("Native tour world boundary");
         if(++age<100)return;
         try
         {
             if(shots==null)
             {
-                shots=JsonParser.parseString(Files.readString(mc.gameDirectory.toPath().resolve("projectseele-local-maps/r11_worldtour.json"))).getAsJsonArray();folder=mc.gameDirectory.toPath().resolve("../artifacts/world_motion_r11/world_native_"+System.currentTimeMillis()).normalize();Files.createDirectories(folder);
-                oldDistance=mc.options.renderDistance().get();oldPause=mc.options.pauseOnLostFocus;oldGui=mc.options.hideGui;oldCamera=mc.options.getCameraType();mc.options.renderDistance().set(12);mc.options.broadcastOptions();mc.options.pauseOnLostFocus=false;mc.player.connection.sendCommand("gamemode spectator");
+                shots=JsonParser.parseString(Files.readString(mc.gameDirectory.toPath().resolve("projectseele-local-maps/"+(R19?"r19":"r11")+"_worldtour.json"))).getAsJsonArray();folder=mc.gameDirectory.toPath().resolve((R19?"../artifacts/world_repair_r19/native_tour_":"../artifacts/world_motion_r11/world_native_")+System.currentTimeMillis()).normalize();Files.createDirectories(folder);
+                oldDistance=mc.options.renderDistance().get();oldPause=mc.options.pauseOnLostFocus;oldGui=mc.options.hideGui;oldCamera=mc.options.getCameraType();mc.options.renderDistance().set(BENCH?32:12);mc.options.broadcastOptions();mc.options.pauseOnLostFocus=false;mc.player.connection.sendCommand("gamemode spectator");
             }
             if(done)
             {
@@ -40,16 +46,16 @@ public final class UNWorldR11Tour
             if(index>=shots.size()){done=true;return;}
             if(!requested)
             {
-                var shot=shots.get(index).getAsJsonObject();eye=vec(shot.getAsJsonArray("eye"));target=vec(shot.getAsJsonArray("target"));Vec3 d=target.subtract(eye);
+                var shot=shots.get(index).getAsJsonObject();eye=vec(shot.getAsJsonArray("eye"));target=vec(shot.getAsJsonArray("target"));Vec3 d=target.subtract(eye);warmup=shot.has("warmupTicks")?shot.get("warmupTicks").getAsInt():BENCH?400:180;
                 mc.player.connection.sendCommand(String.format(Locale.ROOT,"execute in projectseele:geofront run tp @s %.5f %.5f %.5f %.5f %.5f",eye.x,eye.y-mc.player.getEyeHeight(),eye.z,Math.toDegrees(Math.atan2(-d.x,d.z)),-Math.toDegrees(Math.atan2(d.y,d.horizontalDistance()))));
-                mc.options.hideGui=true;mc.options.setCameraType(net.minecraft.client.CameraType.FIRST_PERSON);mc.setCameraEntity(mc.player);requested=true;settle=0;ready=false;
+                mc.options.hideGui=true;mc.options.setCameraType(net.minecraft.client.CameraType.FIRST_PERSON);mc.setCameraEntity(mc.player);requested=true;settle=0;ready=false;frameTimes.clear();previousFrame=0;
             }
             if(mc.level.dimension().location().toString().equals("projectseele:geofront")&&mc.player.getEyePosition().distanceToSqr(eye)<.2&&mc.screen==null)
             {
-                if(settle++==40)mc.levelRenderer.allChanged();
-                if(settle>180&&mc.level.hasChunkAt(net.minecraft.core.BlockPos.containing(target)))ready=true;
+                if(settle++==40&&!BENCH)mc.levelRenderer.allChanged();
+                if(settle>warmup&&mc.level.hasChunkAt(net.minecraft.core.BlockPos.containing(target)))ready=true;
             }
-            if(age>8000)throw new IllegalStateException("UN tour timeout at "+index);
+            if(age>Math.max(8000,shots.size()*600))throw new IllegalStateException("Native tour timeout at "+index);
         }
         catch(Exception e){ProjectSeele.LOGGER.error("R11 UN tour failed",e);done=true;}
     }
@@ -58,10 +64,20 @@ public final class UNWorldR11Tour
         if(!ENABLED||done||!requested||shots==null)return;var mc=Minecraft.getInstance();if(mc.player==null)return;
         if(event.phase==TickEvent.Phase.START)
         {Vec3 d=target.subtract(eye);float yaw=(float)Math.toDegrees(Math.atan2(-d.x,d.z)),pitch=(float)-Math.toDegrees(Math.atan2(d.y,d.horizontalDistance()));mc.player.setYRot(yaw);mc.player.yRotO=yaw;mc.player.setXRot(pitch);mc.player.xRotO=pitch;return;}
+        if(BENCH&&settle>warmup-80)
+        {
+            long now=System.nanoTime();if(previousFrame!=0)frameTimes.add((now-previousFrame)/1e6);previousFrame=now;
+        }
         if(!ready)return;
         try(var image=net.minecraft.client.Screenshot.takeScreenshot(mc.getMainRenderTarget()))
         {
-            JsonObject spec=shots.get(index).getAsJsonObject();String name=spec.get("name").getAsString();image.writeToFile(folder.resolve(name+".png"));JsonObject r=spec.deepCopy();r.addProperty("chunks",mc.levelRenderer.getChunkStatistics());receipt.add(r);ProjectSeele.LOGGER.info("R11 UN TOUR captured {}",name);
+            JsonObject spec=shots.get(index).getAsJsonObject();String name=spec.get("name").getAsString();image.writeToFile(folder.resolve(name+".png"));JsonObject r=spec.deepCopy();r.addProperty("chunks",mc.levelRenderer.getChunkStatistics());
+            r.addProperty("renderer",org.lwjgl.opengl.GL11.glGetString(org.lwjgl.opengl.GL11.GL_RENDERER));r.addProperty("render_distance",mc.options.renderDistance().get());
+            r.addProperty("distant_horizons",net.minecraftforge.fml.ModList.get().isLoaded("distanthorizons"));
+            boolean gpu=false;try{gpu=Class.forName("me.cortex.nvidium.Nvidium").getField("IS_ENABLED").getBoolean(null);}catch(ReflectiveOperationException ignored){}
+            r.addProperty("acedium_enabled",gpu);
+            if(!frameTimes.isEmpty()){frameTimes.sort(Double::compareTo);r.addProperty("measured_frames",frameTimes.size());r.addProperty("frame_ms_p50",frameTimes.get(frameTimes.size()/2));r.addProperty("frame_ms_p95",frameTimes.get(Math.min(frameTimes.size()-1,(int)(frameTimes.size()*.95))));}
+            receipt.add(r);ProjectSeele.LOGGER.info("R19/11 native tour captured {}",name);
         }
         catch(Exception e){throw new IllegalStateException(e);}
         requested=false;ready=false;index++;

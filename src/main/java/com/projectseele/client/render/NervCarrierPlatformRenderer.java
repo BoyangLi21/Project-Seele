@@ -76,6 +76,14 @@ public final class NervCarrierPlatformRenderer
                         packedLight);
             }
             TvFacilityMeshes.cage(poses,packedLight,entity.getRestraintProgress(partialTick));
+            var serviceAnchor=entity.blockPosition().offset(21,0,42);
+            if(entity.level().hasChunkAt(serviceAnchor)&&entity.level().getBlockState(serviceAnchor).is(com.projectseele.registry.ModBlocks.NERV_MACHINE_HAZARD.get()))
+            {
+                poses.pushPose();
+                poses.translate(serviceAnchor.getX()-entity.getX(),serviceAnchor.getY()-entity.getY(),serviceAnchor.getZ()-entity.getZ());
+                TvFacilityMeshes.draw("r19_buttress_services",poses,packedLight);
+                poses.popPose();
+            }
             super.render(entity, yaw, partialTick, poses, buffers,
                     packedLight);
             return;
@@ -147,14 +155,14 @@ public final class NervCarrierPlatformRenderer
         {
             return;
         }
-        // TV wet cages have a dark wine-coloured, nearly opaque cooling bath.
-        // Its exact surface follows the same synchronized hydraulic level.
-        // The underlying LCL physics and every drainage interlock are retained.
+        // Keep the interpolated hydraulic surface the same amber as the real
+        // fluid. The old opaque purple overlay hid its correct orange tint.
         var out=buffers.getBuffer(net.minecraft.client.renderer.RenderType.entityTranslucent(
                 new ResourceLocation("minecraft","textures/block/white_concrete.png")));
         float y=level+.93F;
+        int tint=com.projectseele.fluid.LclFluidType.TINT;
         for(float[] p:new float[][]{{-19.5F,26.5F,0,1},{19.5F,26.5F,1,1},{19.5F,-26.5F,1,0},{-19.5F,-26.5F,0,0}})
-            out.vertex(poses.last().pose(),p[0],y,p[1]).color(132,59,91,250).uv(p[2],p[3]).overlayCoords(OverlayTexture.NO_OVERLAY).uv2(15728880).normal(poses.last().normal(),0,1,0).endVertex();
+            out.vertex(poses.last().pose(),p[0],y,p[1]).color((tint>>16)&255,(tint>>8)&255,tint&255,(tint>>>24)&255).uv(p[2],p[3]).overlayCoords(OverlayTexture.NO_OVERLAY).uv2(packedLight).normal(poses.last().normal(),0,1,0).endVertex();
     }
 
     /**

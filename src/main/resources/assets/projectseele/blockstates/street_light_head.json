@@ -1,0 +1,19 @@
+{
+  "variants": {
+    "facing=north": {
+      "model": "projectseele:block/street_light_head"
+    },
+    "facing=east": {
+      "model": "projectseele:block/street_light_head",
+      "y": 90
+    },
+    "facing=south": {
+      "model": "projectseele:block/street_light_head",
+      "y": 180
+    },
+    "facing=west": {
+      "model": "projectseele:block/street_light_head",
+      "y": 270
+    }
+  }
+}

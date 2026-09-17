@@ -16,6 +16,7 @@ public final class NervStaffRenderer extends MobRenderer<NervStaffEntity,PlayerM
         @Override public void setupAnim(NervStaffEntity entity,float swing,float amount,float time,float yaw,float pitch)
         {
             super.setupAnim(entity,swing,amount,time,yaw,pitch);
+            hat.visible=!java.util.Set.of("misato","ritsuko","maya","fuyutsuki").contains(entity.skin());
             if(entity.activity()==2){rightArm.xRot=-1.25F;rightArm.yRot=-.15F;rightSleeve.copyFrom(rightArm);}
         }
     }
@@ -23,6 +24,7 @@ public final class NervStaffRenderer extends MobRenderer<NervStaffEntity,PlayerM
     public NervStaffRenderer(EntityRendererProvider.Context context)
     {
         super(context,new StaffModel(context.bakeLayer(ModelLayers.PLAYER),false),.35F);regular=model;slim=new StaffModel(context.bakeLayer(ModelLayers.PLAYER_SLIM),true);
+        addLayer(new NervStaffAccessoryLayer(this));
     }
     @Override public ResourceLocation getTextureLocation(NervStaffEntity entity){return NervStaffSkins.forStaff(entity).texture();}
     @Override public void render(NervStaffEntity entity,float yaw,float partial,PoseStack pose,MultiBufferSource buffers,int light)

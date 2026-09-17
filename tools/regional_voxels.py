@@ -101,7 +101,7 @@ class Painter:
     def apply(self,name):
         folder=self.save_plan(name)
         lock=(WORLD/'session.lock').open('r+b');msvcrt.locking(lock.fileno(),msvcrt.LK_NBLCK,1)
-        report_dir=folder/('applied_'+datetime.now().strftime('%Y%m%d_%H%M%S'));(report_dir/'before').mkdir(parents=True);(report_dir/'delta').mkdir()
+        report_dir=folder/('applied_'+datetime.now().strftime('%Y%m%d_%H%M%S_%f'));(report_dir/'before').mkdir(parents=True);(report_dir/'delta').mkdir()
         groups=defaultdict(dict)
         for (cx,cz),ops in self.by_chunk.items():groups[cx//32,cz//32][cx,cz]=ops
         additions_by_chunk=defaultdict(set)
@@ -244,7 +244,7 @@ class Painter:
         except Exception:
             for path,backup in touched:atomic_replace(path,backup.read_bytes())
             raise
-        receipt=dict(counts=counts,kept_existing_cells=dict(protected),verified=True,elapsed=round(time.monotonic()-start,2))
+        receipt=dict(world=str(WORLD),dimension=DIM,counts=counts,kept_existing_cells=dict(protected),verified=True,elapsed=round(time.monotonic()-start,2))
         (report_dir/'receipt.json').write_text(json.dumps(receipt,indent=2),encoding='utf-8')
         print('VERIFIED',report_dir,flush=True)
         return receipt

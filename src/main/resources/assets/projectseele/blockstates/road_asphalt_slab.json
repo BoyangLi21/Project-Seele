@@ -1,0 +1,13 @@
+{
+  "variants": {
+    "type=bottom": {
+      "model": "projectseele:block/road_asphalt_slab"
+    },
+    "type=top": {
+      "model": "projectseele:block/road_asphalt_slab_top"
+    },
+    "type=double": {
+      "model": "projectseele:block/road_asphalt_slab_double"
+    }
+  }
+}

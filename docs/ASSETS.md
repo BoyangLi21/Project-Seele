@@ -229,3 +229,12 @@ CMU 18_03、18_05／19_05，Bandai Namco Research dataset-1 的职业演员出�
 `staff_misato`、`staff_ritsuko`、`staff_maya` 及六套通用 NERV／UN 制服由 `tools/build_staff_skins_r15.py` 原创绘制。Planet Minecraft 的候选角色皮肤下载未成功，未进入本轮素材。门的分缝、边框、识别条和状态指示为项目原创建模，使用原版白色混凝土纹理进行着色，没有复制该纹理文件。
 
 R15 战斗继续在 R12 私有动捕和角色几何基础上改编；混合派生动作仅保存在本机 `first_battle_r15.json`。录像是实际游戏画面，配原创合成音效离线混音。Distant Horizons、Embeddium、FerriteCore 来自各项目官方 Modrinth 分发，下载脚本固定版本并验证 SHA-512；第三方 JAR 不提交到仓库。详见 [R15](STAFF_WORLD_R15.md)。
+
+
+## R19 世界修补与 UN-00（2026-09-17）
+
+新的道路灯头、站台／住宅／UN 座椅、发射区管道与支架、NPC 发型附件为项目原创几何；道路半砖引用 Minecraft 自带混凝土材质，未复制原版纹理文件。车站时刻牌读取实际 MTR 预测数据。参考图片及用户 Bilibili 片段仅保存在本机研究目录，不进入公开资源或游戏纹理。
+
+EVA-UN-00 的两次 Lux3D 输出作为原始候选存档，未作为最终公开网格；公开的 139,806 三角形版本由 `build_un00_body_r19.py` 与 `attach_un00_dorsal_r19.py` 构造，沿用本项目原创背部机械。私有动作仍留在 `eva_real_model`，原三台用户机体资源不覆盖。人物恢复本机既有包中的像素皮肤，新增发型为项目原创模型。
+
+依赖新增 Xaero’s Minimap 26.5.0 和 Xaero’s World Map 1.46.0，官方文件及 SHA-512 在 `tools/client_navigation_r19.json`。Acedium 0.2.7-beta 仅供独立试验，不随默认包分发。详情与造型出处见 [R19](WORLD_REPAIR_R19.md)。

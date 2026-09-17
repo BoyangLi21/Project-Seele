@@ -2,7 +2,7 @@
 from pathlib import Path
 import gzip,json
 import numpy as np
-from scipy.ndimage import binary_dilation,label
+from scipy.ndimage import binary_dilation,label,find_objects
 import scan_regional_completion as scan
 
 ROOT=Path(__file__).resolve().parents[1]
@@ -65,8 +65,10 @@ def main():
     masks={}
     for name,mask in [('floor',floor),('wall',walls),('ceiling',ceiling)]:
         candidates=mask&empty&~held&~ports;masks[name]=candidates;groups,count=label(candidates);components=[]
-        for i in range(1,count+1):
-            pts=coords(groups==i)
+        for i,box in enumerate(find_objects(groups),1):
+            if box is None:continue
+            y,z,x=np.nonzero(groups[box]==i)
+            pts=np.column_stack((x+LO[0]+box[2].start,y+LO[1]+box[0].start,z+LO[2]+box[1].start))
             components.append(dict(cells=len(pts),min=pts.min(axis=0).tolist(),max=pts.max(axis=0).tolist()))
         report['issues'][name]=dict(cells=int(candidates.sum()),components=components)
     fragments=spaces&natural&~held
