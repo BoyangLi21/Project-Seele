@@ -27,6 +27,8 @@ public final class LocalVisualAssetFingerprint
     private static final Map<String,MeshContract> R13_CONTRACTS=Map.of("eva_unit00",new MeshContract(11028,45,true),"eva_unit01",new MeshContract(11666,45,true),"eva_unit02",new MeshContract(11262,45,true),"eva_prototype",new MeshContract(94054,48,false));
     private static final Map<String,MeshContract> R19_CONTRACTS=Map.of("eva_prototype",new MeshContract(139806,48,false));
     private static final Map<String,MeshContract> R21_CONTRACTS=Map.of("eva_prototype",new MeshContract(242686,62,false));
+    private static final Map<String,MeshContract> R22_CONTRACTS=Map.of("eva_prototype",new MeshContract(243758,62,false),"eva_un01",new MeshContract(228610,62,false));
+    private static final Map<String,MeshContract> R23_CONTRACTS=Map.of("eva_prototype",new MeshContract(239090,64,false),"eva_un01",new MeshContract(222409,64,false));
     private static final Map<String, Fingerprint> CACHE = new ConcurrentHashMap<>();
 
     private LocalVisualAssetFingerprint() {}
@@ -68,7 +70,9 @@ public final class LocalVisualAssetFingerprint
                 && (contract.matches(meshTag, mesh) || R11_CONTRACTS.containsKey(assetName) && R11_CONTRACTS.get(assetName).matches(meshTag,mesh)
                 || R13_CONTRACTS.containsKey(assetName) && R13_CONTRACTS.get(assetName).matches(meshTag,mesh)
                 || R19_CONTRACTS.containsKey(assetName) && R19_CONTRACTS.get(assetName).matches(meshTag,mesh)
-                || R21_CONTRACTS.containsKey(assetName) && R21_CONTRACTS.get(assetName).matches(meshTag,mesh));
+                || R21_CONTRACTS.containsKey(assetName) && R21_CONTRACTS.get(assetName).matches(meshTag,mesh)
+                || R22_CONTRACTS.containsKey(assetName) && R22_CONTRACTS.get(assetName).matches(meshTag,mesh)
+                || R23_CONTRACTS.containsKey(assetName) && R23_CONTRACTS.get(assetName).matches(meshTag,mesh));
         boolean valid = complete && sameSource && meshMatches;
         String reason = !complete ? "missing-resource"
                 : !sameSource ? "mixed-resource-packs"

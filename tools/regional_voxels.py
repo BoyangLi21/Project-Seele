@@ -98,9 +98,12 @@ class Painter:
         (folder/'block_entities.json').write_text(json.dumps([{'pos':p,'snbt':v.snbt()} for p,v in self.block_entities.items()],ensure_ascii=False),encoding='utf-8')
         print(name,'operations',len(self.ops),'chunks',len(self.by_chunk),'block entities',len(self.block_entities),flush=True)
         return folder
-    def apply(self,name):
+    def apply(self,name,session_lock=None):
         folder=self.save_plan(name)
-        lock=(WORLD/'session.lock').open('r+b');msvcrt.locking(lock.fileno(),msvcrt.LK_NBLCK,1)
+        own_lock=session_lock is None
+        lock=(WORLD/'session.lock').open('r+b') if own_lock else session_lock
+        if own_lock:msvcrt.locking(lock.fileno(),msvcrt.LK_NBLCK,1)
+        else:assert not lock.closed and Path(lock.name).resolve()==(WORLD/'session.lock').resolve(),'Wrong externally held world lock'
         report_dir=folder/('applied_'+datetime.now().strftime('%Y%m%d_%H%M%S_%f'));(report_dir/'before').mkdir(parents=True);(report_dir/'delta').mkdir()
         groups=defaultdict(dict)
         for (cx,cz),ops in self.by_chunk.items():groups[cx//32,cz//32][cx,cz]=ops
@@ -244,6 +247,8 @@ class Painter:
         except Exception:
             for path,backup in touched:atomic_replace(path,backup.read_bytes())
             raise
+        finally:
+            if own_lock:lock.close()
         receipt=dict(world=str(WORLD),dimension=DIM,counts=counts,kept_existing_cells=dict(protected),verified=True,elapsed=round(time.monotonic()-start,2))
         (report_dir/'receipt.json').write_text(json.dumps(receipt,indent=2),encoding='utf-8')
         print('VERIFIED',report_dir,flush=True)

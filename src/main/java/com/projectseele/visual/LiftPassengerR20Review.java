@@ -18,11 +18,15 @@ import java.util.*;
 @Mod.EventBusSubscriber(modid=ProjectSeele.MODID)
 public final class LiftPassengerR20Review
 {
+    private static final boolean DESCENT="r22-lift-descend".equals(System.getProperty("projectseele.regionalBuild",""));
+    private static final boolean ALL="r22-lifts-all".equals(System.getProperty("projectseele.regionalBuild",""));
+    public static final boolean R22=ALL||DESCENT||"r22-lifts".equals(System.getProperty("projectseele.regionalBuild",""));
     private static final boolean R21="r21-lifts".equals(System.getProperty("projectseele.regionalBuild",""));
-    public static final boolean ENABLED=R21||Set.of("r20-lift","r20-lift-rest").contains(System.getProperty("projectseele.regionalBuild",""));
+    public static final boolean ENABLED=R22||R21||Set.of("r20-lift","r20-lift-rest").contains(System.getProperty("projectseele.regionalBuild",""));
+    public static volatile net.minecraft.core.BlockPos controllerPosition;
     public static volatile boolean clientReady,finished,moving;
     public static volatile int tripAge;
-    private static int age,index=R21?2:"r20-lift-rest".equals(System.getProperty("projectseele.regionalBuild",""))?4:0,stage,timer;
+    private static int age,index=DESCENT?3:R21?2:"r20-lift-rest".equals(System.getProperty("projectseele.regionalBuild",""))?4:0,stage,timer;
     private static final JsonArray results=new JsonArray();
     private static final JsonArray damageEvents=new JsonArray();
     @SubscribeEvent public static void hurt(net.minecraftforge.event.entity.living.LivingHurtEvent e)
@@ -39,23 +43,26 @@ public final class LiftPassengerR20Review
     @SubscribeEvent public static void tick(TickEvent.ServerTickEvent e)
     {
         if(!ENABLED||finished||e.phase!=TickEvent.Phase.END||!clientReady||e.getServer().getPlayerList().getPlayers().isEmpty())return;
-        Path world=e.getServer().getWorldPath(LevelResource.ROOT).normalize();require(world.getFileName().toString().equals(R21?"SEELE_R21_REVIEW":"SEELE_R20_REVIEW"),"R20/R21 review boundary");
+        Path world=e.getServer().getWorldPath(LevelResource.ROOT).normalize();require(world.getFileName().toString().equals(R22?"SEELE_R22_REVIEW":R21?"SEELE_R21_REVIEW":"SEELE_R20_REVIEW"),"R20/R21/R22 review boundary");
         var player=e.getServer().getPlayerList().getPlayers().get(0);var level=e.getServer().getLevel(FacilitySchemaV2.DIMENSION);
         try
         {
             if(++age>15000)throw new IllegalStateException("R20 lift suite timeout");
-            if(R21){FROM[3]=75;TO[2]=75;if(index==4)index=6;}
+            if(DESCENT&&index==4){write(world,"");finished=true;return;}
+            if(R21||R22){FROM[3]=75;TO[2]=75;if(index==4&&!ALL)index=6;}
             if(index==IDS.length||R21&&index==8){write(world,"");finished=true;return;}
             var spec=NervLiftPassengerSync.managedLifts(level).stream().filter(s->s.id().equals(IDS[index])).findFirst().orElseThrow();
             var from=spec.stops().stream().filter(s->s.walkY()==FROM[index]).findFirst().orElseThrow();var to=spec.stops().stream().filter(s->s.walkY()==TO[index]).findFirst().orElseThrow();
             var base=S20MovingElevatorsAdapter.controllerPosition(spec,spec.lower());level.getChunkAt(base);
+            controllerPosition=base;
             if(spec.id().equals(NervLiftPassengerSync.GATEWAY)){level.getChunkAt(RegionalGatewayDirector.controllerPos(81));if(stage==0)RegionalGatewayDirector.commission(level);}
             if(!(level.getBlockEntity(base) instanceof ControllerBlockEntity c)||c.getGroup()==null)return;
             var group=c.getGroup();timer++;
             if(stage==0)
             {
                 ProjectSeele.LOGGER.info("R20 lift setup {} {} -> {}",spec.id(),FROM[index],TO[index]);
-                player.getInventory().add(new net.minecraft.world.item.ItemStack(com.projectseele.registry.ModItems.TERMINAL_DOGMA_ACCESS_CARD.get()));
+                var card=new net.minecraft.world.item.ItemStack(com.projectseele.registry.ModItems.TERMINAL_DOGMA_ACCESS_CARD.get());
+                if(!player.getInventory().contains(card))player.getInventory().add(card);
                 player.setGameMode(GameType.CREATIVE);player.getAbilities().flying=false;player.onUpdateAbilities();
                 player.teleportTo(level,from.cabinCentre().getX()+.5,from.walkY(),from.cabinCentre().getZ()+(spec.id().equals(NervLiftPassengerSync.GATEWAY)?-11.5:7.5),180,0);
                 if(spec.id().equals(NervLiftPassengerSync.GATEWAY))RegionalGatewayDirector.request(level,FROM[index],player);else group.onDisplayPress(FROM[index],0,player);stage=1;timer=0;

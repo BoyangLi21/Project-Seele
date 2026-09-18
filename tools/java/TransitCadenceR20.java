@@ -32,6 +32,7 @@ public final class TransitCadenceR20
             var siding=sim.sidings.stream().filter(s->s.getName().startsWith(route.getRouteNumber()+"车辆段")||s.getName().startsWith(route.getRouteNumber()+" ")).findFirst().orElseThrow();sidings.put(d,siding);siding.clearVehicles();d.setUseRealTime(true);d.setRepeatInfinitely(true);d.getRealTimeDepartures().clear();d.getRealTimeDepartures().add(0);
             siding.setName(route.getRouteNumber()+"车辆段");d.setName(route.getName()+"运行基地");
         }
+        if(deps.isEmpty())throw new IllegalStateException("No selected depots; an empty check is not a cadence pass");
         generate(sim,deps);JsonArray tune=new JsonArray();Map<Depot,Long> target=new HashMap<>();
         for(var d:deps){long before=Math.round(period.getDouble(sidings.get(d)));if(before<=0)throw new IllegalStateException("Missing repeat period");target.put(d,Math.max(120000L,((before+59999)/60000)*60000));System.out.println("Cadence "+d.getId()+" "+before+" -> "+target.get(d));}
         for(int iteration=0;iteration<5;iteration++)

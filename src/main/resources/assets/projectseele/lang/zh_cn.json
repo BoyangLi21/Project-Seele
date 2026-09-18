@@ -244,5 +244,6 @@
   "subtitles.projectseele.facility_siren": "NERV 出动提示警报",
   "block.projectseele.nerv_moving_walk": "NERV 平层自动步道",
   "subtitles.projectseele.pa_door_open": "舱门开启，请确认出舱通道安全。",
-  "subtitles.projectseele.pa_door_close": "舱门即将关闭，请离开移动范围。"
+  "subtitles.projectseele.pa_door_close": "舱门即将关闭，请离开移动范围。",
+  "block.projectseele.nerv_direction_panel": "NERV 通道导向牌"
 }

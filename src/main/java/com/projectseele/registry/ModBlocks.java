@@ -53,6 +53,7 @@ public final class ModBlocks
     public static final RegistryObject<Block> RESIDENTIAL_CHAIR=BLOCKS.register("residential_chair",()->new com.projectseele.world.NervOfficeChairBlock(BlockBehaviour.Properties.copy(Blocks.OAK_PLANKS).strength(1.5F).noOcclusion()));
     public static final RegistryObject<Block> MILITARY_SEAT=BLOCKS.register("military_seat",()->new com.projectseele.world.NervOfficeChairBlock(BlockBehaviour.Properties.copy(Blocks.IRON_BLOCK).strength(1.5F).noOcclusion()));
     public static final RegistryObject<Block> STATION_DEPARTURE_BOARD=BLOCKS.register("station_departure_board",()->new com.projectseele.world.StationDepartureBoardBlock(BlockBehaviour.Properties.copy(Blocks.IRON_BLOCK).strength(1.5F).noOcclusion()));
+    public static final RegistryObject<Block> NERV_DIRECTION_PANEL=BLOCKS.register("nerv_direction_panel",()->new com.projectseele.world.StationDepartureBoardBlock(BlockBehaviour.Properties.copy(Blocks.IRON_BLOCK).strength(1.5F).noOcclusion(),true));
     public static final RegistryObject<Block> NERV_BRIEFING_TILE=BLOCKS.register("nerv_briefing_tile",()->new com.projectseele.world.NervBriefingTileBlock(BlockBehaviour.Properties.copy(Blocks.IRON_BLOCK).lightLevel(s->6)));
     public static final RegistryObject<Block> NERV_PYRAMID_PANEL=BLOCKS.register("nerv_pyramid_panel",
             ()->new Block(BlockBehaviour.Properties.copy(Blocks.REINFORCED_DEEPSLATE)));

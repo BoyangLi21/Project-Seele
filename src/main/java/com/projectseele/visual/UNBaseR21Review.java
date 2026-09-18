@@ -19,10 +19,11 @@ import java.util.*;
 @Mod.EventBusSubscriber(modid=ProjectSeele.MODID)
 public final class UNBaseR21Review
 {
-    public static final boolean ENABLED=Set.of("r21-un-base","r21-un-base00","r21-un-base01").contains(System.getProperty("projectseele.regionalBuild",""));
-    public static volatile int actor,forward;public static volatile boolean finished;public static volatile String shot="";
+    public static final boolean R22="r22-un-base".equals(System.getProperty("projectseele.regionalBuild",""));
+    public static final boolean ENABLED=R22||Set.of("r21-un-base","r21-un-base00","r21-un-base01").contains(System.getProperty("projectseele.regionalBuild",""));
+    public static volatile int actor,forward,attackCycle;public static volatile boolean finished;public static volatile String shot="";
     public static final Set<String> captured=java.util.concurrent.ConcurrentHashMap.newKeySet();
-    private static int age,stage,ticks,serial="r21-un-base01".equals(System.getProperty("projectseele.regionalBuild",""))?1:0;private static ServerPlayer pilot;private static EvaPrototypeEntity eva;private static UUID unitId,plugId;private static Path world;private static float health,pilotHealth,boardingYaw,boardingPitch;
+    private static int age,stage,ticks,serial="r21-un-base01".equals(System.getProperty("projectseele.regionalBuild",""))?1:0;private static ServerPlayer pilot;private static EvaPrototypeEntity eva;private static UUID unitId,plugId;private static Path world;private static float health,pilotHealth,boardingYaw,boardingPitch;private static boolean recalledInitialState;
     private static final JsonArray checks=new JsonArray();
     private static MilitaryR07Director.Phase phase(ServerLevel l){return serial==0?MilitaryR07Director.state(l).phase:UNAnnexR20.state(l).phase;}
     private static String request(ServerLevel l,String action){return serial==0?MilitaryR07Director.request(l,action,pilot):UNAnnexR20.request(l,action,pilot);}
@@ -32,7 +33,7 @@ public final class UNBaseR21Review
     @SubscribeEvent public static void tick(TickEvent.ServerTickEvent event)
     {
         if(!ENABLED||finished||event.phase!=TickEvent.Phase.END)return;var server=event.getServer();if(server.getPlayerList().getPlayers().isEmpty()||++age<100)return;
-        world=server.getWorldPath(LevelResource.ROOT).normalize();if(!world.getFileName().toString().equals("SEELE_R21_REVIEW"))throw new IllegalStateException("UN base review is copy-only");
+        world=server.getWorldPath(LevelResource.ROOT).normalize();if(!world.getFileName().toString().equals(R22?"SEELE_R22_REVIEW":"SEELE_R21_REVIEW"))throw new IllegalStateException("UN base review is copy-only");
         var level=server.getLevel(FacilitySchemaV2.DIMENSION);if(level==null)return;
         try
         {
@@ -47,6 +48,12 @@ public final class UNBaseR21Review
                 UUID id=serial==0?MilitaryR07Director.state(level).entities.get("prototype"):UNAnnexR20.state(level).unitId;
                 if(id==null||!(level.getEntity(id) instanceof EvaPrototypeEntity found))return;
                 eva=found;unitId=id;actor=eva.getId();require(eva.getUNSerial()==serial,"Airframe serial mismatch");
+                if(R22&&!recalledInitialState&&eva.position().distanceTo(home)>3)
+                {
+                    recalledInitialState=true;
+                    server.getCommands().performPrefixedCommand(pilot.createCommandSourceStack().withPermission(2),"seele military recover 0"+serial);
+                    next(-3);return;
+                }
                 // A timed-out drive may be saved as Player.RootVehicle. Recover
                 // that same airframe and capsule through normal driver input.
                 if(pilot.getRootVehicle()==eva)
@@ -72,6 +79,8 @@ public final class UNBaseR21Review
                 health=eva.getHealth();pilotHealth=pilot.getHealth();request(level,"drain");next(1);return;
             }
             var plug=UNPlugDirector.capsule(eva);
+            if(stage==-3&&eva.position().distanceTo(home)<1&&plug!=null&&plug.getInsertionStage()==EntryPlugCarrierEntity.STAGE_SUSPENDED&&!pilot.isPassenger())
+            {control(level,home);next(0);return;}
             if(stage==-1&&eva.getZ()<home.z+1.5)
             {forward=0;require(eva.position().distanceTo(home)<3,"Saved drive recovery missed original bed");require(EntryPlugDirector.ejectPilotToPlug(level,1,eva,pilot),"Saved drive capsule recovery rejected");next(-2);}
             else if(stage==-2&&plug!=null&&plug.getInsertionStage()==EntryPlugCarrierEntity.STAGE_SUSPENDED&&!pilot.isPassenger())
@@ -106,7 +115,29 @@ public final class UNBaseR21Review
                 require(pilot.getRootVehicle()==eva,"Pilot ride graph lost while exiting");
                 if(eva.getZ()>-6108){forward=0;shot="un0"+serial+"_outside";next(5);}
             }
-            else if(stage==5&&ticks>40&&captured.contains(shot)){forward=-1;next(6);}
+            else if(stage==5&&ticks>40&&captured.contains(shot))
+            {
+                if(R22){shot="un0"+serial+"_head_detail";next(48);}
+                else {forward=-1;next(6);}
+            }
+            else if(stage==48&&captured.contains(shot)){shot="un0"+serial+"_hand_detail";next(49);}
+            else if(stage==49&&captured.contains(shot)){attackCycle=1;eva.meleeAttack(pilot);shot="un0"+serial+"_attack_a";next(50);}
+            else if(stage==50)
+            {
+                if(ticks==8)shot="un0"+serial+"_attack_b";
+                if(ticks==16)shot="un0"+serial+"_attack_c";
+                if(ticks>60)
+                {
+                    boolean complete=captured.contains("un0"+serial+"_attack_a")&&captured.contains("un0"+serial+"_attack_b")&&captured.contains("un0"+serial+"_attack_c");
+                    if(!complete)
+                    {
+                        require(++attackCycle<=3,"Three native attacks produced no complete capture coverage");
+                        eva.meleeAttack(pilot);shot="un0"+serial+"_attack_a";ticks=0;
+                        ProjectSeele.LOGGER.info("UN capture repeats a genuine native attack after a missed render window: serial={} cycle={}",serial,attackCycle);return;
+                    }
+                    server.getCommands().performPrefixedCommand(pilot.createCommandSourceStack().withPermission(2),"seele military recover 0"+serial);next(7);
+                }
+            }
             else if(stage==6&&eva.getZ()<home.z+1.5)
             {
                 forward=0;require(eva.position().distanceTo(home)<3,"Return to the original bed under driver input");
@@ -114,14 +145,26 @@ public final class UNBaseR21Review
             }
             else if(stage==7&&plug!=null&&plug.getInsertionStage()==EntryPlugCarrierEntity.STAGE_SUSPENDED&&!pilot.isPassenger())
             {
-                require(plug.getUUID().equals(plugId)&&eva.getUUID().equals(unitId),"Capsule or airframe was replaced");require(eva.getHealth()==health&&pilot.getHealth()==pilotHealth,"Drive cycle changed health");
-                control(level,home);request(level,"door");next(8);
+                require(plug.getUUID().equals(plugId)&&eva.getUUID().equals(unitId),"Capsule or airframe was replaced");require(eva.getHealth()>=health&&pilot.getHealth()>=pilotHealth,"Drive cycle caused damage");
+                control(level,home);
+                if(R22)
+                {
+                    eva.teleportTo(home.x+12,home.y,home.z+35);eva.setYRot(90);eva.setYBodyRot(90);
+                    server.getCommands().performPrefixedCommand(pilot.createCommandSourceStack().withPermission(2),"seele military reset 0"+serial);next(71);
+                }
+                else {request(level,"door");next(8);}
+            }
+            else if(stage==71&&ticks>10)
+            {
+                require(eva.getUUID().equals(unitId)&&plug.getUUID().equals(plugId),"Reset replaced identities");
+                require(eva.position().distanceTo(home)<1&&Math.abs(eva.getYRot())<.01,"Reset home/yaw mismatch");
+                require(plug.getInsertionStage()==EntryPlugCarrierEntity.STAGE_SUSPENDED&&!pilot.isPassenger(),"Reset capsule not docked");request(level,"door");next(8);
             }
             else if(stage==8&&phase(level)==MilitaryR07Director.Phase.DRY){request(level,"fill");next(9);}
             else if(stage==9&&phase(level)==MilitaryR07Director.Phase.WET)
             {
                 shot="un0"+serial+"_stored";if(!captured.contains(shot))return;
-                var row=new JsonObject();row.addProperty("unit","EVA-UN-0"+serial);row.addProperty("airframe",unitId.toString());row.addProperty("plug",plugId.toString());row.addProperty("passed",true);row.addProperty("ordinary_hatch_boarding",true);row.addProperty("driven_out_and_back",true);row.addProperty("wet_closed_restored",true);checks.add(row);
+                var row=new JsonObject();row.addProperty("unit","EVA-UN-0"+serial);row.addProperty("airframe",unitId.toString());row.addProperty("plug",plugId.toString());row.addProperty("passed",true);row.addProperty("ordinary_hatch_boarding",true);row.addProperty("driven_out_and_back",!R22);row.addProperty("attack_recover_reset_commands",R22);row.addProperty("native_attacks_for_capture",attackCycle);row.addProperty("wet_closed_restored",true);checks.add(row);
                 if(++serial<2&&!"r21-un-base00".equals(System.getProperty("projectseele.regionalBuild",""))){shot="";next(0);}else finish("");
             }
         }
@@ -129,7 +172,7 @@ public final class UNBaseR21Review
     }
     private static void finish(String error)
     {
-        forward=0;finished=true;try{var data=new JsonObject();data.addProperty("error",error);data.add("checks",checks);Files.writeString(world.resolve("un_base_r21_review.json"),data.toString());}catch(Exception failure){throw new IllegalStateException(failure);}
+        forward=0;finished=true;try{var data=new JsonObject();data.addProperty("error",error);data.add("checks",checks);Files.writeString(world.resolve(R22?"un_base_r22_review.json":"un_base_r21_review.json"),data.toString());}catch(Exception failure){throw new IllegalStateException(failure);}
     }
     private UNBaseR21Review(){}
 }

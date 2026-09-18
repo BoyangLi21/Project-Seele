@@ -17,7 +17,8 @@ import java.util.*;
 public final class UNWorldR11Tour
 {
     private static final boolean BENCH="r19-worldtour-bench".equals(System.getProperty("projectseele.regionalBuild",""));
-    private static final boolean R21="r21-worldtour".equals(System.getProperty("projectseele.regionalBuild",""));
+    private static final boolean R23="r22-worldtour".equals(System.getProperty("projectseele.regionalBuild",""));
+    private static final boolean R21=R23||"r21-worldtour".equals(System.getProperty("projectseele.regionalBuild",""));
     private static final boolean R20=R21||"r20-worldtour".equals(System.getProperty("projectseele.regionalBuild",""));
     private static final boolean BOARDS_TOUR="r19-boards-tour".equals(System.getProperty("projectseele.regionalBuild",""));
     private static final boolean R19=R20||BENCH||BOARDS_TOUR||"r19-worldtour".equals(System.getProperty("projectseele.regionalBuild",""));
@@ -31,15 +32,15 @@ public final class UNWorldR11Tour
     {
         if(!ENABLED||event.phase!=TickEvent.Phase.END||BOARDS_TOUR&&!com.projectseele.visual.WorldRepairR19Review.finished)return;var mc=Minecraft.getInstance();if(mc.player==null||mc.level==null||mc.getSingleplayerServer()==null)return;
         String world=mc.getSingleplayerServer().getWorldPath(LevelResource.ROOT).normalize().getFileName().toString();
-        if(R19?!world.equals(R21?"SEELE_R21_REVIEW":R20?"SEELE_R20_REVIEW":"SEELE_R19_NATIVE_REVIEW"):!world.equals("SEELE_R11_CANONICAL_ACCEPTANCE")&&!world.equals("SEELE_TV_WORLD_PREVIEW_20260906"))throw new IllegalStateException("Native tour world boundary");
+        if(R19?!world.equals(R23?"SEELE_R22_REVIEW":R21?"SEELE_R21_REVIEW":R20?"SEELE_R20_REVIEW":"SEELE_R19_NATIVE_REVIEW"):!world.equals("SEELE_R11_CANONICAL_ACCEPTANCE")&&!world.equals("SEELE_TV_WORLD_PREVIEW_20260906"))throw new IllegalStateException("Native tour world boundary");
         if(++age<100)return;
         try
         {
             if(shots==null)
             {
-                shots=JsonParser.parseString(Files.readString(mc.gameDirectory.toPath().resolve("projectseele-local-maps/"+(R21?"r21":R20?"r20":R19?"r19":"r11")+"_worldtour.json"))).getAsJsonArray();folder=mc.gameDirectory.toPath().resolve((R21?"../artifacts/world_repair_r21/native_tour_":R20?"../artifacts/world_rebuild_r20/native_tour_":R19?"../artifacts/world_repair_r19/native_tour_":"../artifacts/world_motion_r11/world_native_")+System.currentTimeMillis()).normalize();Files.createDirectories(folder);
+                shots=JsonParser.parseString(Files.readString(mc.gameDirectory.toPath().resolve("projectseele-local-maps/"+(R23?"r23":R21?"r21":R20?"r20":R19?"r19":"r11")+"_worldtour.json"))).getAsJsonArray();folder=mc.gameDirectory.toPath().resolve((R23?"../artifacts/facility_r23/native_tour_":R21?"../artifacts/world_repair_r21/native_tour_":R20?"../artifacts/world_rebuild_r20/native_tour_":R19?"../artifacts/world_repair_r19/native_tour_":"../artifacts/world_motion_r11/world_native_")+System.currentTimeMillis()).normalize();Files.createDirectories(folder);
                 if(R21){var keys=new JsonObject();for(var key:mc.options.keyMappings)if(key.getName().contains("superbwarfare"))keys.addProperty(key.getName(),key.getTranslatedKeyMessage().getString());Files.writeString(folder.resolve("actual_vehicle_keybindings.json"),keys.toString());}
-                oldDistance=mc.options.renderDistance().get();oldPause=mc.options.pauseOnLostFocus;oldGui=mc.options.hideGui;oldCamera=mc.options.getCameraType();mc.options.renderDistance().set(BENCH?32:12);mc.options.broadcastOptions();mc.options.pauseOnLostFocus=false;mc.player.connection.sendCommand("gamemode spectator");
+                oldDistance=mc.options.renderDistance().get();oldPause=mc.options.pauseOnLostFocus;oldGui=mc.options.hideGui;oldCamera=mc.options.getCameraType();mc.options.renderDistance().set(R23?8:BENCH?32:12);mc.options.broadcastOptions();mc.options.pauseOnLostFocus=false;mc.player.connection.sendCommand("gamemode spectator");
             }
             if(done)
             {
@@ -56,8 +57,14 @@ public final class UNWorldR11Tour
             }
             if(mc.level.dimension().location().toString().equals("projectseele:geofront")&&mc.player.getEyePosition().distanceToSqr(eye)<.2&&mc.screen==null)
             {
-                if(settle++==40&&!BENCH)mc.levelRenderer.allChanged();
-                if(settle>warmup&&mc.level.hasChunkAt(net.minecraft.core.BlockPos.containing(target)))ready=true;
+                // A teleport already queues the destination meshes. Throwing
+                // that queue away again produced empty-sky R23 captures.
+                if(settle++==40&&!BENCH&&!R23)mc.levelRenderer.allChanged();
+                boolean neighbourhoodReady=mc.level.hasChunkAt(net.minecraft.core.BlockPos.containing(target));
+                if(R23)
+                    for(int dx=-2;dx<=2;dx++)for(int dz=-2;dz<=2;dz++)
+                        neighbourhoodReady &= mc.level.hasChunkAt(net.minecraft.core.BlockPos.containing(eye.add(dx*16,0,dz*16)));
+                if(settle>warmup&&neighbourhoodReady)ready=true;
             }
             if(age>Math.max(8000,shots.size()*600))throw new IllegalStateException("Native tour timeout at "+index);
         }

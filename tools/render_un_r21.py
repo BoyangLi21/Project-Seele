@@ -4,8 +4,8 @@ import numpy as np
 from pathlib import Path
 from mathutils import Vector,Matrix,Euler,Quaternion
 ROOT=Path(__file__).resolve().parents[1]
-ap=argparse.ArgumentParser();ap.add_argument('--unit',required=True);ap.add_argument('--views',default='front,threequarter,rear');ap.add_argument('--open',type=float,default=0);a=ap.parse_args(sys.argv[sys.argv.index('--')+1:])
-OUT=ROOT/'artifacts/un_models_r21'/('un'+a.unit);ASSET=OUT/'runtime/assets/projectseele';mesh=json.loads((ASSET/'mesh/eva_prototype.mesh.json').read_text());geo=json.loads((ASSET/'geo/eva_prototype.geo.json').read_text())['minecraft:geometry'][0]['bones'];bones={b['name']:b for b in geo};matrices={}
+ap=argparse.ArgumentParser();ap.add_argument('--unit',required=True);ap.add_argument('--views',default='front,threequarter,rear');ap.add_argument('--open',type=float,default=0);ap.add_argument('--asset-root',type=Path,default=ROOT/'artifacts/un_models_r21');a=ap.parse_args(sys.argv[sys.argv.index('--')+1:])
+OUT=a.asset_root/('un'+a.unit);ASSET=OUT/'runtime/assets/projectseele';mesh=json.loads((ASSET/'mesh/eva_prototype.mesh.json').read_text());geo=json.loads((ASSET/'geo/eva_prototype.geo.json').read_text())['minecraft:geometry'][0]['bones'];bones={b['name']:b for b in geo};matrices={}
 def transform(name):
  if name not in matrices:
   b=bones[name];p=Vector(np.asarray(b['pivot'])*[-1,1,1]);angles=np.asarray(b.get('rotation',[0,0,0]))*[-1,-1,1];q=Euler(tuple(np.deg2rad(angles)),'XYZ').to_matrix().to_4x4()

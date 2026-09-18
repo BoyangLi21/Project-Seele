@@ -951,6 +951,15 @@ public final class EvaHangarBuilder
                                int variant, boolean open)
     {
         BlockPos bed = hangarBed(origin, variant);
+        // The moving gate is narrower than the wet vessel. Fixed returns
+        // must remain sealed even while the central transport opening moves.
+        for(int side:new int[]{-1,1})for(int x=CORRIDOR_HALF_WIDTH+1;x<=HALF_WIDTH;x++)
+            for(int y=0;y<=LCL_SHOULDER_LAYERS;y++)
+            {
+                BlockPos q=bed.offset(side*x,y,HALF_DEPTH);BlockState old=level.getBlockState(q);
+                if(old.isAir()||old.is(ModBlocks.LCL_BLOCK.get()))
+                    set(level,q,ModBlocks.NERV_SHAFT_PANEL.get().defaultBlockState());
+            }
         BlockState accent = accent(variant);
         for (int x = -CORRIDOR_HALF_WIDTH;
              x <= CORRIDOR_HALF_WIDTH; x++)

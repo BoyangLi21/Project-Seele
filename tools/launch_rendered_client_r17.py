@@ -32,13 +32,13 @@ def ensure_private_pack(game,review=False):
             selected=json.loads(line.partition(':')[2])
             original=list(selected)
             if required not in selected:selected.append(required)
-            extra='file/eva_un_r21_review'
-            selected=[p for p in selected if p!=extra]
+            extra='file/'+(review if isinstance(review,str) else 'eva_un_r21_review')
+            selected=[p for p in selected if p not in ('file/eva_un_r21_review','file/eva_access_r22_review')]
             if review:selected.append(extra)
             if original==selected:return
             lines[index]='resourcePacks:'+json.dumps(selected,ensure_ascii=False,separators=(',',':'))
             break
-    else:lines.append('resourcePacks:'+json.dumps([required]+(['file/eva_un_r21_review'] if review else [])))
+    else:lines.append('resourcePacks:'+json.dumps([required]+(['file/'+(review if isinstance(review,str) else 'eva_un_r21_review')] if review else [])))
     import datetime,shutil
     backup=ROOT/'.Codex/client-options-backup'/datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
     backup.mkdir(parents=True,exist_ok=True);shutil.copy2(options,backup/options.name)
@@ -61,20 +61,34 @@ def main():
     if not (ROOT/'run/resourcepacks/eva_real_model/pack.mcmeta').is_file():raise FileNotFoundError('The private EVA resource pack is not installed')
     java,env=java_environment();prefer_discrete_gpu(java)
     subprocess.run([sys.executable,'tools/fetch_client_mods_r19.py'],cwd=ROOT,env=env,check=True)
+    subprocess.run([sys.executable,'tools/fetch_piano_r22.py'],cwd=ROOT,env=env,check=True)
     ensure_local(ROOT/'run')
-    ensure_private_pack(ROOT/'run',bool(a.review and a.review.startswith('r21-') and (ROOT/'run/resourcepacks/eva_un_r21_review/pack.mcmeta').exists()))
+    review_pack='eva_access_r22_review' if a.review and a.review.startswith('r22-') else 'eva_un_r21_review'
+    ensure_private_pack(ROOT/'run',review_pack if a.review and a.review.startswith(('r21-','r22-')) and (ROOT/'run/resourcepacks'/review_pack/'pack.mcmeta').exists() else False)
     command=[str(ROOT/'gradlew.bat'),'--no-daemon','writeClientLaunchR17','-PstrictHighDetail=true','-PoptimizedClient','-PexactTerrain','-PclientNavigation','-PclientHeap='+a.heap,'-PquickPlayWorld='+a.world]
     if a.gpu_terrain:
         from fetch_gpu_client_r19 import ensure_local as ensure_gpu
         ensure_gpu();command.append('-PgpuTerrain')
     if a.native_capture:command.append('-PnativeCapture')
     if a.review:command.append('-PregionalBuild='+a.review)
-    if a.review=='r21-flight-riding':command.append('-PtvTransitCapture')
+    if a.review in ('r21-flight-riding','r22-flight-riding'):command.append('-PtvTransitCapture')
     if a.battle_clip:command.append('-PfirstBattleReviewClip='+str(a.battle_clip.resolve()))
     if a.far_view:command.append('-PfarViewOnly='+a.far_view)
     if a.movie_only:command.append('-PfirstBattleMovieOnly')
     subprocess.run(command,cwd=ROOT,env=env,check=True)
     if a.prepare_only:return 0
-    return run_prepared(ROOT/'.Codex/client-launch-r17.json',env)
+    # Automated reviews choose their own view distances after entry. Avoid
+    # first loading the full 24-chunk play profile just to discard it then.
+    # Restore only this option after the client exits; normal play keeps 24.
+    option=ROOT/'run/options.txt';original_distance=None
+    if a.review and not a.review.endswith('manual'):
+        lines=option.read_text(encoding='utf8').splitlines()
+        for i,line in enumerate(lines):
+            if line.startswith('renderDistance:'):original_distance=line;lines[i]='renderDistance:8';break
+        option.write_text('\n'.join(lines)+'\n',encoding='utf8')
+    try:return run_prepared(ROOT/'.Codex/client-launch-r17.json',env)
+    finally:
+        if original_distance is not None:
+            lines=option.read_text(encoding='utf8').splitlines();lines=[original_distance if s.startswith('renderDistance:') else s for s in lines];option.write_text('\n'.join(lines)+'\n',encoding='utf8')
 
 if __name__=='__main__':raise SystemExit(main())

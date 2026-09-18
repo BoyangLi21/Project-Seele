@@ -1,15 +1,20 @@
 {
   "required": true,
   "package": "com.projectseele.mixin",
+  "plugin": "com.projectseele.mixin.SeeleCompatibilityPlugin",
   "compatibilityLevel": "JAVA_17",
   "refmap": "projectseele.refmap.json",
   "minVersion": "0.8",
   "mixins": [
     "BiomeManagerMixin",
+    "PianoSyncServerR23Mixin",
     "MovingElevatorGroupAccessMixin",
+    "MovingElevatorMotionR22Mixin",
+    "MovingElevatorPassengerR22Mixin",
     "MovingElevatorRemoteAccessor",
     "TransportPassengerDiagnosticsMixin",
     "MtrRouteEndpointMixin",
+    "UNFlightSpeedR22Mixin",
     "SbwDefenseOwnerMixin",
     "EvaSmallObstacleMixin"
   ],
@@ -24,9 +29,13 @@
     "client.PlayerModelGendoPoseMixin",
     "client.MovingElevatorDisplayMixin",
     "client.MovingElevatorPanelMixin",
+    "client.LocalPlayerLiftPacketsR22Mixin",
+    "client.LocalPlayerPositionAccessorR22",
     "client.TransportPassengerPacketDiagnosticsMixin",
     "client.AircraftPositionSmoothingMixin",
     "client.MtrFrameClockR21Mixin",
+    "client.MtrAnnouncementPronunciationMixin",
+    "client.PianoInventoryOverlayR22Mixin",
     "client.AircraftCorrectionBudgetMixin"
   ],
   "injectors": {

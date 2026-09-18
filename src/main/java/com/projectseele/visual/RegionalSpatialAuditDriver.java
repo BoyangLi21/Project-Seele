@@ -31,7 +31,8 @@ import java.util.*;
 public final class RegionalSpatialAuditDriver
 {
     private static final boolean COMBINED=Set.of("r10-world","r20-civil-annex").contains(System.getProperty("projectseele.regionalBuild",""));
-    private static final boolean R21="r21-collision".equals(System.getProperty("projectseele.regionalBuild",""));
+    private static final boolean R23="r23-collision".equals(System.getProperty("projectseele.regionalBuild",""));
+    private static final boolean R21=R23||"r21-collision".equals(System.getProperty("projectseele.regionalBuild",""));
     private static final boolean R20=R21||Set.of("r20-collision","r20-civil-annex").contains(System.getProperty("projectseele.regionalBuild",""));
     private static final boolean R19=R20||"r19-collision".equals(System.getProperty("projectseele.regionalBuild",""));
     private static final boolean ENABLED=R19||COMBINED||"collision-audit".equals(System.getProperty("projectseele.regionalBuild",""));
@@ -49,6 +50,7 @@ public final class RegionalSpatialAuditDriver
     private static int waypoint;
     private static double distance,maxRise,fallSpeed;
     private static int doorInteractions;
+    private static int mechanismWait;
     private static final JsonArray TRACE=new JsonArray();
     private static ServerLevel activeLevel;
     private static final Map<BlockPos,BlockState> RESTORE=new LinkedHashMap<>();
@@ -76,8 +78,9 @@ public final class RegionalSpatialAuditDriver
     {
         if(!ENABLED||done||event.phase!=TickEvent.Phase.END)return;
         var server=event.getServer();Path world=server.getWorldPath(LevelResource.ROOT).normalize();
-        if(!world.getFileName().toString().equals(R21?"SEELE_R21_REVIEW":R20?"SEELE_R20_REVIEW":R19?"SEELE_R19_NATIVE_REVIEW":"SEELE_TV_WORLD_PREVIEW_20260906"))throw new IllegalStateException("Wrong quality audit world");
+        if(!world.getFileName().toString().equals(R23?"SEELE_R22_REVIEW":R21?"SEELE_R21_REVIEW":R20?"SEELE_R20_REVIEW":R19?"SEELE_R19_NATIVE_REVIEW":"SEELE_TV_WORLD_PREVIEW_20260906"))throw new IllegalStateException("Wrong quality audit world");
         ServerLevel level=server.getLevel(FacilitySchemaV2.DIMENSION);
+        if(level!=null)level.resetEmptyTime();
         try
         {
             if(++age<100)return;
@@ -116,7 +119,7 @@ public final class RegionalSpatialAuditDriver
                     }
                     Files.writeString(world.resolve("quality_terrain_survey.json"),GSON.toJson(heights));
                 }
-                cases=JsonParser.parseString(Files.readString(world.resolve("quality_walk_cases.json"))).getAsJsonArray();
+                cases=JsonParser.parseString(Files.readString(world.resolve(R23?"r23_walk_cases.json":"quality_walk_cases.json"))).getAsJsonArray();
                 ProjectSeele.LOGGER.info("SPATIAL NATIVE shapes={} cases={} playerStep={}",shapes.size(),cases.size(),player.maxUpStep());
             }
             if(Files.exists(world.resolve("regional_stop_requested")))
@@ -154,6 +157,15 @@ public final class RegionalSpatialAuditDriver
                 stepLimit=Math.max(2000,(int)Math.ceil(length/.12)+route.size()*100);
                 TRACE.asList().clear();positioned=true;
                 activeLevel=level;RESTORE.clear();doorInteractions=0;
+                if(test.has("commandButton"))
+                {
+                    var b=test.getAsJsonArray("commandButton");BlockPos button=new BlockPos(b.get(0).getAsInt(),b.get(1).getAsInt(),b.get(2).getAsInt());
+                    var state=level.getBlockState(button);var point=state.getShape(level,button).bounds().getCenter().add(Vec3.atLowerCornerOf(button));var eye=player.getEyePosition();
+                    var hit=level.clip(new net.minecraft.world.level.ClipContext(eye,point.add(point.subtract(eye).normalize().scale(.03)),net.minecraft.world.level.ClipContext.Block.OUTLINE,net.minecraft.world.level.ClipContext.Fluid.NONE,player));
+                    if(eye.distanceTo(point)>4.5||!hit.getBlockPos().equals(button)){finish(test,"command_button_not_physically_reachable");return;}
+                    if(!com.projectseele.world.CommandRoomSlidingDoorDirector.handleUse(player,button)){finish(test,"command_button_rejected");return;}
+                    mechanismWait=20;doorInteractions++;
+                }
                 if(test.has("interactBlocks"))
                 {
                     // Imported multi-height shutters are functional entrances too.
@@ -194,6 +206,7 @@ public final class RegionalSpatialAuditDriver
                     {finish(test,"door_did_not_open");return;}
                 }
             }
+            if(mechanismWait>0){mechanismWait--;return;}
             for(int n=0;n<120;n++)
             {
                 Vec3 old=player.position();double dx=end.x-old.x,dz=end.z-old.z;distance=Math.hypot(dx,dz);
@@ -267,6 +280,12 @@ public final class RegionalSpatialAuditDriver
         JsonObject result=test.deepCopy();result.addProperty("status",status);result.add("actual",position(player.position()));
         result.addProperty("waypointsReached",waypoint);result.addProperty("nativeDoorInteractions",doorInteractions);
         result.addProperty("maxRise",maxRise);result.addProperty("playerStep",player.maxUpStep());result.add("trace",TRACE.deepCopy());RESULTS.add(result);
+        if(!status.equals("pass"))
+        {
+            var nearby=new JsonArray();var at=player.blockPosition();
+            for(BlockPos q:BlockPos.betweenClosed(at.offset(-2,-2,-2),at.offset(2,3,2)))if(!activeLevel.getBlockState(q).isAir())nearby.add(q.toShortString()+" "+activeLevel.getBlockState(q));result.add("nearbyBlocks",nearby);
+            var entities=new JsonArray();for(var entity:activeLevel.getEntities(player,player.getBoundingBox().inflate(4)))entities.add(entity.getType()+" "+entity.getUUID()+" "+entity.getBoundingBox());result.add("nearbyEntities",entities);
+        }
         ProjectSeele.LOGGER.info("SPATIAL WALK {} {} actual={} target={}",test.get("id").getAsString(),status,player.position(),end);
         RESTORE.forEach((pos,state)->activeLevel.setBlock(pos,state,3));RESTORE.clear();
         index++;wait=0;

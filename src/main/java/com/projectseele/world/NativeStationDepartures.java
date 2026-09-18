@@ -18,7 +18,7 @@ public final class NativeStationDepartures
     public record Snapshot(long platformId, long clock, List<Long> departures, List<String> rows) {}
     private static final DateTimeFormatter CLOCK = DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.of("Asia/Shanghai"));
     private record Cached(long until, Snapshot snapshot) {}
-    private static final Map<Object,Map<BlockPos,Cached>> CACHE = new WeakHashMap<>();
+    private static final Map<Object,Map<String,Cached>> CACHE = new WeakHashMap<>();
     private static Object call(Object object, String method) throws ReflectiveOperationException
     {
         return object.getClass().getMethod(method).invoke(object);
@@ -29,15 +29,20 @@ public final class NativeStationDepartures
         return text.length() > limit ? text.substring(0, limit) : text;
     }
     public static Snapshot read(BlockPos centre) throws ReflectiveOperationException
+    {return read(centre,-1);}
+    public static Snapshot read(BlockPos centre,long preferredId) throws ReflectiveOperationException
     {
         Object simulator = RegionalNativeTransitInspection.simulator();
         if (simulator == null) return new Snapshot(-1, 0, List.of(), List.of("正在读取运行信息"));
         var cache = CACHE.computeIfAbsent(simulator, ignored -> new HashMap<>());
-        long moment = System.nanoTime();Cached cached = cache.get(centre);
+        String cacheKey=centre.asLong()+"/"+preferredId;
+        long moment = System.nanoTime();Cached cached = cache.get(cacheKey);
         if (cached != null && cached.until() > moment) return cached.snapshot();
         Object nearest = null;double distance = 16;
         for (Object platform : (Iterable<?>) simulator.getClass().getField("platforms").get(simulator))
         {
+            if(preferredId!=-1&&((Number)call(platform,"getId")).longValue()==preferredId){nearest=platform;break;}
+            if(preferredId!=-1)continue;
             Object pos = call(platform, "getMidPosition");
             double dx = ((Number)call(pos,"getX")).doubleValue() - centre.getX();
             double dy = ((Number)call(pos,"getY")).doubleValue() - centre.getY();
@@ -68,7 +73,7 @@ public final class NativeStationDepartures
         }
         if (rows.isEmpty()) rows.add("当前暂无待发班次");
         Snapshot snapshot = new Snapshot(id, now, List.copyOf(times), List.copyOf(rows));
-        cache.put(centre.immutable(), new Cached(moment + 1_000_000_000L, snapshot));
+        cache.put(cacheKey, new Cached(moment + 1_000_000_000L, snapshot));
         return snapshot;
     }
     private NativeStationDepartures() {}

@@ -1,0 +1,107 @@
+{
+  "parent": "minecraft:block/block",
+  "textures": {
+    "particle": "projectseele:block/nerv_machine_edge",
+    "metal": "projectseele:block/nerv_machine_edge",
+    "screen": "minecraft:block/black_concrete",
+    "led": "minecraft:block/lime_concrete"
+  },
+  "elements": [
+    {
+      "from": [
+        1,
+        2,
+        0.0
+      ],
+      "to": [
+        15,
+        14,
+        3.0
+      ],
+      "faces": {
+        "up": {
+          "texture": "#metal"
+        },
+        "down": {
+          "texture": "#metal"
+        },
+        "north": {
+          "texture": "#metal"
+        },
+        "south": {
+          "texture": "#metal"
+        },
+        "east": {
+          "texture": "#metal"
+        },
+        "west": {
+          "texture": "#metal"
+        }
+      }
+    },
+    {
+      "from": [
+        1.65,
+        2.65,
+        3.0
+      ],
+      "to": [
+        14.35,
+        13.35,
+        3.09
+      ],
+      "faces": {
+        "up": {
+          "texture": "#screen"
+        },
+        "down": {
+          "texture": "#screen"
+        },
+        "north": {
+          "texture": "#screen"
+        },
+        "south": {
+          "texture": "#screen"
+        },
+        "east": {
+          "texture": "#screen"
+        },
+        "west": {
+          "texture": "#screen"
+        }
+      }
+    },
+    {
+      "from": [
+        12.8,
+        2.4,
+        3.09
+      ],
+      "to": [
+        13.8,
+        2.8,
+        3.12
+      ],
+      "faces": {
+        "up": {
+          "texture": "#led"
+        },
+        "down": {
+          "texture": "#led"
+        },
+        "north": {
+          "texture": "#led"
+        },
+        "south": {
+          "texture": "#led"
+        },
+        "east": {
+          "texture": "#led"
+        },
+        "west": {
+          "texture": "#led"
+        }
+      }
+    }
+  ]
+}

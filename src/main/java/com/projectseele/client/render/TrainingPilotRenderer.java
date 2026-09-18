@@ -20,7 +20,7 @@ public final class TrainingPilotRenderer
     public TrainingPilotRenderer(EntityRendererProvider.Context context)
     {
         super(context, new PlayerModel<>(
-                context.bakeLayer(ModelLayers.PLAYER), false), 0.5F);
+                context.bakeLayer(ModelLayers.PLAYER_SLIM), true), 0.5F);
     }
 
     @Override
@@ -39,4 +39,4 @@ public final class TrainingPilotRenderer
         return new ResourceLocation(ProjectSeele.MODID,
                 "textures/entity/training_pilot_" + pilot + ".png");
     }
-}
+}

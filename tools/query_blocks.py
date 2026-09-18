@@ -31,6 +31,34 @@ from inspect_map_assets import (  # noqa: E402
 
 AIR = {"minecraft:air", "minecraft:cave_air", "minecraft:void_air"}
 
+def chunk_statuses(world: Path, dimension: str, selected):
+    """Metadata preflight without decoding voxel palettes or altering chunks."""
+    wanted=set(map(tuple,selected))
+    if not wanted:return {}
+    bounds=(min(x for x,z in wanted),max(x for x,z in wanted),min(z for x,z in wanted),max(z for x,z in wanted))
+    result={p:'missing' for p in wanted}
+    for cx,cz,chunk in iter_chunks(dimension_dir(world,dimension),bounds,wanted):
+        result[cx,cz]=str(chunk.get('Status','')).removeprefix('minecraft:')
+    return result
+
+def iter_matching_sections(world: Path, dimension: str, prefixes, stats=None):
+    """Full-save palette prefilter; decode only sections containing requested blocks."""
+    import numpy as np
+    prefixes=tuple(prefixes);stats={} if stats is None else stats
+    stats.update(chunks_read=0,full_chunks=0,unfinished_chunks=0,matching_sections=0,complete=False)
+    for cx,cz,chunk in iter_chunks(dimension_dir(world,dimension),(-1875000,1875000,-1875000,1875000)):
+        stats['chunks_read']+=1
+        if str(chunk.get('Status','')).removeprefix('minecraft:')!='full':stats['unfinished_chunks']+=1;continue
+        stats['full_chunks']+=1
+        for section in chunk.get('sections',[]):
+            candidates=section.get('block_states',{}).get('palette',[])
+            if not any(str(entry.get('Name','')).startswith(prefixes) for entry in candidates):continue
+            palette,indices=decode_modern_section(section)
+            if not palette:continue
+            stats['matching_sections']+=1
+            yield cx,cz,int(section.get('Y',0)),tuple(palette_state(entry) for entry in palette),np.asarray(indices,dtype=np.int32)
+    stats['complete']=True
+
 
 def iter_selected_sections(world: Path, dimension: str,
                            selected: dict[tuple[int, int], set[int]], *, skip_unfinished: bool = False):

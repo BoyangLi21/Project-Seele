@@ -39,7 +39,7 @@ public final class EvaPrototypeEntity extends EvaUnit01Entity
     {entityData.set(EYE_YAW,getYRot()+net.minecraft.util.Mth.clamp(net.minecraft.util.Mth.wrapDegrees(p.getYRot()-getYRot()),-65,65));entityData.set(EYE_PITCH,net.minecraft.util.Mth.clamp(p.getXRot(),-35,35));}
     @Override public void tick()
     {
-        super.tick();if(level().isClientSide)return;com.projectseele.world.UNPlugDirector.tick(this);if(eyeLaserCooldown()>0)entityData.set(LASER_COOLDOWN,eyeLaserCooldown()-1);
+        super.tick();if(level().isClientSide)return;com.projectseele.world.UNRecoveryR22.remember(this);com.projectseele.world.UNPlugDirector.tick(this);if(eyeLaserCooldown()>0)entityData.set(LASER_COOLDOWN,eyeLaserCooldown()-1);
         if(!isEyeLaserActive())return;
         if(!(getPilotEntity() instanceof net.minecraft.server.level.ServerPlayer pilot)||!isPoweredOn()||isPilotControlLocked()){entityData.set(LASER_AGE,-1);return;}
         int age=entityData.get(LASER_AGE)+1;entityData.set(LASER_AGE,age);if(age<8)eyeAim(pilot);if(age==8)fireEyeLaser(pilot);if(age>=20)entityData.set(LASER_AGE,-1);

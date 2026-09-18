@@ -260,3 +260,9 @@ R20 视频取自实际 Minecraft 帧缓冲，按原时间剪辑，无生成或�
 ## R21 UN 双机私有模型
 
 Lux3D 原始网格、本地涂装与蒙皮处理、Pro 原始交付和 Blender 源文件保存在本机 `artifacts/un_models_r21`。实际选用 Lux3D 两个已完成任务的几何，经本地装配、测量与原生驾驶测试后接入独立 UN-00／UN-01 资源；未提交生成网格或参考图到公开仓库。来源、预算、验证与文件边界见 [UN 双机记录](UN_MODELS_R21.md)。
+
+## R23 增量
+
+- `nerv_direction_panel` 为原创紧凑壁牌，复用自有时刻表绘制，避免指路牌占用通道。
+- `tools/build_tv_machinery_r16.py` 的常驻运输架上部增加原创检修视口；`refine_carrier_viewport_r23.py` 只重建该部件，未改变其他机械部分或加入原片素材。
+- R23 两台 UN 的手部／光学改造与三驾驶员皮肤仅安装在本机私有资源包。完整皮肤来自用户已下载文件，原像素未改；其来源哈希和安装凭据保留于 `artifacts/access_r22/asset_stage.json` 与 `artifacts/facility_r23/asset_install`，公开前仍需各自的再分发许可。

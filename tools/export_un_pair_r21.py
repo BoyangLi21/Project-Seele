@@ -1,12 +1,12 @@
 """Export actual staged geometry as editable, skinned Blender/GLB files."""
-import bpy,json,sys,runpy,datetime,hashlib
+import bpy,json,sys,runpy,datetime,hashlib,argparse
 import numpy as np
 from pathlib import Path
 from mathutils import Matrix,Vector
-ROOT=Path(__file__).resolve().parents[1];OUT=ROOT/'artifacts/un_models_r21/export';OUT.mkdir(exist_ok=True)
+ROOT=Path(__file__).resolve().parents[1];ap=argparse.ArgumentParser();ap.add_argument('--asset-root',type=Path,default=ROOT/'artifacts/un_models_r21');args=ap.parse_args(sys.argv[sys.argv.index('--')+1:] if '--' in sys.argv else []);ASSET_ROOT=args.asset_root;OUT=ASSET_ROOT/'export';OUT.mkdir(exist_ok=True)
 started=datetime.datetime.now(datetime.timezone.utc).isoformat();outputs=[]
 for unit in ['00','01']:
- sys.argv=[str(ROOT/'tools/render_un_r21.py'),'--','--unit',unit,'--views','']
+ sys.argv=[str(ROOT/'tools/render_un_r21.py'),'--','--unit',unit,'--views','','--asset-root',str(ASSET_ROOT)]
  context=runpy.run_path(str(ROOT/'tools/render_un_r21.py'));mesh=context['mesh'];bones=context['bones'];transform=context['transform']
  objects=[o for o in bpy.context.scene.objects if o.type=='MESH' and o.get('runtime_bone')]
  # The renderer's model frame maps to Blender's Z-up frame without scaling

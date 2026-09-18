@@ -128,7 +128,7 @@ public final class UNPlugDirector
     }
     private static void diagnoseClearance(ServerLevel level,EvaPrototypeEntity eva,EntryPlugCarrierEntity plug,AABB bounds,String kind)
     {
-        if(!System.getProperty("projectseele.regionalBuild","").startsWith("r21-un-base"))return;
+        if(!System.getProperty("projectseele.regionalBuild","").startsWith("r21-un-base")&&!"r22-un-base".equals(System.getProperty("projectseele.regionalBuild","")))return;
         try
         {
             var report=new com.google.gson.JsonObject();report.addProperty("unit",eva.getUNSerial());report.addProperty("kind",kind);report.addProperty("bounds",bounds.toString());var cells=new com.google.gson.JsonArray();

@@ -141,9 +141,16 @@ def carrier():
   housing(x,0,9.65,1.6,62.0,2.0,.40,BLUE)
   box(x+.32,1,9.59,.32,59,.08,STEEL)
   for y in range(3,62,6):housing(x-.14,y,9.44,1.88,.52,2.35,.10,EDGE)
- for y,h in [(4,9),(16,9),(28,9),(39,4),(54,6)]:
+ for y,h in [(4,9),(16,9),(28,9),(39,4)]:
   housing(-5.25,y,10.3,10.5,h,1.25,.7,BLUE)
   housing(-2.4,y+.45,10.16,4.8,h-.90,.16,.3,EDGE);bolts(-2.12,y+.73,10.10,4.24,h-1.46)
+ # Retain both full-height load rails, but leave the head/dorsal inspection
+ # window open. The former solid 54..60 m pallet hid the EVA from the rear
+ # gallery and visually covered the insertion hardware.
+ for x in (-5.25,4.65):
+  housing(x,54,10.3,.6,6.1,1.25,.16,EDGE)
+  for y in (54.45,59.65):bolts(x+.16,y,10.22,.28,.18)
+ housing(-5.25,53.7,10.3,10.5,.30,1.25,.10,EDGE)
  housing(-7.1,61.4,9.05,14.2,1.1,3.2,.32,EDGE)
  for x in (-5,-2.5,0,2.5,5):cylinder((x,61.38,9.7),(x,61.24,9.7),.40,LAMP,24)
  for side in (-1,1):

@@ -269,7 +269,7 @@ public final class MilitaryR07Director
         for(var entry:data.entities.entrySet())
         {
             Entity e=level.getEntity(entry.getValue());if(e==null||!entry.getKey().startsWith("vehicle/"))continue;
-            boolean supplied=data.power&&(data.baseGenerator&&e.getX()>6300&&e.getX()<6900&&e.getZ()>-6740&&e.getZ()<-5900
+            boolean supplied=data.power&&(data.baseGenerator&&e.getX()>6300&&e.getX()<6900&&e.getZ()>-7090&&e.getZ()<-5900
                     ||data.portGenerator&&e.getX()>1200&&e.getX()<1656&&e.getZ()>280&&e.getZ()<640);
             if(supplied)e.getCapability(ForgeCapabilities.ENERGY).ifPresent(storage->storage.receiveEnergy(2000,false));
             if(e.getTags().contains("seele_r07_defense"))
@@ -283,9 +283,19 @@ public final class MilitaryR07Director
     public static JsonObject commission(ServerLevel level)
     {
         JsonObject plan=plan(level);if(plan==null)throw new IllegalStateException("Missing R07 installation plan");
-        State state=state(level);if(state.commissioned)throw new IllegalStateException("R07 already commissioned; inspect saved identities");
+        return commissionSpecs(level,plan.getAsJsonArray("entities"),false);
+    }
+    /** Explicit expansion of the same saved fleet; unloaded UUIDs are retained. */
+    public static JsonObject reinforce(ServerLevel level,JsonArray additions)
+    {
+        if(!state(level).commissioned)throw new IllegalStateException("Original base not commissioned");
+        return commissionSpecs(level,additions,true);
+    }
+    private static JsonObject commissionSpecs(ServerLevel level,JsonArray specifications,boolean addition)
+    {
+        State state=state(level);if(state.commissioned&&!addition)throw new IllegalStateException("R07 already commissioned; inspect saved identities");
         JsonArray receipts=new JsonArray();
-        for(var item:plan.getAsJsonArray("entities"))
+        for(var item:specifications)
         {
             JsonObject spec=item.getAsJsonObject();String key=spec.get("key").getAsString();var pos=spec.getAsJsonArray("position");
             if(state.entities.containsKey(key))
@@ -308,6 +318,15 @@ public final class MilitaryR07Director
                 tag.remove("Inventory");ListTag items=new ListTag();CompoundTag box=new ItemStack(BuiltInRegistries.ITEM.get(ammo)).save(new CompoundTag());box.putByte("Slot",(byte)0);items.add(box);tag.put("Items",items);
             }
             e.load(tag);e.moveTo(point.x,point.y,point.z,spec.get("yaw").getAsFloat(),0);e.addTag("seele_r07_owned");
+            if(addition)
+            {
+                for(int cx=(int)Math.floor(e.getBoundingBox().minX-2)>>4;cx<=(int)Math.floor(e.getBoundingBox().maxX+2)>>4;cx++)
+                    for(int cz=(int)Math.floor(e.getBoundingBox().minZ-2)>>4;cz<=(int)Math.floor(e.getBoundingBox().maxZ+2)>>4;cz++)level.getChunk(cx,cz);
+                if(!level.noCollision(e))throw new IllegalStateException("New vehicle intersects a block or existing vehicle: "+key+" "+point);
+                if(level.getBlockState(BlockPos.containing(point.add(0,-.05,0))).getCollisionShape(level,BlockPos.containing(point.add(0,-.05,0))).isEmpty())
+                    throw new IllegalStateException("New vehicle pad has no support: "+key);
+                e.addTag("seele_r23_readiness");
+            }
             if(spec.has("role")&&spec.get("role").getAsString().equals("defense"))
             {
                 UUID ownerId=state.entities.get("owner/"+key);

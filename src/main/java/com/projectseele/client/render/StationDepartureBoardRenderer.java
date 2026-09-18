@@ -16,12 +16,13 @@ public final class StationDepartureBoardRenderer implements BlockEntityRenderer<
     @Override public void render(StationDepartureBoardBlockEntity board,float partial,PoseStack poses,MultiBufferSource buffers,int light,int overlay)
     {
         boolean direction=board.getBlockState().getValue(StationDepartureBoardBlock.WAYFINDING);
-        float scale=direction?.020F:.0125F, width=direction?132:216;
-        poses.pushPose();poses.translate(.5,direction?1.73:1.08,.5);
+        boolean compact=board.getBlockState().getBlock() instanceof StationDepartureBoardBlock b&&b.compact();
+        float scale=compact?.0088F:direction?.020F:.0125F, width=compact?96:direction?132:216;
+        poses.pushPose();poses.translate(.5,compact?.805:direction?1.73:1.08,.5);
         poses.mulPose(Axis.YP.rotationDegrees(-board.getBlockState().getValue(StationDepartureBoardBlock.FACING).toYRot()));
         // The front face ends at .13. A two-millimetre gap loses depth
         // precision at the GeoFront's negative elevations and shreds glyphs.
-        poses.translate(0,0,.15);poses.scale(scale,-scale,scale);
+        poses.translate(0,0,compact?-.295:.15);poses.scale(scale,-scale,scale);
         line(board.title(),0,0xffedbd55,width,poses,buffers);
         line(board.station(),11,0xffabbec5,width,poses,buffers);
         for(int i=0;i<board.rows().size();i++) line(board.rows().get(i),25+i*13,i==0?0xffe9efde:0xffa9d9ae,width,poses,buffers);

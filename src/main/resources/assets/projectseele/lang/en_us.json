@@ -246,5 +246,6 @@
   "subtitles.projectseele.facility_siren": "facility siren",
   "block.projectseele.nerv_moving_walk": "NERV Flat Moving Walk",
   "subtitles.projectseele.pa_door_open": "pa door open",
-  "subtitles.projectseele.pa_door_close": "pa door close"
+  "subtitles.projectseele.pa_door_close": "pa door close",
+  "block.projectseele.nerv_direction_panel": "NERV Direction Panel"
 }

@@ -614,6 +614,19 @@ public final class EntryPlugCarrierEntity extends PathfinderMob
         this.entityData.set(DATA_SHELL_VISIBLE, true);
     }
 
+    /** Operator recovery keeps the same independent capsule and never spawns a replacement. */
+    public void resetIndependentAtDock(EvaPrototypeEntity eva)
+    {
+        if(this.level().isClientSide||!this.isIndependentUNPlug()
+                ||!eva.getPersistentData().hasUUID("UNPlug")
+                ||!eva.getPersistentData().getUUID("UNPlug").equals(this.getUUID()))
+            throw new IllegalStateException("Independent capsule identity mismatch");
+        this.ejectPassengers();this.unlockFromEva();eva.clearEntryPlugLink(this);this.assignIndependentEva(eva);
+        this.setInsertionStage(STAGE_SUSPENDED);this.setInsertionProgress(0);this.setCabinRecoveryProgress(0);
+        this.clearInsertionAbortRequest();this.setCanonicalTransform(com.projectseele.world.UNPlugDirector.dock(eva));this.openCabin();
+        eva.getPersistentData().putInt("UNSequenceTicks",0);
+    }
+
     public boolean beginFieldEjection(Vec3 start, Vec3 escape, Vec3 landing)
     {
         int stage = this.getInsertionStage();
@@ -1183,6 +1196,8 @@ public final class EntryPlugCarrierEntity extends PathfinderMob
     public void tick()
     {
         super.tick();
+        if(!this.level().isClientSide&&this.isIndependentUNPlug())
+            com.projectseele.world.UNRecoveryR22.remember(this);
         this.noPhysics = true;
         this.setNoGravity(true);
         this.setDeltaMovement(Vec3.ZERO);
