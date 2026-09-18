@@ -31,7 +31,8 @@ import java.util.*;
 public final class RegionalSpatialAuditDriver
 {
     private static final boolean COMBINED=Set.of("r10-world","r20-civil-annex").contains(System.getProperty("projectseele.regionalBuild",""));
-    private static final boolean R20=Set.of("r20-collision","r20-civil-annex").contains(System.getProperty("projectseele.regionalBuild",""));
+    private static final boolean R21="r21-collision".equals(System.getProperty("projectseele.regionalBuild",""));
+    private static final boolean R20=R21||Set.of("r20-collision","r20-civil-annex").contains(System.getProperty("projectseele.regionalBuild",""));
     private static final boolean R19=R20||"r19-collision".equals(System.getProperty("projectseele.regionalBuild",""));
     private static final boolean ENABLED=R19||COMBINED||"collision-audit".equals(System.getProperty("projectseele.regionalBuild",""));
     private static final TicketType<ChunkPos> TICKET=TicketType.create("projectseele_spatial_audit",Comparator.comparingLong(ChunkPos::toLong),100);
@@ -75,7 +76,7 @@ public final class RegionalSpatialAuditDriver
     {
         if(!ENABLED||done||event.phase!=TickEvent.Phase.END)return;
         var server=event.getServer();Path world=server.getWorldPath(LevelResource.ROOT).normalize();
-        if(!world.getFileName().toString().equals(R20?"SEELE_R20_REVIEW":R19?"SEELE_R19_NATIVE_REVIEW":"SEELE_TV_WORLD_PREVIEW_20260906"))throw new IllegalStateException("Wrong quality audit world");
+        if(!world.getFileName().toString().equals(R21?"SEELE_R21_REVIEW":R20?"SEELE_R20_REVIEW":R19?"SEELE_R19_NATIVE_REVIEW":"SEELE_TV_WORLD_PREVIEW_20260906"))throw new IllegalStateException("Wrong quality audit world");
         ServerLevel level=server.getLevel(FacilitySchemaV2.DIMENSION);
         try
         {

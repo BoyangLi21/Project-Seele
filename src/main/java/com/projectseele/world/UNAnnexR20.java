@@ -3,6 +3,7 @@ package com.projectseele.world;
 import com.projectseele.ProjectSeele;
 import com.projectseele.entity.NervHangarDoorEntity;
 import com.projectseele.entity.NervCarrierPlatformEntity;
+import com.projectseele.entity.EvaPrototypeEntity;
 import com.projectseele.registry.ModEntities;
 import com.projectseele.registry.ModItems;
 import net.minecraft.core.BlockPos;
@@ -22,7 +23,7 @@ import net.minecraftforge.fml.common.Mod;
 import java.nio.file.Files;
 import java.util.*;
 
-/** Independent wet-cell controls; commissioning the future UN-01 is separate. */
+/** Independent UN-01 wet cell, airframe and capsule; no canonical NERV fleet slot. */
 @Mod.EventBusSubscriber(modid=ProjectSeele.MODID)
 public final class UNAnnexR20
 {
@@ -35,12 +36,27 @@ public final class UNAnnexR20
     private static final int LAYER=33*90,TOTAL=LAYER*44;
     public static final class State extends SavedData
     {
-        public MilitaryR07Director.Phase phase=MilitaryR07Director.Phase.WET;public int cursor;
-        static State load(CompoundTag t){State s=new State();try{s.phase=MilitaryR07Director.Phase.valueOf(t.getString("Phase"));}catch(Exception ignored){}s.cursor=t.getInt("Cursor");return s;}
-        @Override public CompoundTag save(CompoundTag t){t.putString("Phase",phase.name());t.putInt("Cursor",cursor);return t;}
+        public MilitaryR07Director.Phase phase=MilitaryR07Director.Phase.WET;public int cursor;public UUID unitId;
+        static State load(CompoundTag t){State s=new State();try{s.phase=MilitaryR07Director.Phase.valueOf(t.getString("Phase"));}catch(Exception ignored){}s.cursor=t.getInt("Cursor");if(t.hasUUID("Unit"))s.unitId=t.getUUID("Unit");return s;}
+        @Override public CompoundTag save(CompoundTag t){t.putString("Phase",phase.name());t.putInt("Cursor",cursor);if(unitId!=null)t.putUUID("Unit",unitId);return t;}
     }
     public static State state(ServerLevel l){return l.getDataStorage().computeIfAbsent(State::load,State::new,"projectseele_un01_annex_r20");}
     public static boolean installed(ServerLevel l){return Files.isRegularFile(l.getServer().getWorldPath(LevelResource.ROOT).resolve("un01_annex_r20.json"));}
+    public static boolean modelsInstalled(ServerLevel l){return Files.isRegularFile(l.getServer().getWorldPath(LevelResource.ROOT).resolve("un_models_r21.json"));}
+    public static EvaPrototypeEntity airframe(ServerLevel l)
+    {UUID id=state(l).unitId;return id!=null&&l.getEntity(id) instanceof EvaPrototypeEntity eva?eva:null;}
+    private static void commission(ServerLevel l,State s)
+    {
+        if(!modelsInstalled(l)||s.unitId!=null)return;
+        l.getChunkAt(BlockPos.containing(HOME));
+        for(var existing:l.getEntitiesOfClass(EvaPrototypeEntity.class,new AABB(HOME,HOME).inflate(100),u->u.getUNSerial()==1))
+        {s.unitId=existing.getUUID();s.setDirty();return;}
+        var eva=ModEntities.EVA_PROTOTYPE.get().create(l);if(eva==null)return;
+        eva.setUNSerial(1);eva.moveTo(HOME.x,HOME.y,HOME.z,0,0);eva.setYBodyRot(0);eva.setYHeadRot(0);
+        eva.setCustomName(Component.literal("EVA-UN-01"));eva.setPersistenceRequired();eva.setNoAi(true);
+        eva.setNervLogisticsLocked(true);eva.setNoGravity(true);eva.enterHangarStandby();eva.addTag("seele_r21_un01");
+        if(l.addFreshEntity(eva)){s.unitId=eva.getUUID();s.setDirty();ProjectSeele.LOGGER.info("EVA-UN-01 commissioned with independent identity {}",s.unitId);}
+    }
     private static boolean card(Player p)
     {
         if(p==null||p.isCreative())return true;
@@ -59,7 +75,7 @@ public final class UNAnnexR20
                 else if(s.phase==MilitaryR07Director.Phase.OPEN){if(occupied(l))return "舱门区域有人员或载具";s.phase=MilitaryR07Director.Phase.CLOSING;}
                 else return "请等待排液或舱门动作完成";
             }
-            case "fill" -> {if(s.phase!=MilitaryR07Director.Phase.DRY)return "请先关闭舱门";if(!l.getEntitiesOfClass(Player.class,PIT,q->!q.isSpectator()).isEmpty())return "请先离开 LCL 试验区";s.phase=MilitaryR07Director.Phase.FILLING;s.cursor=0;}
+            case "fill" -> {if(s.phase!=MilitaryR07Director.Phase.DRY)return "请先关闭舱门";var unit=airframe(l);if(modelsInstalled(l)&&(unit==null||unit.position().distanceTo(HOME)>3||unit.isVehicle()))return "UN-01 须归位并解除驾驶";if(!l.getEntitiesOfClass(Player.class,PIT,q->!q.isSpectator()).isEmpty())return "请先离开 LCL 试验区";s.phase=MilitaryR07Director.Phase.FILLING;s.cursor=0;}
             default -> {return status(s);}
         }
         s.setDirty();return status(s);
@@ -80,6 +96,8 @@ public final class UNAnnexR20
     {
         if(e.phase!=TickEvent.Phase.END)return;var l=e.getServer().getLevel(FacilitySchemaV2.DIMENSION);if(l==null||!installed(l))return;var s=state(l);boolean active=s.phase==MilitaryR07Director.Phase.DRAINING||s.phase==MilitaryR07Director.Phase.FILLING||s.phase==MilitaryR07Director.Phase.OPENING||s.phase==MilitaryR07Director.Phase.CLOSING;
         if(active){tickets(l,true);l.resetEmptyTime();}if(!l.hasChunkAt(BUTTONS[0]))return;
+        commission(l,s);
+        FacilityAudioR21.auxiliary(l,"UN01",s.phase,DOOR);
         boolean open=s.phase==MilitaryR07Director.Phase.OPEN||s.phase==MilitaryR07Director.Phase.OPENING;NervHangarDoorEntity.reconcile(l,3,DOOR,open);
         if(s.phase==MilitaryR07Director.Phase.DRAINING||s.phase==MilitaryR07Director.Phase.FILLING)
         {
@@ -102,9 +120,19 @@ public final class UNAnnexR20
                 else if(s.phase==MilitaryR07Director.Phase.CLOSING){if(occupied(l)){s.phase=MilitaryR07Director.Phase.OPENING;s.setDirty();}else{seal(l,true);if(t<=.001){s.phase=MilitaryR07Director.Phase.DRY;tickets(l,false);s.setDirty();}}}
             }
         }
-        // Reuse the already reviewed mechanical hoist, with real supporting
-        // beams; no placeholder airframe is created while model work is paused.
-        if(l.getGameTime()%20==0)
+        var unit=airframe(l);
+        if(unit!=null)
+        {
+            UUID old=HOISTS.remove(l);if(old!=null&&l.getEntity(old) instanceof NervCarrierPlatformEntity crane)crane.discard();
+            if(s.phase==MilitaryR07Director.Phase.OPEN){unit.setNervLogisticsLocked(false);unit.setNoGravity(false);}
+            else if(unit.position().distanceTo(HOME)<4&&!unit.isVehicle())
+            {
+                unit.setNervLogisticsLocked(true);unit.setNoGravity(true);
+                if(unit.isUmbilicalSevered()||unit.isEntryPlugInserted()||unit.getPowerTicks()>0||unit.getWeapon()!=com.projectseele.entity.EvaUnit01Entity.WEAPON_FISTS)unit.enterHangarStandby();
+            }
+        }
+        // Before an approved model is installed, retain the empty bay's hoist.
+        else if(!modelsInstalled(l)&&l.getGameTime()%20==0)
         {
             NervCarrierPlatformEntity crane=HOISTS.containsKey(l)&&l.getEntity(HOISTS.get(l)) instanceof NervCarrierPlatformEntity c?c:null;
             if(crane==null){crane=ModEntities.NERV_CARRIER_PLATFORM.get().create(l);if(crane!=null){crane.configurePlugCrane(1,-18);crane.moveControlled(6282.5,150,-6217.5);l.addFreshEntity(crane);HOISTS.put(l,crane.getUUID());}}
@@ -119,6 +147,11 @@ public final class UNAnnexR20
     {
         var branch=net.minecraft.commands.Commands.literal("un01");
         for(String a:new String[]{"status","drain","door","fill"})branch.then(net.minecraft.commands.Commands.literal(a).executes(c->{var l=c.getSource().getServer().getLevel(FacilitySchemaV2.DIMENSION);String text=l==null?"地下维度未加载":request(l,a,c.getSource().getPlayerOrException());c.getSource().sendSuccess(()->Component.literal(text),false);return 1;}));
+        for(String destination:new String[]{"control","gantry"})branch.then(net.minecraft.commands.Commands.literal("visit").then(net.minecraft.commands.Commands.literal(destination).executes(c->{
+            var l=c.getSource().getServer().getLevel(FacilitySchemaV2.DIMENSION);if(l==null||!installed(l))return 0;
+            var p=c.getSource().getPlayerOrException();Vec3 at=destination.equals("gantry")?HOME.add(4,50,-12):new Vec3(6242.5,77,-6136.5);
+            p.stopRiding();p.teleportTo(l,at.x,at.y,at.z,destination.equals("gantry")?90:180,0);p.fallDistance=0;p.setDeltaMovement(Vec3.ZERO);return 1;
+        })));
         e.getDispatcher().register(net.minecraft.commands.Commands.literal("seele").requires(s->s.hasPermission(2)).then(net.minecraft.commands.Commands.literal("military").then(branch)));
     }
     private UNAnnexR20(){}

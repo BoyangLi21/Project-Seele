@@ -187,6 +187,7 @@ public final class Tokyo3RetractionDirector
                     : "Tokyo-3 armour towers are already rising.");
         }
 
+        if(!retract&&BattlefieldR21.deferRestore(level))return new RequestResult(true,"Restoring street fixtures before the city rises.");
         acquireTravelTickets(level, origin);
         if (current.depth() == current.targetDepth())
         {

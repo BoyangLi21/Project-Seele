@@ -11,13 +11,18 @@ import net.minecraft.network.chat.Component;
 /** Independent experimental airframe; it never occupies a canonical Unit-01 fleet slot. */
 public final class EvaPrototypeEntity extends EvaUnit01Entity
 {
+    public int getUNSerial(){return entityData.get(UN_SERIAL);}
+    public void setUNSerial(int serial){entityData.set(UN_SERIAL,net.minecraft.util.Mth.clamp(serial,0,1));}
+    @Override public String experimentalAssetName(){return getUNSerial()==1?"eva_un01":"eva_prototype";}
+    public Vec3 homePosition(){return new Vec3(getUNSerial()==1?6282.5:6442.5,77,-6205.5);}
     private static final net.minecraft.network.syncher.EntityDataAccessor<Integer> LASER_AGE=net.minecraft.network.syncher.SynchedEntityData.defineId(EvaPrototypeEntity.class,net.minecraft.network.syncher.EntityDataSerializers.INT);
     private static final net.minecraft.network.syncher.EntityDataAccessor<Integer> LASER_COOLDOWN=net.minecraft.network.syncher.SynchedEntityData.defineId(EvaPrototypeEntity.class,net.minecraft.network.syncher.EntityDataSerializers.INT);
     private static final net.minecraft.network.syncher.EntityDataAccessor<Float> EYE_YAW=net.minecraft.network.syncher.SynchedEntityData.defineId(EvaPrototypeEntity.class,net.minecraft.network.syncher.EntityDataSerializers.FLOAT);
     private static final net.minecraft.network.syncher.EntityDataAccessor<Float> EYE_PITCH=net.minecraft.network.syncher.SynchedEntityData.defineId(EvaPrototypeEntity.class,net.minecraft.network.syncher.EntityDataSerializers.FLOAT);
     private static final net.minecraft.network.syncher.EntityDataAccessor<org.joml.Vector3f> LASER_END=net.minecraft.network.syncher.SynchedEntityData.defineId(EvaPrototypeEntity.class,net.minecraft.network.syncher.EntityDataSerializers.VECTOR3);
+    private static final net.minecraft.network.syncher.EntityDataAccessor<Integer> UN_SERIAL=net.minecraft.network.syncher.SynchedEntityData.defineId(EvaPrototypeEntity.class,net.minecraft.network.syncher.EntityDataSerializers.INT);
     private final EvaPoseSignalClock eyeClock=new EvaPoseSignalClock();
-    @Override protected void defineSynchedData(){super.defineSynchedData();entityData.define(LASER_AGE,-1);entityData.define(LASER_COOLDOWN,0);entityData.define(EYE_YAW,0F);entityData.define(EYE_PITCH,0F);entityData.define(LASER_END,new org.joml.Vector3f());}
+    @Override protected void defineSynchedData(){super.defineSynchedData();entityData.define(UN_SERIAL,0);entityData.define(LASER_AGE,-1);entityData.define(LASER_COOLDOWN,0);entityData.define(EYE_YAW,0F);entityData.define(EYE_PITCH,0F);entityData.define(LASER_END,new org.joml.Vector3f());}
     public boolean isEyeLaserActive(){return entityData.get(LASER_AGE)>=0;}
     public float eyeLaserAge(float partial){return level().isClientSide?eyeClock.sample(FirstBattleSignals.clientFrameTime()):entityData.get(LASER_AGE);}
     public int eyeLaserCooldown(){return entityData.get(LASER_COOLDOWN);}
@@ -60,8 +65,8 @@ public final class EvaPrototypeEntity extends EvaUnit01Entity
         if("r11-mechanics".equals(System.getProperty("projectseele.regionalBuild","")))com.projectseele.ProjectSeele.LOGGER.info("R11 EYE PULSE origin={} end={} hit={} direction={}",eye,end,hit==null?"none":hit.getEntity().getType(),direction);
     }
     @Override public void onSyncedDataUpdated(net.minecraft.network.syncher.EntityDataAccessor<?> key){super.onSyncedDataUpdated(key);if(key.equals(LASER_AGE)&&eyeClock!=null&&level().isClientSide)eyeClock.accept(entityData.get(LASER_AGE),false,true);}
-    @Override public void addAdditionalSaveData(net.minecraft.nbt.CompoundTag t){super.addAdditionalSaveData(t);t.putInt("UNEyeCooldown",eyeLaserCooldown());}
-    @Override public void readAdditionalSaveData(net.minecraft.nbt.CompoundTag t){super.readAdditionalSaveData(t);entityData.set(LASER_COOLDOWN,t.getInt("UNEyeCooldown"));entityData.set(LASER_AGE,-1);}
+    @Override public void addAdditionalSaveData(net.minecraft.nbt.CompoundTag t){super.addAdditionalSaveData(t);t.putInt("UNSerial",getUNSerial());t.putInt("UNEyeCooldown",eyeLaserCooldown());}
+    @Override public void readAdditionalSaveData(net.minecraft.nbt.CompoundTag t){super.readAdditionalSaveData(t);setUNSerial(t.getInt("UNSerial"));entityData.set(LASER_COOLDOWN,t.getInt("UNEyeCooldown"));entityData.set(LASER_AGE,-1);}
     public EvaPrototypeEntity(EntityType<? extends EvaUnit01Entity> type,Level level)
     {
         super(type,level);
@@ -76,10 +81,10 @@ public final class EvaPrototypeEntity extends EvaUnit01Entity
     public boolean isInsideTestHangar()
     {
         return this.level().dimension().equals(com.projectseele.world.FacilitySchemaV2.DIMENSION)
-                && this.getX()>=6384 && this.getX()<=6500
+                && Math.abs(this.getX()-homePosition().x)<=58
                 && this.getY()>=76 && this.getY()<=160
                 && this.getZ()>=-6288 && this.getZ()<=-6136
-                && this.level().getBlockState(new net.minecraft.core.BlockPos(6442,76,-6205))
+                && this.level().getBlockState(net.minecraft.core.BlockPos.containing(homePosition().add(0,-1,0)))
                     .is(com.projectseele.registry.ModBlocks.NERV_FLOOR_PANEL.get());
     }
 
@@ -100,9 +105,9 @@ public final class EvaPrototypeEntity extends EvaUnit01Entity
     public Vec3 getDismountLocationForPassenger(LivingEntity passenger)
     {
         // This surface project has its own gantry and never borrows Unit-01's capsule.
-        if(this.position().distanceTo(new Vec3(6442.5,77,-6205.5))<4
+        if(this.position().distanceTo(homePosition())<4
                 &&this.level().dimension().equals(com.projectseele.world.FacilitySchemaV2.DIMENSION))
-            return new Vec3(6442.5,127,-6217.5);
+            return homePosition().add(4,50,-12);
         return super.getDismountLocationForPassenger(passenger);
     }
 }

@@ -21,10 +21,12 @@ public final class LocalVisualAssetFingerprint
             "eva_unit01", new MeshContract(6_044, 43, true),
             "eva_unit02", new MeshContract(5_770, 43, true),
             "mass_production_eva", new MeshContract(4_901, 15, false),
-            "eva_prototype", new MeshContract(98_722, 46, false));
+            "eva_prototype", new MeshContract(98_722, 46, false),
+            "eva_un01", new MeshContract(227_353,62,false));
     private static final Map<String,MeshContract> R11_CONTRACTS=Map.of("eva_unit00",new MeshContract(6994,46,true),"eva_unit01",new MeshContract(7454,46,true),"eva_unit02",new MeshContract(7244,46,true),"eva_prototype",new MeshContract(86855,49,false));
     private static final Map<String,MeshContract> R13_CONTRACTS=Map.of("eva_unit00",new MeshContract(11028,45,true),"eva_unit01",new MeshContract(11666,45,true),"eva_unit02",new MeshContract(11262,45,true),"eva_prototype",new MeshContract(94054,48,false));
     private static final Map<String,MeshContract> R19_CONTRACTS=Map.of("eva_prototype",new MeshContract(139806,48,false));
+    private static final Map<String,MeshContract> R21_CONTRACTS=Map.of("eva_prototype",new MeshContract(242686,62,false));
     private static final Map<String, Fingerprint> CACHE = new ConcurrentHashMap<>();
 
     private LocalVisualAssetFingerprint() {}
@@ -65,7 +67,8 @@ public final class LocalVisualAssetFingerprint
         boolean meshMatches = contract != null
                 && (contract.matches(meshTag, mesh) || R11_CONTRACTS.containsKey(assetName) && R11_CONTRACTS.get(assetName).matches(meshTag,mesh)
                 || R13_CONTRACTS.containsKey(assetName) && R13_CONTRACTS.get(assetName).matches(meshTag,mesh)
-                || R19_CONTRACTS.containsKey(assetName) && R19_CONTRACTS.get(assetName).matches(meshTag,mesh));
+                || R19_CONTRACTS.containsKey(assetName) && R19_CONTRACTS.get(assetName).matches(meshTag,mesh)
+                || R21_CONTRACTS.containsKey(assetName) && R21_CONTRACTS.get(assetName).matches(meshTag,mesh));
         boolean valid = complete && sameSource && meshMatches;
         String reason = !complete ? "missing-resource"
                 : !sameSource ? "mixed-resource-packs"

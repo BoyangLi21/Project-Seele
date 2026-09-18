@@ -6,13 +6,15 @@ import org.joml.Vector3f;
 /** The EVA-UN monocular lens, expressed in the same body rig used for aiming. */
 public final class EvaUNOptics
 {
-    public static final Vector3f LENS=new Vector3f(0,173,-7.49F).div(16);
+    public static final Vector3f LENS=new Vector3f(.44174902F,172.53937223F,-12.41352608F).div(16);
+    private static final Vector3f LENS_01=new Vector3f(.09852021F,177.80722014F,-15.24171775F).div(16);
+    public static Vector3f lens(EvaPrototypeEntity eva){return new Vector3f(eva.getUNSerial()==1?LENS_01:LENS);}
     public static Quaternionf orientation(EvaPrototypeEntity eva)
     {return new Quaternionf().rotationY((180-eva.eyeAimYaw())*(float)Math.PI/180).rotateX(-eva.eyeAimPitch()*(float)Math.PI/180);}
     public static Vec3 eye(EvaPrototypeEntity eva,float partial)
     {
         var pose=EvaBodyPose.sample(eva,partial);var b=pose.rig.get("head");var world=EvaRifleKinematics.world(eva,partial);Vector3f joint=new Matrix4f(world).mul(pose.matrix("head")).transformPosition(new Vector3f(b.pivot()));
-        Vector3f offset=orientation(eva).transform(new Vector3f(LENS).sub(b.pivot()).mul(EvaScale.RENDER_SCALE));joint.add(offset);return new Vec3(joint.x,joint.y,joint.z);
+        Vector3f offset=orientation(eva).transform(lens(eva).sub(b.pivot()).mul(EvaScale.RENDER_SCALE));joint.add(offset);return new Vec3(joint.x,joint.y,joint.z);
     }
     private EvaUNOptics() {}
 }

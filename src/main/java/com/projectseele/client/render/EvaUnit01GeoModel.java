@@ -30,7 +30,7 @@ public class EvaUnit01GeoModel extends GeoModel<EvaUnit01Entity>
     @Override
     public ResourceLocation getModelResource(EvaUnit01Entity animatable)
     {
-        if(animatable.isExperimentalUnit())return new ResourceLocation(ProjectSeele.MODID,"geo/eva_prototype.geo.json");
+        if(animatable.isExperimentalUnit())return new ResourceLocation(ProjectSeele.MODID,"geo/"+animatable.experimentalAssetName()+".geo.json");
         return switch (animatable.getUnitVariant())
         {
             case EvaUnit01Entity.UNIT_00 -> MODEL_00;
@@ -42,7 +42,7 @@ public class EvaUnit01GeoModel extends GeoModel<EvaUnit01Entity>
     @Override
     public ResourceLocation getTextureResource(EvaUnit01Entity animatable)
     {
-        if(animatable.isExperimentalUnit())return new ResourceLocation(ProjectSeele.MODID,"textures/entity/eva_prototype.png");
+        if(animatable.isExperimentalUnit())return new ResourceLocation(ProjectSeele.MODID,"textures/entity/"+animatable.experimentalAssetName()+".png");
         return switch (animatable.getUnitVariant())
         {
             case EvaUnit01Entity.UNIT_00 -> TEXTURE_00;
@@ -54,7 +54,7 @@ public class EvaUnit01GeoModel extends GeoModel<EvaUnit01Entity>
     @Override
     public ResourceLocation getAnimationResource(EvaUnit01Entity animatable)
     {
-        if(animatable.isExperimentalUnit())return new ResourceLocation(ProjectSeele.MODID,"animations/eva_prototype.animation.json");
+        if(animatable.isExperimentalUnit())return new ResourceLocation(ProjectSeele.MODID,"animations/"+animatable.experimentalAssetName()+".animation.json");
         return switch (animatable.getUnitVariant())
         {
             case EvaUnit01Entity.UNIT_00 -> ANIMATIONS_00;

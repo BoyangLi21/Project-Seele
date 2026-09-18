@@ -40,6 +40,8 @@ public final class ModBlocks
     public static final RegistryObject<Block> NERV_FLOOR_PANEL=finish("nerv_floor_panel",Blocks.SMOOTH_STONE,0);
     public static final RegistryObject<Block> NERV_HAZARD_PAVING=finish("nerv_hazard_paving",Blocks.SMOOTH_STONE,0);
     public static final RegistryObject<Block> NERV_STRIP_LIGHT=finish("nerv_strip_light",Blocks.IRON_BLOCK,14);
+    public static final RegistryObject<Block> NERV_MOVING_WALK=BLOCKS.register("nerv_moving_walk",()->new com.projectseele.world.MovingWalkwayBlock(BlockBehaviour.Properties.copy(Blocks.IRON_BLOCK).strength(2F).noOcclusion()));
+    public static final RegistryObject<Block> NERV_WARNING_BEACON=BLOCKS.register("nerv_warning_beacon",()->new com.projectseele.world.FacilityBeaconBlock(BlockBehaviour.Properties.copy(Blocks.IRON_BLOCK).strength(2F).lightLevel(s->s.getValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.LIT)?15:0)));
     public static final RegistryObject<Block> NERV_SERVER_RACK=equipment("nerv_server_rack",3);
     public static final RegistryObject<Block> NERV_STORAGE_PANEL=equipment("nerv_storage_panel",0);
     public static final RegistryObject<Block> NERV_MEDICAL_PANEL=equipment("nerv_medical_panel",4);

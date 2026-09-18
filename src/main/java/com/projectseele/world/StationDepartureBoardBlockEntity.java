@@ -16,10 +16,11 @@ public final class StationDepartureBoardBlockEntity extends BlockEntity
     private String station = "", route = "";
     private List<String> rows = List.of("正在读取运行信息");
     private boolean warned;
+    private boolean wayfinding;
     private long linkedPlatformId = -1, nativeClock;
     private List<Long> departures = List.of();
     public StationDepartureBoardBlockEntity(BlockPos pos, BlockState state) { super(ModBlockEntities.STATION_DEPARTURE_BOARD.get(),pos,state); }
-    public String title() { return route + "  发车信息 · 北京时间"; }
+    public String title() { return wayfinding ? route : route + "  发车信息 · 北京时间"; }
     public String station() { return station; }
     public List<String> rows() { return rows; }
     public long linkedPlatformId() { return linkedPlatformId; }
@@ -27,7 +28,7 @@ public final class StationDepartureBoardBlockEntity extends BlockEntity
     public List<Long> departureTimes() { return departures; }
     public void tickServer()
     {
-        if (level == null || level.getGameTime() % 20 != Math.floorMod(worldPosition.asLong(),20)) return;
+        if (wayfinding || level == null || level.getGameTime() % 20 != Math.floorMod(worldPosition.asLong(),20)) return;
         try
         {
             var snapshot = NativeStationDepartures.read(platform);
@@ -47,11 +48,13 @@ public final class StationDepartureBoardBlockEntity extends BlockEntity
     {
         super.saveAdditional(tag);tag.putLong("PlatformCentre",platform.asLong());tag.putString("Station",station);tag.putString("Route",route);
         tag.putString("Row0",rows.isEmpty()?"":rows.get(0));tag.putString("Row1",rows.size()>1?rows.get(1):"");
+        tag.putBoolean("Wayfinding",wayfinding);tag.putString("Row2",rows.size()>2?rows.get(2):"");
     }
     @Override public void load(CompoundTag tag)
     {
         super.load(tag);platform=BlockPos.of(tag.getLong("PlatformCentre"));station=tag.getString("Station");route=tag.getString("Route");
-        rows=tag.getString("Row1").isEmpty()?List.of(tag.getString("Row0")):List.of(tag.getString("Row0"),tag.getString("Row1"));
+        wayfinding=tag.getBoolean("Wayfinding");
+        rows=wayfinding&&!tag.getString("Row2").isEmpty()?List.of(tag.getString("Row0"),tag.getString("Row1"),tag.getString("Row2")):tag.getString("Row1").isEmpty()?List.of(tag.getString("Row0")):List.of(tag.getString("Row0"),tag.getString("Row1"));
     }
     @Override public CompoundTag getUpdateTag() { return saveWithoutMetadata(); }
     @Override public ClientboundBlockEntityDataPacket getUpdatePacket() { return ClientboundBlockEntityDataPacket.create(this); }

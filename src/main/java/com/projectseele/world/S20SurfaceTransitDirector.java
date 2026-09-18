@@ -85,6 +85,7 @@ public final class S20SurfaceTransitDirector
         {
             return;
         }
+        if(FacilityLayoutR21.active(level))return;
         if (!shaftBaseInstalled(level))
         {
             level.getChunkAt(new BlockPos(
@@ -179,6 +180,8 @@ public final class S20SurfaceTransitDirector
 
     public static boolean installed(ServerLevel level)
     {
+        if(FacilityLayoutR21.active(level))return level.getBlockState(new BlockPos(130,-442,269)).is(com.supermartijn642.movingelevators.MovingElevators.elevator_block)
+                &&level.getBlockState(new BlockPos(130,75,269)).is(com.supermartijn642.movingelevators.MovingElevators.elevator_block);
         return shaftBaseInstalled(level)
                 && lowerShaftShellInstalled(level)
                 && lowerConcourseInstalled(level)
@@ -286,6 +289,7 @@ public final class S20SurfaceTransitDirector
     /** Repaints the bounded street pavilion after an overlapping old lot is removed. */
     public static void repairSurfacePavilion(ServerLevel level)
     {
+        if(FacilityLayoutR21.active(level))return;
         buildSurfacePavilion(level);
     }
 

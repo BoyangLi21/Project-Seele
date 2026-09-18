@@ -200,6 +200,7 @@ public final class S20PhysicalElevatorDirector
         int upperWalkY = FacilityWorldPolicy.isS22Coastal(level.getServer())
                 ? FacilitySchemaV2.WORLDGEN_SURFACE_DATUM + 1
                 : S20SurfaceTransitDirector.UPPER_WALK_Y;
+        if(BattlefieldR21.installed(level))upperWalkY=75;
         return new LiftSpec(SURFACE_TRANSIT_LIFT_ID,
                 new Landing("GEOFRONT TRANSIT",
                         new BlockPos(S20SurfaceTransitDirector.AXIS_X,

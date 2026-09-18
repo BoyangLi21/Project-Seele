@@ -59,6 +59,12 @@ public final class NervArmamentStationEntity extends Entity
     public static final double EVA_PICKUP_RANGE = 24.0D;
     private static final Map<ServerLevel,UUID> COMMAND_STATION =
             Collections.synchronizedMap(new WeakHashMap<>());
+    private static final net.minecraft.server.level.TicketType<net.minecraft.world.level.ChunkPos> COMMAND_TICKET=
+            net.minecraft.server.level.TicketType.create("seele_armament_command",java.util.Comparator.comparingLong(net.minecraft.world.level.ChunkPos::toLong),120);
+    public static void keepCommandStationLoaded(ServerLevel level,net.minecraft.core.BlockPos pos)
+    {
+        var chunk=new net.minecraft.world.level.ChunkPos(pos);level.getChunkSource().addRegionTicket(COMMAND_TICKET,chunk,2,chunk);level.getChunkAt(pos);
+    }
 
     private static final EntityDataAccessor<Integer> DATA_STATE =
             SynchedEntityData.defineId(NervArmamentStationEntity.class,
@@ -161,6 +167,8 @@ public final class NervArmamentStationEntity extends Entity
         }
 
         this.phaseTicks++;
+        if(this.level() instanceof ServerLevel server&&this.getStationState()!=STOWED&&this.getStationState()!=READY&&this.tickCount%40==0)
+            keepCommandStationLoaded(server,this.blockPosition());
         switch (this.getStationState())
         {
             case OPENING ->

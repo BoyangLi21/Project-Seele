@@ -183,6 +183,7 @@ public final class ThirdTokyoSurfaceBuilder
     public static void ensureLaunchControlQuarter(ServerLevel level,
                                                   BlockPos origin)
     {
+        if(BattlefieldR21.concealed(level))return;
         for (int x : new int[] {-40, 40})
         {
             for (int z : new int[] {-40, 40})

@@ -1108,7 +1108,7 @@ public final class EntryPlugCarrierEntity extends PathfinderMob
         {
             EvaUnit01Entity host=getLinkedEva();
             if(host instanceof EvaPrototypeEntity un && com.projectseele.world.UNPlugDirector.atDock(un))
-                return com.projectseele.world.UNPlugDirector.dock(un).transformPoint(EntryPlugKinematics.HATCH_PORTAL_CENTRE_P).add(0,-1.6,0);
+                return com.projectseele.world.UNPlugDirector.dock(un).transformPoint(EntryPlugKinematics.HATCH_PORTAL_CENTRE_P).add(4,-1.6,0);
             return null;
         }
         if (!(this.level() instanceof ServerLevel server))

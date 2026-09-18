@@ -23,7 +23,8 @@ import java.nio.file.*;
 public final class EvaTerrainR11Review
 {
     public static final boolean TURN_ONLY="r11-terrain-turn".equals(System.getProperty("projectseele.regionalBuild",""));
-    public static final boolean R19="r19-un-terrain".equals(System.getProperty("projectseele.regionalBuild",""));
+    public static final boolean R21=java.util.Set.of("r21-un00-terrain","r21-un01-terrain").contains(System.getProperty("projectseele.regionalBuild",""));
+    public static final boolean R19=R21||"r19-un-terrain".equals(System.getProperty("projectseele.regionalBuild",""));
     public static final boolean ENABLED=R19||TURN_ONLY||"r11-terrain".equals(System.getProperty("projectseele.regionalBuild",""));
     public static volatile boolean tracked,mounted,finished,jump,runningCase,crouchInput;
     public static volatile int actor,forward,caseIndex=TURN_ONLY?5:0,caseTick;
@@ -59,19 +60,22 @@ public final class EvaTerrainR11Review
     private static void place(ServerLevel l)
     {
         runningCase=false;caseTick=0;forward=0;jump=false;crouchInput=caseIndex==4;wallOverlaps=0;pilot.stopRiding();eva.prepareForMotionLab();eva.setNoGravity(false);eva.moveTo(caseIndex*96+.5,caseIndex==2?-50:-60,-36.5,0,0);eva.yBodyRot=eva.yHeadRot=0;eva.setOnGround(true);eva.setDeltaMovement(Vec3.ZERO);eva.fallDistance=0;
+        var chunk=new ChunkPos(eva.blockPosition());l.getChunkSource().addRegionTicket(net.minecraft.server.level.TicketType.PORTAL,chunk,2,BlockPos.containing(eva.position()));
         for(var p:l.players())p.connection.send(new ClientboundTeleportEntityPacket(eva));pilot.teleportTo(l,eva.getX(),eva.getY()+1,-49,0,0);pilot.getFoodData().setFoodLevel(20);actor=eva.getId();tracked=mounted=false;phase=1;ticks=0;stalled=0;maxVertical=0;previous=eva.position();
     }
     @SubscribeEvent public static void tick(TickEvent.ServerTickEvent event)
     {
         if(!ENABLED||finished||event.phase!=TickEvent.Phase.END)return;var server=event.getServer();if(server.getPlayerList().getPlayers().isEmpty()||++age<80)return;
-        Path world=server.getWorldPath(LevelResource.ROOT).normalize();if(!world.getFileName().toString().equals(R19?"SEELE_UN_TERRAIN_R19_REVIEW":"SEELE_TERRAIN_REVIEW_R11"))throw new IllegalStateException("Terrain test is laboratory-only");ServerLevel l=server.overworld();
+        Path world=server.getWorldPath(LevelResource.ROOT).normalize();if(!world.getFileName().toString().equals(R21?"SEELE_UN_TERRAIN_R21_REVIEW":R19?"SEELE_UN_TERRAIN_R19_REVIEW":"SEELE_TERRAIN_REVIEW_R11"))throw new IllegalStateException("Terrain test is laboratory-only");ServerLevel l=server.overworld();
         try
         {
             if(!built)
             {
                 built=true;pilot=server.getPlayerList().getPlayers().get(0);pilot.stopRiding();pilot.setGameMode(GameType.SURVIVAL);pilot.setHealth(pilot.getMaxHealth());pilot.getCapability(EvaPilotCapability.DATA).ifPresent(c->c.setSynchronization(100));server.setFlightAllowed(true);
-                var old=new java.util.ArrayList<net.minecraft.world.entity.Entity>();for(var e:l.getAllEntities())if(e instanceof EvaUnit01Entity)old.add(e);for(var e:old)e.discard();terrain(l);eva=R19?ModEntities.EVA_PROTOTYPE.get().create(l):ModEntities.EVA_UNIT01.get().create(l);eva.moveTo(caseIndex*96+.5,-60,-36.5,0,0);l.getChunk(eva.blockPosition());if(!l.addFreshEntity(eva))throw new IllegalStateException("Terrain actor spawn refused");place(l);return;
+                var old=new java.util.ArrayList<net.minecraft.world.entity.Entity>();for(var e:l.getAllEntities())if(e instanceof EvaUnit01Entity)old.add(e);for(var e:old)e.discard();terrain(l);eva=R19?ModEntities.EVA_PROTOTYPE.get().create(l):ModEntities.EVA_UNIT01.get().create(l);if("r21-un01-terrain".equals(System.getProperty("projectseele.regionalBuild","")))((com.projectseele.entity.EvaPrototypeEntity)eva).setUNSerial(1);eva.moveTo(caseIndex*96+.5,-60,-36.5,0,0);l.getChunk(eva.blockPosition());if(!l.addFreshEntity(eva))throw new IllegalStateException("Terrain actor spawn refused");place(l);return;
             }
+            if(eva.isRemoved()&&eva.getRemovalReason()==net.minecraft.world.entity.Entity.RemovalReason.UNLOADED_TO_CHUNK&&l.getEntity(eva.getUUID()) instanceof EvaUnit01Entity restored)
+            {eva=restored;actor=eva.getId();tracked=false;ProjectSeele.LOGGER.info("Terrain fixture rebound the same UUID after chunk streaming: {}",eva.getUUID());}
             ticks++;caseTick=ticks;
             if(phase<3&&ticks%20==0){var c=new ChunkPos(eva.blockPosition());l.getChunkSource().addRegionTicket(net.minecraft.server.level.TicketType.PORTAL,c,2,BlockPos.containing(eva.position()));}
             if(phase==1){if(ticks>25&&tracked){if(!eva.boardFromExternalPlug(pilot,100))throw new IllegalStateException("Terrain test boarding failed");phase=2;ticks=0;}else if(ticks>(R19?900:240))throw new IllegalStateException("Terrain client tracking deadline; serverAlive="+eva.isAlive()+" actor="+eva.getId()+" position="+eva.position()+" pilot="+pilot.position());return;}

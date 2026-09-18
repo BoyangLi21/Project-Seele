@@ -21,6 +21,29 @@ def prefer_discrete_gpu(java):
         for exe in ('java.exe','javaw.exe'):
             winreg.SetValueEx(key,str((java/'bin'/exe).resolve()),0,winreg.REG_SZ,'GpuPreference=2;')
 
+
+def ensure_private_pack(game,review=False):
+    """A recovery launch can clear selected packs while leaving files installed."""
+    options=Path(game)/'options.txt'
+    lines=options.read_text(encoding='utf8').splitlines()
+    required='file/eva_real_model'
+    for index,line in enumerate(lines):
+        if line.startswith('resourcePacks:'):
+            selected=json.loads(line.partition(':')[2])
+            original=list(selected)
+            if required not in selected:selected.append(required)
+            extra='file/eva_un_r21_review'
+            selected=[p for p in selected if p!=extra]
+            if review:selected.append(extra)
+            if original==selected:return
+            lines[index]='resourcePacks:'+json.dumps(selected,ensure_ascii=False,separators=(',',':'))
+            break
+    else:lines.append('resourcePacks:'+json.dumps([required]+(['file/eva_un_r21_review'] if review else [])))
+    import datetime,shutil
+    backup=ROOT/'.Codex/client-options-backup'/datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+    backup.mkdir(parents=True,exist_ok=True);shutil.copy2(options,backup/options.name)
+    options.write_text('\n'.join(lines)+'\n',encoding='utf8')
+
 def run_prepared(path,env=None):
     d=json.loads(Path(path).read_text(encoding='utf8'));command=d['command']
     assert command and Path(command[0]).name.lower() in ('java','java.exe')
@@ -39,12 +62,14 @@ def main():
     java,env=java_environment();prefer_discrete_gpu(java)
     subprocess.run([sys.executable,'tools/fetch_client_mods_r19.py'],cwd=ROOT,env=env,check=True)
     ensure_local(ROOT/'run')
+    ensure_private_pack(ROOT/'run',bool(a.review and a.review.startswith('r21-') and (ROOT/'run/resourcepacks/eva_un_r21_review/pack.mcmeta').exists()))
     command=[str(ROOT/'gradlew.bat'),'--no-daemon','writeClientLaunchR17','-PstrictHighDetail=true','-PoptimizedClient','-PexactTerrain','-PclientNavigation','-PclientHeap='+a.heap,'-PquickPlayWorld='+a.world]
     if a.gpu_terrain:
         from fetch_gpu_client_r19 import ensure_local as ensure_gpu
         ensure_gpu();command.append('-PgpuTerrain')
     if a.native_capture:command.append('-PnativeCapture')
     if a.review:command.append('-PregionalBuild='+a.review)
+    if a.review=='r21-flight-riding':command.append('-PtvTransitCapture')
     if a.battle_clip:command.append('-PfirstBattleReviewClip='+str(a.battle_clip.resolve()))
     if a.far_view:command.append('-PfarViewOnly='+a.far_view)
     if a.movie_only:command.append('-PfirstBattleMovieOnly')

@@ -3,7 +3,7 @@
     "subtitle": "subtitles.projectseele.alarm",
     "sounds": [
       {
-        "name": "projectseele:alarm",
+        "name": "projectseele:facility_siren",
         "stream": false
       }
     ]
@@ -202,6 +202,235 @@
       {
         "name": "projectseele:eva_drive_loop",
         "attenuation_distance": 48,
+        "stream": false
+      }
+    ]
+  },
+  "pa_prepare": {
+    "subtitle": "subtitles.projectseele.pa_prepare",
+    "sounds": [
+      {
+        "name": "projectseele:pa_prepare",
+        "attenuation_distance": 220,
+        "stream": false
+      }
+    ]
+  },
+  "pa_insert": {
+    "subtitle": "subtitles.projectseele.pa_insert",
+    "sounds": [
+      {
+        "name": "projectseele:pa_insert",
+        "attenuation_distance": 220,
+        "stream": false
+      }
+    ]
+  },
+  "pa_lock": {
+    "subtitle": "subtitles.projectseele.pa_lock",
+    "sounds": [
+      {
+        "name": "projectseele:pa_lock",
+        "attenuation_distance": 220,
+        "stream": false
+      }
+    ]
+  },
+  "pa_drain": {
+    "subtitle": "subtitles.projectseele.pa_drain",
+    "sounds": [
+      {
+        "name": "projectseele:pa_drain",
+        "attenuation_distance": 220,
+        "stream": false
+      }
+    ]
+  },
+  "pa_transfer": {
+    "subtitle": "subtitles.projectseele.pa_transfer",
+    "sounds": [
+      {
+        "name": "projectseele:pa_transfer",
+        "attenuation_distance": 220,
+        "stream": false
+      }
+    ]
+  },
+  "pa_ready": {
+    "subtitle": "subtitles.projectseele.pa_ready",
+    "sounds": [
+      {
+        "name": "projectseele:pa_ready",
+        "attenuation_distance": 220,
+        "stream": false
+      }
+    ]
+  },
+  "pa_recover": {
+    "subtitle": "subtitles.projectseele.pa_recover",
+    "sounds": [
+      {
+        "name": "projectseele:pa_recover",
+        "attenuation_distance": 220,
+        "stream": false
+      }
+    ]
+  },
+  "pa_return": {
+    "subtitle": "subtitles.projectseele.pa_return",
+    "sounds": [
+      {
+        "name": "projectseele:pa_return",
+        "attenuation_distance": 220,
+        "stream": false
+      }
+    ]
+  },
+  "pa_fill": {
+    "subtitle": "subtitles.projectseele.pa_fill",
+    "sounds": [
+      {
+        "name": "projectseele:pa_fill",
+        "attenuation_distance": 220,
+        "stream": false
+      }
+    ]
+  },
+  "pa_standby": {
+    "subtitle": "subtitles.projectseele.pa_standby",
+    "sounds": [
+      {
+        "name": "projectseele:pa_standby",
+        "attenuation_distance": 220,
+        "stream": false
+      }
+    ]
+  },
+  "pa_fault": {
+    "subtitle": "subtitles.projectseele.pa_fault",
+    "sounds": [
+      {
+        "name": "projectseele:pa_fault",
+        "attenuation_distance": 220,
+        "stream": false
+      }
+    ]
+  },
+  "pa_3": {
+    "subtitle": "subtitles.projectseele.pa_3",
+    "sounds": [
+      {
+        "name": "projectseele:pa_3",
+        "attenuation_distance": 220,
+        "stream": false
+      }
+    ]
+  },
+  "pa_2": {
+    "subtitle": "subtitles.projectseele.pa_2",
+    "sounds": [
+      {
+        "name": "projectseele:pa_2",
+        "attenuation_distance": 220,
+        "stream": false
+      }
+    ]
+  },
+  "pa_1": {
+    "subtitle": "subtitles.projectseele.pa_1",
+    "sounds": [
+      {
+        "name": "projectseele:pa_1",
+        "attenuation_distance": 220,
+        "stream": false
+      }
+    ]
+  },
+  "pa_launch": {
+    "subtitle": "subtitles.projectseele.pa_launch",
+    "sounds": [
+      {
+        "name": "projectseele:pa_launch",
+        "attenuation_distance": 220,
+        "stream": false
+      }
+    ]
+  },
+  "facility_rail_motion": {
+    "subtitle": "subtitles.projectseele.facility_rail_motion",
+    "sounds": [
+      {
+        "name": "projectseele:facility_rail_motion",
+        "attenuation_distance": 220,
+        "stream": false
+      }
+    ]
+  },
+  "facility_hydraulic": {
+    "subtitle": "subtitles.projectseele.facility_hydraulic",
+    "sounds": [
+      {
+        "name": "projectseele:facility_hydraulic",
+        "attenuation_distance": 220,
+        "stream": false
+      }
+    ]
+  },
+  "facility_lock": {
+    "subtitle": "subtitles.projectseele.facility_lock",
+    "sounds": [
+      {
+        "name": "projectseele:facility_lock",
+        "attenuation_distance": 220,
+        "stream": false
+      }
+    ]
+  },
+  "facility_catapult": {
+    "subtitle": "subtitles.projectseele.facility_catapult",
+    "sounds": [
+      {
+        "name": "projectseele:facility_catapult",
+        "attenuation_distance": 220,
+        "stream": false
+      }
+    ]
+  },
+  "facility_siren": {
+    "subtitle": "subtitles.projectseele.facility_siren",
+    "sounds": [
+      {
+        "name": "projectseele:facility_siren",
+        "attenuation_distance": 220,
+        "stream": false
+      }
+    ]
+  },
+  "eva_rifle_fire": {
+    "subtitle": "subtitles.projectseele.rifle_fire",
+    "sounds": [
+      {
+        "name": "projectseele:rifle_fire",
+        "attenuation_distance": 192
+      }
+    ]
+  },
+  "pa_door_open": {
+    "subtitle": "subtitles.projectseele.pa_door_open",
+    "sounds": [
+      {
+        "name": "projectseele:pa_door_open",
+        "attenuation_distance": 220,
+        "stream": false
+      }
+    ]
+  },
+  "pa_door_close": {
+    "subtitle": "subtitles.projectseele.pa_door_close",
+    "sounds": [
+      {
+        "name": "projectseele:pa_door_close",
+        "attenuation_distance": 220,
         "stream": false
       }
     ]

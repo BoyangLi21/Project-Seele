@@ -16,7 +16,8 @@ import java.util.Map;
 /** Independent native bone-matrix witnesses, enabled only in the disposable mechanical fixtures. */
 public final class EvaDorsalR13Audit
 {
-    private static final boolean R19="r19-un".equals(System.getProperty("projectseele.regionalBuild",""));
+    private static final boolean R21=java.util.Set.of("r21-un00","r21-un01").contains(System.getProperty("projectseele.regionalBuild",""));
+    private static final boolean R19=R21||"r19-un".equals(System.getProperty("projectseele.regionalBuild",""));
     public static final boolean ENABLED=R19||java.util.Set.of("r11-mechanics","r11-canonical").contains(System.getProperty("projectseele.regionalBuild",""));
     private static final class Frame {long time;Matrix4f liner,cover;}
     private static final Map<Integer,Frame> FRAMES=new HashMap<>();
@@ -52,7 +53,7 @@ public final class EvaDorsalR13Audit
         {
             try
             {
-                if(output==null){output=Minecraft.getInstance().gameDirectory.toPath().resolve((R19?"../artifacts/world_repair_r19/un00_local/native_pose_":"../artifacts/dorsal_tv_r13/native_pose_")+System.currentTimeMillis()+".json").normalize();Files.createDirectories(output.getParent());}
+                if(output==null){output=Minecraft.getInstance().gameDirectory.toPath().resolve((R21?"../artifacts/un_models_r21/native_pose_"+System.getProperty("projectseele.regionalBuild")+"_":R19?"../artifacts/world_repair_r19/un00_local/native_pose_":"../artifacts/dorsal_tv_r13/native_pose_")+System.currentTimeMillis()+".json").normalize();Files.createDirectories(output.getParent());}
                 JsonObject report=new JsonObject();report.addProperty("passed",maximumMouth<.05&&maximumCover<.05&&minimumAxis>.999);report.addProperty("samples",count);report.addProperty("max_mouth_error",maximumMouth);report.addProperty("max_cover_error",maximumCover);report.addProperty("minimum_axis_dot",minimumAxis);report.add("rows",ROWS);Files.writeString(output,report.toString());
             }
             catch(Exception e){throw new IllegalStateException("Dorsal render witness could not be saved",e);}

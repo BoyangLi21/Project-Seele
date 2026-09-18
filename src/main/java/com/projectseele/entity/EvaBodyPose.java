@@ -138,7 +138,7 @@ public final class EvaBodyPose
     public static boolean hasSupportedStances(){if(data==null)reload();return data.clips().containsKey("rifle_stance");}
     public static boolean hasTerrainStances(){if(data==null)reload();return data.clips().containsKey("unarmed_stance");}
     public static Vector3f eyePoint(int variant){if(data==null)reload();return new Vector3f(data.eyes().get(variant));}
-    public static Vector3f eyePoint(EvaUnit01Entity eva){return eva.isExperimentalUnit()?new Vector3f(EvaUNOptics.LENS):eyePoint(eva.getUnitVariant());}
+    public static Vector3f eyePoint(EvaUnit01Entity eva){return eva instanceof EvaPrototypeEntity un?EvaUNOptics.lens(un):eyePoint(eva.getUnitVariant());}
     public static net.minecraft.world.phys.Vec3 opticalEye(EvaUnit01Entity eva,float partial)
     {
         var body=sample(eva,partial);body.rotations.get("head").rotateY((float)Math.toRadians(-eva.pilotHeadYawForRender(partial))).rotateX((float)Math.toRadians(-eva.pilotHeadPitchForRender(partial)));body.dirty();

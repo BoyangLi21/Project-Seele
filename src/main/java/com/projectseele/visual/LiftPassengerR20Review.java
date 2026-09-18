@@ -18,11 +18,20 @@ import java.util.*;
 @Mod.EventBusSubscriber(modid=ProjectSeele.MODID)
 public final class LiftPassengerR20Review
 {
-    public static final boolean ENABLED=Set.of("r20-lift","r20-lift-rest").contains(System.getProperty("projectseele.regionalBuild",""));
+    private static final boolean R21="r21-lifts".equals(System.getProperty("projectseele.regionalBuild",""));
+    public static final boolean ENABLED=R21||Set.of("r20-lift","r20-lift-rest").contains(System.getProperty("projectseele.regionalBuild",""));
     public static volatile boolean clientReady,finished,moving;
     public static volatile int tripAge;
-    private static int age,index="r20-lift-rest".equals(System.getProperty("projectseele.regionalBuild",""))?4:0,stage,timer;
+    private static int age,index=R21?2:"r20-lift-rest".equals(System.getProperty("projectseele.regionalBuild",""))?4:0,stage,timer;
     private static final JsonArray results=new JsonArray();
+    private static final JsonArray damageEvents=new JsonArray();
+    @SubscribeEvent public static void hurt(net.minecraftforge.event.entity.living.LivingHurtEvent e)
+    {
+        if(!ENABLED||finished||!(e.getEntity() instanceof ServerPlayer p))return;
+        JsonObject r=new JsonObject();r.addProperty("source",e.getSource().getMsgId());r.addProperty("amount",e.getAmount());r.addProperty("stage",stage);r.addProperty("timer",timer);r.addProperty("lift",IDS[Math.min(index,IDS.length-1)]);r.addProperty("position",p.position().toString());r.addProperty("fallDistance",p.fallDistance);
+        JsonArray blocks=new JsonArray();for(var q:net.minecraft.core.BlockPos.betweenClosed(p.blockPosition().offset(-1,0,-1),p.blockPosition().offset(1,2,1)))if(!p.level().getBlockState(q).isAir())blocks.add(q.toShortString()+" "+p.level().getBlockState(q));r.add("nearbyBlocks",blocks);damageEvents.add(r);
+        ProjectSeele.LOGGER.warn("R21 LIFT DAMAGE {}",r);
+    }
     private static double minimumFloorError=100,maximumWallOverflow;
     private static final String[] IDS={S20PhysicalElevatorDirector.COMMAND_REAR_LIFT_ID,S20PhysicalElevatorDirector.COMMAND_REAR_LIFT_ID,S20PhysicalElevatorDirector.SURFACE_TRANSIT_LIFT_ID,S20PhysicalElevatorDirector.SURFACE_TRANSIT_LIFT_ID,NervLiftPassengerSync.GATEWAY,NervLiftPassengerSync.GATEWAY,S20PhysicalElevatorDirector.COMPACT_CAGE_LIFT_ID,S20PhysicalElevatorDirector.COMPACT_CAGE_LIFT_ID,S20PhysicalElevatorDirector.COMMANDER_OFFICE_LIFT_ID,S20PhysicalElevatorDirector.COMMANDER_OFFICE_LIFT_ID};
     private static final int[] FROM={-566,-448,-442,81,-466,81,-442,-370,-388,-340},TO={-448,-566,81,-442,81,-466,-370,-394,-340,-388};
@@ -30,12 +39,13 @@ public final class LiftPassengerR20Review
     @SubscribeEvent public static void tick(TickEvent.ServerTickEvent e)
     {
         if(!ENABLED||finished||e.phase!=TickEvent.Phase.END||!clientReady||e.getServer().getPlayerList().getPlayers().isEmpty())return;
-        Path world=e.getServer().getWorldPath(LevelResource.ROOT).normalize();require(world.getFileName().toString().equals("SEELE_R20_REVIEW"),"R20 review boundary");
+        Path world=e.getServer().getWorldPath(LevelResource.ROOT).normalize();require(world.getFileName().toString().equals(R21?"SEELE_R21_REVIEW":"SEELE_R20_REVIEW"),"R20/R21 review boundary");
         var player=e.getServer().getPlayerList().getPlayers().get(0);var level=e.getServer().getLevel(FacilitySchemaV2.DIMENSION);
         try
         {
             if(++age>15000)throw new IllegalStateException("R20 lift suite timeout");
-            if(index==IDS.length){write(world,"");finished=true;return;}
+            if(R21){FROM[3]=75;TO[2]=75;if(index==4)index=6;}
+            if(index==IDS.length||R21&&index==8){write(world,"");finished=true;return;}
             var spec=NervLiftPassengerSync.managedLifts(level).stream().filter(s->s.id().equals(IDS[index])).findFirst().orElseThrow();
             var from=spec.stops().stream().filter(s->s.walkY()==FROM[index]).findFirst().orElseThrow();var to=spec.stops().stream().filter(s->s.walkY()==TO[index]).findFirst().orElseThrow();
             var base=S20MovingElevatorsAdapter.controllerPosition(spec,spec.lower());level.getChunkAt(base);
@@ -105,6 +115,6 @@ public final class LiftPassengerR20Review
     }
     private static void write(Path world,String error)
     {
-        try{JsonObject r=new JsonObject();r.addProperty("error",error);r.add("trips",results);Files.writeString(world.resolve("r20_lift_review.json"),r.toString());}catch(Exception x){throw new IllegalStateException(x);}
+        try{JsonObject r=new JsonObject();r.addProperty("error",error);r.add("trips",results);r.add("damage",damageEvents);Files.writeString(world.resolve("r20_lift_review.json"),r.toString());}catch(Exception x){throw new IllegalStateException(x);}
     }
 }

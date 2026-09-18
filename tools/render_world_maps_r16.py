@@ -77,6 +77,7 @@ def surface(main,base):
  fig=plt.figure(figsize=(18,12),facecolor=BG);fig.text(.04,.956,'地上区域总图',fontproperties=FONT,fontsize=28,color=INK);fig.text(.04,.921,'TOKYO-3  /  NEW HAKONE  /  KIRISATO  /  UN TEST FACILITY',fontsize=11,color=GOLD)
  ax=fig.add_axes([.045,.16,.69,.725]);canvas(ax,main)
  points=[('第三新东京市',(-120,250),(100,-700)),('新箱根市',(-1500,650),(-1510,1270)),('雾里团地\n独立住宅区',(-2750,-955),(-2620,-1270)),('新箱根飞行场',(-1710,-205),(-1930,-690)),('箱根湾空港',(770,1245),(800,1580)),('正式 NERV 入构设施\n大电梯 → 地下入构站',(-360,750),(-545,1370)),('湾岸港区\n晓级驱逐舰靠泊',(1430,420),(1510,920)),('第三新东京中央站',(-120,-200),(-680,-1000)),('EVA 地表出入口',(30,-36),(620,-190))]
+ if REVISION=='R21':points.append(('NERV 航空基地\nF2 → UN · 每分钟一班',(545,-31),(970,-765)))
  for text,p,q in points:label(ax,text,p,q)
  scale(ax,-2910,1510,500,'500 方块')
  # P1 geometry is the saved, commissioned native MTR track sample, not a
@@ -88,10 +89,11 @@ def surface(main,base):
  label(ax,'P1 湾岸联络线',(856,473),(920,775),9)
  bx=fig.add_axes([.78,.32,.18,.50]);canvas(bx,base);bx.set_title('UN 远郊军事基地',fontproperties=FONT,color=INK,fontsize=16,pad=14)
  markers=[(1,6430,-6580),(2,6640,-6569),(3,6634,-6380),(4,6442,-6205),(5,6784,-6340),(6,6560,-5964)]
- if REVISION=='R20':markers.append((7,6282,-6205))
+ if REVISION in ('R20','R21'):markers.append((7,6282,-6205))
  for i,x,z in markers:bx.text(x,z,str(i),ha='center',va='center',fontsize=10,color=INK,bbox=dict(boxstyle='circle,pad=.25',fc=BG,ec=GOLD,lw=1.2))
  fig.text(.78,.273,'1 管制与人员区     2 军机防护库\n3 装甲车辆整备     4 EVA-UN 试验机库\n5 跑道与滑行道     6 基地入口\n周界设有防御岗楼与巡逻岗位',fontproperties=FONT,fontsize=10,color=INK,linespacing=1.9)
  if REVISION=='R20':fig.text(.78,.185,'7 UN-01 新试验舱\n   已建成，机体模型待交接',fontproperties=FONT,fontsize=10,color=GOLD,linespacing=1.7)
+ if REVISION=='R21':fig.text(.78,.185,'4 EVA-UN-00 机库\n7 EVA-UN-01 机库\nF2 航班连接 NERV 航空基地',fontproperties=FONT,fontsize=10,color=GOLD,linespacing=1.7)
  loc=fig.add_axes([.78,.835,.18,.072]);loc.set_facecolor('#1a2930');loc.plot([-120,6442],[220,-6320],color=GOLD,lw=.9,ls='--');loc.scatter([-120,6442],[220,-6320],c=[INK,GOLD],s=20);loc.set_xlim(-3100,7200);loc.set_ylim(1800,-7000);loc.set_xticks([]);loc.set_yticks([]);loc.text(-2700,-5800,'同一坐标系\n基地在主城东北约 9 千格',fontproperties=FONT,fontsize=8,color=INK)
  caption(fig,.084,REVISION+' · 当前存档方块顶面测绘。基地另附放大图；右上小图表示实际相对位置。')
  caption(fig,.055,'暗色斜纹为尚未测得完整区块的范围；活动车辆、人物与机械用位置标注表示。底图不使用远景缓存。')
@@ -101,11 +103,12 @@ def underground(main,cages,dogma):
  fig=plt.figure(figsize=(18,12),facecolor=BG);fig.text(.04,.956,'地下区域总图',fontproperties=FONT,fontsize=28,color=INK);fig.text(.04,.921,'GEOFRONT  /  NERV HEADQUARTERS  /  EVA CAGES  /  TERMINAL DOGMA',fontsize=11,color=GOLD)
  ax=fig.add_axes([.045,.14,.685,.745]);canvas(ax,main)
  labels=[('NERV 金字塔本部',(30,327),(-95,130)),('三机整备机库',(30,CAGE_Z),(-340,-207)),('发射区 · 三条地表井道',(30,-36),(390,-180)),('本部电车站',(30,490),(-30,630)),('研究与模拟设施',(295,550),(520,738)),('整备补给区',(285,180),(540,230)),('正式入构大电梯\n地下入构站',(-360,750),(-560,942)),('地下湖与自然景观',(-540,360),(-695,170)),('深层电梯\n通往 Terminal Dogma',(12,253),(-280,385))]
+ if REVISION=='R21':labels.extend([('Y=-367 三机观察廊',(30,-221),(495,-322)),('双向自动步道\n金字塔 — 发射区车站',(118,110),(510,35))])
  for t,p,q in labels:label(ax,t,p,q,10)
  scale(ax,-850,890,200,'200 方块')
  cx=fig.add_axes([.775,.545,.19,.28]);canvas(cx,cages);cx.set_title('机库作业层',fontproperties=FONT,fontsize=15,color=INK,pad=12);cx.set_xlabel('剖切上限 Y=-394',fontproperties=FONT,color=MUTED,fontsize=9)
  for name,x in [('00',-12),('01',30),('02',72)]:cx.text(x,CAGE_Z,name,ha='center',va='center',fontsize=10,color=INK,bbox=dict(fc=BG,ec=GOLD,boxstyle='round,pad=.2'))
- cx.annotate('斜坡转运 → 弹射井' if REVISION=='R20' else '转运 → 弹射井',xy=(30,-36),xytext=(30,(CAGE_Z-36)/2),fontproperties=FONT,fontsize=8,color=INK,ha='center',arrowprops=dict(arrowstyle='->',color=GOLD))
+ cx.annotate('斜坡转运 → 弹射井' if REVISION in ('R20','R21') else '转运 → 弹射井',xy=(30,-36),xytext=(30,(CAGE_Z-36)/2),fontproperties=FONT,fontsize=8,color=INK,ha='center',arrowprops=dict(arrowstyle='->',color=GOLD))
  dx=fig.add_axes([.775,.20,.19,.28]);canvas(dx,dogma);dx.set_title('Terminal Dogma',fontsize=15,color=INK,pad=12);dx.set_xlabel('剖切上限 Y=-566',fontproperties=FONT,color=MUTED,fontsize=9)
  label(dx,'莉莉丝 / 红十字架',(30.5,355.5),(65,420),8);label(dx,'封印区入口',(12,285),(-20,239),8)
  caption(fig,.082,REVISION+' · 主图投影地下暴露表面；右侧分层图剖开上方围护，以显示作业层和深层封印室。')

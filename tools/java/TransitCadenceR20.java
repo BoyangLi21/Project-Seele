@@ -25,10 +25,12 @@ public final class TransitCadenceR20
         if(!args[0].contains(".Codex"))throw new IllegalArgumentException("staging only");
         var sim=new Simulator("projectseele/geofront",new String[]{"minecraft/overworld","projectseele/geofront","minecraft/the_nether","minecraft/the_end"},Path.of(args[0]),false);
         var deps=new ObjectArrayList<Depot>();Map<Depot,Siding> sidings=new HashMap<>();Field period=Siding.class.getDeclaredField("timeOffsetForRepeating");period.setAccessible(true);
-        for(var d:sim.depots)if(d.getTransportMode()==TransportMode.TRAIN&&(args.length<3||sim.routes.stream().anyMatch(r->d.getRouteIds().contains(r.getId())&&r.getRouteNumber().equals(args[2]))))
+        TransportMode mode=args.length>3?TransportMode.valueOf(args[3]):TransportMode.TRAIN;
+        for(var d:sim.depots)if(d.getTransportMode()==mode&&(args.length<3||sim.routes.stream().anyMatch(r->d.getRouteIds().contains(r.getId())&&r.getRouteNumber().equals(args[2]))))
         {
             deps.add(d);var route=sim.routes.stream().filter(r->d.getRouteIds().contains(r.getId())).findFirst().orElseThrow();
-            var siding=sim.sidings.stream().filter(s->s.getName().startsWith(route.getRouteNumber()+"车辆段")).findFirst().orElseThrow();sidings.put(d,siding);siding.clearVehicles();d.setUseRealTime(true);d.setRepeatInfinitely(true);d.getRealTimeDepartures().clear();d.getRealTimeDepartures().add(0);
+            var siding=sim.sidings.stream().filter(s->s.getName().startsWith(route.getRouteNumber()+"车辆段")||s.getName().startsWith(route.getRouteNumber()+" ")).findFirst().orElseThrow();sidings.put(d,siding);siding.clearVehicles();d.setUseRealTime(true);d.setRepeatInfinitely(true);d.getRealTimeDepartures().clear();d.getRealTimeDepartures().add(0);
+            siding.setName(route.getRouteNumber()+"车辆段");d.setName(route.getName()+"运行基地");
         }
         generate(sim,deps);JsonArray tune=new JsonArray();Map<Depot,Long> target=new HashMap<>();
         for(var d:deps){long before=Math.round(period.getDouble(sidings.get(d)));if(before<=0)throw new IllegalStateException("Missing repeat period");target.put(d,Math.max(120000L,((before+59999)/60000)*60000));System.out.println("Cadence "+d.getId()+" "+before+" -> "+target.get(d));}
@@ -55,7 +57,9 @@ public final class TransitCadenceR20
         generate(sim,deps);sim.instantDeployDepots(deps);
         for(int i=0;i<1500;i++){sim.tick();Thread.sleep(10);}
         JsonArray all=new JsonArray();boolean pass=true;
-        for(var p:sim.platforms)if(p.getTransportMode()==TransportMode.TRAIN)
+        Set<Long> selectedPlatforms=new HashSet<>();
+        for(var d:deps)for(var r:sim.routes)if(d.getRouteIds().contains(r.getId()))for(var rp:r.getRoutePlatforms())selectedPlatforms.add(rp.getPlatform().getId());
+        for(var p:sim.platforms)if(p.getTransportMode()==mode&&(args.length<3||selectedPlatforms.contains(p.getId())))
         {
             var response=new ArrivalsRequest(new LongImmutableList(new long[]{p.getId()}),8,8).getArrivals(sim);var j=json(response);JsonObject row=new JsonObject();row.addProperty("id",p.getId());row.addProperty("station",p.getStationName());row.add("native",j);
             var values=j.getAsJsonArray("arrivals");JsonArray intervals=new JsonArray(),scheduled=new JsonArray();boolean ok=values.size()>=3;

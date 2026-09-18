@@ -20,7 +20,8 @@ import java.nio.file.*;
 @Mod.EventBusSubscriber(modid=ProjectSeele.MODID)
 public final class EvaMechanicsR11Review
 {
-    public static final boolean R19="r19-un".equals(System.getProperty("projectseele.regionalBuild",""));
+    public static final boolean R21=java.util.Set.of("r21-un00","r21-un01").contains(System.getProperty("projectseele.regionalBuild",""));
+    public static final boolean R19=R21||"r19-un".equals(System.getProperty("projectseele.regionalBuild",""));
     public static final boolean ENABLED=R19||"r11-mechanics".equals(System.getProperty("projectseele.regionalBuild",""));
     public static final java.util.Set<String> captured=java.util.concurrent.ConcurrentHashMap.newKeySet();
     public static volatile int actor,age;public static volatile boolean tracked,finished;public static volatile String shot="",view="body";
@@ -31,7 +32,7 @@ public final class EvaMechanicsR11Review
     @SubscribeEvent public static void tick(TickEvent.ServerTickEvent event)
     {
         if(!ENABLED||finished||event.phase!=TickEvent.Phase.END)return;var server=event.getServer();if(server.getPlayerList().getPlayers().isEmpty()||++age<70)return;
-        world=server.getWorldPath(LevelResource.ROOT).normalize();if(!world.getFileName().toString().equals(R19?"SEELE_UN_R19_REVIEW":"SEELE_MECHANICS_REVIEW_R11"))throw new IllegalStateException("UN mechanics requires disposable lab");
+        world=server.getWorldPath(LevelResource.ROOT).normalize();if(!world.getFileName().toString().equals(R21?"SEELE_UN_R21_REVIEW":R19?"SEELE_UN_R19_REVIEW":"SEELE_MECHANICS_REVIEW_R11"))throw new IllegalStateException("UN mechanics requires disposable lab");
         ServerLevel l=server.overworld();try
         {
             if(age>1800)throw new IllegalStateException("UN mechanics deadline in phase "+phase);
@@ -44,7 +45,7 @@ public final class EvaMechanicsR11Review
                 for(BlockPos p:BlockPos.betweenClosed(-45,-61,-55,45,-61,200))l.setBlock(p,Blocks.GRAY_CONCRETE.defaultBlockState(),2);
                 l.setBlock(new BlockPos(-20,-60,0),com.projectseele.registry.ModBlocks.UMBILICAL_PYLON.get().defaultBlockState(),2);
                 for(BlockPos b:BlockPos.betweenClosed(-5,-12,-16,5,-11,-10))if(Math.abs(b.getX())>=2)l.setBlock(b,Blocks.IRON_BLOCK.defaultBlockState(),2);
-                eva=ModEntities.EVA_PROTOTYPE.get().create(l);eva.moveTo(.5,-60,.5,0,0);eva.setNoAi(true);eva.setNoGravity(true);eva.getPersistentData().putBoolean("UNMechanicsLab",true);l.addFreshEntity(eva);actor=eva.getId();pilot.teleportTo(l,.5,-10,-18,0,0);phase=1;tick=0;return;
+                eva=ModEntities.EVA_PROTOTYPE.get().create(l);if("r21-un01".equals(System.getProperty("projectseele.regionalBuild","")))eva.setUNSerial(1);eva.moveTo(.5,-60,.5,0,0);eva.setNoAi(true);eva.setNoGravity(true);eva.getPersistentData().putBoolean("UNMechanicsLab",true);l.addFreshEntity(eva);actor=eva.getId();pilot.teleportTo(l,.5,-10,-18,0,0);phase=1;tick=0;return;
             }
             tick++;EntryPlugCarrierEntity p=UNPlugDirector.capsule(eva);
             if(target!=null&&tick%20==0){var c=new net.minecraft.world.level.ChunkPos(target.blockPosition());l.getChunkSource().addRegionTicket(TARGET_TICKET,c,2,c);l.getChunk(c.x,c.z);}

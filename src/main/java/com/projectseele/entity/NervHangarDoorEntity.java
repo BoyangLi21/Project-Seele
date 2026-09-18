@@ -35,6 +35,7 @@ public final class NervHangarDoorEntity extends Entity
 
     private float clientOpen;
     private float clientOpenO;
+    private boolean wasMoving;
 
     public NervHangarDoorEntity(EntityType<? extends NervHangarDoorEntity> type,
                                 Level level)
@@ -77,6 +78,10 @@ public final class NervHangarDoorEntity extends Entity
         float current = this.entityData.get(DATA_OPEN);
         float next = Mth.approach(current,
                 this.entityData.get(DATA_TARGET), this.getVariant()==3?0.0125F:0.075F);
+        boolean moving=Math.abs(next-current)>1.0E-4F;
+        if(moving&&(!wasMoving||this.tickCount%40==0))this.level().playSound(null,this.getX(),this.getY()+30,this.getZ(),com.projectseele.registry.ModSounds.FACILITY.get("facility_hydraulic").get(),net.minecraft.sounds.SoundSource.BLOCKS,1.0F,.8F);
+        if(!moving&&wasMoving)this.level().playSound(null,this.getX(),this.getY()+30,this.getZ(),com.projectseele.registry.ModSounds.FACILITY.get("facility_lock").get(),net.minecraft.sounds.SoundSource.BLOCKS,1.3F,.8F);
+        wasMoving=moving;
         if (Math.abs(next - current) > 1.0E-4F)
         {
             this.entityData.set(DATA_OPEN, next);

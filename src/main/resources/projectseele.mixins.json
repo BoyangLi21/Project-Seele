@@ -25,7 +25,9 @@
     "client.MovingElevatorDisplayMixin",
     "client.MovingElevatorPanelMixin",
     "client.TransportPassengerPacketDiagnosticsMixin",
-    "client.AircraftPositionSmoothingMixin"
+    "client.AircraftPositionSmoothingMixin",
+    "client.MtrFrameClockR21Mixin",
+    "client.AircraftCorrectionBudgetMixin"
   ],
   "injectors": {
     "defaultRequire": 1

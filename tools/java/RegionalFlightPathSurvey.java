@@ -14,10 +14,11 @@ public final class RegionalFlightPathSurvey
             throw new IllegalArgumentException("Read a copied native database");
         Simulator sim=new Simulator("projectseele/geofront",new String[]{"projectseele/geofront"},root,false);
         JsonArray segments=new JsonArray();int index=0;
-        for(Depot depot:sim.depots)if(depot.getTransportMode()==TransportMode.AIRPLANE)
+        String requested=args.length>2?args[2]:"";
+        for(Depot depot:sim.depots)if(depot.getTransportMode()==TransportMode.AIRPLANE&&(requested.isEmpty()||sim.routes.stream().anyMatch(r->depot.getRouteIds().contains(r.getId())&&r.getRouteNumber().equals(requested))))
             for(PathData path:depot.getPath())
             {
-                JsonObject segment=new JsonObject();segment.addProperty("id","F1_native_"+index++);
+                JsonObject segment=new JsonObject();segment.addProperty("id",(requested.isEmpty()?"air":requested)+"_native_"+index++);
                 segment.addProperty("kind","flight");segment.addProperty("mode","AIRPLANE");
                 double length=path.getRailLength();segment.addProperty("length",length);JsonArray points=new JsonArray();
                 for(double distance=0;distance<length+4;distance+=4)

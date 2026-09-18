@@ -55,23 +55,28 @@ public final class NervHangarDoorRenderer
         double slide = door.getOpenProgress(partialTick) * 17.0D;
         poses.pushPose();
         TvFacilityMeshes.pressureDoors(poses,facilityLight,door.getOpenProgress(partialTick));
-        splitLogo(poses, buffers, slide);
+        splitLogo(poses, buffers, slide,door.getVariant()==3);
         poses.popPose();
         super.render(door, yaw, partialTick, poses, buffers, packedLight);
     }
 
     private static void splitLogo(PoseStack poses,
-            MultiBufferSource buffers, double slide)
+            MultiBufferSource buffers, double slide,boolean unitedNations)
     {
-        ResourceLocation texture = TreeOfLifeWallClient.nervLogoTexture(
-                Minecraft.getInstance());
+        ResourceLocation texture = unitedNations?com.projectseele.client.UNIdentityClient.logoTexture()
+                :TreeOfLifeWallClient.nervLogoTexture(Minecraft.getInstance());
         if (texture == null) return;
         VertexConsumer consumer = buffers.getBuffer(
-                RenderType.entityTranslucent(texture));
+                RenderType.entityCutout(texture));
+        double bottom=unitedNations?20:18,top=unitedNations?44:46;
         logoHalf(poses, consumer, -12.0D - slide, -slide,
-                18.0D, 46.0D, -0.61D, 1.0F, 0.5F);
+                bottom, top, -0.61D, 1.0F, 0.5F);
         logoHalf(poses, consumer, slide, 12.0D + slide,
-                18.0D, 46.0D, -0.61D, 0.5F, 0.0F);
+                bottom, top, -0.61D, 0.5F, 0.0F);
+        // Opposite face has its own winding and UVs, so the exterior approach
+        // reads the same word instead of seeing the reverse of an inner decal.
+        logoHalf(poses,consumer,-slide,-12.0D-slide,bottom,top,.61D,.5F,0F);
+        logoHalf(poses,consumer,12.0D+slide,slide,bottom,top,.61D,1F,.5F);
     }
 
     private static void logoHalf(PoseStack poses, VertexConsumer consumer,

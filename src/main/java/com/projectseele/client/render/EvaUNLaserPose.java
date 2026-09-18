@@ -13,7 +13,7 @@ public final class EvaUNLaserPose
         if(!(eva instanceof EvaPrototypeEntity un)||!un.isEyeLaserActive()||root==null)return EvaMotionEngineV2.BoneWrites.empty();
         var head=model.getBone("head").orElse(null);if(head==null)return EvaMotionEngineV2.BoneWrites.empty();
         EvaRigTransforms.rotate(head,EvaRigTransforms.rotation(EvaRigTransforms.parent(head,root)).invert().mul(EvaUNOptics.orientation(un)));
-        var p=EvaRigTransforms.point(head,EvaUNOptics.LENS,root);if(EYES.size()>16)EYES.clear();EYES.put(eva.getId(),new Eye(new Vec3(p.x,p.y,p.z),System.nanoTime()));
+        var p=EvaRigTransforms.point(head,EvaUNOptics.lens(un),root);if(EYES.size()>16)EYES.clear();EYES.put(eva.getId(),new Eye(new Vec3(p.x,p.y,p.z),System.nanoTime()));
         return new EvaMotionEngineV2.BoneWrites(Set.of("head"),Set.of(),"MOTION_ENGINE_LIVE_ACTION");
     }
     public static Vec3 eye(EvaPrototypeEntity un,float partial){var e=EYES.get(un.getId());return e!=null&&System.nanoTime()-e.tick<200_000_000L?e.point:EvaUNOptics.eye(un,partial);}

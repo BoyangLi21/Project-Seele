@@ -145,11 +145,11 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
         super(context, new EvaUnit01GeoModel());
         this.addRenderLayer(new LocalTriangleMeshLayer<>(this,
                 EvaUnit01Renderer::meshResourceForEntity,
-                entity -> entity.isExperimentalUnit()?new ResourceLocation(ProjectSeele.MODID,"textures/entity/eva_prototype.png"):textureResourceForVariant(entity.getUnitVariant()),
+                entity -> entity.isExperimentalUnit()?new ResourceLocation(ProjectSeele.MODID,"textures/entity/"+entity.experimentalAssetName()+".png"):textureResourceForVariant(entity.getUnitVariant()),
                 this::shouldRenderBodyMesh));
         this.addRenderLayer(new LocalTriangleMeshLayer<>(this,
                 EvaUnit01Renderer::meshResourceForEntity,
-                entity -> entity.isExperimentalUnit()?new ResourceLocation(ProjectSeele.MODID,"textures/entity/eva_prototype_eyes.png"):eyeTextureResourceForVariant(entity.getUnitVariant()),
+                entity -> entity.isExperimentalUnit()?new ResourceLocation(ProjectSeele.MODID,"textures/entity/"+entity.experimentalAssetName()+"_eyes.png"):eyeTextureResourceForVariant(entity.getUnitVariant()),
                 (entity, bone) -> !this.pilotView && com.projectseele.entity.EvaDorsalMechanism.eyesEnabled(entity)
                         && "head".equals(bone.getName()), true));
         this.addRenderLayer(new LocalTriangleMeshLayer<>(this,
@@ -187,7 +187,9 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
     public static void prewarmLocalBodyMeshes(ResourceManager resourceManager)
     {
         LocalTriangleMeshLayer.prewarm(resourceManager,
-                MESH_00, MESH_01, MESH_02);
+                MESH_00, MESH_01, MESH_02,
+                new ResourceLocation(ProjectSeele.MODID,"mesh/eva_prototype.mesh.json"),
+                new ResourceLocation(ProjectSeele.MODID,"mesh/eva_un01.mesh.json"));
     }
 
     @Override
@@ -195,7 +197,7 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
                        MultiBufferSource bufferSource, int packedLight)
     {
         LocalVisualAssetFingerprint.Fingerprint fingerprint =
-                entity.isExperimentalUnit()?LocalVisualAssetFingerprint.inspect("eva_prototype"):visualFingerprintForVariant(entity.getUnitVariant());
+                entity.isExperimentalUnit()?LocalVisualAssetFingerprint.inspect(entity.experimentalAssetName()):visualFingerprintForVariant(entity.getUnitVariant());
         if (LocalVisualAssetFingerprint.isStrictMode() && !fingerprint.valid())
         {
             if (!this.strictFailureReported)
@@ -572,7 +574,8 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
         // or descendants.  Arms, hands, fingers and weapons therefore remain
         // the exact world skeleton seen by third person without the chest
         // becoming an opaque wall during a knife strike or spear lunge.
-        return !PILOT_CAMERA_MESH_COVER.contains(bone.getName());
+        String surface=bone.getName().startsWith("r21_join_")&&bone.getParent()!=null?bone.getParent().getName():bone.getName();
+        return !PILOT_CAMERA_MESH_COVER.contains(surface);
     }
 
     private static void hideSubtree(GeoBone bone)
@@ -604,7 +607,7 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
 
     public static ResourceLocation meshResourceForEntity(EvaUnit01Entity entity)
     {
-        return entity.isExperimentalUnit()?new ResourceLocation(ProjectSeele.MODID,"mesh/eva_prototype.mesh.json"):meshResourceForVariant(entity.getUnitVariant());
+        return entity.isExperimentalUnit()?new ResourceLocation(ProjectSeele.MODID,"mesh/"+entity.experimentalAssetName()+".mesh.json"):meshResourceForVariant(entity.getUnitVariant());
     }
 
 }

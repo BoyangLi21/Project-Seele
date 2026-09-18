@@ -25,6 +25,11 @@ public final class UNIdentityClient
     private record Plate(Vec3 p,float width,float height,float yaw,BlockPos support) {}
     private static final ResourceLocation TEXTURE=new ResourceLocation("projectseele","local/un_emblem_r11");
     private static List<Plate> plates;private static DynamicTexture texture;private static float imageAspect=1;
+    public static ResourceLocation logoTexture()
+    {
+        if(plates==null)load();
+        return texture==null?new ResourceLocation("projectseele","textures/entity/un_door_mark.png"):TEXTURE;
+    }
     private static void load()
     {
         plates=new ArrayList<>();Path base=Path.of("projectseele-local-maps");

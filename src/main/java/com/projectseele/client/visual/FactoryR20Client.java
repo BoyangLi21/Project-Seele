@@ -15,7 +15,7 @@ import com.google.gson.*;
 @Mod.EventBusSubscriber(modid="projectseele",value=Dist.CLIENT)
 public final class FactoryR20Client
 {
-    private static int distance=-1,exit,age,lastStill=-1,dropped;private static String previous="";private static Path folder;
+    private static int distance=-1,exit,age,lastStill=-1,dropped,phaseTicks;private static String previous="",inputPhase="";private static Path folder;
     private static final JsonArray frames=new JsonArray();private static long began,lastFrame;private static boolean closing;
     private static volatile String frameError="";private static boolean oldGui;
     private static final ThreadPoolExecutor writer=new ThreadPoolExecutor(2,2,0,TimeUnit.SECONDS,new ArrayBlockingQueue<>(8),r->{Thread t=new Thread(r,"r20-factory-frames");t.setDaemon(true);return t;});
@@ -33,8 +33,19 @@ public final class FactoryR20Client
         if(!FactoryR20Review.ENABLED||e.phase!=TickEvent.Phase.END)return;var mc=Minecraft.getInstance();mc.options.pauseOnLostFocus=false;if(mc.screen instanceof PauseScreen)mc.setScreen(null);
         if(FactoryR20Review.finished){if(distance>=0){mc.options.renderDistance().set(distance);mc.options.broadcastOptions();mc.options.hideGui=oldGui;distance=-1;}if(!closing){writer.shutdown();closing=true;}if(writer.isTerminated()&&++exit==1&&folder!=null){try{JsonObject report=new JsonObject();report.addProperty("source","Unmodified native framebuffer; real F5 pilot camera and carrier motion");report.addProperty("dropped",dropped);report.addProperty("write_failure",frameError);report.add("frames",frames);Files.writeString(folder.resolve("frames.json"),report.toString());}catch(Exception x){throw new IllegalStateException(x);}}if(exit>30)mc.stop();return;}
         if(mc.player==null||mc.level==null||mc.screen!=null)return;
-        if(distance<0){distance=mc.options.renderDistance().get();oldGui=mc.options.hideGui;mc.options.hideGui=true;mc.options.renderDistance().set(10);mc.options.broadcastOptions();mc.options.setCameraType(CameraType.THIRD_PERSON_BACK);folder=mc.gameDirectory.toPath().resolve("../artifacts/world_rebuild_r20/factory/native_cycle_"+System.currentTimeMillis());try{Files.createDirectories(folder);}catch(Exception x){throw new IllegalStateException(x);}}
+        if(distance<0){distance=mc.options.renderDistance().get();oldGui=mc.options.hideGui;mc.options.hideGui=true;mc.options.renderDistance().set(10);mc.options.broadcastOptions();mc.options.setCameraType(CameraType.THIRD_PERSON_BACK);folder=mc.gameDirectory.toPath().resolve(("r21-factory".equals(System.getProperty("projectseele.regionalBuild",""))?"../artifacts/world_repair_r21/factory/native_cycle_":"../artifacts/world_rebuild_r20/factory/native_cycle_")+System.currentTimeMillis());try{Files.createDirectories(folder);}catch(Exception x){throw new IllegalStateException(x);}}
         FactoryR20Review.ready=true;age++;
+        if(!inputPhase.equals(FactoryR20Review.phase)){inputPhase=FactoryR20Review.phase;phaseTicks=0;}else phaseTicks++;
+        if("r21-factory".equals(System.getProperty("projectseele.regionalBuild","")))
+        {
+            boolean free=FactoryR20Review.phase.equals("free_surface_hold");
+            mc.options.keyUp.setDown(free&&phaseTicks>=30&&phaseTicks<44);
+            mc.options.keyDown.setDown(free&&phaseTicks>=55&&phaseTicks<69);
+            mc.options.keyAttack.setDown(free&&phaseTicks>=90&&phaseTicks<120);
+            mc.options.keyUse.setDown(free&&phaseTicks>=135&&phaseTicks<140);
+            if(free&&phaseTicks==90)KeyMapping.click(mc.options.keyAttack.getKey());
+            if(free&&phaseTicks==135)KeyMapping.click(mc.options.keyUse.getKey());
+        }
         if(!FactoryR20Review.phase.equals("setup")&&!FactoryR20Review.phase.equals("board"))
         {mc.player.setYRot(180);mc.player.yRotO=180;mc.player.setXRot(12);mc.player.xRotO=12;}
     }

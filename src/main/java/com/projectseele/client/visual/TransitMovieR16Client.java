@@ -37,7 +37,7 @@ public final class TransitMovieR16Client
         if(!initialized)
         {
             initialized=true;oldGui=mc.options.hideGui;oldFov=mc.options.fov().get();oldCamera=mc.options.getCameraType();mc.options.hideGui=true;mc.options.fov().set(76);
-            String mode=System.getProperty("projectseele.regionalBuild");folder=mc.gameDirectory.toPath().resolve((mode.startsWith("r20-")?"../artifacts/world_rebuild_r20/transit/native_movie_":"../artifacts/tv_facilities_r16/transit_")+mode+"_"+System.currentTimeMillis()).normalize();
+            String mode=System.getProperty("projectseele.regionalBuild");folder=mc.gameDirectory.toPath().resolve((mode.startsWith("r21-")?"../artifacts/world_repair_r21/transit/native_movie_":mode.startsWith("r20-")?"../artifacts/world_rebuild_r20/transit/native_movie_":"../artifacts/tv_facilities_r16/transit_")+mode+"_"+System.currentTimeMillis()).normalize();
             try{Files.createDirectories(folder);}catch(Exception e){throw new IllegalStateException(e);}
         }
         view=RegionalTransitRidingChecks.movieView();
@@ -67,7 +67,7 @@ public final class TransitMovieR16Client
     @SubscribeEvent public static void render(TickEvent.RenderTickEvent event)
     {
         if(!ENABLED||!initialized||closing)return;var mc=Minecraft.getInstance();if(mc.level==null||mc.player==null||view==null)return;
-        var v=view;boolean flight=v.service().equals("F1");Vec3 right=new Vec3(-forward.z,0,forward.x);
+        var v=view;boolean flight=v.service().equals("F1")||v.service().equals("F2");Vec3 right=new Vec3(-forward.z,0,forward.x);
         if(event.phase==TickEvent.Phase.START)
         {
             // MTR owns the camera's riding-relative transform. Use vanilla F5
@@ -83,6 +83,13 @@ public final class TransitMovieR16Client
             else phase=v.travel()>460?(v.doors()?"station_arrival":"station_approach")
                     :v.travel()>100&&v.travel()<360?"passenger_ride":"station_departure";
             if(mc.options.getCameraType()!=CameraType.FIRST_PERSON)mc.options.setCameraType(CameraType.FIRST_PERSON);
+            if(v.inside())
+            {
+                // The aircraft's door is next to its forward bulkhead. Look
+                // down the passenger aisle, toward the rear of the fuselage.
+                float yaw=(float)Math.toDegrees(Math.atan2(-forward.x,forward.z))+(flight?180:0);
+                mc.player.setYRot(yaw);mc.player.yRotO=yaw;mc.player.setXRot(5);mc.player.xRotO=5;
+            }
             mc.options.hideGui=true;if(mc.getCameraEntity()!=mc.player)mc.setCameraEntity(mc.player);return;
         }
 

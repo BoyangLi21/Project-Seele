@@ -1,19 +1,35 @@
 {
   "variants": {
-    "facing=south": {
+    "facing=south,wayfinding=false": {
       "model": "projectseele:block/station_departure_board",
       "y": 0
     },
-    "facing=north": {
+    "facing=south,wayfinding=true": {
+      "model": "projectseele:block/station_wayfinding_board",
+      "y": 0
+    },
+    "facing=north,wayfinding=false": {
       "model": "projectseele:block/station_departure_board",
       "y": 180
     },
-    "facing=east": {
+    "facing=north,wayfinding=true": {
+      "model": "projectseele:block/station_wayfinding_board",
+      "y": 180
+    },
+    "facing=east,wayfinding=false": {
       "model": "projectseele:block/station_departure_board",
       "y": 270
     },
-    "facing=west": {
+    "facing=east,wayfinding=true": {
+      "model": "projectseele:block/station_wayfinding_board",
+      "y": 270
+    },
+    "facing=west,wayfinding=false": {
       "model": "projectseele:block/station_departure_board",
+      "y": 90
+    },
+    "facing=west,wayfinding=true": {
+      "model": "projectseele:block/station_wayfinding_board",
       "y": 90
     }
   }

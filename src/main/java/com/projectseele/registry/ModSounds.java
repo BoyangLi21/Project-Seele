@@ -37,10 +37,23 @@ public class ModSounds
     public static final RegistryObject<SoundEvent> EVA_COCKPIT_CONFIRM=register("eva_cockpit_confirm");
     public static final RegistryObject<SoundEvent> EVA_COCKPIT_WARNING=register("eva_cockpit_warning");
     public static final RegistryObject<SoundEvent> EVA_DRIVE_LOOP=register("eva_drive_loop");
+    public static final RegistryObject<SoundEvent> EVA_RIFLE_FIRE=register("eva_rifle_fire");
+
+    public static final java.util.Map<String,RegistryObject<SoundEvent>> FACILITY=facilitySounds();
+    private static java.util.Map<String,RegistryObject<SoundEvent>> facilitySounds()
+    {
+        var result=new java.util.LinkedHashMap<String,RegistryObject<SoundEvent>>();
+        for(String name:new String[]{"facility_rail_motion","facility_hydraulic","facility_lock","facility_catapult","facility_siren",
+                "pa_prepare","pa_insert","pa_lock","pa_drain","pa_transfer","pa_ready","pa_recover","pa_return","pa_fill","pa_standby","pa_fault","pa_3","pa_2","pa_1","pa_launch","pa_door_open","pa_door_close"})
+            result.put(name,SOUNDS.register(name,()->SoundEvent.createFixedRangeEvent(new ResourceLocation(ProjectSeele.MODID,name),220)));
+        return java.util.Collections.unmodifiableMap(result);
+    }
 
     private static RegistryObject<SoundEvent> register(String name)
     {
         return SOUNDS.register(name,
-                () -> SoundEvent.createVariableRangeEvent(new ResourceLocation(ProjectSeele.MODID, name)));
+                () -> name.startsWith("eva_")&&!name.startsWith("eva_cockpit")&&!name.equals("eva_drive_loop")
+                        ? SoundEvent.createFixedRangeEvent(new ResourceLocation(ProjectSeele.MODID,name),192)
+                        : SoundEvent.createVariableRangeEvent(new ResourceLocation(ProjectSeele.MODID, name)));
     }
 }

@@ -137,6 +137,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
     {
         return false;
     }
+    public String experimentalAssetName() { return "eva_prototype"; }
     public static final int VISUAL_NORMAL = 0;
     public static final int VISUAL_IDLE = 1;
     public static final int VISUAL_WALK_CONTACT = 2;
@@ -3309,7 +3310,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
         level.sendParticles(ParticleTypes.SMOKE,
                 muzzle.x, muzzle.y, muzzle.z, 3,
                 0.12D, 0.12D, 0.12D, 0.025D);
-        level.playSound(null, muzzle.x, muzzle.y, muzzle.z, ModSounds.RIFLE_FIRE.get(),
+        level.playSound(null, muzzle.x, muzzle.y, muzzle.z, ModSounds.EVA_RIFLE_FIRE.get(),
                 SoundSource.PLAYERS, 3.2F,
                 0.93F + this.random.nextFloat() * 0.08F);
     }

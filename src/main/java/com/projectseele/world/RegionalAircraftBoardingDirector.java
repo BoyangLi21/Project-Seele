@@ -78,7 +78,7 @@ public final class RegionalAircraftBoardingDirector
             for(JsonElement cell:item.getAsJsonArray("stairs"))
             {
                 JsonArray a=cell.getAsJsonArray();BlockPos pos=new BlockPos(a.get(0).getAsInt(),a.get(1).getAsInt(),a.get(2).getAsInt());
-                if(Math.abs(pos.getX()-gate.x)>40||Math.abs(pos.getZ()-gate.z)>20||pos.getY()<81||pos.getY()>85)
+                if(Math.abs(pos.getX()-gate.x)>40||Math.abs(pos.getZ()-gate.z)>40||pos.getY()<gate.y+1||pos.getY()>gate.y+5)
                     throw new IllegalStateException("Boarding cells exceed surveyed apron "+gate.id);
                 gate.stairs.put(pos,parse(a.get(3).getAsString()));
             }

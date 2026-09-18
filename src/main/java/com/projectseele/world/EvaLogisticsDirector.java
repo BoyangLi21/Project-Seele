@@ -1184,6 +1184,7 @@ public final class EvaLogisticsDirector
         NervCarrierVisuals.updateLclSurface(level, unit,
                 hangar.getX() + 0.5D, hangar.getY(),
                 hangar.getZ() + 0.5D, visualLclLevel(entry));
+        FacilityAudioR21.tick(level,variant,entry,unit,hangar,silo);
         if (isHangarConstrained(entry.phase()))
         {
             holdOnHangarBed(unit, hangar);

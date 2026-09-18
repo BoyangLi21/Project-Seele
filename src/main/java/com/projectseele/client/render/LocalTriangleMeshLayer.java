@@ -126,6 +126,10 @@ public final class LocalTriangleMeshLayer<T extends GeoAnimatable> extends GeoRe
                         this.textureSelector.apply(animatable)));
         float[] values = skinVertices(mesh,part,bone);
         int stride = mesh.stride();
+        if(!this.fullBright&&animatable instanceof com.projectseele.entity.EvaPrototypeEntity eva&&this.getRenderer() instanceof EvaUnit01Renderer renderer
+                &&com.projectseele.visual.EvaTerrainR11Review.R21&&com.projectseele.visual.EvaTerrainR11Review.runningCase
+                &&com.projectseele.visual.EvaTerrainR11Review.caseTick%20==0)
+            witnessWelds(mesh,part,bone,values,renderer.renderedMeshTransform(pose,eva,partialTick),eva.getUNSerial());
         if(Boolean.getBoolean("projectseele.motionReviewR05")&&!this.fullBright&&animatable instanceof EvaUnit01Entity eva
                 &&this.getRenderer() instanceof EvaUnit01Renderer renderer)
             com.projectseele.client.visual.EvaMeshAuditR05.capture(eva.getId(),meshLocation.getPath().contains("pallet_smg")?"rifle":bone.getName(),
@@ -375,7 +379,7 @@ public final class LocalTriangleMeshLayer<T extends GeoAnimatable> extends GeoRe
             MeshData mesh = new MeshData(stride, Map.copyOf(parts),
                     triangleCount, captureTag,
                     (minimumX + maximumX) * 0.5F, minimumY,
-                    (minimumZ + maximumZ) * 0.5F, jointSkins(parts,stride));
+                    (minimumZ + maximumZ) * 0.5F, root.has("jointSkins")?authoredJointSkins(root.getAsJsonObject("jointSkins"),parts,stride):jointSkins(parts,stride));
             CACHE.put(meshLocation, mesh);
             ProjectSeele.LOGGER.info("Loaded local triangle mesh {}: {}",
                     meshLocation, captureTag);
@@ -427,7 +431,84 @@ public final class LocalTriangleMeshLayer<T extends GeoAnimatable> extends GeoRe
                             float centreX, float minimumY,
                             float centreZ,Map<String,JointSkin> joints) {}
 
-    private record JointSkin(String other,float[] weights,float[] rest,float[] scratch) {}
+    private record JointSkin(String other,float[] weights,float[] rest,float[] scratch,Map<String,float[]> influences)
+    {
+        JointSkin(String other,float[] weights,float[] rest,float[] scratch){this(other,weights,rest,scratch,Map.of());}
+    }
+
+    private static final Map<String,WeldWitness> WELD_WITNESSES=new HashMap<>();
+    private static final class WeldWitness
+    {
+        final Map<String,Map<String,Integer>> points=new HashMap<>();
+        final Map<String,Vector3f> framePoints=new HashMap<>();final Map<String,String> frameOwners=new HashMap<>();long frame=-1;int samples;double maximum;String worst="";
+        WeldWitness(MeshData mesh)
+        {
+            for(var entry:mesh.parts().entrySet())
+            {
+                String name=entry.getKey();if(name.startsWith("dorsal_")||name.startsWith("finger_")||name.startsWith("hand_")||name.startsWith("wrist_"))continue;
+                var part=entry.getValue();var v=part.vertices();
+                for(int i=0;i<v.length;i+=8)
+                {
+                    String key=Math.round((v[i]+part.pivotX())*1000)+","+Math.round((v[i+1]+part.pivotY())*1000)+","+Math.round((v[i+2]+part.pivotZ())*1000);
+                    points.computeIfAbsent(key,k->new HashMap<>()).putIfAbsent(name,i);
+                }
+            }
+            points.entrySet().removeIf(e->e.getValue().size()<2||e.getValue().keySet().stream().noneMatch(n->n.startsWith("r21_join_")));
+        }
+    }
+    private static void witnessWelds(MeshData mesh,MeshPart part,GeoBone bone,float[] values,Matrix4f world,int serial)
+    {
+        var witness=WELD_WITNESSES.computeIfAbsent(mesh.captureTag(),k->new WeldWitness(mesh));long frame=com.projectseele.client.AircraftRenderClockR21.frame;
+        if(frame!=witness.frame)
+        {
+            witness.frame=frame;witness.framePoints.clear();witness.frameOwners.clear();
+            if(witness.samples>0)try
+            {
+                var report=new JsonObject();report.addProperty("passed",witness.maximum<.02);report.addProperty("maximum_world_gap",witness.maximum);report.addProperty("compared_pairs",witness.samples);report.addProperty("neutral_shared_points",witness.points.size());report.addProperty("worst",witness.worst);
+                var path=Minecraft.getInstance().gameDirectory.toPath().resolve("../artifacts/un_models_r21/seam_witness_un0"+serial+".json").normalize();java.nio.file.Files.writeString(path,report.toString());
+            }catch(IOException e){throw new IllegalStateException(e);}
+        }
+        for(var entry:witness.points.entrySet())
+        {
+            Integer i=entry.getValue().get(bone.getName());if(i==null)continue;
+            var point=world.transformPosition(new Vector3f(-(values[i]+part.pivotX())/16,(values[i+1]+part.pivotY())/16,(values[i+2]+part.pivotZ())/16));
+            var previous=witness.framePoints.putIfAbsent(entry.getKey(),point);
+            if(previous!=null)
+            {
+                double gap=point.distance(previous);if(gap>witness.maximum){witness.maximum=gap;witness.worst=entry.getKey()+" "+witness.frameOwners.get(entry.getKey())+" / "+bone.getName()+" case="+com.projectseele.visual.EvaTerrainR11Review.caseIndex+" tick="+com.projectseele.visual.EvaTerrainR11Review.caseTick;}
+                witness.samples++;
+            }
+            else witness.frameOwners.put(entry.getKey(),bone.getName());
+        }
+    }
+
+    private static Map<String,JointSkin> authoredJointSkins(JsonObject definitions,Map<String,MeshPart> parts,int stride) throws IOException
+    {
+        Map<String,JointSkin> result=new HashMap<>();
+        for(var entry:definitions.entrySet())
+        {
+            var part=parts.get(entry.getKey());var definition=entry.getValue().getAsJsonObject();
+            if(part==null)throw new IOException("Authored joint part missing");
+            if(definition.has("influences"))
+            {
+                int count=part.vertices().length/stride;Map<String,float[]> influences=new HashMap<>();float[] sums=new float[count];
+                for(var row:definition.getAsJsonObject("influences").entrySet())
+                {
+                    var values=row.getValue().getAsJsonArray();if(values.size()!=count)throw new IOException("Joint influence length");float[] weights=new float[count];
+                    for(int i=0;i<count;i++){float w=values.get(i).getAsFloat();if(!Float.isFinite(w)||w<0||w>1)throw new IOException("Invalid joint influence");weights[i]=w;sums[i]+=w;}
+                    influences.put(row.getKey(),weights);
+                }
+                for(float sum:sums)if(Math.abs(sum-1)>.0002)throw new IOException("Joint influences must sum to one");
+                float[] rest=part.vertices().clone();result.put(entry.getKey(),new JointSkin("",new float[0],rest,rest.clone(),java.util.Collections.unmodifiableMap(new java.util.TreeMap<>(influences))));continue;
+            }
+            var values=definition.getAsJsonArray("weights");
+            if(part==null||values.size()!=part.vertices().length/stride)throw new IOException("Authored joint weight length: "+entry.getKey());
+            float[] weights=new float[values.size()];
+            for(int i=0;i<weights.length;i++){weights[i]=values.get(i).getAsFloat();if(!Float.isFinite(weights[i])||weights[i]<0||weights[i]>1)throw new IOException("Invalid joint weight");}
+            float[] rest=part.vertices().clone();result.put(entry.getKey(),new JointSkin(definition.get("otherBone").getAsString(),weights,rest,rest.clone()));
+        }
+        return Map.copyOf(result);
+    }
 
     private static Vector3f restPoint(MeshPart p,int offset)
     {
@@ -494,6 +575,7 @@ public final class LocalTriangleMeshLayer<T extends GeoAnimatable> extends GeoRe
     private static float[] skinVertices(MeshData mesh,MeshPart part,GeoBone bone)
     {
         var skin=mesh.joints().get(bone.getName());if(skin==null)return part.vertices();
+        if(!skin.influences().isEmpty())return skinAuthored(mesh,part,bone,skin);
         var root=bone;while(root.getParent()!=null)root=root.getParent();var other=findBone(root,skin.other());if(other==null)return part.vertices();
         var matrix=EvaRigTransforms.model(bone).invert().mul(EvaRigTransforms.model(other));
         var q=EvaRigTransforms.rotation(matrix);if(q.w<0)q.mul(-1);
@@ -512,6 +594,50 @@ public final class LocalTriangleMeshLayer<T extends GeoAnimatable> extends GeoRe
             out[i]=-(x+rw*ax+ry*az-rz*ay+tx)*16-part.pivotX();
             out[i+1]=(y+rw*ay+rz*ax-rx*az+ty)*16-part.pivotY();out[i+2]=(z+rw*az+rx*ay-ry*ax+tz)*16-part.pivotZ();
             x=-source[i+5];y=source[i+6];z=source[i+7];ax=2*(ry*z-rz*y);ay=2*(rz*x-rx*z);az=2*(rx*y-ry*x);
+            out[i+5]=-(x+rw*ax+ry*az-rz*ay);out[i+6]=y+rw*ay+rz*ax-rx*az;out[i+7]=z+rw*az+rx*ay-ry*ax;
+        }
+        return out;
+    }
+
+    /** Generated bodies can have three-way shoulder/hip junctions. All
+     * copies share the complete authored weights, avoiding pairwise tears. */
+    private static float[] skinAuthored(MeshData mesh,MeshPart part,GeoBone bone,JointSkin skin)
+    {
+        var root=bone;while(root.getParent()!=null)root=root.getParent();
+        var inverse=EvaRigTransforms.model(bone).invert();var inverseRotation=EvaRigTransforms.rotation(inverse);int palette=skin.influences().size(),slot=0;
+        float[][] transforms=new float[palette][8],weights=new float[palette][];
+        for(var entry:skin.influences().entrySet())
+        {
+            var other=findBone(root,entry.getKey());if(other==null)throw new IllegalStateException("Authored seam bone missing: "+entry.getKey());
+            var model=EvaRigTransforms.model(other);var global=EvaRigTransforms.rotation(model);if(global.w<0)global.mul(-1);
+            var relative=new Matrix4f(inverse).mul(model);var q=EvaRigTransforms.rotation(relative);
+            // All seam copies use the same global quaternion hemisphere.
+            // Choosing a separate short arc around each owning part tears
+            // three-way junctions when limbs fold past 180 degrees.
+            if(q.dot(new org.joml.Quaternionf(inverseRotation).mul(global))<0)q.mul(-1);
+            var dual=new org.joml.Quaternionf(relative.m30(),relative.m31(),relative.m32(),0).mul(q).mul(.5F);
+            transforms[slot]=new float[]{q.x,q.y,q.z,q.w,dual.x,dual.y,dual.z,dual.w};weights[slot++]=entry.getValue();
+        }
+        float[] rest=skin.rest(),out=skin.scratch();int stride=mesh.stride();
+        for(int vertex=0;vertex<rest.length/stride;vertex++)
+        {
+            float rx=0,ry=0,rz=0,rw=0,dx=0,dy=0,dz=0,dw=0;
+            int dominant=0;for(int p=1;p<palette;p++)if(weights[p][vertex]>weights[dominant][vertex])dominant=p;
+            var reference=transforms[dominant];
+            for(int p=0;p<palette;p++)
+            {
+                float weight=weights[p][vertex];if(weight==0)continue;var t=transforms[p];
+                if(t[0]*reference[0]+t[1]*reference[1]+t[2]*reference[2]+t[3]*reference[3]<0)weight=-weight;
+                rx+=t[0]*weight;ry+=t[1]*weight;rz+=t[2]*weight;rw+=t[3]*weight;
+                dx+=t[4]*weight;dy+=t[5]*weight;dz+=t[6]*weight;dw+=t[7]*weight;
+            }
+            float inv=1F/(float)Math.sqrt(rx*rx+ry*ry+rz*rz+rw*rw);rx*=inv;ry*=inv;rz*=inv;rw*=inv;dx*=inv;dy*=inv;dz*=inv;dw*=inv;
+            float dot=rx*dx+ry*dy+rz*dz+rw*dw;dx-=rx*dot;dy-=ry*dot;dz-=rz*dot;dw-=rw*dot;
+            float tx=2*(-dw*rx+dx*rw-dy*rz+dz*ry),ty=2*(-dw*ry+dx*rz+dy*rw-dz*rx),tz=2*(-dw*rz-dx*ry+dy*rx+dz*rw);
+            int i=vertex*stride;float x=-(rest[i]+part.pivotX())/16,y=(rest[i+1]+part.pivotY())/16,z=(rest[i+2]+part.pivotZ())/16;
+            float ax=2*(ry*z-rz*y),ay=2*(rz*x-rx*z),az=2*(rx*y-ry*x);
+            out[i]=-(x+rw*ax+ry*az-rz*ay+tx)*16-part.pivotX();out[i+1]=(y+rw*ay+rz*ax-rx*az+ty)*16-part.pivotY();out[i+2]=(z+rw*az+rx*ay-ry*ax+tz)*16-part.pivotZ();
+            x=-rest[i+5];y=rest[i+6];z=rest[i+7];ax=2*(ry*z-rz*y);ay=2*(rz*x-rx*z);az=2*(rx*y-ry*x);
             out[i+5]=-(x+rw*ax+ry*az-rz*ay);out[i+6]=y+rw*ay+rz*ax-rx*az;out[i+7]=z+rw*az+rx*ay-ry*ax;
         }
         return out;

@@ -19,7 +19,8 @@ import java.util.*;
 @Mod.EventBusSubscriber(modid=ProjectSeele.MODID)
 public final class FactoryR20Review
 {
-    public static final boolean ENABLED="r20-factory".equals(System.getProperty("projectseele.regionalBuild",""));
+    private static final boolean R21="r21-factory".equals(System.getProperty("projectseele.regionalBuild",""));
+    public static final boolean ENABLED=R21||"r20-factory".equals(System.getProperty("projectseele.regionalBuild",""));
     public static volatile boolean ready,finished;public static volatile String phase="setup";
     private static int age,state,timer;private static Path world;private static ServerLevel level;private static ServerPlayer player;
     private static UUID evaId,plugId;private static final JsonArray samples=new JsonArray();private static Vec3 last;
@@ -32,7 +33,7 @@ public final class FactoryR20Review
         {
             if(world==null)
             {
-                world=event.getServer().getWorldPath(LevelResource.ROOT).normalize();require(world.getFileName().toString().equals("SEELE_R20_REVIEW"),"Review world boundary");
+                world=event.getServer().getWorldPath(LevelResource.ROOT).normalize();require(world.getFileName().toString().equals(R21?"SEELE_R21_REVIEW":"SEELE_R20_REVIEW"),"Review world boundary");
                 level=event.getServer().getLevel(FacilitySchemaV2.DIMENSION);player=event.getServer().getPlayerList().getPlayers().get(0);player.stopRiding();player.setGameMode(GameType.CREATIVE);player.teleportTo(level,30.5,-394,-267.5,0,0);
             }
             require(++age<14000,"Cycle timeout: "+phase);timer++;

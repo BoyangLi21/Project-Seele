@@ -16,7 +16,7 @@ public final class EvaDorsalProfile
     {
         public Vec3 centreBlocks(){return centreModel.scale(EvaScale.RENDER_SCALE/16D);}
     }
-    private static final String[] MODELS={"eva_unit00","eva_unit01","eva_unit02","eva_prototype"};
+    private static final String[] MODELS={"eva_unit00","eva_unit01","eva_unit02","eva_prototype","eva_un01"};
     private static final Map<String,Profile> PROFILES=load();
     private static Vec3 vector(JsonArray a)
     {
@@ -40,7 +40,7 @@ public final class EvaDorsalProfile
         }
         catch(Exception e){throw new IllegalStateException("Invalid TV dorsal profiles",e);}
     }
-    public static Profile byVariant(int variant){return PROFILES.get(MODELS[Math.max(0,Math.min(3,variant))]);}
-    public static Profile of(EvaUnit01Entity unit){return byVariant(unit instanceof EvaPrototypeEntity?3:unit.getUnitVariant());}
+    public static Profile byVariant(int variant){return PROFILES.get(MODELS[Math.max(0,Math.min(4,variant))]);}
+    public static Profile of(EvaUnit01Entity unit){return byVariant(unit instanceof EvaPrototypeEntity un?3+un.getUNSerial():unit.getUnitVariant());}
     private EvaDorsalProfile() {}
 }

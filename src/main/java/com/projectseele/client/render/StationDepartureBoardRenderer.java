@@ -15,18 +15,22 @@ public final class StationDepartureBoardRenderer implements BlockEntityRenderer<
     public StationDepartureBoardRenderer(BlockEntityRendererProvider.Context context) { font=context.getFont(); }
     @Override public void render(StationDepartureBoardBlockEntity board,float partial,PoseStack poses,MultiBufferSource buffers,int light,int overlay)
     {
-        poses.pushPose();poses.translate(.5,1.08,.5);
+        boolean direction=board.getBlockState().getValue(StationDepartureBoardBlock.WAYFINDING);
+        float scale=direction?.020F:.0125F, width=direction?132:216;
+        poses.pushPose();poses.translate(.5,direction?1.73:1.08,.5);
         poses.mulPose(Axis.YP.rotationDegrees(-board.getBlockState().getValue(StationDepartureBoardBlock.FACING).toYRot()));
-        poses.translate(0,0,.132);poses.scale(.0125F,-.0125F,.0125F);
-        line(board.title(),0,0xffedbd55,poses,buffers);
-        line(board.station(),11,0xffabbec5,poses,buffers);
-        for(int i=0;i<board.rows().size();i++) line(board.rows().get(i),25+i*13,i==0?0xffe9efde:0xffa9d9ae,poses,buffers);
+        // The front face ends at .13. A two-millimetre gap loses depth
+        // precision at the GeoFront's negative elevations and shreds glyphs.
+        poses.translate(0,0,.15);poses.scale(scale,-scale,scale);
+        line(board.title(),0,0xffedbd55,width,poses,buffers);
+        line(board.station(),11,0xffabbec5,width,poses,buffers);
+        for(int i=0;i<board.rows().size();i++) line(board.rows().get(i),25+i*13,i==0?0xffe9efde:0xffa9d9ae,width,poses,buffers);
         poses.popPose();
     }
-    private void line(String text,int y,int color,PoseStack poses,MultiBufferSource buffers)
+    private void line(String text,int y,int color,float width,PoseStack poses,MultiBufferSource buffers)
     {
-        poses.pushPose();float fit=Math.min(1,216F/Math.max(1,font.width(text)));poses.translate(0,y,0);poses.scale(fit,1,1);
-        font.drawInBatch(text,-font.width(text)/2F,0,color,false,poses.last().pose(),buffers,Font.DisplayMode.NORMAL,0,15728880);
+        poses.pushPose();float fit=Math.min(1,width/Math.max(1,font.width(text)));poses.translate(0,y,0);poses.scale(fit,1,1);
+        font.drawInBatch(text,-font.width(text)/2F,0,color,false,poses.last().pose(),buffers,Font.DisplayMode.POLYGON_OFFSET,0,15728880);
         poses.popPose();
     }
     @Override public int getViewDistance() { return 96; }

@@ -3,14 +3,14 @@ import argparse,json,subprocess
 from pathlib import Path
 from export_tv_movies_r16 import choose
 ROOT=Path(__file__).resolve().parents[1];OUT=ROOT/'artifacts/world_rebuild_r20/media'
-def main(folder,kind,name):
+def main(folder,kind,name,flight_proof=None):
     folder=Path(folder);data=json.loads((folder/'frames.json').read_text());frames=data['frames'];assert len(frames)>25 and not data['write_failure'];OUT.mkdir(exist_ok=True)
     if kind=='train':
         proof=json.loads((OUT.parent/'transit/p1_native_pass.json').read_text());assert proof['passed']
         assert any(f.get('riding') and f.get('travel',0)>500 and f.get('doors') and f.get('speed',1)<.001 for f in frames)
         segments=choose(frames,'train')
     elif kind=='flight':
-        proof=json.loads((OUT.parent/'transit/f1_native_pass.json').read_text());assert proof['passed'] and proof['oppositeAirportStop'];segments=choose(frames,'flight')
+        proof=json.loads(Path(flight_proof or OUT.parent/'transit/f1_native_pass.json').read_text());assert proof['passed'] and proof['oppositeAirportStop'];segments=choose(frames,'flight')
     else:
         intervals=[]
         def add(a,b):
@@ -37,7 +37,7 @@ def main(folder,kind,name):
             lines += ["file '"+path.as_posix()+"'",'option framerate 1000',f'duration {dt:.8f}'];duration+=dt;count+=1
     lines += ["file '"+(folder/frames[segments[-1][1]-1]['file']).resolve().as_posix()+"'",'option framerate 1000']
     script=OUT/(name+'.concat.txt');script.write_text('\n'.join(lines)+'\n',encoding='utf8');target=OUT/(name+'.mp4')
-    command=['ffmpeg','-hide_banner','-loglevel','error','-y','-f','concat','-safe','0','-i',str(script),'-fps_mode','vfr','-c:v','libx264','-threads','2','-preset','fast','-crf','24','-pix_fmt','yuv420p','-an','-movflags','+faststart',str(target)]
+    command=['ffmpeg','-hide_banner','-loglevel','error','-y','-f','concat','-safe','0','-i',str(script),'-fps_mode','vfr','-c:v','libx264','-threads','2','-preset','fast','-crf','24','-bf','0','-pix_fmt','yuv420p','-an','-movflags','+faststart',str(target)]
     subprocess.run(command,check=True)
     if target.stat().st_size>18*1048576:
         command[command.index('-crf')+1]='27';command[-1:-1]=['-vf','scale=960:-2'];subprocess.run(command,check=True)
