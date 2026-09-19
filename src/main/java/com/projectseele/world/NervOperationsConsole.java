@@ -465,6 +465,18 @@ public final class NervOperationsConsole
         return offset<0?null:S24CoordinateTransform.apply(level.getServer(),S20_AUTHORED_CONTROLS[offset+2-variant]);
     }
 
+    public record ControlOutcome(long tick, java.util.UUID requester,
+                                 BlockPos button, boolean accepted, String message) {}
+    private static final java.util.Map<ServerLevel, ControlOutcome> LAST_OUTCOMES = new java.util.WeakHashMap<>();
+
+    /** Read immediately after a physical press; handled does not mean accepted. */
+    public static ControlOutcome lastOutcome(ServerLevel level, ServerPlayer requester, BlockPos button)
+    {
+        ControlOutcome result = LAST_OUTCOMES.get(level);
+        return result != null && result.tick() == level.getGameTime()
+                && result.requester().equals(requester.getUUID()) && result.button().equals(button) ? result : null;
+    }
+
     /** Returns true only for one of the exact physical NERV command buttons. */
     public static boolean handleUse(ServerPlayer player, BlockPos position)
     {
@@ -723,6 +735,8 @@ public final class NervOperationsConsole
             case S20_ARMAMENT_RECALL_ACTION -> "armament_recall";
             default -> S20_IDS[action];
         };
+        LAST_OUTCOMES.put(level, new ControlOutcome(level.getGameTime(), player.getUUID(),
+                position.immutable(), result.accepted(), result.message()));
         record(level, id + ": " + result.message());
         player.displayClientMessage(Component.literal(
                         "[NERV S20] " + result.message())

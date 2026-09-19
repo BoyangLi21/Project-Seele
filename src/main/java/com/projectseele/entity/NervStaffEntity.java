@@ -16,6 +16,8 @@ public final class NervStaffEntity extends PathfinderMob
 {
     private static final EntityDataAccessor<String> SKIN=SynchedEntityData.defineId(NervStaffEntity.class,EntityDataSerializers.STRING);
     private static final EntityDataAccessor<Integer> ACTIVITY=SynchedEntityData.defineId(NervStaffEntity.class,EntityDataSerializers.INT);
+    private static final EntityDataAccessor<BlockPos> PRESS_TARGET=SynchedEntityData.defineId(NervStaffEntity.class,EntityDataSerializers.BLOCK_POS);
+    private static final EntityDataAccessor<Long> PRESS_START=SynchedEntityData.defineId(NervStaffEntity.class,EntityDataSerializers.LONG);
     private String memberId="",role="technician";
     private BlockPos station=BlockPos.ZERO;
     private java.util.UUID requester;
@@ -32,7 +34,7 @@ public final class NervStaffEntity extends PathfinderMob
     {
         return PathfinderMob.createMobAttributes().add(Attributes.MAX_HEALTH,20).add(Attributes.MOVEMENT_SPEED,.25).add(Attributes.FOLLOW_RANGE,16);
     }
-    @Override protected void defineSynchedData(){super.defineSynchedData();entityData.define(SKIN,"technician");entityData.define(ACTIVITY,0);}
+    @Override protected void defineSynchedData(){super.defineSynchedData();entityData.define(SKIN,"technician");entityData.define(ACTIVITY,0);entityData.define(PRESS_TARGET,BlockPos.ZERO);entityData.define(PRESS_START,-1L);}
     public void assign(String id,String name,String role,String skin,BlockPos station)
     {
         this.memberId=id;this.role=role;this.station=station;entityData.set(SKIN,skin.matches("[a-z0-9_]{1,40}")?skin:"technician");setCustomName(net.minecraft.network.chat.Component.literal(name));setCustomNameVisible(false);
@@ -42,6 +44,19 @@ public final class NervStaffEntity extends PathfinderMob
     public String skin(){return entityData.get(SKIN);}
     public int activity(){return entityData.get(ACTIVITY);}
     public int pressCount(){return pressCount;}
+    public BlockPos pressTarget(){return entityData.get(PRESS_TARGET);}
+    public float pressBlend(float partial)
+    {
+        long start=entityData.get(PRESS_START);if(start<0||activity()!=2)return 0;
+        float age=level().getGameTime()-start+partial;
+        float t=age<6?net.minecraft.util.Mth.clamp(age/6,0,1):age<10?1:net.minecraft.util.Mth.clamp((16-age)/6,0,1);
+        return t*t*(3-2*t);
+    }
+    public boolean beginPressGesture(BlockPos target)
+    {
+        if(entityData.get(PRESS_START)<0){entityData.set(PRESS_TARGET,target.immutable());entityData.set(PRESS_START,level().getGameTime());entityData.set(ACTIVITY,2);}
+        return level().getGameTime()-entityData.get(PRESS_START)>=6;
+    }
     public BlockPos station(){return station;}
     public boolean busy(){return requester!=null;}
     public java.util.UUID requester(){return requester;}
@@ -54,7 +69,7 @@ public final class NervStaffEntity extends PathfinderMob
     {
         requester=null;operation="";control=approach=null;getNavigation().stop();
         returning=distanceToSqr(net.minecraft.world.phys.Vec3.atBottomCenterOf(station))>1;
-        returnTicks=0;setNoAi(true);if(pressTicks==0)entityData.set(ACTIVITY,0);
+        returnTicks=0;setNoAi(true);if(pressTicks==0){entityData.set(ACTIVITY,0);entityData.set(PRESS_START,-1L);}
     }
     @Override public void tick()
     {
@@ -64,7 +79,7 @@ public final class NervStaffEntity extends PathfinderMob
             setNoAi(false);if(--settleTicks==0||onGround()){settleTicks=0;if(requester==null)setNoAi(true);}return;
         }
         if(requester!=null)NervStaffDialogue.tickTask(this,requester,operation,variant,control,approach,++taskTicks);
-        else if(pressTicks>0){if(--pressTicks==0)entityData.set(ACTIVITY,0);}
+        else if(pressTicks>0){if(--pressTicks==0){entityData.set(ACTIVITY,0);entityData.set(PRESS_START,-1L);}}
         else if(returning)
         {
             // Never teleport a staff member through a locked door to restore a post.
@@ -77,11 +92,12 @@ public final class NervStaffEntity extends PathfinderMob
             var player=level().getNearestPlayer(this,7);if(player!=null){double dx=player.getX()-getX(),dz=player.getZ()-getZ();setYHeadRot((float)Math.toDegrees(Math.atan2(-dx,dz)));}
         }
     }
-    public void pressing(){pressCount++;pressTicks=16;entityData.set(ACTIVITY,2);swing(InteractionHand.MAIN_HAND);}
+    public void pressing(){pressCount++;pressTicks=10;entityData.set(ACTIVITY,2);if(entityData.get(PRESS_START)<0)entityData.set(PRESS_START,level().getGameTime()-6);}
     @Override protected InteractionResult mobInteract(Player player,InteractionHand hand)
     {
         if(hand!=InteractionHand.MAIN_HAND)return InteractionResult.PASS;
-        if(player instanceof net.minecraft.server.level.ServerPlayer server)NervStaffDialogue.open(server,this);
+        if(player instanceof net.minecraft.server.level.ServerPlayer server)
+        {if(player.isShiftKeyDown())NervStaffDialogue.openChat(server,this);else NervStaffDialogue.open(server,this);}
         return InteractionResult.sidedSuccess(level().isClientSide);
     }
     @Override public boolean removeWhenFarAway(double distance){return false;}

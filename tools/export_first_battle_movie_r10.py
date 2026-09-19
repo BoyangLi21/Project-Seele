@@ -5,12 +5,17 @@ import numpy as np
 ROOT=Path(__file__).resolve().parents[1];OUT=ROOT/'artifacts/first_battle_world_r10/choreography';RATE=48000
 def main(folder,output=OUT,name='eva_sachiel_first_battle_r10',landing_time=11.7):
  output.mkdir(parents=True,exist_ok=True)
- data=json.loads((folder/'frames.json').read_text());frames=data['frames'];assert frames and any(f['active'] for f in frames)
+ data=json.loads((folder/'frames.json').read_text());frames=data['frames'];assert frames and any(f.get('active',True) for f in frames)
+ assert not data.get('write_failure') and not data.get('error'), 'Capture reported a write failure'
  lines=[]
  for i,f in enumerate(frames):
-  lines+=[f"file '{(folder/f['file']).resolve().as_posix()}'",f"duration {(frames[i+1]['seconds']-f['seconds']) if i+1<len(frames) else .05:.7f}"]
- lines.append(f"file '{(folder/frames[-1]['file']).resolve().as_posix()}'");source=output/'native_first_battle.concat.txt';source.write_text('\n'.join(lines)+'\n',encoding='utf8')
- duration=frames[-1]['seconds']+.05;audio=np.zeros(round(duration*RATE)+RATE*3,dtype=np.float32);active=[f for f in frames if f['active']]
+  path=(folder/f['file']).resolve();assert path.parent==folder.resolve() and path.is_file()
+  delta=(frames[i+1]['seconds']-f['seconds']) if i+1<len(frames) else .05;assert 0<delta<10
+  # JPEG demuxers otherwise use a 1/25s clock and quantise native 30Hz
+  # frame times, introducing repeated/dropped steps in the review movie.
+  lines+=[f"file '{path.as_posix()}'",'option framerate 1000',f"duration {delta:.7f}"]
+ lines+=[f"file '{(folder/frames[-1]['file']).resolve().as_posix()}'",'option framerate 1000'];source=output/'native_first_battle.concat.txt';source.write_text('\n'.join(lines)+'\n',encoding='utf8')
+ duration=frames[-1]['seconds']+.05;audio=np.zeros(round(duration*RATE)+RATE*3,dtype=np.float32);active=[f for f in frames if f.get('active',True)]
  cues=[(0,'berserk_roar',.65),(.95,'foot_concrete',.7),(1.4,'at_pressure',.7),(2.65,'at_pressure',.5),(3.75,'at_pressure',.6),(4.95,'at_tear',.85),(6.1,'foot_concrete',.6),(8,'armor_impact',.7),(9.2,'impact',.8),(landing_time,'land',.9),(12.75,'impact',.85),(14.15,'impact',.85),(15.35,'armor_impact',.6),(16.05,'core_break',.8),(17.7,'at_pressure',.8),(18.6,'core_break',1),(20.5,'foot_concrete',.6),(21.4,'foot_concrete',.6)]
  for time,cue_name,gain in cues:
   at=min(active,key=lambda f:abs(f['scene_seconds']-time))['seconds'];path=ROOT/'artifacts/first_battle_world_r10/audio'/('eva_'+cue_name+'.wav')

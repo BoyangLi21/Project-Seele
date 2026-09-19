@@ -7,6 +7,7 @@ public final class EvaImpactPose
 {
     public static EvaMotionEngineV2.BoneWrites apply(LivingEntity entity,BakedGeoModel model,float partial)
     {
+        if(entity instanceof FirstBattleSignals.Actor actor&&actor.firstBattleSignals().active(entity))return EvaMotionEngineV2.BoneWrites.empty();
         if(entity instanceof EvaUnit01Entity eva&&(eva.getWeapon()==EvaUnit01Entity.WEAPON_RIFLE||eva.isNervLogisticsLocked()||eva.isLaunchSequenceActive()))return EvaMotionEngineV2.BoneWrites.empty();
         if(entity instanceof EvaUnit01Entity eva&&eva.isPoweredOn()&&eva.getActivationTicks()==0&&EvaBodyPose.hasTerrainStances()&&!eva.isVisuallyAirborneForRender()&&!eva.hasLiveActionForRender(partial)&&(eva.getWeapon()==EvaUnit01Entity.WEAPON_FISTS||eva.getWeapon()==EvaUnit01Entity.WEAPON_KNIFE))return EvaMotionEngineV2.BoneWrites.empty();
         var p=EvaImpactResponse.sample(entity,partial);if(p.energy()<.001)return EvaMotionEngineV2.BoneWrites.empty();Set<String> names=new LinkedHashSet<>();

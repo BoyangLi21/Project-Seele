@@ -8,10 +8,10 @@ from collections import defaultdict,Counter
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-import gzip,json,shutil,msvcrt,time
+import gzip,json,shutil,msvcrt,time,copy
 import nbtlib
 import numpy as np
-from query_blocks import iter_selected_sections,dimension_dir,AIR
+from query_blocks import iter_selected_sections,iter_block_entities,dimension_dir,AIR
 from transplant_s22_authority import read_region,parse_chunk,build_region,decoded_sections,flush_decoded,chunk_blob
 from apply_s20_approved_semantic_repairs import parse_state,atomic_replace
 
@@ -47,7 +47,7 @@ class Op:
 
 class Painter:
     def __init__(self):
-        self.ops=[];self.by_chunk=defaultdict(list);self.block_entities={};self.keep_boxes=[]
+        self.ops=[];self.by_chunk=defaultdict(list);self.block_entities={};self.keep_boxes=[];self.entity_updates={}
         self.meta={'rooms':[],'landmarks':[],'doors':[],'walk_nodes':[]}
     def fill(self,x0,y0,z0,x1,y1,z1,state,owner,mode='new'):
         state=canonical_state(state)
@@ -62,6 +62,11 @@ class Painter:
     def match(self,box,before,after,owner):
         self.fill(*box,after,owner,'match')
         self.ops[-1]=Op(self.ops[-1].box,canonical_state(after),owner,'match',(canonical_state(before),))
+    def update_block_entity(self,pos,state,before,after,owner):
+        """Explicit NBT-only edit with measured state/tag preconditions and inverse."""
+        pos=tuple(map(int,pos));self.match((*pos,*pos),state,state,owner)
+        self.block_entities[pos]=copy.deepcopy(after)
+        self.entity_updates[pos]=(canonical_state(state),copy.deepcopy(before),copy.deepcopy(after),owner)
     def heightfield(self,cx,cz,heights,active,owner,clear_vegetation=None):
         if clear_vegetation is None:clear_vegetation=np.ones((16,16),dtype=bool)
         op=Op((cx*16,32,cz*16,cx*16+15,255,cz*16+15),'minecraft:grass_block[snowy=false]',owner,'heightfield',
@@ -117,7 +122,7 @@ class Painter:
                 if x0//16<=cx<=x1//16 and z0//16<=cz<=z1//16:
                     protected_by_chunk[cx,cz].append(protection)
         for p in self.block_entities:additions_by_chunk[p[0]//16,p[2]//16].add(p)
-        touched=[];counts=Counter();protected=Counter();start=time.monotonic()
+        touched=[];counts=Counter();protected=Counter();start=time.monotonic();entity_deltas=[]
         try:
             for number,((rx,rz),chunks_ops) in enumerate(sorted(groups.items())):
                 selected={p:{sy for i in ops for sy in range(self.ops[i].box[1]//16,self.ops[i].box[4]//16+1)} for p,ops in chunks_ops.items()}
@@ -203,10 +208,24 @@ class Painter:
                         mask &= ~protected_cells(op.mode)[ay:by,az:bz,ax:bx]
                         view[mask]=target
                     diff=(before!=after)&(before!=65535)
-                    if not diff.any():continue
+                    old_entities={tuple(int(t[k]) for k in ('x','y','z')):t for t in root.get('block_entities',[])}
+                    nbt_changes=set()
+                    for pos,(expected_state,expected_tag,new_tag,owner) in self.entity_updates.items():
+                        if (pos[0]//16,pos[2]//16)!=(cx,cz):continue
+                        yy,zz,xx=pos[1]-minimum*16,pos[2]&15,pos[0]&15
+                        if protected_cells('match')[yy,zz,xx]:raise RuntimeError(f'Protected NBT update: {pos} {owner}')
+                        if palettes[int(before[yy,zz,xx])]!=expected_state or palettes[int(after[yy,zz,xx])]!=expected_state:
+                            raise RuntimeError(f'NBT block-state precondition changed: {pos}')
+                        original=old_entities.get(pos)
+                        actual=None if original is None else original.snbt()
+                        expected=None if expected_tag is None else expected_tag.snbt()
+                        if actual!=expected:raise RuntimeError(f'NBT precondition changed: {pos}')
+                        if actual!=new_tag.snbt():
+                            nbt_changes.add(pos);entity_deltas.append(dict(position=pos,owner=owner,state=expected_state,before=actual,after=new_tag.snbt()))
+                    if not diff.any() and not nbt_changes:continue
                     offsets=np.flatnonzero(diff).astype(np.uint32);old_values=before.reshape(-1)[offsets];new_values=after.reshape(-1)[offsets]
                     np.savez_compressed(report_dir/'delta'/f'c.{cx}.{cz}.npz',minimum=np.int32(minimum*16),offsets=offsets,palette=np.asarray(palettes),before=old_values,after=new_values)
-                    changed_positions=set()
+                    changed_positions=set(nbt_changes)
                     for sy in selected[cx,cz]:
                         block_slice=slice((sy-minimum)*16,(sy-minimum+1)*16);mask=diff[block_slice].reshape(-1)
                         if not mask.any():continue
@@ -230,9 +249,10 @@ class Painter:
                     existing=[t for t in root.get('block_entities',[]) if tuple(int(t[k]) for k in ('x','y','z')) not in changed_positions]
                     existing += [self.block_entities[p] for p in changed_positions if p in self.block_entities]
                     root['block_entities']=nbtlib.List[nbtlib.Compound](existing)
-                    flush_decoded(root,decoded);root['isLightOn']=nbtlib.Byte(0);root.pop('Heightmaps',None)
-                    for section in root.get('sections',[]):section.pop('BlockLight',None);section.pop('SkyLight',None)
-                    blobs[slot]=chunk_blob(root);dirty=True;counts['cells']+=len(offsets);counts['chunks']+=1
+                    if diff.any():
+                        flush_decoded(root,decoded);root['isLightOn']=nbtlib.Byte(0);root.pop('Heightmaps',None)
+                        for section in root.get('sections',[]):section.pop('BlockLight',None);section.pop('SkyLight',None)
+                    blobs[slot]=chunk_blob(root);dirty=True;counts['cells']+=len(offsets);counts['chunks']+=1;counts['block_entities']+=len(nbt_changes)
                 if dirty:
                     atomic_replace(path,build_region(stamps,blobs));touched.append((path,backup))
                     for cx,cz,sy,pal,idx in iter_selected_sections(WORLD,DIM,selected):
@@ -243,12 +263,19 @@ class Painter:
                             if keep.any():
                                 expected=d['palette'][d['after'][keep]];actual=np.asarray(pal)[idx[(offsets[keep]%4096).astype(int)]]
                                 if not np.array_equal(actual,expected):raise RuntimeError(f'Readback mismatch {cx,cz,sy}')
+                    requested={p:entry for p,entry in self.entity_updates.items() if (p[0]//16,p[2]//16) in chunks_ops}
+                    if requested:
+                        lo=tuple(min(p[i] for p in requested) for i in range(3));hi=tuple(max(p[i] for p in requested) for i in range(3))
+                        current=dict(iter_block_entities(WORLD,DIM,lo,hi,selected_chunks=set(chunks_ops)))
+                        for p,(_,_,expected,_) in requested.items():
+                            if p not in current or current[p].snbt()!=expected.snbt():raise RuntimeError(f'NBT readback mismatch: {p}')
                 print(f'{name}: regions {number+1}/{len(groups)}, cells {counts["cells"]}, {time.monotonic()-start:.1f}s',flush=True)
         except Exception:
             for path,backup in touched:atomic_replace(path,backup.read_bytes())
             raise
         finally:
             if own_lock:lock.close()
+        (report_dir/'block_entity_deltas.json').write_text(json.dumps(entity_deltas,ensure_ascii=False,indent=2),encoding='utf8')
         receipt=dict(world=str(WORLD),dimension=DIM,counts=counts,kept_existing_cells=dict(protected),verified=True,elapsed=round(time.monotonic()-start,2))
         (report_dir/'receipt.json').write_text(json.dumps(receipt,indent=2),encoding='utf-8')
         print('VERIFIED',report_dir,flush=True)

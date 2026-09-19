@@ -8,6 +8,9 @@
     "projectseele:nerv_hazard_paving",
     "projectseele:nerv_strip_light",
     "projectseele:station_tactile_path",
-    "projectseele:station_tactile_warning"
+    "projectseele:station_tactile_warning",
+    "projectseele:period_station_floor",
+    "projectseele:period_fixture",
+    "projectseele:station_drain"
   ]
 }

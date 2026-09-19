@@ -6,6 +6,8 @@
   "refmap": "projectseele.refmap.json",
   "minVersion": "0.8",
   "mixins": [
+    "CollisionChunkRevisionR24Mixin",
+    "SbwRestCollisionR24Mixin",
     "BiomeManagerMixin",
     "PianoSyncServerR23Mixin",
     "MovingElevatorGroupAccessMixin",
@@ -19,6 +21,9 @@
     "EvaSmallObstacleMixin"
   ],
   "client": [
+    "client.SbwPhantomLoadR24Mixin",
+    "client.ChunkSkySourceR24Mixin",
+    "client.NervChestFinishR24Mixin",
     "client.SbwOverlayTraceMixin",
     "client.NativeImagePixelsAccessor",
     "client.CameraMixin",

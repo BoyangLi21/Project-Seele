@@ -242,18 +242,19 @@ public final class ClientFxManager
         PoseStack poseStack = event.getPoseStack();
         Vec3 cam = event.getCamera().getPosition();
         MultiBufferSource.BufferSource buffer = Minecraft.getInstance().renderBuffers().bufferSource();
-        VertexConsumer consumer = buffer.getBuffer(RenderType.lightning());
 
         for (WorldFx fx : ACTIVE)
         {
             poseStack.pushPose();
             poseStack.translate(fx.pos.x - cam.x, fx.pos.y - cam.y, fx.pos.z - cam.z);
             VertexConsumer target = fx instanceof KabbalahTree
-                    ? buffer.getBuffer(TREE_GEOMETRY) : consumer;
+                    ? buffer.getBuffer(TREE_GEOMETRY) : fx instanceof CrossExplosion
+                    ? buffer.getBuffer(com.projectseele.client.render.EnergyGlowR24.CROSS) : buffer.getBuffer(RenderType.lightning());
             fx.render(poseStack, target, event.getPartialTick());
             poseStack.popPose();
         }
         buffer.endBatch(RenderType.lightning());
+        buffer.endBatch(com.projectseele.client.render.EnergyGlowR24.CROSS);
         buffer.endBatch(TREE_GEOMETRY);
 
         // World-space lettering uses the same pose as the luminous geometry,
@@ -343,18 +344,18 @@ public final class ClientFxManager
             // Vertical pillar: violet-white core in an orange sheath.
             Vector3f base = new Vector3f(0.0F, -2.0F * this.scale, 0.0F);
             Vector3f top = new Vector3f(0.0F, height, 0.0F);
-            RibbonRenderer.drawStarRibbon(pose, consumer, base, top,
+            RibbonRenderer.drawSoftStarRibbon(pose, consumer, base, top,
                     2.0F * widthMul, 1.5F * widthMul, 1.0F, 0.55F, 0.22F, alpha * 0.5F);
-            RibbonRenderer.drawStarRibbon(pose, consumer, base, top,
+            RibbonRenderer.drawSoftStarRibbon(pose, consumer, base, top,
                     0.9F * widthMul, 0.65F * widthMul, 1.0F, 0.97F, 0.90F, alpha * 0.95F);
 
             if (armReach > 0.05F)
             {
                 Vector3f left = new Vector3f(-armReach, armY, 0.0F);
                 Vector3f right = new Vector3f(armReach, armY, 0.0F);
-                RibbonRenderer.drawStarRibbon(pose, consumer, left, right,
+                RibbonRenderer.drawSoftStarRibbon(pose, consumer, left, right,
                         1.5F * widthMul, 1.5F * widthMul, 1.0F, 0.55F, 0.22F, alpha * 0.5F);
-                RibbonRenderer.drawStarRibbon(pose, consumer, left, right,
+                RibbonRenderer.drawSoftStarRibbon(pose, consumer, left, right,
                         0.7F * widthMul, 0.7F * widthMul, 1.0F, 0.97F, 0.90F, alpha * 0.95F);
             }
 

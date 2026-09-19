@@ -60,7 +60,10 @@ public final class NervCommandSeatEntity extends Entity
         if(!this.level().isClientSide&&this.getTags().contains("seele_office_seat")&&this.tickCount>5)
         {
             var pos=net.minecraft.core.BlockPos.of(this.getPersistentData().getLong("OfficeChair"));
-            if(!this.isVehicle()||!(this.level().getBlockState(pos).getBlock() instanceof com.projectseele.world.NervOfficeChairBlock))this.discard();
+            var chair=this.level().getBlockState(pos);
+            boolean valid=chair.getBlock() instanceof com.projectseele.world.NervOfficeChairBlock
+                    ||chair.getBlock() instanceof com.projectseele.world.PeriodFixtureBlock&&chair.getValue(com.projectseele.world.PeriodFixtureBlock.KIND)==com.projectseele.world.PeriodFixtureBlock.Kind.CAFE_STOOL;
+            if(!this.isVehicle()||!valid)this.discard();
         }
     }
 

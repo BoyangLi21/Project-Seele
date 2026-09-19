@@ -349,6 +349,9 @@ dependencies {
     if (project.hasProperty('lowEndClient') || project.hasProperty('optimizedClient')) {
         runtimeOnly fg.deobf('local:embeddium:0.3.31+mc1.20.1')
     }
+    if (project.hasProperty('clientOcclusion')) {
+        runtimeOnly fg.deobf('local:entityculling-forge:1.7.3-mc1.20.1')
+    }
     if (project.hasProperty('gpuTerrain')) {
         runtimeOnly fg.deobf('local:acedium:0.2.7-beta')
     }

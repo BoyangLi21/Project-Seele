@@ -25,14 +25,19 @@ public final class NervStaffDialogue
             "un_guard",List.of("UN 安保值勤。试验区未经许可不得进入。"),
             "un_crew",List.of("车辆、航空器和试验机库按值班表检查。控制设备请交给当班人员。"),
             "technician",List.of("本区设备运行中。我正在记录压力、供电和检修情况。"));
-    private static void say(ServerPlayer player,String name,String line)
+    public static void say(ServerPlayer player,String name,String line)
     {
         player.sendSystemMessage(Component.literal("「"+name+"」 ").withStyle(ChatFormatting.AQUA).append(Component.literal(line).withStyle(ChatFormatting.WHITE)));
         if("r15-staff".equals(System.getProperty("projectseele.regionalBuild","")))ProjectSeele.LOGGER.info("STAFF REVIEW DIALOGUE {} {}",name,line);
     }
+    public static void reply(ServerPlayer player,NervStaffEntity npc,String line)
+    {
+        say(player,npc.getName().getString(),line);
+        StaffConversationR24.note(player,npc,line);
+    }
     private static MutableComponent option(String text,String command)
     {return Component.literal("["+text+"] ").withStyle(s->s.withColor(ChatFormatting.GOLD).withClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND,command)));}
-    private static String stage(String value)
+    public static String stage(String value)
     {
         EvaFleetSavedData.Phase phase;
         try{phase=EvaFleetSavedData.Phase.valueOf(value);}catch(RuntimeException exception){return "等待状态确认";}
@@ -46,51 +51,112 @@ public final class NervStaffDialogue
         };
     }
     public static void open(ServerPlayer player,NervStaffEntity npc)
+    { StaffConversationR24.open(player,npc,false); }
+    public static void openChat(ServerPlayer player,NervStaffEntity npc)
     {
-        var lines=LINES.getOrDefault(npc.staffRole(),LINES.get("technician"));say(player,npc.getName().getString(),lines.get((int)(player.level().getGameTime()/100+Math.abs(npc.getId()))%lines.size()));
+        reply(player,npc,StaffDialogueCatalogR24.line(npc.skin(),npc.staffRole(),"greeting",player.tickCount / 100));
         String prefix="/nerv talk \""+npc.memberId()+"\" ";var menu=option("战况",prefix+"状态");
         if(Set.of("commander","scientist").contains(npc.staffRole()))
         {
             for(int v=0;v<3;v++){String unit=String.format(Locale.ROOT,"%02d",v);menu.append(option("整备 "+unit,prefix+"整备 "+unit)).append(option("发射 "+unit,prefix+"发射 "+unit)).append(option("回收 "+unit,prefix+"回收 "+unit));}
-            menu.append(option("取消当前操作",prefix+"停止操作"));
+            menu.append(option("整备后发射 01",prefix+"整备后发射 01")).append(option("取消后续操作",prefix+"停止操作"));
         }
         player.sendSystemMessage(menu);
+        player.sendSystemMessage(option("道路指引",prefix+"TOPIC:directions").append(option("同步与驾驶",prefix+"TOPIC:sync")).append(option("插入栓",prefix+"TOPIC:plug")).append(option("作战记录",prefix+"TOPIC:campaign")).append(option("值班闲聊",prefix+"TOPIC:duty")));
     }
     public static boolean authorized(ServerPlayer player)
     {
-        return player.createCommandSourceStack().hasPermission(2)||player.getInventory().items.stream().anyMatch(s->s.is(ModItems.NERV_EMPLOYEE_CARD.get())||s.is(ModItems.TERMINAL_DOGMA_ACCESS_CARD.get()));
+        return player.createCommandSourceStack().hasPermission(2)||java.util.stream.Stream.concat(player.getInventory().items.stream(),player.getInventory().offhand.stream()).anyMatch(s->s.is(ModItems.NERV_EMPLOYEE_CARD.get())||s.is(ModItems.TERMINAL_DOGMA_ACCESS_CARD.get()));
     }
     public static int talk(ServerPlayer player,String target,String text)
     {
         var nearby=player.serverLevel().getEntitiesOfClass(NervStaffEntity.class,player.getBoundingBox().inflate(10),n->n.memberId().equals(target)||n.getStringUUID().equals(target));
         if(nearby.isEmpty()){player.sendSystemMessage(Component.literal("请走到工作人员身边再交谈。"));return 0;}
         var npc=nearby.get(0);if(player.distanceToSqr(npc)>100)return 0;
-        if(text.equals("停止操作"))
+        return converse(player,npc,text);
+    }
+    public static int converse(ServerPlayer player,NervStaffEntity npc,String text)
+    {
+        if(text.startsWith("ROUTE:"))
+        {reply(player,npc,NervWayfindingR24.start(player,text.substring(6)));return 1;}
+        if(text.startsWith("CAMPAIGN:"))
         {
-            if(npc.busy()&&!player.getUUID().equals(npc.requester())&&!player.createCommandSourceStack().hasPermission(2))
-            {say(player,npc.getName().getString(),"这项操作由另一名指挥人员下达，请由下令人取消。");return 0;}
-            npc.finishTask();say(player,npc.getName().getString(),"收到，停止尚未执行的操作。");return 1;
+            if(!Set.of("commander","scientist").contains(npc.staffRole()))
+            {reply(player,npc,"请向作战指挥或技术负责人提交作战指令。");return 0;}
+            int result=switch(text)
+            {
+                case "CAMPAIGN:begin" -> com.projectseele.event.TvCampaignDirector.begin(player);
+                case "CAMPAIGN:cancel" -> com.projectseele.event.TvCampaignDirector.cancel(player);
+                default -> 0;
+            };
+            reply(player,npc,com.projectseele.event.TvCampaignDirector.briefing(player));return result;
         }
-        if(text.contains("状态")||text.contains("战况"))
+        var intent=StaffIntentR24.parse(text);
+        switch(intent.kind())
         {
-            for(int v=0;v<3;v++){var status=EvaLogisticsDirector.status(player.serverLevel(),v);say(player,npc.getName().getString(),String.format(Locale.ROOT,"EVA-%02d：%s，%s。",v,stage(status.phase()),status.loaded()?"机体信号在线":"等待远端信号"));}return 1;
+            case CANCEL -> { return StaffCommandBookR24.cancel(player,npc,intent.unit()); }
+            case ACTION -> { return StaffCommandBookR24.request(player,npc,intent.subject(),intent.unit()); }
+            case INVALID -> { reply(player,npc,intent.subject());return 0; }
+            case QUERY ->
+            {
+                List<String> lines=new ArrayList<>();
+                for(int v=0;v<3;v++)if(intent.unit()<0||intent.unit()==v)
+                    lines.add(unitName(v)+"："+readinessHint(player.serverLevel(),v,"query"));
+                reply(player,npc,String.join("\n",lines));return 1;
+            }
+            default ->
+            {
+                if(intent.subject().equals("status"))
+                {
+                    for(int v=0;v<3;v++)
+                    {
+                        var status=EvaLogisticsDirector.status(player.serverLevel(),v);
+                        reply(player,npc,unitName(v)+"："+stage(status.phase())+"，"+(status.loaded()?"机体信号在线":"等待远端信号")+"。");
+                    }
+                    var job=StaffCommandBookR24.order(npc);if(job!=null)reply(player,npc,"当前指令："+unitName(job.unit)+" · "+job.message+"。");
+                }
+                else if(intent.subject().equals("campaign"))
+                    reply(player,npc,com.projectseele.event.TvCampaignDirector.briefing(player));
+                else if(intent.subject().equals("directions"))
+                    reply(player,npc,npc.staffRole().startsWith("un_")
+                        ?"请沿基地的人员标线前往车辆区、航空区或试验机库，避开滑行道和舱门作业范围。总部步行引导仅在地下总部公共通道内可用。"
+                        :NervWayfindingR24.describe(player));
+                else reply(player,npc,StaffDialogueCatalogR24.line(npc.skin(),npc.staffRole(),intent.subject(),player.tickCount/100));
+                return 1;
+            }
         }
-        var command=java.util.regex.Pattern.compile("^(?:请|请帮我|帮我)?(整备|准备|发射|出击|回收)\\s*(?:EVA[-_ ]?)?(00|01|02|零号机?|零號機?|初号机?|初號機?|二号机?|二號機?|贰号机?)$",java.util.regex.Pattern.CASE_INSENSITIVE).matcher(text.trim());
-        String op="";
-        if(command.matches())op=switch(command.group(1)){case "整备","准备"->"prepare";case "发射","出击"->"launch";default->"recover";};
-        else if(text.matches(".*(?:整备|准备|发射|出击|回收).*"))
-        {say(player,npc.getName().getString(),"请明确指定一个动作和一台机体，例如「整备 01」。询问、否定和多项指令不会执行。");return 0;}
-        if(op.isEmpty()){open(player,npc);return 1;}
-        if(!Set.of("commander","scientist").contains(npc.staffRole())||!authorized(player)){say(player,npc.getName().getString(),"这项操作需要指挥权限或 NERV 通行证。");return 0;}
-        if(npc.busy()){say(player,npc.getName().getString(),"正在执行上一项操作。请稍候，或先取消。");return 0;}
-        String unit=command.group(2);int variant=unit.matches("00|零.*")?0:unit.matches("01|初.*")?1:2;
-        if(variant<0){say(player,npc.getName().getString(),"请明确指定 EVA-00、EVA-01 或 EVA-02。");return 0;}
+    }
+    public static String unitName(int variant)
+    {return switch(variant){case 0->"零号机";case 1->"初号机";default->"二号机";};}
+    public static boolean boarded(ServerLevel level,int variant)
+    {
+        var unit=EvaLogisticsDirector.canonicalUnit(level,variant);if(unit==null)return false;
+        if(unit.getPilotEntity()!=null)return true;
+        var plug=EntryPlugDirector.canonical(level,variant);
+        return plug!=null&&(plug.getFirstPassenger() instanceof ServerPlayer||plug.getFirstPassenger() instanceof TrainingPilotEntity);
+    }
+    public static String readinessHint(ServerLevel level,int variant,String operation)
+    {
+        var status=EvaLogisticsDirector.status(level,variant);
+        if(!status.loaded())return "等待远端机库信号。";
+        return switch(status.phase())
+        {
+            case "PARKED" -> boarded(level,variant)?"驾驶员已登机，可以提交整备；接入和轨道仍需通过联锁检查。":"请先进入对应机库悬挂的插入栓。驾驶员登机后才能整备。";
+            case "SILO_READY" -> "机体已到发射台；发射前仍会复核插入栓与轨道锁定。";
+            case "DEPLOYED" -> "机体正在出动。回收前请回到本机的地表回收平台并停稳。";
+            case "PLUG_FAULT" -> "插入栓接入出现故障，请在机库检查并中止故障接入流程。";
+            default -> "当前正在"+stage(status.phase())+"，请等待这一阶段完成。";
+        };
+    }
+    public static int beginNativeAction(ServerPlayer player,NervStaffEntity npc,String op,int variant)
+    {
+        if(!Set.of("commander","scientist").contains(npc.staffRole())||!authorized(player)||npc.busy())return 0;
         BlockPos control=NervOperationsConsole.staffControl(player.serverLevel(),op,variant);
-        if(control==null||!(player.serverLevel().getBlockState(control).getBlock() instanceof ButtonBlock)){say(player,npc.getName().getString(),"对应实体按键不可用，操作中止。");return 0;}
+        if(control==null||!(player.serverLevel().getBlockState(control).getBlock() instanceof ButtonBlock)){reply(player,npc,"对应实体按键不可用，操作中止。");return 0;}
         BlockPos approach=approach(npc,control);
-        if(approach==null){say(player,npc.getName().getString(),"通往按键的路径受阻，请先清理控制台旁的通道。");return 0;}
+        if(approach==null){reply(player,npc,"通往按键的路径受阻，请先清理控制台旁的通道。");return 0;}
         EvaLogisticsDirector.loadControlTarget(player.serverLevel(),variant);
-        npc.begin(player.getUUID(),op,variant,control,approach);say(player,npc.getName().getString(),"收到。我去操作 EVA-"+String.format(Locale.ROOT,"%02d",variant)+" 的"+(op.equals("prepare")?"整备":op.equals("launch")?"发射":"回收")+"按键。联锁检查仍然有效。");return 1;
+        npc.begin(player.getUUID(),op,variant,control,approach);reply(player,npc,"收到。我去操作 EVA-"+String.format(Locale.ROOT,"%02d",variant)+" 的"+(op.equals("prepare")?"整备":op.equals("launch")?"发射":"回收")+"按键。联锁检查仍然有效。");return 1;
     }
     private static BlockPos approach(NervStaffEntity npc,BlockPos button)
     {
@@ -105,7 +171,7 @@ public final class NervStaffDialogue
             var hit=level.clip(new net.minecraft.world.level.ClipContext(eye,Vec3.atCenterOf(button),net.minecraft.world.level.ClipContext.Block.COLLIDER,net.minecraft.world.level.ClipContext.Fluid.NONE,npc));
             if(hit.getType()!=HitResult.Type.MISS&&!hit.getBlockPos().equals(button))continue;options.add(p.immutable());
         }
-        options.sort(Comparator.comparingDouble(p->npc.distanceToSqr(Vec3.atBottomCenterOf(p))));
+        options.sort(Comparator.<BlockPos>comparingDouble(p->Vec3.atBottomCenterOf(p).distanceToSqr(Vec3.atCenterOf(button))).thenComparingDouble(p->npc.distanceToSqr(Vec3.atBottomCenterOf(p))));
         if("r15-staff".equals(System.getProperty("projectseele.regionalBuild","")))ProjectSeele.LOGGER.info("STAFF PATH REVIEW actor={} pos={} onGround={} candidates={}",npc.memberId(),npc.position(),npc.onGround(),options);
         for(var p:options){var path=npc.getNavigation().createPath(p,0);if(path!=null&&path.canReach())return p;}return null;
     }
@@ -113,23 +179,35 @@ public final class NervStaffDialogue
     {
         var level=(ServerLevel)npc.level();var player=level.getServer().getPlayerList().getPlayer(owner);
         if(ticks%40==0&&"r15-staff-controls".equals(System.getProperty("projectseele.regionalBuild","")))ProjectSeele.LOGGER.info("STAFF CONTROL TRACE actor={} pos={} target={} navDone={} onGround={} loaded={}",npc.memberId(),npc.position(),approach,npc.getNavigation().isDone(),npc.onGround(),EvaLogisticsDirector.status(level,variant).loaded());
-        if(player==null||player.level()!=level||player.distanceToSqr(npc)>48*48||!authorized(player)||ticks>300)
-        {if(player!=null)say(player,npc.getName().getString(),"操作中止：人员离开、权限变化或路径超时。");npc.finishTask();return;}
+        if(player==null||player.level()!=level||(StaffCommandBookR24.order(npc)==null&&player.distanceToSqr(npc)>48*48)||!authorized(player)||ticks>300)
+        {StaffCommandBookR24.failed(npc,"按键操作已中止：通讯中断、权限改变或路径超时。");npc.finishTask();return;}
         if(ticks%20==0&&!EvaLogisticsDirector.status(level,variant).loaded())EvaLogisticsDirector.loadControlTarget(level,variant);
-        if(npc.distanceToSqr(Vec3.atBottomCenterOf(approach))>.8)
-        {if(ticks%20==0)npc.getNavigation().moveTo(approach.getX()+.5,approach.getY(),approach.getZ()+.5,.9);return;}
+        if(npc.distanceToSqr(Vec3.atBottomCenterOf(approach))>.16)
+        {
+            if(npc.getNavigation().isDone()&&npc.distanceToSqr(Vec3.atBottomCenterOf(approach))<1.2)
+                npc.getMoveControl().setWantedPosition(approach.getX()+.5,approach.getY(),approach.getZ()+.5,.65);
+            else if(ticks%20==0)npc.getNavigation().moveTo(approach.getX()+.5,approach.getY(),approach.getZ()+.5,.9);
+            return;
+        }
         npc.getNavigation().stop();npc.getLookControl().setLookAt(control.getX()+.5,control.getY()+.5,control.getZ()+.5,30,30);
-        if(ticks%20!=0)return;
+        float facing=(float)Math.toDegrees(Math.atan2(-(control.getX()+.5-npc.getX()),control.getZ()+.5-npc.getZ()));
+        npc.setYRot(net.minecraft.util.Mth.approachDegrees(npc.getYRot(),facing,18));npc.yBodyRot=npc.getYRot();
+        if(Math.abs(net.minecraft.util.Mth.wrapDegrees(facing-npc.getYRot()))>12)return;
         if(!EvaLogisticsDirector.status(level,variant).loaded()&&ticks<240)return;
+        if(!npc.beginPressGesture(control))return;
         var state=level.getBlockState(control);
         if(!(state.getBlock() instanceof ButtonBlock)||state.getValue(ButtonBlock.POWERED))
-        {say(player,npc.getName().getString(),"按键状态已变化，操作未执行。");npc.finishTask();return;}
+        {StaffCommandBookR24.failed(npc,"按键状态已变化，操作未执行。");npc.finishTask();return;}
         npc.pressing();
         // Physical depression and the existing authoritative console dispatcher are
         // separate in the original player interaction hook. Invoke each exactly once.
         state.use(level,player,InteractionHand.MAIN_HAND,new BlockHitResult(Vec3.atCenterOf(control),net.minecraft.core.Direction.UP,control,false));
         boolean handled=NervOperationsConsole.handleUse(player,control);var status=EvaLogisticsDirector.status(level,variant);
-        say(player,npc.getName().getString(),handled?"按键已操作。当前状态："+stage(status.phase())+"。":"控制台没有接受这个按键。");
+        var outcome=handled?NervOperationsConsole.lastOutcome(level,player,control):null;
+        boolean accepted=outcome!=null&&outcome.accepted();
+        if(StaffCommandBookR24.order(npc)==null||accepted&&!operation.equals("launch"))
+            reply(player,npc,accepted?"按键已操作，指令被接受。当前："+stage(status.phase())+"。":"控制台没有接受本次指令。"+readinessHint(level,variant,operation));
+        StaffCommandBookR24.pressed(npc,outcome);
         ProjectSeele.LOGGER.info("STAFF CONSOLE actor={} operation={} unit={} button={} requester={} phase={}",npc.memberId(),operation,variant,control,owner,status.phase());npc.finishTask();
     }
     public static void pilot(ServerPlayer player,TrainingPilotEntity pilot)

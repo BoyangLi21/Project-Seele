@@ -1,0 +1,25 @@
+name: 贡献提案
+description: 认领一个有明确边界的代码、美术、动作、对白或考据任务
+title: "[贡献] "
+body:
+  - type: textarea
+    id: scope
+    attributes:
+      label: 目标与边界
+      description: 写出一个可单独验收的结果，以及涉及的区域或模块。
+    validations:
+      required: true
+  - type: textarea
+    id: source
+    attributes:
+      label: 资料或素材来源
+      description: 区分 TV、剧场版和原创设计；外部素材请附作者、原网址、许可及修改方式。
+    validations:
+      required: true
+  - type: textarea
+    id: verify
+    attributes:
+      label: 如何验证
+      description: 游戏内的通行／接触／状态／联机检查；美术请包含可编辑源文件和实际游戏视角。
+    validations:
+      required: true

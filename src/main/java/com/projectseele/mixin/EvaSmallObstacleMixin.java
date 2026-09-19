@@ -17,7 +17,8 @@ public abstract class EvaSmallObstacleMixin
     @Redirect(method="computeNext",at=@At(value="INVOKE",target="Lnet/minecraft/world/level/block/state/BlockState;getCollisionShape(Lnet/minecraft/world/level/BlockGetter;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/phys/shapes/CollisionContext;)Lnet/minecraft/world/phys/shapes/VoxelShape;"))
     private VoxelShape seele$largeAirframeClearance(BlockState state,BlockGetter level,BlockPos pos,CollisionContext context)
     {
-        VoxelShape shape=state.getCollisionShape(level,pos,context);
+        VoxelShape shape=com.projectseele.entity.SbwStaticShapesR24.shape(state,context);
+        if(shape==null){com.projectseele.entity.SbwRestCollisionR24.shapeFallback();shape=state.getCollisionShape(level,pos,context);}
         return context instanceof EntityCollisionContext entityContext&&entityContext.getEntity() instanceof EvaUnit01Entity eva
                 &&EvaObstacleCollision.ignores(eva,state,pos,shape)?Shapes.empty():shape;
     }

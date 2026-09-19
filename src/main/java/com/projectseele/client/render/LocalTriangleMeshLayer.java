@@ -126,6 +126,12 @@ public final class LocalTriangleMeshLayer<T extends GeoAnimatable> extends GeoRe
                         this.textureSelector.apply(animatable)));
         float[] values = skinVertices(mesh,part,bone);
         int stride = mesh.stride();
+        if(!this.fullBright&&animatable instanceof EvaUnit01Entity eva&&eva.isFirstBattleActive()
+                &&this.getRenderer() instanceof EvaUnit01Renderer renderer)
+            EvaContactShadowsR24.capture(eva,bone.getName(),values,stride,part.pivotX(),part.pivotY(),part.pivotZ(),renderer.renderedMeshTransform(pose,eva,partialTick));
+        if(com.projectseele.client.visual.TvBattleContactR24Audit.ENABLED&&!this.fullBright&&animatable instanceof EvaUnit01Entity eva
+                &&this.getRenderer() instanceof EvaUnit01Renderer renderer)
+            com.projectseele.client.visual.TvBattleContactR24Audit.sample(eva,bone.getName(),values,stride,part.pivotX(),part.pivotY(),part.pivotZ(),renderer.renderedMeshTransform(pose,eva,partialTick));
         if(!this.fullBright&&animatable instanceof com.projectseele.entity.EvaPrototypeEntity eva&&this.getRenderer() instanceof EvaUnit01Renderer renderer
                 &&com.projectseele.visual.EvaTerrainR11Review.R21&&com.projectseele.visual.EvaTerrainR11Review.runningCase
                 &&com.projectseele.visual.EvaTerrainR11Review.caseTick%20==0)

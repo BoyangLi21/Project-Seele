@@ -32,6 +32,13 @@ public final class FirstBattleMission
     private record Site(String dimension,Vec3 hero,Vec3 angel,BlockPos console,float yaw) {}
     private static final Map<ServerLevel,Optional<Site>> SITES=new WeakHashMap<>();
     private static final Map<ServerLevel,ServerBossEvent> BARS=new WeakHashMap<>();
+    private static final net.minecraft.server.level.TicketType<net.minecraft.world.level.ChunkPos> TICKET=
+            net.minecraft.server.level.TicketType.create("first_battle_mission",Comparator.comparingLong(net.minecraft.world.level.ChunkPos::toLong),60);
+    private static void loadTarget(ServerLevel level,BlockPos at)
+    {
+        var chunk=new net.minecraft.world.level.ChunkPos(at);
+        level.getChunkSource().addRegionTicket(TICKET,chunk,2,chunk);level.getChunk(at);
+    }
     private static Vec3 point(com.google.gson.JsonArray a){return new Vec3(a.get(0).getAsDouble(),a.get(1).getAsDouble(),a.get(2).getAsDouble());}
     private static Site site(ServerLevel level)
     {
@@ -49,6 +56,10 @@ public final class FirstBattleMission
     {
         ServerLevel level=missionLevel(player);if(level==null){player.displayClientMessage(Component.literal("当前世界尚未设置迎击区域。"),false);return false;}
         var data=FirstBattleSavedData.get(level);if(data.active!=null||data.missionOwner!=null){player.displayClientMessage(Component.literal("迎击任务已下达，请先完成当前行动。"),false);return false;}
+        Site existingSite=site(level);
+        if(!level.getEntitiesOfClass(SachielEntity.class,new net.minecraft.world.phys.AABB(existingSite.angel,existingSite.angel).inflate(220),
+                a->a.isAlive()&&a.getTags().contains("seele_first_battle_mission")).isEmpty())
+        {player.displayClientMessage(Component.literal("迎击区域仍有未归档的任务目标，本次不会重复生成使徒。"),false);return false;}
         data.missionOwner=player.getUUID();data.missionAngel=null;data.missionLastPos=null;data.missionCancelRequested=false;data.missionMissingTicks=0;data.setDirty();Site s=site(level);
         player.displayClientMessage(Component.literal("作战命令：驾驶初号机前往东北迎击大道。目标区域 X "+(int)s.hero.x+" / Z "+(int)s.hero.z+"。削弱使徒后将进入自主作战演出。"),false);return true;
     }
@@ -62,6 +73,13 @@ public final class FirstBattleMission
         else if(level.getEntity(data.missionAngel) instanceof SachielEntity angel&&angel.getTags().contains("seele_first_battle_mission"))
         {angel.discard();data.missionAngel=null;data.missionOwner=null;data.missionCancelRequested=false;}
         data.setDirty();return true;
+    }
+    public static void naturalResolution(SachielEntity angel)
+    {
+        if(!(angel.level() instanceof ServerLevel level))return;var data=FirstBattleSavedData.get(level);
+        if(data.active!=null||data.missionCancelRequested||data.missionOwner==null||!angel.getUUID().equals(data.missionAngel))return;
+        TvCampaignDirector.firstBattleComplete(level,data.missionOwner,angel.getUUID());data.completedPilots.add(data.missionOwner);
+        data.missionOwner=null;data.missionAngel=null;data.setDirty();
     }
     @SubscribeEvent public static void interact(PlayerInteractEvent.RightClickBlock event)
     {
@@ -85,12 +103,16 @@ public final class FirstBattleMission
             if(data.missionOwner==null)continue;
             if(data.missionAngel!=null)
             {
+                loadTarget(level,data.missionLastPos==null?BlockPos.containing(s.angel):data.missionLastPos);
                 var entity=level.getEntity(data.missionAngel);
                 if(entity==null)
                 {
                     BlockPos last=data.missionLastPos==null?BlockPos.containing(s.angel):data.missionLastPos;
                     for(int x=-1;x<=1;x++)for(int z=-1;z<=1;z++)level.getChunk((last.getX()>>4)+x,(last.getZ()>>4)+z);
-                    if(++data.missionMissingTicks>40&&data.active==null){data.missionOwner=null;data.missionAngel=null;data.missionCancelRequested=false;data.setDirty();}
+                    // A requested chunk can be FULL before its saved entities
+                    // have attached. That interval is not proof of deletion.
+                    boolean attached=level.areEntitiesLoaded(new net.minecraft.world.level.ChunkPos(last).toLong())&&level.isPositionEntityTicking(last);
+                    if(attached&&++data.missionMissingTicks>40&&data.active==null){data.missionOwner=null;data.missionAngel=null;data.missionCancelRequested=false;data.setDirty();}
                     continue;
                 }
                 data.missionMissingTicks=0;data.missionLastPos=entity.blockPosition();data.setDirty();
@@ -107,15 +129,19 @@ public final class FirstBattleMission
             {
                 bar.setName(Component.literal("初号机 · 前往东北迎击大道 / "+Math.round(distance)+" m"));bar.setProgress(1);
                 if(eva==null||eva.level()!=level||eva.getUnitVariant()!=EvaUnit01Entity.UNIT_01||eva.isExperimentalUnit()||distance>90)continue;
-                level.getChunk(BlockPos.containing(s.angel));SachielEntity angel=ModEntities.SACHIEL.get().create(level);if(angel==null)continue;
+                loadTarget(level,BlockPos.containing(s.angel));SachielEntity angel=ModEntities.SACHIEL.get().create(level);if(angel==null)continue;
                 angel.moveTo(s.angel.x,s.angel.y,s.angel.z,s.yaw+180,0);angel.yBodyRot=angel.yHeadRot=s.yaw+180;angel.setPersistenceRequired();angel.addTag("seele_first_battle_mission");angel.addTag("seele_first_battle_replay");angel.setTarget(eva);
                 if(!level.noCollision(angel,angel.getBoundingBox())){player.displayClientMessage(Component.literal("迎击区域被占用，清空大道后会继续出动。"),true);continue;}
-                level.addFreshEntity(angel);data.missionAngel=angel.getUUID();data.missionLastPos=angel.blockPosition();data.setDirty();ProjectSeele.LOGGER.info("R10 MISSION Angel deployed {}",angel.getUUID());
+                if(!level.addFreshEntity(angel))continue;
+                data.missionAngel=angel.getUUID();data.missionLastPos=angel.blockPosition();data.setDirty();
+                TvCampaignDirector.firstBattleBound(level,data.missionOwner,angel.getUUID());
+                ProjectSeele.LOGGER.info("R10 MISSION Angel deployed {}",angel.getUUID());
             }
             if(level.getEntity(data.missionAngel) instanceof SachielEntity angel)
             {
                 if(!angel.isAlive())
                 {
+                    TvCampaignDirector.firstBattleComplete(level,data.missionOwner,angel.getUUID());
                     data.missionOwner=null;data.missionAngel=null;data.setDirty();bar.removeAllPlayers();continue;
                 }
                 float field=angel.getAtField();bar.setName(Component.literal("第3使徒 サキエル · "+(field>0?"AT FIELD "+Math.round(field):"CORE "+Math.round(angel.getHealth()/angel.getMaxHealth()*100)+"%")));bar.setProgress(field>0?Math.min(1,field/900):angel.getHealth()/angel.getMaxHealth());

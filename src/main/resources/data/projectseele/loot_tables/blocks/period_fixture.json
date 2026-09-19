@@ -1,0 +1,1 @@
+{"type":"minecraft:block","pools":[{"rolls":1,"entries":[{"type":"minecraft:item","name":"projectseele:period_fixture","functions":[{"function":"minecraft:copy_state","block":"projectseele:period_fixture","properties":["kind"]}]}],"conditions":[{"condition":"minecraft:survives_explosion"}]}]}

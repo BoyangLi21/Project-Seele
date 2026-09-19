@@ -434,5 +434,50 @@
         "stream": false
       }
     ]
+  },
+  "shamshel_whip_charge": {
+    "subtitle": "subtitles.projectseele.shamshel_whip_charge",
+    "sounds": [
+      {
+        "name": "projectseele:shamshel_whip_charge",
+        "attenuation_distance": 160
+      }
+    ]
+  },
+  "shamshel_whip_crack": {
+    "subtitle": "subtitles.projectseele.shamshel_whip_crack",
+    "sounds": [
+      {
+        "name": "projectseele:shamshel_whip_crack",
+        "attenuation_distance": 192
+      }
+    ]
+  },
+  "period_phone_busy": {
+    "subtitle": "subtitles.projectseele.period_phone_busy",
+    "sounds": [
+      {
+        "name": "projectseele:period_phone_busy",
+        "attenuation_distance": 12
+      }
+    ]
+  },
+  "staff_radio_connect": {
+    "subtitle": "subtitles.projectseele.staff_radio_connect",
+    "sounds": [
+      {
+        "name": "projectseele:staff_radio_connect",
+        "attenuation_distance": 12
+      }
+    ]
+  },
+  "staff_radio_ack": {
+    "subtitle": "subtitles.projectseele.staff_radio_ack",
+    "sounds": [
+      {
+        "name": "projectseele:staff_radio_ack",
+        "attenuation_distance": 12
+      }
+    ]
   }
 }

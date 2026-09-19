@@ -42,6 +42,14 @@ public class ModCreativeTabs
                         output.accept(ModItems.NERV_STRIP_LIGHT.get());
                         output.accept(ModItems.STATION_TACTILE_PATH.get());
                         output.accept(ModItems.STATION_TACTILE_WARNING.get());
+                        output.accept(ModItems.PERIOD_STATION_FLOOR.get());
+                        output.accept(ModItems.STATION_DRAIN.get());
+                        for(var kind:com.projectseele.world.PeriodFixtureBlock.Kind.values())
+                        {
+                            var stack=new net.minecraft.world.item.ItemStack(ModItems.PERIOD_FIXTURE.get());
+                            stack.getOrCreateTagElement("BlockStateTag").putString("kind",kind.getSerializedName());
+                            stack.setHoverName(Component.translatable("period_fixture.projectseele."+kind.getSerializedName()));output.accept(stack);
+                        }
                         output.accept(ModItems.BETA_CAPSULE.get());
                         output.accept(ModItems.COMMAND_SEAT_BACK.get());
                         output.accept(ModItems.EVA_PROGRESSIVE_KNIFE.get());

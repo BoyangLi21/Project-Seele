@@ -40,6 +40,9 @@ public class ModItems
     public static final RegistryObject<Item> MILITARY_SEAT=ITEMS.register("military_seat",()->new BlockItem(ModBlocks.MILITARY_SEAT.get(),new Item.Properties()));
     public static final RegistryObject<Item> STATION_DEPARTURE_BOARD=ITEMS.register("station_departure_board",()->new BlockItem(ModBlocks.STATION_DEPARTURE_BOARD.get(),new Item.Properties()));
     public static final RegistryObject<Item> NERV_DIRECTION_PANEL=ITEMS.register("nerv_direction_panel",()->new BlockItem(ModBlocks.NERV_DIRECTION_PANEL.get(),new Item.Properties()));
+    public static final RegistryObject<Item> PERIOD_FIXTURE=ITEMS.register("period_fixture",()->new BlockItem(ModBlocks.PERIOD_FIXTURE.get(),new Item.Properties()));
+    public static final RegistryObject<Item> PERIOD_STATION_FLOOR=ITEMS.register("period_station_floor",()->new BlockItem(ModBlocks.PERIOD_STATION_FLOOR.get(),new Item.Properties()));
+    public static final RegistryObject<Item> STATION_DRAIN=ITEMS.register("station_drain",()->new BlockItem(ModBlocks.STATION_DRAIN.get(),new Item.Properties()));
     public static final RegistryObject<Item> NERV_BRIEFING_TILE=ITEMS.register("nerv_briefing_tile",()->new BlockItem(ModBlocks.NERV_BRIEFING_TILE.get(),new Item.Properties()));
     public static final RegistryObject<Item> NERV_WALL_DATUM=ITEMS.register("nerv_wall_datum",()->new BlockItem(ModBlocks.NERV_WALL_DATUM.get(),new Item.Properties()));
     public static final RegistryObject<Item> NERV_FLOOR_PANEL=ITEMS.register("nerv_floor_panel",()->new BlockItem(ModBlocks.NERV_FLOOR_PANEL.get(),new Item.Properties()));

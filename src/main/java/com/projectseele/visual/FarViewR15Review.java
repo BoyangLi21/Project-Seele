@@ -10,7 +10,9 @@ import net.minecraftforge.fml.common.Mod;
 @Mod.EventBusSubscriber(modid=ProjectSeele.MODID)
 public final class FarViewR15Review
 {
-    public static final boolean CURRENT="r17-farview".equals(System.getProperty("projectseele.regionalBuild",""));
+    public static final boolean OCCLUSION_AB="r24-occlusion-ab".equals(System.getProperty("projectseele.regionalBuild",""));
+    public static final boolean TV24=OCCLUSION_AB||java.util.Set.of("r24-farview","r24-sbw-rest-verify","r24-sbw-phantom-verify").contains(System.getProperty("projectseele.regionalBuild",""));
+    public static final boolean CURRENT=TV24||"r17-farview".equals(System.getProperty("projectseele.regionalBuild",""));
     public static final boolean ENABLED=CURRENT||"r15-farview".equals(System.getProperty("projectseele.regionalBuild",""));
     public record Shot(String name,Vec3 eye,Vec3 target){}
     private static final Shot[] ALL_SHOTS={
@@ -20,6 +22,7 @@ public final class FarViewR15Review
         new Shot("command_interior",new Vec3(36,-405.8,276),new Vec3(29,-407.8,283)),
         new Shot("un_far",new Vec3(6330,170,-6150),new Vec3(6620,100,-6320))};
     public static final Shot[] SHOTS=java.util.Arrays.stream(ALL_SHOTS)
+            .map(s->TV24&&s.name().equals("city_far")?new Shot(s.name(),new Vec3(-180,140,620),new Vec3(25,85,300)):s)
             .filter(s->System.getProperty("projectseele.farViewOnly","").isEmpty()
                     ||s.name().equals(System.getProperty("projectseele.farViewOnly"))).toArray(Shot[]::new);
     public static volatile int index=-1,age;
@@ -27,7 +30,7 @@ public final class FarViewR15Review
     @SubscribeEvent public static void tick(TickEvent.ServerTickEvent event)
     {
         if(!ENABLED||finished||event.phase!=TickEvent.Phase.END)return;var server=event.getServer();if(server.getPlayerList().getPlayers().isEmpty())return;
-        if(!server.getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT).normalize().getFileName().toString().equals(CURRENT?"SEELE_FAR_REVIEW_R17":"SEELE_STAFF_REVIEW_R15"))throw new IllegalStateException("Far view requires copied save");
+        if(!server.getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT).normalize().getFileName().toString().equals(TV24?"SEELE_R24_TV_REVIEW":CURRENT?"SEELE_FAR_REVIEW_R17":"SEELE_STAFF_REVIEW_R15"))throw new IllegalStateException("Far view requires copied save");
         if(index<0||next)
         {
             next=false;age=0;if(++index>=SHOTS.length){finished=true;return;}var level=server.getLevel(GeoFrontCommands.GEOFRONT);var player=server.getPlayerList().getPlayers().get(0);var s=SHOTS[index];var d=s.target.subtract(s.eye);

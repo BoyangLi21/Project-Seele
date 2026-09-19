@@ -38,6 +38,11 @@ public class ModSounds
     public static final RegistryObject<SoundEvent> EVA_COCKPIT_WARNING=register("eva_cockpit_warning");
     public static final RegistryObject<SoundEvent> EVA_DRIVE_LOOP=register("eva_drive_loop");
     public static final RegistryObject<SoundEvent> EVA_RIFLE_FIRE=register("eva_rifle_fire");
+    public static final RegistryObject<SoundEvent> SHAMSHEL_WHIP_CHARGE=register("shamshel_whip_charge");
+    public static final RegistryObject<SoundEvent> SHAMSHEL_WHIP_CRACK=register("shamshel_whip_crack");
+    public static final RegistryObject<SoundEvent> PERIOD_PHONE_BUSY=register("period_phone_busy");
+    public static final RegistryObject<SoundEvent> STAFF_RADIO_CONNECT=register("staff_radio_connect");
+    public static final RegistryObject<SoundEvent> STAFF_RADIO_ACK=register("staff_radio_ack");
 
     public static final java.util.Map<String,RegistryObject<SoundEvent>> FACILITY=facilitySounds();
     private static java.util.Map<String,RegistryObject<SoundEvent>> facilitySounds()
@@ -52,7 +57,7 @@ public class ModSounds
     private static RegistryObject<SoundEvent> register(String name)
     {
         return SOUNDS.register(name,
-                () -> name.startsWith("eva_")&&!name.startsWith("eva_cockpit")&&!name.equals("eva_drive_loop")
+                () -> (name.startsWith("eva_")&&!name.startsWith("eva_cockpit")&&!name.equals("eva_drive_loop"))||name.startsWith("shamshel_")
                         ? SoundEvent.createFixedRangeEvent(new ResourceLocation(ProjectSeele.MODID,name),192)
                         : SoundEvent.createVariableRangeEvent(new ResourceLocation(ProjectSeele.MODID, name)));
     }

@@ -114,6 +114,17 @@ public final class FirstBattleClient
             SeeleNetwork.CHANNEL.sendToServer(new ServerboundEvaControlPacket(ServerboundEvaControlPacket.ACTION_SKIP_FIRST_BATTLE));
     }
     @SubscribeEvent public static void logout(ClientPlayerNetworkEvent.LoggingOut event){restore();}
+    @SubscribeEvent(priority=net.minecraftforge.eventbus.api.EventPriority.HIGHEST)
+    public static void directedHud(net.minecraftforge.client.event.RenderGuiOverlayEvent.Pre event)
+    {
+        // The pilot's directed view keeps the scene, accessibility subtitles
+        // and optical-feed capture. Normal HUDs return immediately afterwards;
+        // no user minimap settings or chat history are changed.
+        if(!active()||Minecraft.getInstance().screen!=null)return;
+        String id=event.getOverlay().id().toString();
+        if(!java.util.Set.of("projectseele:first_battle","projectseele:nuclear_flash",
+                "projectseele:eva_command_feed_capture","minecraft:subtitles").contains(id))event.setCanceled(true);
+    }
     public static final IGuiOverlay OVERLAY=(gui,g,partial,width,height)->
     {
         var eva=actor();if(eva==null)return;float t=eva.firstBattleSignals().time(eva,partial);float fade=FirstBattleClip.smooth(t/.7F)*(1-FirstBattleClip.smooth((t-21.6F)/1.4F));int bars=Math.round(height*.09F*fade),alpha=Math.round(fade*235);

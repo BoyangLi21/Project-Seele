@@ -49,11 +49,15 @@ public final class ModBlocks
     public static final RegistryObject<Block> ROAD_ASPHALT_SLAB=BLOCKS.register("road_asphalt_slab",()->new net.minecraft.world.level.block.SlabBlock(BlockBehaviour.Properties.copy(Blocks.BLACK_CONCRETE)));
     public static final RegistryObject<Block> ROAD_MARKING_SLAB=BLOCKS.register("road_marking_slab",()->new net.minecraft.world.level.block.SlabBlock(BlockBehaviour.Properties.copy(Blocks.WHITE_CONCRETE)));
     public static final RegistryObject<Block> STREET_LIGHT_HEAD=BLOCKS.register("street_light_head",()->new com.projectseele.world.StreetLightHeadBlock(BlockBehaviour.Properties.copy(Blocks.IRON_BLOCK).strength(1.5F).lightLevel(s->15).noOcclusion()));
+    public static final RegistryObject<Block> PERIOD_STATION_FLOOR=BLOCKS.register("period_station_floor",()->new Block(BlockBehaviour.Properties.copy(Blocks.SMOOTH_STONE)));
+    public static final RegistryObject<Block> STATION_DRAIN=BLOCKS.register("station_drain",()->new Block(BlockBehaviour.Properties.copy(Blocks.SMOOTH_STONE)));
+    public static final RegistryObject<Block> PERIOD_FIXTURE_PART=BLOCKS.register("period_fixture_part",()->new com.projectseele.world.PeriodFixturePartBlock(BlockBehaviour.Properties.copy(Blocks.IRON_BLOCK).strength(2).noOcclusion().dynamicShape().noLootTable()));
     public static final RegistryObject<Block> STATION_SEAT=BLOCKS.register("station_seat",()->new com.projectseele.world.NervOfficeChairBlock(BlockBehaviour.Properties.copy(Blocks.IRON_BLOCK).strength(1.5F).noOcclusion()));
     public static final RegistryObject<Block> RESIDENTIAL_CHAIR=BLOCKS.register("residential_chair",()->new com.projectseele.world.NervOfficeChairBlock(BlockBehaviour.Properties.copy(Blocks.OAK_PLANKS).strength(1.5F).noOcclusion()));
     public static final RegistryObject<Block> MILITARY_SEAT=BLOCKS.register("military_seat",()->new com.projectseele.world.NervOfficeChairBlock(BlockBehaviour.Properties.copy(Blocks.IRON_BLOCK).strength(1.5F).noOcclusion()));
     public static final RegistryObject<Block> STATION_DEPARTURE_BOARD=BLOCKS.register("station_departure_board",()->new com.projectseele.world.StationDepartureBoardBlock(BlockBehaviour.Properties.copy(Blocks.IRON_BLOCK).strength(1.5F).noOcclusion()));
     public static final RegistryObject<Block> NERV_DIRECTION_PANEL=BLOCKS.register("nerv_direction_panel",()->new com.projectseele.world.StationDepartureBoardBlock(BlockBehaviour.Properties.copy(Blocks.IRON_BLOCK).strength(1.5F).noOcclusion(),true));
+    public static final RegistryObject<Block> PERIOD_FIXTURE=BLOCKS.register("period_fixture",()->new com.projectseele.world.PeriodFixtureBlock(BlockBehaviour.Properties.copy(Blocks.IRON_BLOCK).strength(1.5F).noOcclusion()));
     public static final RegistryObject<Block> NERV_BRIEFING_TILE=BLOCKS.register("nerv_briefing_tile",()->new com.projectseele.world.NervBriefingTileBlock(BlockBehaviour.Properties.copy(Blocks.IRON_BLOCK).lightLevel(s->6)));
     public static final RegistryObject<Block> NERV_PYRAMID_PANEL=BLOCKS.register("nerv_pyramid_panel",
             ()->new Block(BlockBehaviour.Properties.copy(Blocks.REINFORCED_DEEPSLATE)));

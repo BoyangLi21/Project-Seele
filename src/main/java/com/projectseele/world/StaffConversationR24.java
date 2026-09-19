@@ -1,0 +1,208 @@
+package com.projectseele.world;
+
+import com.projectseele.ProjectSeele;
+import com.projectseele.entity.EntryPlugCarrierEntity;
+import com.projectseele.entity.NervStaffEntity;
+import com.projectseele.network.ClientboundStaffConversationPacket;
+import com.projectseele.network.SeeleNetwork;
+import net.minecraft.core.BlockPos;
+import net.minecraft.network.chat.Component;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.*;
+import net.minecraft.world.level.ChunkPos;
+import net.minecraftforge.event.TickEvent;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.network.PacketDistributor;
+import java.util.*;
+
+/** The conversation owns no machinery: it forwards validated requests to posted personnel. */
+@Mod.EventBusSubscriber(modid = ProjectSeele.MODID)
+public final class StaffConversationR24
+{
+    private static final class Session
+    {
+        final UUID nonce = UUID.randomUUID(), actor;
+        final ServerLevel level;
+        final boolean radio;
+        long lastAction = -100, lastRefresh = -100;
+        long requestWindow = -100;
+        int requestCount;
+        String reply;
+        Session(NervStaffEntity npc, boolean radio, String reply)
+        { actor = npc.getUUID(); level = (ServerLevel) npc.level(); this.radio = radio; this.reply = reply; }
+    }
+    private record Pending(String skin, long until) {}
+    private static final Map<MinecraftServer, Map<UUID, Session>> SESSIONS = new WeakHashMap<>();
+    private static final Map<MinecraftServer, Map<UUID, Pending>> PENDING = new WeakHashMap<>();
+    private static final TicketType<ChunkPos> TICKET = TicketType.create("nerv_staff_radio_r24", Comparator.comparingLong(ChunkPos::toLong), 100);
+
+    private static Map<UUID, Session> sessions(ServerPlayer player)
+    { return SESSIONS.computeIfAbsent(player.server, key -> new HashMap<>()); }
+
+    public static boolean radioAllowed(ServerPlayer player)
+    {
+        if (!NervStaffDialogue.authorized(player)) return false;
+        if (EvaPilotResolver.controlTarget(player) != null) return true;
+        if (player.getVehicle() instanceof EntryPlugCarrierEntity plug
+                && !plug.isIndependentUNPlug() && plug.getAssignedVariant() >= 0 && plug.getAssignedVariant() < 3
+                && EntryPlugDirector.canonical(player.serverLevel(), plug.getAssignedVariant()) == plug) return true;
+        for (int unit = 0; unit < 3; unit++)
+        {
+            BlockPos control = NervOperationsConsole.staffControl(player.serverLevel(), "prepare", unit);
+            if (control != null && player.distanceToSqr(control.getX() + .5, control.getY(), control.getZ() + .5) < 100) return true;
+        }
+        return false;
+    }
+
+    private static boolean available(ServerPlayer player, NervStaffEntity npc, Session session)
+    {
+        return npc.isAlive() && player.level() == npc.level()
+                && (session.radio ? radioAllowed(player) : player.distanceToSqr(npc) <= 100);
+    }
+
+    public static void open(ServerPlayer player, NervStaffEntity npc, boolean radio)
+    {
+        if (player.level() != npc.level() || radio && !radioAllowed(player) || !radio && player.distanceToSqr(npc) > 100) return;
+        var session = new Session(npc, radio, StaffDialogueCatalogR24.line(npc.skin(), npc.staffRole(), "greeting", player.tickCount / 100));
+        sessions(player).put(player.getUUID(), session); send(player, npc, session, true);
+    }
+
+    private static String role(NervStaffEntity npc)
+    {
+        if (npc.skin().equals("fuyutsuki")) return "副司令";
+        return switch (npc.staffRole())
+        {
+            case "commander" -> "作战指挥"; case "scientist" -> "技术负责人";
+            case "operator" -> "监视操作员"; case "medic" -> "医疗值班";
+            case "guard", "un_guard" -> "安保值勤"; case "un_crew" -> "UN 基地勤务";
+            default -> "设施技术员";
+        };
+    }
+
+    private static void send(ServerPlayer player, NervStaffEntity npc, Session session, boolean open)
+    {
+        List<String> units = new ArrayList<>();
+        for (int i = 0; i < 3; i++)
+        {
+            var state = EvaLogisticsDirector.status(player.serverLevel(), i);
+            units.add(NervStaffDialogue.unitName(i) + " · " + NervStaffDialogue.stage(state.phase())
+                    + (state.loaded() ? "" : " / 远端信号待接入"));
+        }
+        var job = StaffCommandBookR24.order(npc);
+        String order = job == null ? "" : NervStaffDialogue.unitName(job.unit) + " · " + job.message;
+        boolean canCommand = NervStaffDialogue.authorized(player) && Set.of("commander", "scientist").contains(npc.staffRole());
+        if (!canCommand && order.isEmpty()) order = "本次对话可查询信息，出动指令需要相应岗位与通行权限";
+        var packet = new ClientboundStaffConversationPacket(session.nonce, npc.getUUID(), npc.getId(),
+                npc.getName().getString(), role(npc), npc.skin(), open, true, canCommand, session.radio,
+                session.reply, order, List.copyOf(units));
+        SeeleNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), packet);
+    }
+
+    public static void note(ServerPlayer player, NervStaffEntity npc, String line)
+    {
+        Session session = sessions(player).get(player.getUUID());
+        if (session != null && session.actor.equals(npc.getUUID()) && available(player, npc, session))
+        { session.reply = line; send(player, npc, session, false); }
+    }
+
+    public static void receive(ServerPlayer player, UUID nonce, String request)
+    {
+        Session session = sessions(player).get(player.getUUID());
+        if (session == null || !session.nonce.equals(nonce) || request.length() > 160) return;
+        if (request.equals("CLOSE")) { sessions(player).remove(player.getUUID()); return; }
+        var entity = session.level.getEntity(session.actor);
+        if (!(entity instanceof NervStaffEntity npc) || !available(player, npc, session))
+        {
+            sessions(player).remove(player.getUUID());
+            SeeleNetwork.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), new ClientboundStaffConversationPacket(
+                    nonce, session.actor, -1, "NERV", "", "", false, false, false, session.radio,
+                    "对话链路已结束。已经下达的指令仍按原联锁流程执行。", "", List.of()));
+            return;
+        }
+        long tick = player.server.getTickCount();
+        if (request.equals("REFRESH"))
+        {
+            if (tick - session.lastRefresh < 20) return;
+            session.lastRefresh = tick; if (session.radio) load(session.level, npc.blockPosition());
+            send(player, npc, session, false); return;
+        }
+        // Permit ordinary short bursts such as cancel -> new order. Drop
+        // excess traffic with a visible reply instead of a dead-looking UI.
+        if (tick - session.requestWindow >= 20) { session.requestWindow = tick; session.requestCount = 0; }
+        if (++session.requestCount > 8)
+        {
+            session.reply = "指令输入过快，请稍候再试。已有指令的状态仍显示在上方。";
+            if (tick - session.lastAction >= 5) { session.lastAction = tick; send(player, npc, session, false); }
+            return;
+        }
+        session.lastAction = tick;
+        if (request.startsWith("CONTACT:"))
+        { contact(player, request.substring(8)); return; }
+        NervStaffDialogue.converse(player, npc, request);
+        send(player, npc, session, false);
+    }
+
+    public static int contact(ServerPlayer player, String name)
+    {
+        if (!radioAllowed(player))
+        {
+            player.sendSystemMessage(Component.literal("请携带 NERV 通行证，在指挥台附近、已登上的插入栓或机体内使用指挥通信。")); return 0;
+        }
+        String skin = switch (name.strip().toLowerCase(Locale.ROOT))
+        {
+            case "美里", "葛城美里", "misato" -> "misato";
+            case "律子", "赤木律子", "ritsuko" -> "ritsuko";
+            case "冬月", "冬月司令", "fuyutsuki" -> "fuyutsuki";
+            default -> "";
+        };
+        if (skin.isEmpty()) { player.sendSystemMessage(Component.literal("可联络：美里、律子、冬月。")); return 0; }
+        if (connect(player, skin)) return 1;
+        PENDING.computeIfAbsent(player.server, key -> new HashMap<>()).put(player.getUUID(), new Pending(skin, player.server.getTickCount() + 200));
+        player.sendSystemMessage(Component.literal("正在连接指挥频道……")); return 1;
+    }
+
+    private static boolean connect(ServerPlayer player, String skin)
+    {
+        var level = player.serverLevel();
+        var station = NervStaffDirector.roster(level).stream().filter(post -> post.skin().equals(skin)).findFirst().orElse(null);
+        if (station == null) return false;
+        UUID id = NervStaffSavedData.get(level).identity(station.id());
+        load(level, station.feet());
+        if (id != null && level.getEntity(id) instanceof NervStaffEntity npc)
+        { open(player, npc, true); return true; }
+        if (System.getProperty("projectseele.regionalBuild", "").startsWith("r24-") && player.server.getTickCount() % 20 == 0)
+            ProjectSeele.LOGGER.info("R24 RADIO LOAD person={} uuid={} post={} entityTicking={} loadedNPCs={}",
+                    station.id(), id, station.feet(), level.isPositionEntityTicking(station.feet()),
+                    level.getEntitiesOfClass(NervStaffEntity.class, new net.minecraft.world.phys.AABB(station.feet()).inflate(32)).stream().map(n -> n.memberId()+":"+n.getUUID()).toList());
+        return false;
+    }
+    private static void load(ServerLevel level, BlockPos at)
+    {
+        for (int x = (at.getX() >> 4) - 1; x <= (at.getX() >> 4) + 1; x++)
+            for (int z = (at.getZ() >> 4) - 1; z <= (at.getZ() >> 4) + 1; z++)
+            { var chunk = new ChunkPos(x, z); level.getChunkSource().addRegionTicket(TICKET, chunk, 2, chunk); level.getChunk(x, z); }
+    }
+
+    @SubscribeEvent public static void tick(TickEvent.ServerTickEvent event)
+    {
+        if (event.phase != TickEvent.Phase.END || event.getServer().getTickCount() % 5 != 0) return;
+        if (event.getServer().getTickCount() % 200 == 0)
+        {
+            var active = SESSIONS.get(event.getServer());
+            if (active != null) active.keySet().removeIf(id -> event.getServer().getPlayerList().getPlayer(id) == null);
+        }
+        var pending = PENDING.get(event.getServer()); if (pending == null) return;
+        for (var entry : List.copyOf(pending.entrySet()))
+        {
+            var player = event.getServer().getPlayerList().getPlayer(entry.getKey());
+            if (player == null || !radioAllowed(player)) { pending.remove(entry.getKey()); continue; }
+            if (connect(player, entry.getValue().skin())) { pending.remove(entry.getKey()); continue; }
+            if (event.getServer().getTickCount() > entry.getValue().until())
+            {
+                pending.remove(entry.getKey()); player.sendSystemMessage(Component.literal("该岗位暂时无法接通，请稍后再试。"));
+            }
+        }
+    }
+    private StaffConversationR24() {}
+}

@@ -12,7 +12,7 @@ import net.minecraftforge.network.simple.SimpleChannel;
  */
 public final class SeeleNetwork
 {
-    private static final String PROTOCOL_VERSION = "30";
+    private static final String PROTOCOL_VERSION = "31";
 
     public static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(
             new ResourceLocation(ProjectSeele.MODID, "main"),
@@ -166,5 +166,11 @@ public final class SeeleNetwork
                 .decoder(ClientboundUltramanStatePacket::new)
                 .consumerMainThread(ClientboundUltramanStatePacket::handle)
                 .add();
+        CHANNEL.messageBuilder(ClientboundStaffConversationPacket.class, id++, NetworkDirection.PLAY_TO_CLIENT)
+                .encoder(ClientboundStaffConversationPacket::encode).decoder(ClientboundStaffConversationPacket::new)
+                .consumerMainThread(ClientboundStaffConversationPacket::handle).add();
+        CHANNEL.messageBuilder(ServerboundStaffConversationPacket.class, id++, NetworkDirection.PLAY_TO_SERVER)
+                .encoder(ServerboundStaffConversationPacket::encode).decoder(ServerboundStaffConversationPacket::new)
+                .consumerMainThread(ServerboundStaffConversationPacket::handle).add();
     }
 }

@@ -7,8 +7,8 @@ import org.joml.Vector3f;
 
 /**
  * Shared direct-vertex helpers for luminous energy geometry (beams, crosses,
- * rays). Everything targets {@code RenderType.lightning()}: POSITION_COLOR,
- * additive blending, fullbright. Quads are emitted double-sided.
+ * rays). Uses POSITION_COLOR luminous passes, including lightning and the
+ * depth-tested, non-depth-writing cross glow. Quads are emitted double-sided.
  */
 public final class RibbonRenderer
 {
@@ -46,6 +46,32 @@ public final class RibbonRenderer
             Vector3f e0 = new Vector3f(end).add(new Vector3f(w).mul(endWidth));
             Vector3f e1 = new Vector3f(end).sub(new Vector3f(w).mul(endWidth));
             quadBothSides(pose, consumer, s0, s1, e1, e0, r, g, b, a);
+        }
+    }
+
+    /** Continuous edge falloff for large light pillars, without opaque card edges. */
+    public static void drawSoftStarRibbon(Matrix4f pose,VertexConsumer consumer,Vector3f start,Vector3f end,
+                                         float startWidth,float endWidth,float r,float g,float b,float alpha)
+    {
+        Vector3f axis=new Vector3f(end).sub(start);if(axis.lengthSquared()<1e-4F)return;axis.normalize();
+        Vector3f seed=Math.abs(axis.y())>.98F?new Vector3f(1,0,0):new Vector3f(0,1,0);
+        Vector3f u=new Vector3f(axis).cross(seed).normalize(),v=new Vector3f(axis).cross(u).normalize();
+        for(int plane=0;plane<4;plane++)
+        {
+            float angle=(float)(plane*Math.PI/4);Vector3f direction=new Vector3f(u).mul(Mth.cos(angle)).add(new Vector3f(v).mul(Mth.sin(angle)));
+            for(int band=0;band<8;band++)
+            {
+                float left=-1+band*.25F,right=left+.25F;
+                float a0=alpha*(1-left*left)*(1-left*left),a1=alpha*(1-right*right)*(1-right*right);
+                Vector3f s0=new Vector3f(start).add(new Vector3f(direction).mul(startWidth*left));
+                Vector3f s1=new Vector3f(start).add(new Vector3f(direction).mul(startWidth*right));
+                Vector3f e0=new Vector3f(end).add(new Vector3f(direction).mul(endWidth*left));
+                Vector3f e1=new Vector3f(end).add(new Vector3f(direction).mul(endWidth*right));
+                putColorVertex(pose,consumer,s0,r,g,b,a0);putColorVertex(pose,consumer,s1,r,g,b,a1);
+                putColorVertex(pose,consumer,e1,r,g,b,a1);putColorVertex(pose,consumer,e0,r,g,b,a0);
+                putColorVertex(pose,consumer,e0,r,g,b,a0);putColorVertex(pose,consumer,e1,r,g,b,a1);
+                putColorVertex(pose,consumer,s1,r,g,b,a1);putColorVertex(pose,consumer,s0,r,g,b,a0);
+            }
         }
     }
 
@@ -124,6 +150,8 @@ public final class RibbonRenderer
     public static void putColorVertex(Matrix4f pose, VertexConsumer consumer, Vector3f pos,
                                       float r, float g, float b, float a)
     {
-        consumer.vertex(pose, pos.x(), pos.y(), pos.z()).color(r, g, b, a).endVertex();
+        // Pulsing highlights may exceed 1. Packing 256 into an unsigned byte
+        // wraps to zero, producing a dark flash at the brightest instant.
+        consumer.vertex(pose, pos.x(), pos.y(), pos.z()).color(Mth.clamp(r,0,1),Mth.clamp(g,0,1),Mth.clamp(b,0,1),Mth.clamp(a,0,1)).endVertex();
     }
 }

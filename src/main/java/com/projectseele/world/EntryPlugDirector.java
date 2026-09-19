@@ -1110,6 +1110,23 @@ public final class EntryPlugDirector
      * for the ejection — this is not the "don't spawn a second plug for
      * insertion" case.
      */
+    /** Same hoist path for a correctly docked capsule whose driver disconnected. */
+    public static boolean extractEmptyCapsule(ServerLevel level, int variant, EvaUnit01Entity unit)
+    {
+        if (unit.isExperimentalUnit() || !isInsideAssignedCage(level,unit,variant) || unit.getPilotEntity()!=null) return false;
+        EntryPlugCarrierEntity plug=canonical(level,variant);
+        if(plug==null||plug.isVehicle()||plug.getLinkedEva()!=unit||unit.getLockedEntryPlug()!=plug
+                ||plug.getInsertionStage()!=EntryPlugCarrierEntity.STAGE_LOCKED) return false;
+        RigidTransform seated=EntryPlugKinematics.lockedTransform(unit);
+        if(plug.getCanonicalTransform().translation().distanceToSqr(seated.translation())>.25) return false;
+        plug.unlockFromEva();plug.setCanonicalTransform(seated);
+        if(!plug.transitionInsertionStage(EntryPlugCarrierEntity.STAGE_LOCKED,plug.getInsertionEpoch(),EntryPlugCarrierEntity.STAGE_EJECTING)) return false;
+        plug.setInsertionProgress(100);remember(level,variant,plug);
+        level.playSound(null,plug.blockPosition(),SoundEvents.PISTON_EXTEND,SoundSource.BLOCKS,2.4F,.58F);
+        ProjectSeele.LOGGER.info("NERV empty canonical capsule extraction started: eva={} plug={}",unit.getUUID(),plug.getUUID());
+        return true;
+    }
+
     public static boolean ejectPilotToPlug(ServerLevel level, int variant,
                                            EvaUnit01Entity unit,
                                            LivingEntity pilot)

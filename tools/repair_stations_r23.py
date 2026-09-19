@@ -30,7 +30,9 @@ class RevisedStation(Station):
    self.fill(-h,y-2,lo,h,y-1,hi,DECK);self.fill(-h,y,lo,h,y,hi,FLOOR)
    self.fill(-h,y+1,lo,h,y+4,hi,AIR)
    # Relocate the outer frame and every fixture attached to it together.
-   self.fill(-h,g+1,sign*15,h,y+10,sign*15,AIR)
+   # Retiring an old frame must not cut through the newly laid deck.
+   self.fill(-h,g+1,sign*15,h,y-3,sign*15,AIR)
+   self.fill(-h,y+1,sign*15,h,y+10,sign*15,AIR)
    for u in range(-h+2,h,16):self.fill(u,g+1,sign*17,u,y+10,sign*17,DECK)
    self.fill(-h,y+1,sign*17,h,y+1,sign*17,EDGE);self.fill(-h,y+2,sign*17,h,y+3,sign*17,GLASS)
    self.fill(-h,y+10,sign*17,h,y+10,sign*17,EDGE);self.fill(-h,y+11,sign*17,h,y+11,sign*15,DECK)

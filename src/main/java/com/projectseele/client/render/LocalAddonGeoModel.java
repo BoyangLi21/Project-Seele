@@ -42,6 +42,7 @@ public class LocalAddonGeoModel<T extends GeoEntity> extends GeoModel<T>
     {
         super.setCustomAnimations(animatable,instanceId,state);
         if(animatable instanceof com.projectseele.entity.SachielEntity angel)SachielStrikePose.apply(angel,this.getBakedModel(this.getModelResource(animatable)),state.getPartialTick());
+        if(animatable instanceof com.projectseele.entity.ShamshelEntity angel)ShamshelWhipPose.apply(angel,this.getBakedModel(this.getModelResource(animatable)),state.getPartialTick());
         if(animatable instanceof net.minecraft.world.entity.Entity entity)
             FirstBattlePoseRenderer.apply(entity,this.getBakedModel(this.getModelResource(animatable)),state.getPartialTick());
         if(animatable instanceof net.minecraft.world.entity.LivingEntity living)

@@ -2284,6 +2284,9 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
 
     public String poseTransitionKey(float partialTick)
     {
+        // The directed clip owns its own airborne/landing/contact changes.
+        // Blend once at its entry and exit, not again at each gait-key change.
+        if(this.isFirstBattleActive())return "firstbattle";
         String pose;
         if (this.getOrdinaryAttackStage() >= 0)
             pose = "ordinary:" + this.clientMeleeStartTick;

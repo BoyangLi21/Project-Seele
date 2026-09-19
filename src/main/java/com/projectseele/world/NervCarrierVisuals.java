@@ -50,6 +50,11 @@ public final class NervCarrierVisuals
                                         double x, double y, double z,
                                         float restraintProgress)
     {
+        // A deployed EVA can be ticking hundreds of metres from this bay.
+        // In an inactive entity chunk, addFreshEntity followed by a UUID
+        // lookup cannot establish ownership; recreating the non-saving
+        // visual every tick churns entities and starves remote loads.
+        if (!level.isPositionEntityTicking(net.minecraft.core.BlockPos.containing(x, y, z))) return;
         NervCarrierPlatformEntity gantry = resolve(level,
                 GANTRY_BY_EVA, unit.getUUID());
         if (gantry == null)
@@ -84,6 +89,7 @@ public final class NervCarrierVisuals
                                         double x, double y, double z,
                                         float layers)
     {
+        if (!level.isPositionEntityTicking(net.minecraft.core.BlockPos.containing(x, y, z))) return;
         NervCarrierPlatformEntity gantry = resolve(level,
                 GANTRY_BY_EVA, unit.getUUID());
         if (gantry == null)
@@ -113,6 +119,7 @@ public final class NervCarrierVisuals
                                        double x, double trolleyY, double z,
                                        double bottomY)
     {
+        if (!level.isPositionEntityTicking(net.minecraft.core.BlockPos.containing(x, trolleyY, z))) return;
         int safeVariant = Math.max(EvaUnit01Entity.UNIT_00,
                 Math.min(EvaUnit01Entity.UNIT_02, variant));
         UUID[] owners = PLUG_CRANE_BY_LEVEL.computeIfAbsent(level,

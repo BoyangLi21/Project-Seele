@@ -15,6 +15,8 @@ public final class StaffSkinReloadListener
         event.registerReloadListener((net.minecraft.server.packs.resources.ResourceManagerReloadListener)manager->{
             NervStaffSkins.reset();
             com.projectseele.client.render.TvFacilityMeshes.clearCache();
+                com.projectseele.client.render.PeriodFixtureRenderer.clearCache();
+                com.projectseele.client.render.NervChestFinishR24.clear();
         });
     }
     private StaffSkinReloadListener() {}

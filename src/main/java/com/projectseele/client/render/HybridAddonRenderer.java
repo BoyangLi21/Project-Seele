@@ -88,6 +88,8 @@ public class HybridAddonRenderer<T extends LivingEntity & GeoEntity> extends Ent
         {
             this.fallback.render(entity, yaw, partialTick, poseStack, buffers, effectiveLight);
         }
+        if(entity instanceof com.projectseele.entity.ShamshelEntity angel)
+            ShamshelWhipLight.render(angel,partialTick,poseStack,buffers);
     }
 
     @Override
@@ -147,7 +149,19 @@ public class HybridAddonRenderer<T extends LivingEntity & GeoEntity> extends Ent
         org.joml.Matrix4f renderedMeshTransform(org.joml.Matrix4f pose,net.minecraft.world.entity.Entity entity,float partial)
         {
             var world=software.bernie.geckolib.util.RenderUtils.invertAndMultiplyMatrices(pose,this.entityRenderTranslations);
-            var origin=entity.getPosition(partial);world.m30(world.m30()+(float)origin.x).m31(world.m31()+(float)origin.y).m32(world.m32()+(float)origin.z);return world;
+            var origin=new net.minecraft.world.phys.Vec3(
+                    net.minecraft.util.Mth.lerp((double)partial,entity.xOld,entity.getX()),
+                    net.minecraft.util.Mth.lerp((double)partial,entity.yOld,entity.getY()),
+                    net.minecraft.util.Mth.lerp((double)partial,entity.zOld,entity.getZ()))
+                    .add(com.projectseele.entity.FirstBattleClip.renderOffset(entity,partial));
+            world.m30(world.m30()+(float)origin.x).m31(world.m31()+(float)origin.y).m32(world.m32()+(float)origin.z);return world;
+        }
+
+        @Override protected void applyRotations(T entity,PoseStack pose,float age,float yaw,float partial)
+        {
+            if(entity instanceof com.projectseele.entity.FirstBattleSignals.Actor actor&&actor.firstBattleSignals().active(entity))
+                yaw=com.projectseele.entity.FirstBattleClip.yaw(actor.firstBattleSignals().spec(entity),actor.isFirstBattleEva(),actor.firstBattleSignals().time(entity,partial));
+            super.applyRotations(entity,pose,age,yaw,partial);
         }
 
         @Override

@@ -1,0 +1,29 @@
+name: 地图或玩法问题
+description: 报告可复现的通行、机械、驾驶或联机问题
+title: "[问题] "
+body:
+  - type: input
+    id: version
+    attributes:
+      label: 版本与运行方式
+      placeholder: 提交号／测试 BAT 名称；单人或服务器
+    validations:
+      required: true
+  - type: textarea
+    id: location
+    attributes:
+      label: 位置与环境
+      description: 地图问题请填维度、XYZ、脚下地面高度与前后相邻地点；驾驶问题请填机体、武器和姿态。
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 重现步骤、实际结果和预期
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: 证据
+      description: 可附截图、短视频和相关日志。请移除令牌、账户信息与私人路径；说明是否使用 LOD 或剖切显示。

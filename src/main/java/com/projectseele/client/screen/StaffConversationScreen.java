@@ -1,0 +1,210 @@
+package com.projectseele.client.screen;
+
+import com.projectseele.network.*;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.network.chat.Component;
+import java.util.*;
+
+/** A non-pausing command channel: visible state comes from the server. */
+public final class StaffConversationScreen extends Screen
+{
+    private ClientboundStaffConversationPacket view;
+    private EditBox input;
+    private int x, y, panelWidth, panelHeight, tab, unit = 1, age, savedScale = -1, replyScroll, replyTop;
+    private boolean restoring;
+
+    private StaffConversationScreen(ClientboundStaffConversationPacket view)
+    {
+        super(Component.literal("NERV 通信")); this.view = view;
+    }
+
+    public static void receive(ClientboundStaffConversationPacket packet)
+    {
+        var mc = Minecraft.getInstance();
+        if (mc.screen instanceof StaffConversationScreen screen && screen.view.session().equals(packet.session()))
+        {
+            if (!packet.valid())
+            {
+                if (mc.player != null) mc.player.displayClientMessage(Component.literal(packet.reply()), false);
+                mc.setScreen(null); return;
+            }
+            boolean changed = screen.view.canCommand() != packet.canCommand();
+            if (!screen.view.reply().equals(packet.reply()))
+            {
+                screen.replyScroll = 0;
+                mc.getSoundManager().play(net.minecraft.client.resources.sounds.SimpleSoundInstance.forUI(com.projectseele.registry.ModSounds.STAFF_RADIO_ACK.get(),1,.35F));
+            }
+            screen.view = packet;
+            if (changed) screen.rebuildWidgets();
+        }
+        else if (packet.open() && packet.valid())
+        {
+            var replacement = new StaffConversationScreen(packet);
+            if (mc.screen instanceof StaffConversationScreen old)
+            { replacement.unit = old.unit; replacement.tab = packet.canCommand() ? old.tab : 0; }
+            mc.setScreen(replacement);
+            mc.getSoundManager().play(net.minecraft.client.resources.sounds.SimpleSoundInstance.forUI(com.projectseele.registry.ModSounds.STAFF_RADIO_CONNECT.get(),1,.4F));
+        }
+    }
+    public ClientboundStaffConversationPacket snapshot() { return view; }
+
+    @Override protected void init()
+    {
+        if ((width < 430 || height < 300) && savedScale < 0 && minecraft.options.guiScale().get() != 1)
+        {
+            savedScale = minecraft.options.guiScale().get(); minecraft.options.guiScale().set(2);
+            minecraft.resizeDisplay(); return;
+        }
+        panelWidth = Math.min(560, width - 16); panelHeight = Math.min(320, height - 16);
+        x = (width - panelWidth) / 2; y = (height - panelHeight) / 2;
+        addButton("交谈", x + 12, y + 29, 68, () -> switchTab(0), true);
+        addButton("指挥", x + 84, y + 29, 68, () -> switchTab(1), view.canCommand());
+        addButton("作战记录", x + 156, y + 29, 88, () -> { switchTab(2); send("TOPIC:campaign"); }, true);
+        addButton("关闭", x + panelWidth - 60, y + 8, 48, this::onClose, true);
+        int controlsY = controlsTop();
+        int column = (panelWidth - 32) / 3;
+        if (tab == 0)
+        {
+            String[][] topics = {{"当前状态", "status"}, {"道路指引", "directions"}, {"同步与驾驶", "sync"},
+                    {"插入栓接入", "plug"}, {"供电与回收", "power"}, {"值班闲聊", "duty"}};
+            for (int i = 0; i < topics.length; i++)
+            {
+                String request = "TOPIC:" + topics[i][1];
+                addButton(topics[i][0], x + 12 + (i % 3) * (column + 4), controlsY + (i / 3) * 22,
+                        column, () -> { if(request.equals("TOPIC:directions"))switchTab(3);send(request); }, true);
+            }
+            if (view.radio())
+            {
+                String[] contacts = {"美里", "律子", "冬月"};
+                for (int i = 0; i < contacts.length; i++)
+                {
+                    String person = contacts[i];
+                    addButton("联络" + person, x + 12 + i * (column + 4), controlsY + 44,
+                            column, () -> send("CONTACT:" + person), true);
+                }
+            }
+        }
+        else if (tab == 1)
+        {
+            for (int i = 0; i < 3; i++)
+            {
+                final int selection = i;
+                addButton((unit == i ? "● " : "") + com.projectseele.world.NervStaffDialogue.unitName(i),
+                        x + 12 + i * (column + 4), controlsY, column, () -> { unit = selection; rebuildWidgets(); }, true);
+            }
+            String[] commands = {"整备", "发射", "回收"};
+            for (int i = 0; i < commands.length; i++)
+            {
+                String action = commands[i];
+                addButton(action, x + 12 + i * (column + 4), controlsY + 22, column,
+                        () -> send(action + " 0" + unit), view.canCommand());
+            }
+            int half = (panelWidth - 28) / 2;
+            addButton("整备后发射", x + 12, controlsY + 44, half, () -> send("整备后发射 0" + unit), view.canCommand());
+            addButton("取消后续操作", x + 16 + half, controlsY + 44, half, () -> send("停止操作"), true);
+        }
+        else if(tab==2)
+        {
+            addButton("查看当前简报", x + 12, controlsY, panelWidth - 24, () -> send("TOPIC:campaign"), true);
+            int half = (panelWidth - 28) / 2;
+            addButton("接受当前作战", x + 12, controlsY + 22, half, () -> send("CAMPAIGN:begin"), view.canCommand());
+            addButton("撤销当前作战", x + 16 + half, controlsY + 22, half, () -> send("CAMPAIGN:cancel"), view.canCommand());
+        }
+        else
+        {
+            String[][] destinations={{"指挥室入口","command"},{"机库","hangars"},{"总部火车站","station"},{"金字塔接驳站","pyramid_station"},{"发射区车站","launch_station"},{"观景走廊","observation"},{"终极教条前厅","dogma"}};
+            for(int i=0;i<destinations.length;i++)
+            {
+                String key=destinations[i][1];
+                addButton(destinations[i][0],x+12+(i%3)*(column+4),controlsY+(i/3)*22,column,()->send("ROUTE:"+key),true);
+            }
+            addButton("停止步行引导",x+12,controlsY+66,panelWidth-24,()->send("ROUTE:stop"),true);
+        }
+        input = new EditBox(font, x + 12, y + panelHeight - 21, panelWidth - 83, 17, Component.literal("输入交谈或指令"));
+        input.setMaxLength(160); input.setHint(Component.literal("例如：初号机准备后发射")); addRenderableWidget(input);
+        addButton("发送", x + panelWidth - 64, y + panelHeight - 22, 52, this::submitText, true);
+    }
+
+    private void addButton(String title, int left, int top, int width, Runnable action, boolean enabled)
+    {
+        var button = new ChannelButton(left, top, width, Component.literal(title), action);
+        button.active = enabled; addRenderableWidget(button);
+    }
+    private static final class ChannelButton extends Button
+    {
+        ChannelButton(int x, int y, int width, Component title, Runnable action)
+        { super(x, y, width, 18, title, ignored -> action.run(), DEFAULT_NARRATION); }
+        @Override protected void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partial)
+        {
+            boolean focused = active && isHoveredOrFocused();
+            graphics.fill(getX(), getY(), getX() + width, getY() + height, focused ? 0xFF40584B : 0xFF203A32);
+            graphics.fill(getX(), getY() + height - 1, getX() + width, getY() + height, focused ? 0xFFE2BB67 : 0xFF527867);
+            graphics.drawCenteredString(Minecraft.getInstance().font, getMessage(), getX() + width / 2, getY() + 5,
+                    active ? focused ? 0xFFEFD18E : 0xFFD5E7D8 : 0xFF738178);
+        }
+    }
+    private void switchTab(int next) { tab = next; rebuildWidgets(); }
+    private int controlsTop(){return y+panelHeight-(tab==3?113:tab==2?70:91);}
+    private void submitText() { if (!input.getValue().isBlank()) { send(input.getValue()); input.setValue(""); } }
+    private void send(String request)
+    {
+        if (minecraft != null && minecraft.player != null) SeeleNetwork.CHANNEL.sendToServer(new ServerboundStaffConversationPacket(view.session(), request));
+    }
+    @Override public void tick()
+    {
+        if (input != null) input.tick();
+        if (++age % 40 == 0) send("REFRESH");
+    }
+    @Override public boolean keyPressed(int key, int scan, int modifiers)
+    {
+        if ((key == 257 || key == 335) && input != null && input.isFocused()) { submitText(); return true; }
+        return super.keyPressed(key, scan, modifiers);
+    }
+    @Override public boolean mouseScrolled(double mouseX, double mouseY, double delta)
+    {
+        if (mouseX >= x && mouseX < x + panelWidth && mouseY >= replyTop && mouseY < controlsTop()-6)
+        { replyScroll = Math.max(0, replyScroll - (int) Math.signum(delta) * 2); return true; }
+        return super.mouseScrolled(mouseX, mouseY, delta);
+    }
+    @Override public void render(GuiGraphics graphics, int mouseX, int mouseY, float partial)
+    {
+        renderBackground(graphics);
+        graphics.fill(x, y, x + panelWidth, y + panelHeight, 0xF010211F);
+        graphics.fill(x, y, x + panelWidth, y + 2, 0xFFE2BB67);
+        graphics.fill(x + 8, y + 53, x + panelWidth - 8, y + 54, 0xFF446058);
+        graphics.drawString(font, view.name() + "  /  " + view.role(), x + 12, y + 10, 0xFFE6DEC1, false);
+        int rowY = y + 60;
+        if(tab<2)
+            for (String row : view.units())
+            { graphics.drawString(font, row, x + 12, rowY, 0xFF92C9AE, false); rowY += 11; }
+        else
+        {graphics.drawString(font,view.radio()?"指挥频道在线":"岗位通信在线",x+12,rowY,0xFF92C9AE,false);rowY+=11;}
+        if (!view.order().isBlank())
+        { graphics.drawString(font, font.plainSubstrByWidth(view.order(), panelWidth - 24), x + 12, rowY + 2, 0xFFE2BB67, false); rowY += 15; }
+        int bottom = controlsTop()-6;
+        replyTop = rowY + 6;
+        var lines = font.split(Component.literal(view.reply()), panelWidth - 34);
+        int visibleLines = Math.max(1, (bottom - replyTop) / 10);
+        replyScroll = Math.min(replyScroll, Math.max(0, lines.size() - visibleLines));
+        graphics.enableScissor(x + 10, rowY + 5, x + panelWidth - 10, bottom);
+        for (int i = replyScroll; i < Math.min(lines.size(), replyScroll + visibleLines); i++)
+            graphics.drawString(font, lines.get(i), x + 12, replyTop + (i - replyScroll) * 10, 0xFFEBEADF, false);
+        graphics.disableScissor();
+        if (lines.size() > visibleLines) graphics.drawString(font, "↕", x + panelWidth - 18, replyTop, 0xFFE2BB67, false);
+        super.render(graphics, mouseX, mouseY, partial);
+    }
+    @Override public void onClose() { send("CLOSE"); super.onClose(); }
+    @Override public void removed()
+    {
+        if (savedScale >= 0 && !restoring)
+        {
+            restoring = true; minecraft.options.guiScale().set(savedScale); minecraft.resizeDisplay();
+        }
+        super.removed();
+    }
+    @Override public boolean isPauseScreen() { return false; }
+}

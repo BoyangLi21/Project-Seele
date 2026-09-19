@@ -3,7 +3,7 @@
 > 合规基线：khara 二创指引（非商业、零官方素材）。本文件登记**所有**非代码资产的来源。
 > 任何新素材入库前先在这里登记。
 
-## 音效（全部原创合成）
+## 音效（原创合成与单列的语音生成）
 
 R10 新增的 15 个 `eva_*.ogg` 由 `tools/build_eva_audio_r10.py` 固定种子合成，无录音采样。用途包括落足、落地、关节、挥击、实体命中、刀切、装甲、核心、AT 侵蚀/撕裂、咆哮和驾驶反馈。波形参数、响度与 SHA-256 记录在 `artifacts/first_battle_world_r10/audio/manifest.json`。
 
@@ -25,7 +25,7 @@ R10 负责人授权下载的九份 Battle Orchestra 模型与纹理仅放在 `ex
 
 全部由脚本以固定随机种子生成，可复现；无采样、无原作旋律。许可随仓库 MIT。
 
-## 贴图（全部程序生成）
+## 贴图（各项来源分别登记）
 
 | 文件 | 规格 | 来源 |
 |---|---|---|
@@ -266,3 +266,13 @@ Lux3D 原始网格、本地涂装与蒙皮处理、Pro 原始交付和 Blender �
 - `nerv_direction_panel` 为原创紧凑壁牌，复用自有时刻表绘制，避免指路牌占用通道。
 - `tools/build_tv_machinery_r16.py` 的常驻运输架上部增加原创检修视口；`refine_carrier_viewport_r23.py` 只重建该部件，未改变其他机械部分或加入原片素材。
 - R23 两台 UN 的手部／光学改造与三驾驶员皮肤仅安装在本机私有资源包。完整皮肤来自用户已下载文件，原像素未改；其来源哈希和安装凭据保留于 `artifacts/access_r22/asset_stage.json` 与 `artifacts/facility_r23/asset_install`，公开前仍需各自的再分发许可。
+
+## R24 环境、对白与作战（2026-09-19）
+
+- `mesh/period_details_r24.json` 是 `tools/build_period_props_r24.py` 的原创几何：公共电话、时钟、陈列与茶室设施、监测台、推车、自行车、饮料机和邮筒等。1990 年新宿、1989 年东急档案及 UR 团地照片仅用于观察，来源、改编和 AI 材质提示词见 [美术记录](ART_DIRECTION_R24.md)。
+- 侧室工具箱的 `textures/entity/chest/nerv_equipment_r24.png` 由项目原创 SVG 图集栅格化生成，可编辑源为 `art_sources/nerv_equipment_chest_r24.svg`；没有复制原版箱子纹理，库存和方块身份不变。
+- `textures/block/period_station_concrete_r24.png` 为内置 image_gen 辅助生成的新地面材质，经技术缩放接入；不是官方场景截图或下载照片。AI 生成来源与原始提示词随项目明确登记。
+- `sounds/shamshel_whip_charge.ogg`、`shamshel_whip_crack.ogg`、`period_phone_busy.ogg`、`staff_radio_connect.ogg`、`staff_radio_ack.ogg` 为固定种子原创合成，无录音采样；生成器为 `tools/build_tv_audio_r24.py`，按仓库 MIT 许可。
+- `data/projectseele/nerv_dialogue/profiles.json` 为本项目原创对白，不是原剧台词转录。TV 章节目录用于事件顺序，已实现作战和未来章节分别标识。
+- 夏姆榭尔新的骨骼轨迹和接触代码为本项目编写；现有本机身体依旧是先前登记的私有研究模型，新增动作不会改变原身体素材的许可状态。
+- 开源与视频计划见 [公开准备](OPEN_SOURCE_RELEASE_R24.md) 和 [B 站制作方案](BILIBILI_AND_COMMUNITY_R24.md)。上述文件没有把许可询问信当作已经获得许可。

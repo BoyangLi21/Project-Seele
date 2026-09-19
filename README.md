@@ -8,12 +8,21 @@ An open-source **Neon Genesis Evangelion** universe mod for Minecraft **Forge 1.
 
 ## Status / 状态
 
-Early development. **Visual recovery is in progress.** EVA presentation and Third Impact remain prototypes. The local connected map now places a 416-block Tokyo-3 district above a deeply buried 640-block GeoFront sphere; 95 generated buildings and three private high-rises physically descend into the curved ceiling city instead of disappearing. The same world contains the 522-block launch shafts, Central/Terminal Dogma, live NERV telemetry and persistent Operation Yashima gates. Downloaded assets remain local-only. / **视觉基础抢救中。** EVA 动作与第三次冲击仍是原型。本机连续地图现已把 416 格第三新东京市置于普通地表、640 格 GeoFront 深埋地下；95 栋生成楼宇与三座私有高楼会真正沉入曲面穹顶都市，而不是消失。同一世界还包含 522 格实体发射井、Central/Terminal Dogma、NERV 实时遥测与持久化屋岛作战门禁；下载资产仍只限本机。
+Development build with playable EVA piloting, physical entry-plug insertion, rail transfer, launch/recovery and NPC-operated controls. The local world connects Tokyo-3, a second city, stations, airports, the GeoFront headquarters and a separate UN test base. The ordered TV campaign currently covers Sachiel (episodes 1–2) and Shamshel (episode 3); later chapters and Third Impact remain in development.
 
-Pilot controls / 驾驶操作：`WASD` 移动、`Space` 跳跃、`Shift` 单膝跪地、`Z` 趴下/匍匐、`Ctrl` 冲刺、`B` 踩踏、`R` 切换武器、`G` 开关 A.T. Field、左键近战/自动步枪、右键阳电子炮蓄能/N² 解锁、`V` 弹出插入栓。零号机展开 A.T. Field 后按住 `Shift`，即进入单膝举盾防御。战略武器测试与数值见 [`docs/WEAPONS_TEST.md`](docs/WEAPONS_TEST.md)。
+当前开发版已经接通驾驶、真实插入栓吊装、轨道转运、发射回收和 NPC 操作控制台。地图修复采用逐格差量、真实人物碰撞、门／电梯联锁及全高度扫描。R24 增加地下设施路径导引、按用途细化的侧室与九十年代公共设施细节。
+
+**Public source and the complete local demonstration world are different deliverables.** The repository includes code, project-authored resources and fallback visuals. Private evaluation maps, extracted models and uncleared third-party artwork are not bundled. / **公开源码不等于完整本机演示包。** 私有测试地图、提取模型及尚未确认公开许可的第三方素材不随仓库分发。参与和构建见 [CONTRIBUTING.md](CONTRIBUTING.md)，具体区别见 [公开准备](docs/OPEN_SOURCE_RELEASE_R24.md)。
+
+Pilot controls / 驾驶操作：`WASD` 移动、`Space` 跳跃、`Shift` 单膝跪地、`Z` 趴下/匍匐、`Ctrl` 冲刺、`B` 踩踏、`R` 切换武器、`G` 开关 A.T. Field、左键近战/自动步枪、右键空手／刀重击（炮模式蓄能，N² 模式保险流程）、`V` 弹出插入栓。零号机展开 A.T. Field 后按住 `Shift`，即进入单膝举盾防御。战略武器测试与数值见 [`docs/WEAPONS_TEST.md`](docs/WEAPONS_TEST.md)。
 
 ## Docs / 文档
 
+- [R24 操作与验收](docs/MANUAL_ACCEPTANCE_R24.md) — NPC 出动、七处地下目的地和 TV 剧情入口
+- [R24 开发与验证](docs/TV_DEVELOPMENT_R24.md) — 实际完成内容、证据与限制
+- [R24 渲染与性能](docs/PERFORMANCE_R24.md) — 24 区块实测、车辆优化及 UN 区域的当前瓶颈
+- [环境美术与参考](docs/ART_DIRECTION_R24.md) — 原创资源、实景依据及版本区分
+- [B 站展示与同好共建](docs/BILIBILI_AND_COMMUNITY_R24.md) — 一次完整出动的分镜与贡献方向
 - **[docs/ROADMAP.md](docs/ROADMAP.md)** — full plan through Third Impact & the Tree of Life / 完整路线图（直到第三次冲击与生命之树）
 - [docs/SETUP.md](docs/SETUP.md) — dev environment setup / 开发环境搭建
 - [docs/PROMPTS.md](docs/PROMPTS.md) — kickoff prompts for AI-assisted sessions / AI 协作开工手册

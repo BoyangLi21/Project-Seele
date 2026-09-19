@@ -132,12 +132,20 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
         // the render origin directly preserves the actual vertex scale.
         var world = software.bernie.geckolib.util.RenderUtils.invertAndMultiplyMatrices(
                 pose, this.entityRenderTranslations).transformPosition(point);
-        return eva.getPosition(partial).add(world.x, world.y, world.z);
+        return renderedOrigin(eva,partial).add(world.x, world.y, world.z);
     }
     public org.joml.Matrix4f renderedMeshTransform(org.joml.Matrix4f pose,EvaUnit01Entity eva,float partial)
     {
         var world=software.bernie.geckolib.util.RenderUtils.invertAndMultiplyMatrices(pose,this.entityRenderTranslations);
-        Vec3 p=eva.getPosition(partial);world.m30(world.m30()+(float)p.x).m31(world.m31()+(float)p.y).m32(world.m32()+(float)p.z);return world;
+        Vec3 p=renderedOrigin(eva,partial);world.m30(world.m30()+(float)p.x).m31(world.m31()+(float)p.y).m32(world.m32()+(float)p.z);return world;
+    }
+    private Vec3 renderedOrigin(EvaUnit01Entity eva,float partial)
+    {
+        // This is the exact LevelRenderer/dispatcher baseline. xo/yo/zo used
+        // by getPosition can differ during authoritative vehicle corrections.
+        return new Vec3(Mth.lerp((double)partial,eva.xOld,eva.getX()),
+                Mth.lerp((double)partial,eva.yOld,eva.getY()),Mth.lerp((double)partial,eva.zOld,eva.getZ()))
+                .add(getRenderOffset(eva,partial));
     }
 
     public EvaUnit01Renderer(EntityRendererProvider.Context context)
@@ -249,6 +257,12 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
     }
 
     private record MuzzleSample(Vec3 position, long capturedNanos) {}
+
+    @Override protected void applyRotations(EvaUnit01Entity entity,PoseStack pose,float age,float yaw,float partial)
+    {
+        if(entity.isFirstBattleActive())yaw=com.projectseele.entity.FirstBattleClip.yaw(entity.firstBattleSignals().spec(entity),true,entity.firstBattleSignals().time(entity,partial));
+        super.applyRotations(entity,pose,age,yaw,partial);
+    }
 
     @Override
     public Vec3 getRenderOffset(EvaUnit01Entity entity, float partialTick)

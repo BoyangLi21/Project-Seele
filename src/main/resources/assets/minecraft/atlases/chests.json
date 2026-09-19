@@ -1,0 +1,9 @@
+{
+  "sources": [
+    {
+      "type": "single",
+      "resource": "projectseele:entity/chest/nerv_equipment_r24",
+      "sprite": "projectseele:entity/chest/nerv_equipment_r24"
+    }
+  ]
+}

@@ -15,6 +15,10 @@ public final class NervOfficeChairBlock extends net.minecraft.world.level.block.
     @Override public BlockState mirror(BlockState s,net.minecraft.world.level.block.Mirror m){return rotate(s,m.getRotation(s.getValue(FACING)));}
     @Override public net.minecraft.world.InteractionResult use(BlockState state,net.minecraft.world.level.Level level,BlockPos pos,net.minecraft.world.entity.player.Player player,net.minecraft.world.InteractionHand hand,net.minecraft.world.phys.BlockHitResult hit)
     {
+        return sit(level,pos,player,state.getValue(FACING),-.1);
+    }
+    public static net.minecraft.world.InteractionResult sit(net.minecraft.world.level.Level level,BlockPos pos,net.minecraft.world.entity.player.Player player,Direction facing,double height)
+    {
         if(player.isSecondaryUseActive()||player.isPassenger())return net.minecraft.world.InteractionResult.PASS;
         if(!level.isClientSide)
         {
@@ -23,7 +27,7 @@ public final class NervOfficeChairBlock extends net.minecraft.world.level.block.
             var seat=com.projectseele.registry.ModEntities.NERV_COMMAND_SEAT.get().create(level);
             if(seat!=null)
             {
-                seat.addTag("seele_office_seat");seat.getPersistentData().putLong("OfficeChair",pos.asLong());seat.moveTo(pos.getX()+.5,pos.getY()-.1,pos.getZ()+.5,state.getValue(FACING).toYRot(),0);level.addFreshEntity(seat);
+                seat.addTag("seele_office_seat");seat.getPersistentData().putLong("OfficeChair",pos.asLong());seat.moveTo(pos.getX()+.5,pos.getY()+height,pos.getZ()+.5,facing.toYRot(),0);level.addFreshEntity(seat);
                 if(!player.startRiding(seat,true))seat.discard();
             }
         }

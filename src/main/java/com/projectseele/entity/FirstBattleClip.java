@@ -34,12 +34,13 @@ public final class FirstBattleClip
     private static Data load()
     {
         String review=System.getProperty("projectseele.firstBattleReviewClip","");
-        if(!review.isEmpty()&&"r10-firstbattle".equals(System.getProperty("projectseele.regionalBuild","")))
+        String mode=System.getProperty("projectseele.regionalBuild","");
+        if(!review.isEmpty()&&(mode.equals("r10-firstbattle")||mode.startsWith("r24-campaign")))
         {
             try{return readLocal(Path.of(review),"isolated candidate review");}
             catch(Exception e){throw new IllegalStateException("Requested battle candidate could not load",e);}
         }
-        for(String revision:List.of("r18","r15","r14","r12"))
+        for(String revision:List.of("r24","r18","r15","r14","r12"))
         {
             Path local=Path.of("projectseele-local-maps/first_battle_"+revision+".json");
             if(!Files.isRegularFile(local))continue;
@@ -171,7 +172,16 @@ public final class FirstBattleClip
     public static Vec3 localPoint(FirstBattleSignals.Spec spec,boolean eva,String curve,float seconds)
     {
         if(DATA==null)return Vec3.ZERO;Vec3 p=sample(DATA.roles.get(eva?"eva":"angel").curves.get(curve),seconds);
-        if(!eva)p=p.add(0,spec.initialHeight()*(1-smooth(seconds/1.2F)),(spec.initialDistance()-34)*(1-smooth(seconds/1.2F)));
+        Vec3 correction=eva?Vec3.ZERO:new Vec3(0,spec.initialHeight()*(1-smooth(seconds/1.2F)),(spec.initialDistance()-34)*(1-smooth(seconds/1.2F)));
+        p=p.add(correction);
+        if(!curve.equals("root_blocks"))
+        {
+            // Socket, sole and eye curves follow the same initial heading
+            // blend as the actual body, around that actor's moving origin.
+            Vec3 origin=sample(DATA.roles.get(eva?"eva":"angel").curves.get("root_blocks"),seconds).add(correction);
+            float delta=yaw(spec,eva,seconds)-spec.yaw()-(eva?0:180);
+            p=origin.add(p.subtract(origin).yRot((float)Math.toRadians(-delta)));
+        }
         return p;
     }
     public static Vec3 point(FirstBattleSignals.Spec spec,boolean eva,String curve,float seconds){return world(spec,localPoint(spec,eva,curve,seconds));}

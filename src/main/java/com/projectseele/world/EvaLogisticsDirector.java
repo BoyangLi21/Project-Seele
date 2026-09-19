@@ -520,6 +520,23 @@ public final class EvaLogisticsDirector
         return new ActionResult(true,
                 label(variant) + " catapult release authorized.");
     }
+    public static boolean recoveryMotionSettled(EvaUnit01Entity unit)
+    {
+        Vec3 motion=unit.getDeltaMovement();
+        if(motion.horizontalDistanceSqr()>RECOVERY_MAX_SPEED_SQR)return false;
+        // An unpiloted, grounded EVA retains the next gravity impulse in
+        // deltaMovement (-0.1764 in the current rig). It is not a real fall.
+        // Verify actual support; a stale onGround bit is insufficient.
+        if(motion.y>Math.sqrt(RECOVERY_MAX_SPEED_SQR)||motion.y<-.25)return false;
+        if(motion.y<-Math.sqrt(RECOVERY_MAX_SPEED_SQR)&&!unit.onGround())return false;
+        int supported=0;
+        for(double[] offset:new double[][]{{0,0},{-3,0},{3,0},{0,-2},{0,2}})
+        {
+            double x=unit.getX()+offset[0],y=unit.getY(),z=unit.getZ()+offset[1];
+            if(unit.level().getBlockCollisions(unit,new AABB(x-.6,y-.16,z-.6,x+.6,y+.005,z+.6)).iterator().hasNext())supported++;
+        }
+        return supported>=3;
+    }
     public static ActionResult requestRecovery(ServerLevel level, int variant)
     {
         if (!logisticsReady(level, variant))
@@ -535,6 +552,14 @@ public final class EvaLogisticsDirector
          * standing motionless on its pad is reported as missing.
          */
         loadControlTarget(level, variant);
+        FleetEntry parkedFault=entry(level,variant);
+        EvaUnit01Entity faultUnit=canonical(level,variant);
+        if(parkedFault!=null&&parkedFault.phase()==Phase.PLUG_FAULT&&faultUnit!=null
+                &&EntryPlugDirector.extractEmptyCapsule(level,variant,faultUnit))
+        {
+            put(level,variant,parkedFault.withPhase(Phase.FILLING,0,hangarBed(level,variant).getZ(),parkedFault.lclLayers()));
+            return new ActionResult(true,label(variant)+" empty capsule recovery resumed under the original hoist.");
+        }
         FacilityReadinessService.FacilityReadiness readiness =
                 FacilityReadinessService.read(level,
                         FacilityReadinessService.Operation.RECOVERY, variant);
@@ -568,7 +593,7 @@ public final class EvaLogisticsDirector
             return new ActionResult(false, label(variant)
                     + " must stand on its own Tokyo-3 recovery deck.");
         }
-        if (unit.getDeltaMovement().lengthSqr() > RECOVERY_MAX_SPEED_SQR)
+        if (!recoveryMotionSettled(unit))
         {
             return new ActionResult(false, label(variant)
                     + " must be motionless before surface command authorizes recovery.");
@@ -1571,8 +1596,9 @@ public final class EvaLogisticsDirector
                 {
                     net.minecraft.world.entity.LivingEntity pilot =
                             unit.getPilotEntity();
-                    if (pilot == null || !EntryPlugDirector.ejectPilotToPlug(
-                            level, variant, unit, pilot))
+                    boolean extracted=pilot==null?EntryPlugDirector.extractEmptyCapsule(level,variant,unit)
+                            :EntryPlugDirector.ejectPilotToPlug(level,variant,unit,pilot);
+                    if (!extracted)
                     {
                         holdPlugFault(level, variant, unit, entry,
                                 "wet-cage crane could not begin capsule extraction");
