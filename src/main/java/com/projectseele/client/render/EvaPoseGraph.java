@@ -167,6 +167,7 @@ public final class EvaPoseGraph
         {
             return Snapshot.empty();
         }
+        EvaCervicalPivotR25.apply(entity,model,partialTick);
         EvaPoseTransition.rememberGecko(model);
         if(entity.isNervLogisticsLocked())
         {
@@ -218,10 +219,13 @@ public final class EvaPoseGraph
         var terrain=EvaFootPlacement.apply(entity,model,partialTick,modelToWorld);
         var optics=EvaUNLaserPose.apply(entity,model,modelToWorld);
         var dorsal=EvaDorsalPose.apply(entity,model);
+        var shoulders=EvaShoulderClearanceR25.apply(entity,model,modelToWorld,partialTick);
+        EvaPowerAttachmentR25.capture(entity,model,modelToWorld);
         Set<String> jointR=new LinkedHashSet<>(jointWrites.rotationBones());jointR.addAll(firearm.rotationBones());
         Set<String> jointP=new LinkedHashSet<>(jointWrites.positionBones());jointP.addAll(firearm.positionBones());
         jointR.addAll(terrain.rotationBones());jointP.addAll(terrain.positionBones());
         jointR.addAll(optics.rotationBones());jointR.addAll(dorsal.rotationBones());
+        jointR.addAll(shoulders.rotationBones());
         firearm=new EvaMotionEngineV2.BoneWrites(Set.copyOf(jointR),Set.copyOf(jointP),"MOTION_ENGINE_LIVE_ACTION");
         if(!firearm.rotationBones().isEmpty())
         {

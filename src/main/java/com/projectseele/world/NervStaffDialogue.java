@@ -56,7 +56,7 @@ public final class NervStaffDialogue
     {
         reply(player,npc,StaffDialogueCatalogR24.line(npc.skin(),npc.staffRole(),"greeting",player.tickCount / 100));
         String prefix="/nerv talk \""+npc.memberId()+"\" ";var menu=option("战况",prefix+"状态");
-        if(Set.of("commander","scientist").contains(npc.staffRole()))
+        if(StaffAuthorityR25.commandContact(npc))
         {
             for(int v=0;v<3;v++){String unit=String.format(Locale.ROOT,"%02d",v);menu.append(option("整备 "+unit,prefix+"整备 "+unit)).append(option("发射 "+unit,prefix+"发射 "+unit)).append(option("回收 "+unit,prefix+"回收 "+unit));}
             menu.append(option("整备后发射 01",prefix+"整备后发射 01")).append(option("取消后续操作",prefix+"停止操作"));
@@ -81,7 +81,7 @@ public final class NervStaffDialogue
         {reply(player,npc,NervWayfindingR24.start(player,text.substring(6)));return 1;}
         if(text.startsWith("CAMPAIGN:"))
         {
-            if(!Set.of("commander","scientist").contains(npc.staffRole()))
+            if(!StaffAuthorityR25.allows(npc,"campaign") || !authorized(player))
             {reply(player,npc,"请向作战指挥或技术负责人提交作战指令。");return 0;}
             int result=switch(text)
             {
@@ -95,7 +95,12 @@ public final class NervStaffDialogue
         switch(intent.kind())
         {
             case CANCEL -> { return StaffCommandBookR24.cancel(player,npc,intent.unit()); }
-            case ACTION -> { return StaffCommandBookR24.request(player,npc,intent.subject(),intent.unit()); }
+            case ACTION ->
+            {
+                if(intent.subject().equals("board"))
+                {reply(player,npc,StaffPilotOrdersR25.request(player,npc,intent.unit()));return 1;}
+                return StaffCommandBookR24.request(player,npc,intent.subject(),intent.unit());
+            }
             case INVALID -> { reply(player,npc,intent.subject());return 0; }
             case QUERY ->
             {
@@ -150,7 +155,7 @@ public final class NervStaffDialogue
     }
     public static int beginNativeAction(ServerPlayer player,NervStaffEntity npc,String op,int variant)
     {
-        if(!Set.of("commander","scientist").contains(npc.staffRole())||!authorized(player)||npc.busy())return 0;
+        if(!StaffAuthorityR25.allows(npc,op)||!authorized(player)||npc.busy())return 0;
         BlockPos control=NervOperationsConsole.staffControl(player.serverLevel(),op,variant);
         if(control==null||!(player.serverLevel().getBlockState(control).getBlock() instanceof ButtonBlock)){reply(player,npc,"对应实体按键不可用，操作中止。");return 0;}
         BlockPos approach=approach(npc,control);
@@ -179,7 +184,7 @@ public final class NervStaffDialogue
     {
         var level=(ServerLevel)npc.level();var player=level.getServer().getPlayerList().getPlayer(owner);
         if(ticks%40==0&&"r15-staff-controls".equals(System.getProperty("projectseele.regionalBuild","")))ProjectSeele.LOGGER.info("STAFF CONTROL TRACE actor={} pos={} target={} navDone={} onGround={} loaded={}",npc.memberId(),npc.position(),approach,npc.getNavigation().isDone(),npc.onGround(),EvaLogisticsDirector.status(level,variant).loaded());
-        if(player==null||player.level()!=level||(StaffCommandBookR24.order(npc)==null&&player.distanceToSqr(npc)>48*48)||!authorized(player)||ticks>300)
+        if(player==null||player.level()!=level||(StaffCommandBookR24.order(npc)==null&&player.distanceToSqr(npc)>48*48)||!authorized(player)||!StaffAuthorityR25.allows(npc,operation)||ticks>300)
         {StaffCommandBookR24.failed(npc,"按键操作已中止：通讯中断、权限改变或路径超时。");npc.finishTask();return;}
         if(ticks%20==0&&!EvaLogisticsDirector.status(level,variant).loaded())EvaLogisticsDirector.loadControlTarget(level,variant);
         if(npc.distanceToSqr(Vec3.atBottomCenterOf(approach))>.16)
@@ -214,7 +219,7 @@ public final class NervStaffDialogue
     {
         int v=pilot.getAssignedVariant();String line=switch(v){case 0->"明白。等待指令。";case 2->"准备好了。先确认轨道和供电，别把程序弄乱。";default->"我在。出击前请再确认一次同步状态。";};
         String stage=switch(pilot.getTrainingStage()){case TrainingPilotEntity.STAGE_IN_PLUG->"插入栓内，等待连接";case TrainingPilotEntity.STAGE_LINKED->"神经连接已建立";case TrainingPilotEntity.STAGE_STANDBY->"待命";default->"前往登机位置";};
-        say(player,String.format(Locale.ROOT,"DUMMY-%02d",v),line+" 当前："+stage+"。");
+        say(player,TrainingPilotEntity.pilotName(v),line+" 当前："+stage+"。");
     }
     private NervStaffDialogue() {}
 }

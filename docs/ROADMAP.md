@@ -1,5 +1,7 @@
 # Project SEELE 完整路线图
 
+> 2026-09-20 R25：金字塔分层联络、两座原生电梯、站序图／岗位通信、驾驶员登机、低姿态与电缆修复已安装。9,585 条登记通路经完整检查及 142 项交叉口复验通过；2344 块单向窗、650 个原存档实体的 NBT 与玩家资料保留。写实材质与本批部署交付见 [R25 记录](FACILITY_DEPLOYMENT_R25.md)、[验收手册](MANUAL_ACCEPTANCE_R25.md)、[服务器部署](PRIVATE_SERVER_DEPLOYMENT_CN.md)。
+
 > 更新：2026-09-05。项目负责人授权以真人动捕结合修改推进连续动作；站立/走跑/蹲起已进入统一运行时，Gecko `a910890b` 保留为回退基线。
 > 项目负责人选择的普通攻击 C 与 K1 左侧踹现作为独立 live MotionEngine 动作覆盖
 > standing-fists 左键与 B 键。Pose Authority Phase B/r03 已把所有 post-Gecko 写骨收口到唯一提交点，Phase C

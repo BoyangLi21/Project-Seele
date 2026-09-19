@@ -17,6 +17,7 @@ public final class StationDepartureBoardBlockEntity extends BlockEntity
     private List<String> rows = List.of("正在读取运行信息");
     private boolean warned;
     private boolean wayfinding;
+    private boolean routeMap;
     private long linkedPlatformId = -1, nativeClock;
     private long preferredPlatformId = -1;
     private List<Long> departures = List.of();
@@ -24,6 +25,7 @@ public final class StationDepartureBoardBlockEntity extends BlockEntity
     public String title() { return wayfinding ? route : route + "  发车信息 · 北京时间"; }
     public String station() { return station; }
     public List<String> rows() { return rows; }
+    public boolean routeMap() { return routeMap; }
     public long linkedPlatformId() { return linkedPlatformId; }
     public long nativeClock() { return nativeClock; }
     public List<Long> departureTimes() { return departures; }
@@ -51,6 +53,12 @@ public final class StationDepartureBoardBlockEntity extends BlockEntity
         tag.putString("Row0",rows.isEmpty()?"":rows.get(0));tag.putString("Row1",rows.size()>1?rows.get(1):"");
         tag.putBoolean("Wayfinding",wayfinding);tag.putString("Row2",rows.size()>2?rows.get(2):"");
         tag.putLong("NativePlatformId",preferredPlatformId);
+        if (routeMap)
+        {
+            var map = new net.minecraft.nbt.ListTag();
+            rows.forEach(row -> map.add(net.minecraft.nbt.StringTag.valueOf(row)));
+            tag.put("MapRows", map);
+        }
     }
     @Override public void load(CompoundTag tag)
     {
@@ -58,6 +66,12 @@ public final class StationDepartureBoardBlockEntity extends BlockEntity
         wayfinding=tag.getBoolean("Wayfinding");
         preferredPlatformId=tag.contains("NativePlatformId")?tag.getLong("NativePlatformId"):-1;
         rows=wayfinding&&!tag.getString("Row2").isEmpty()?List.of(tag.getString("Row0"),tag.getString("Row1"),tag.getString("Row2")):tag.getString("Row1").isEmpty()?List.of(tag.getString("Row0")):List.of(tag.getString("Row0"),tag.getString("Row1"));
+        routeMap = wayfinding && tag.contains("MapRows", net.minecraft.nbt.Tag.TAG_LIST);
+        if (routeMap)
+        {
+            var map = tag.getList("MapRows", net.minecraft.nbt.Tag.TAG_STRING);
+            rows = java.util.stream.IntStream.range(0, Math.min(18,map.size())).mapToObj(map::getString).toList();
+        }
     }
     @Override public CompoundTag getUpdateTag() { return saveWithoutMetadata(); }
     @Override public ClientboundBlockEntityDataPacket getUpdatePacket() { return ClientboundBlockEntityDataPacket.create(this); }

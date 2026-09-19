@@ -265,11 +265,13 @@ public final class S20PhysicalElevatorDirector
                     centralDogmaLift(), commanderOfficeLift());
             return lifts.stream().map(spec -> transform(level, spec)).toList();
         }
-        return List.of(commandRearLift(), observationHangarLift(),
+        var result = new ArrayList<>(List.of(commandRearLift(), observationHangarLift(),
                 oldCommandToCompactCageLift(), surfaceTransitLift(level),
                 commanderOfficeLift()).stream()
                 .filter(spec -> !FacilityLayoutR20.active(level.getServer()) || !spec.id().equals(OBSERVATION_HANGAR_LIFT_ID))
-                .map(spec -> RegionalFacilityLayout.personnelLift(level,spec)).toList();
+                .map(spec -> RegionalFacilityLayout.personnelLift(level,spec)).toList());
+        result.addAll(FacilityLiftsR25.installed(level));
+        return List.copyOf(result);
     }
 
     private static LiftSpec transform(ServerLevel level, LiftSpec spec)

@@ -272,5 +272,7 @@
   "block.projectseele.station_drain": "站厅排水盖",
   "period_fixture.projectseele.parked_bicycle": "带前篮的居民自行车",
   "period_fixture.projectseele.vending_machine": "饮料自动售货机",
-  "period_fixture.projectseele.letter_box": "街角邮筒"
+  "period_fixture.projectseele.letter_box": "街角邮筒",
+  "item.projectseele.satellite_phone": "NERV 卫星通信电话",
+  "key.projectseele.command_radio": "指挥室通信 / 卫星电话"
 }

@@ -275,7 +275,7 @@ public final class SeeleConfig
                 .defineInRange("capacityTicks", 6000, 200, 72000);
         UMBILICAL_RANGE = common
                 .comment("Maximum block distance from an EVA to a loaded umbilical power pylon.")
-                .defineInRange("umbilicalRange", 32, 4, 128);
+                .defineInRange("umbilicalRange", 768, 4, 2048);
         UMBILICAL_REPAIR_PER_SECOND = common
                 .comment("Hull health restored each second while connected to an umbilical pylon.")
                 .defineInRange("repairPerSecond", 1.0D, 0.0D, 20.0D);

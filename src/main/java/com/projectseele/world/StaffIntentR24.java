@@ -19,11 +19,12 @@ public final class StaffIntentR24
     private static final Pattern QUESTION = Pattern.compile("吗|么|能否|是否|可否|可以|能不能|怎么|怎样|如何|为什么|[?？]");
     private static final Pattern NEGATIVE = Pattern.compile("不要|别|不许|禁止");
     private static final Pattern AMBIGUOUS = Pattern.compile("或者|还是|同时|分别|[;；\\n\\r]|\\bOR\\b");
-    private static final Pattern POLITE = Pattern.compile("^(?:(?:请帮我|请你|请|帮我|麻烦你|麻烦|把|将)\\s*)+");
+    private static final Pattern POLITE = Pattern.compile("^(?:(?:请帮我|请你|请|帮我|麻烦你|麻烦|通知|让|叫|把|将)\\s*)+");
     private static final Map<String, String> ACTIONS = Map.ofEntries(
             Map.entry("整备", "prepare"), Map.entry("准备", "prepare"), Map.entry("PREPARE", "prepare"),
             Map.entry("发射", "launch"), Map.entry("出击", "launch"), Map.entry("LAUNCH", "launch"),
             Map.entry("回收", "recover"), Map.entry("RECOVER", "recover"),
+            Map.entry("登机", "board"), Map.entry("上机", "board"), Map.entry("驾驶员登机", "board"), Map.entry("BOARD", "board"),
             Map.entry("准备并发射", "deploy"), Map.entry("整备并发射", "deploy"),
             Map.entry("准备后发射", "deploy"), Map.entry("整备后发射", "deploy"),
             Map.entry("准备并出击", "deploy"), Map.entry("整备并出击", "deploy"));
@@ -37,6 +38,9 @@ public final class StaffIntentR24
         String text = Normalizer.normalize(input, Normalizer.Form.NFKC).strip().toUpperCase(Locale.ROOT)
                 .replace('號', '号').replace('機', '机').replace('發', '发').replace('備', '备').replace('擊', '击');
         text = text.replaceFirst("^(?:美里|律子|冬月(?:司令)?|司令)[,，:：]\\s*", "");
+        text = text.replaceAll("绫波丽|綾波レイ|\\bREI\\b", "零号机")
+                .replaceAll("碇真嗣|真嗣|碇シンジ|\\bSHINJI\\b", "初号机")
+                .replaceAll("惣流[·・ ]*明日香(?:[·・ ]*兰格雷)?|明日香|\\bASUKA\\b", "二号机");
         if (text.isBlank()) return new Intent(Kind.TOPIC, "greeting", -1);
         if (text.startsWith("TOPIC:"))
         {
@@ -57,7 +61,7 @@ public final class StaffIntentR24
                     : switch (units.group(2)) { case "零" -> 0; case "初", "一", "壹" -> 1; default -> 2; };
         }
         if (count > 1) return new Intent(Kind.INVALID, "请只指定一台机体。", -1);
-        boolean operation = text.matches(".*(?:整备|准备|发射|出击|回收|PREPARE|LAUNCH|RECOVER).*" );
+        boolean operation = text.matches(".*(?:整备|准备|发射|出击|回收|登机|上机|PREPARE|LAUNCH|RECOVER|BOARD).*" );
         if (QUESTION.matcher(text).find() && (operation || text.matches(".*(?:取消|停止|中止).*")))
             return new Intent(Kind.QUERY, operation ? "readiness" : "status", unit);
         if (NEGATIVE.matcher(text).find() && text.matches(".*(?:取消|停止).*"))

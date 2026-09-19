@@ -53,11 +53,13 @@ public final class StaffCommandBookR24
     {
         return npc.level() instanceof ServerLevel level ? ORDERS.getOrDefault(level, Map.of()).get(npc.getUUID()) : null;
     }
+    public static Order unitOrder(ServerLevel level,int unit)
+    {return ORDERS.getOrDefault(level,Map.of()).values().stream().filter(order->order.unit==unit).findFirst().orElse(null);}
 
     public static int request(ServerPlayer player, NervStaffEntity npc, String operation, int unit)
     {
         if (unit < 0 || unit > 2 || !Set.of("prepare", "launch", "recover", "deploy").contains(operation)) return 0;
-        if (!NervStaffDialogue.authorized(player) || !Set.of("commander", "scientist").contains(npc.staffRole()))
+        if (!NervStaffDialogue.authorized(player) || !StaffAuthorityR25.allows(npc, operation))
         {
             NervStaffDialogue.reply(player, npc, "这项指令需要指挥权限或 NERV 通行证，并由指挥或技术负责人执行。");
             return 0;

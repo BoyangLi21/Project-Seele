@@ -29,6 +29,7 @@ public final class StaffConversationR24
         long requestWindow = -100;
         int requestCount;
         String reply;
+        int pilotContact=-1;
         Session(NervStaffEntity npc, boolean radio, String reply)
         { actor = npc.getUUID(); level = (ServerLevel) npc.level(); this.radio = radio; this.reply = reply; }
     }
@@ -43,6 +44,8 @@ public final class StaffConversationR24
     public static boolean radioAllowed(ServerPlayer player)
     {
         if (!NervStaffDialogue.authorized(player)) return false;
+        if (player.getInventory().items.stream().anyMatch(s -> s.is(com.projectseele.registry.ModItems.SATELLITE_PHONE.get()))
+                || player.getOffhandItem().is(com.projectseele.registry.ModItems.SATELLITE_PHONE.get())) return true;
         if (EvaPilotResolver.controlTarget(player) != null) return true;
         if (player.getVehicle() instanceof EntryPlugCarrierEntity plug
                 && !plug.isIndependentUNPlug() && plug.getAssignedVariant() >= 0 && plug.getAssignedVariant() < 3
@@ -91,7 +94,7 @@ public final class StaffConversationR24
         }
         var job = StaffCommandBookR24.order(npc);
         String order = job == null ? "" : NervStaffDialogue.unitName(job.unit) + " · " + job.message;
-        boolean canCommand = NervStaffDialogue.authorized(player) && Set.of("commander", "scientist").contains(npc.staffRole());
+        boolean canCommand = NervStaffDialogue.authorized(player) && StaffAuthorityR25.commandContact(npc);
         if (!canCommand && order.isEmpty()) order = "本次对话可查询信息，出动指令需要相应岗位与通行权限";
         var packet = new ClientboundStaffConversationPacket(session.nonce, npc.getUUID(), npc.getId(),
                 npc.getName().getString(), role(npc), npc.skin(), open, true, canCommand, session.radio,
@@ -108,6 +111,8 @@ public final class StaffConversationR24
 
     public static void receive(ServerPlayer player, UUID nonce, String request)
     {
+        if (nonce.equals(new UUID(0, 0)) && request.equals("RADIO"))
+        { contact(player, "美里"); return; }
         Session session = sessions(player).get(player.getUUID());
         if (session == null || !session.nonce.equals(nonce) || request.length() > 160) return;
         if (request.equals("CLOSE")) { sessions(player).remove(player.getUUID()); return; }
@@ -125,6 +130,7 @@ public final class StaffConversationR24
         {
             if (tick - session.lastRefresh < 20) return;
             session.lastRefresh = tick; if (session.radio) load(session.level, npc.blockPosition());
+            if(session.pilotContact>=0)session.reply=pilotStatus(player,session.pilotContact);
             send(player, npc, session, false); return;
         }
         // Permit ordinary short bursts such as cancel -> new order. Drop
@@ -139,24 +145,72 @@ public final class StaffConversationR24
         session.lastAction = tick;
         if (request.startsWith("CONTACT:"))
         { contact(player, request.substring(8)); return; }
+        if (request.equals("WEAPONS"))
+        {
+            if (!NervStaffDialogue.authorized(player) || !StaffAuthorityR25.allows(npc, "weapons"))
+                session.reply = "武器部署由作战指挥下令。";
+            else
+            {
+                var eva = EvaPilotResolver.controlTarget(player);
+                var centre = eva == null ? player.position() : eva.position();
+                var station = com.projectseele.entity.NervArmamentStationEntity.nearest(player.level(), centre, 768, false);
+                session.reply = station != null && station.deploy()
+                        ? "就近武器井正在升起，坐标：" + station.blockPosition().toShortString() + "。"
+                        : "附近没有可部署的武器井，或武器井已展开。";
+            }
+            send(player, npc, session, false); return;
+        }
+        if (request.startsWith("BOARD:") || request.startsWith("PILOT:"))
+        {
+            try
+            {
+                int unit = Integer.parseInt(request.substring(6));
+                if (unit < 0 || unit > 2) return;
+                if (request.startsWith("BOARD:"))
+                {
+                    if (!NervStaffDialogue.authorized(player) || !StaffAuthorityR25.allows(npc, "board"))
+                        session.reply = "本岗位无权调遣驾驶员，请联络美里、律子或冬月。";
+                    else
+                    {
+                        session.reply = StaffPilotOrdersR25.request(player,npc,unit);
+                    }
+                }
+                else
+                {
+                    session.pilotContact=unit;session.reply=pilotStatus(player,unit);
+                }
+                send(player, npc, session, false); return;
+            }
+            catch (NumberFormatException ignored) { return; }
+        }
+        session.pilotContact=-1;
         NervStaffDialogue.converse(player, npc, request);
         send(player, npc, session, false);
+    }
+
+    private static String pilotStatus(ServerPlayer player,int unit)
+    {
+        EvaLogisticsDirector.loadControlTarget(player.serverLevel(),unit);
+        var pilot=TrainingPilotDirector.pilots(player.serverLevel()).stream().filter(p->p.getAssignedVariant()==unit).findFirst().orElse(null);
+        return com.projectseele.entity.TrainingPilotEntity.pilotName(unit)+"："+(pilot==null?"频道待接入。":switch(pilot.getTrainingStage())
+        {case 1->"已在插入栓内，等待接入。";case 2->"同步已建立。";case 0->"正在前往登机位置。";default->"在待命位置，等待登机指令。";});
     }
 
     public static int contact(ServerPlayer player, String name)
     {
         if (!radioAllowed(player))
         {
-            player.sendSystemMessage(Component.literal("请携带 NERV 通行证，在指挥台附近、已登上的插入栓或机体内使用指挥通信。")); return 0;
+            player.sendSystemMessage(Component.literal("请携带 NERV 通行证和卫星电话，或在指挥台附近、已登上的插入栓及机体内使用指挥通信。")); return 0;
         }
         String skin = switch (name.strip().toLowerCase(Locale.ROOT))
         {
             case "美里", "葛城美里", "misato" -> "misato";
             case "律子", "赤木律子", "ritsuko" -> "ritsuko";
             case "冬月", "冬月司令", "fuyutsuki" -> "fuyutsuki";
+            case "摩耶", "伊吹摩耶", "maya" -> "maya";
             default -> "";
         };
-        if (skin.isEmpty()) { player.sendSystemMessage(Component.literal("可联络：美里、律子、冬月。")); return 0; }
+        if (skin.isEmpty()) { player.sendSystemMessage(Component.literal("可联络：美里、律子、冬月、摩耶。")); return 0; }
         if (connect(player, skin)) return 1;
         PENDING.computeIfAbsent(player.server, key -> new HashMap<>()).put(player.getUUID(), new Pending(skin, player.server.getTickCount() + 200));
         player.sendSystemMessage(Component.literal("正在连接指挥频道……")); return 1;

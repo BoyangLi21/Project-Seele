@@ -63,6 +63,9 @@ def main():
     subprocess.run([sys.executable,'tools/fetch_client_mods_r19.py'],cwd=ROOT,env=env,check=True)
     subprocess.run([sys.executable,'tools/fetch_piano_r22.py'],cwd=ROOT,env=env,check=True)
     ensure_local(ROOT/'run')
+    if (ROOT/'run/resourcepacks/rotrblocks-v87-128x-2d.zip').is_file():
+        from fetch_realistic_pack_r25 import install as ensure_realistic_pack
+        ensure_realistic_pack(ROOT/'run',True)
     review_pack='eva_tv_r24_review' if a.review and a.review.startswith('r24-') else 'eva_access_r22_review' if a.review and a.review.startswith('r22-') else 'eva_un_r21_review'
     ensure_private_pack(ROOT/'run',review_pack if a.review and a.review.startswith(('r21-','r22-','r24-')) and (ROOT/'run/resourcepacks'/review_pack/'pack.mcmeta').exists() else False)
     command=[str(ROOT/'gradlew.bat'),'--no-daemon','writeClientLaunchR17','-PstrictHighDetail=true','-PoptimizedClient','-PexactTerrain','-PclientNavigation','-PclientHeap='+a.heap,'-PquickPlayWorld='+a.world]

@@ -64,6 +64,7 @@ public final class StaffConversationScreen extends Screen
         addButton("交谈", x + 12, y + 29, 68, () -> switchTab(0), true);
         addButton("指挥", x + 84, y + 29, 68, () -> switchTab(1), view.canCommand());
         addButton("作战记录", x + 156, y + 29, 88, () -> { switchTab(2); send("TOPIC:campaign"); }, true);
+        addButton("通讯录", x + 248, y + 29, 68, () -> switchTab(4), view.radio());
         addButton("关闭", x + panelWidth - 60, y + 8, 48, this::onClose, true);
         int controlsY = controlsTop();
         int column = (panelWidth - 32) / 3;
@@ -101,18 +102,37 @@ public final class StaffConversationScreen extends Screen
             {
                 String action = commands[i];
                 addButton(action, x + 12 + i * (column + 4), controlsY + 22, column,
-                        () -> send(action + " 0" + unit), view.canCommand());
+                        () -> send(action + " 0" + unit), permitted(new String[]{"prepare","launch","recover"}[i]));
             }
             int half = (panelWidth - 28) / 2;
-            addButton("整备后发射", x + 12, controlsY + 44, half, () -> send("整备后发射 0" + unit), view.canCommand());
+            addButton("整备后发射", x + 12, controlsY + 44, half, () -> send("整备后发射 0" + unit), permitted("deploy"));
             addButton("取消后续操作", x + 16 + half, controlsY + 44, half, () -> send("停止操作"), true);
+            addButton("驾驶员登机", x + 12, controlsY + 66, half, () -> send("BOARD:" + unit), permitted("board"));
+            addButton("部署就近武器井", x + 16 + half, controlsY + 66, half, () -> send("WEAPONS"), permitted("weapons"));
         }
         else if(tab==2)
         {
             addButton("查看当前简报", x + 12, controlsY, panelWidth - 24, () -> send("TOPIC:campaign"), true);
             int half = (panelWidth - 28) / 2;
-            addButton("接受当前作战", x + 12, controlsY + 22, half, () -> send("CAMPAIGN:begin"), view.canCommand());
-            addButton("撤销当前作战", x + 16 + half, controlsY + 22, half, () -> send("CAMPAIGN:cancel"), view.canCommand());
+            addButton("接受当前作战", x + 12, controlsY + 22, half, () -> send("CAMPAIGN:begin"), permitted("campaign"));
+            addButton("撤销当前作战", x + 16 + half, controlsY + 22, half, () -> send("CAMPAIGN:cancel"), permitted("campaign"));
+        }
+        else if (tab == 4)
+        {
+            String[] contacts = {"美里", "律子", "冬月", "摩耶"};
+            int half = (panelWidth - 28) / 2;
+            for (int i = 0; i < contacts.length; i++)
+            {
+                String contact = contacts[i];
+                addButton(contact, x + 12 + (i % 2) * (half + 4), controlsY + (i / 2) * 22,
+                        half, () -> send("CONTACT:" + contact), true);
+            }
+            for (int i = 0; i < 3; i++)
+            {
+                int pilot = i;
+                addButton(com.projectseele.entity.TrainingPilotEntity.pilotName(i), x + 12 + i * (column + 4),
+                        controlsY + 44, column, () -> { unit=pilot; send("PILOT:" + pilot); }, true);
+            }
         }
         else
         {
@@ -148,7 +168,9 @@ public final class StaffConversationScreen extends Screen
         }
     }
     private void switchTab(int next) { tab = next; rebuildWidgets(); }
-    private int controlsTop(){return y+panelHeight-(tab==3?113:tab==2?70:91);}
+    private boolean permitted(String action)
+    { return view.canCommand() && com.projectseele.world.StaffAuthorityR25.allows("", view.skin(), action); }
+    private int controlsTop(){return y+panelHeight-(tab==3||tab==1?113:tab==2?70:91);}
     private void submitText() { if (!input.getValue().isBlank()) { send(input.getValue()); input.setValue(""); } }
     private void send(String request)
     {

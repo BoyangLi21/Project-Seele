@@ -18,6 +18,9 @@ public class ModItems
 {
     public static final DeferredRegister<Item> ITEMS = DeferredRegister.create(ForgeRegistries.ITEMS, ProjectSeele.MODID);
 
+    public static final RegistryObject<Item> SATELLITE_PHONE = ITEMS.register("satellite_phone",
+            () -> new com.projectseele.item.SatellitePhoneItem(new Item.Properties().stacksTo(1)));
+
     public static final RegistryObject<Item> CORE_FRAGMENT = ITEMS.register("core_fragment",
             () -> new Item(new Item.Properties()));
     public static final RegistryObject<Item> NERV_WORKSTATION = ITEMS.register("nerv_workstation",

@@ -64,9 +64,9 @@ def cage():
  for side in (-1,1):
   for z in (-5.8,6.3):
    x=side*15.2
-   housing(x-1.0,-.05,z-1.1,2.0,65.3,2.2,.4,OLIVE)
-   box(x-.40,1,z-1.14,.80,61,.06,DARK);box(x-.09,1,z-1.21,.18,61,.08,STEEL)
-   for y in range(2,65,8):
+   housing(x-1.0,-.05,z-1.1,2.0,71.3,2.2,.4,OLIVE)
+   box(x-.40,1,z-1.14,.80,67,.06,DARK);box(x-.09,1,z-1.21,.18,67,.08,STEEL)
+   for y in range(2,71,8):
     housing(x-1.18,y,z-1.2,2.36,.64,2.4,.16,EDGE);bolts(x-.78,y+.18,z-1.22,1.56,.26)
    for y in (11,29,47,62):box(x-.20,y,z-1.24,.40,1.5,.08,LAMP)
   for y in (3,23,54,62):
@@ -85,7 +85,9 @@ def cage():
   for z in range(-20,24,3):
    cylinder((side*18.8,48.2,z),(side*18.8,49.3,z),.035,EDGE,8)
   cylinder((side*18.8,49.3,-21),(side*18.8,49.3,23),.04,EDGE,10)
- for y,z in [(63,-5.8),(63,6.3)]:
+ # The real three-unit capsule sweep reaches 66 m. The old 63 m
+ # crossmember occupied the zero/two-unit insertion paths.
+ for y,z in [(69,-5.8),(69,6.3)]:
   box(-14.2,y,z-.8,28.4,1.1,1.6,OLIVE)
   for x in range(-12,13,3):housing(x-.65,y-.20,z-.95,1.3,.35,.28,.10,LAMP)
  use('shoulder_jaw')
@@ -138,9 +140,9 @@ def carrier():
  warning(-12.8,-.77,-14.54,25.6,.54)
  use('carrier_spine')
  for x in (-6.85,5.25):
-  housing(x,0,9.65,1.6,62.0,2.0,.40,BLUE)
-  box(x+.32,1,9.59,.32,59,.08,STEEL)
-  for y in range(3,62,6):housing(x-.14,y,9.44,1.88,.52,2.35,.10,EDGE)
+  housing(x,0,9.65,1.6,70.0,2.0,.40,BLUE)
+  box(x+.32,1,9.59,.32,67,.08,STEEL)
+  for y in range(3,70,6):housing(x-.14,y,9.44,1.88,.52,2.35,.10,EDGE)
  for y,h in [(4,9),(16,9),(28,9),(39,4)]:
   housing(-5.25,y,10.3,10.5,h,1.25,.7,BLUE)
   housing(-2.4,y+.45,10.16,4.8,h-.90,.16,.3,EDGE);bolts(-2.12,y+.73,10.10,4.24,h-1.46)
@@ -150,9 +152,10 @@ def carrier():
  for x in (-5.25,4.65):
   housing(x,54,10.3,.6,6.1,1.25,.16,EDGE)
   for y in (54.45,59.65):bolts(x+.16,y,10.22,.28,.18)
- housing(-5.25,53.7,10.3,10.5,.30,1.25,.10,EDGE)
- housing(-7.1,61.4,9.05,14.2,1.1,3.2,.32,EDGE)
- for x in (-5,-2.5,0,2.5,5):cylinder((x,61.38,9.7),(x,61.24,9.7),.40,LAMP,24)
+ # An uninterrupted dorsal service opening is needed during rotation as
+ # well as at the final upright pose. Keep its load path on the side rails.
+ housing(-7.1,69.4,9.05,14.2,1.1,3.2,.32,EDGE)
+ for x in (-5,-2.5,0,2.5,5):cylinder((x,69.38,9.7),(x,69.24,9.7),.40,LAMP,24)
  for side in (-1,1):
   hose([(side*5.6,45+7*t,10.0-1.25*math.sin(t*math.pi)) for t in np.linspace(0,1,24)],.12)
  use('carrier_clamp')

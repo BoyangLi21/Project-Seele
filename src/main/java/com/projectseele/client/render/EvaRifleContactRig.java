@@ -54,7 +54,7 @@ public final class EvaRifleContactRig
                 rotations.add(n);positions.add(n);
             }
         }
-        body.dirty();var f=EvaRifleKinematics.sample(eva,partial,eva.getAimDirectionForPoseCapture(),body,root);
+        body.dirty();var f=EvaRifleKinematics.sample(eva,partial,eva.getAimDirectionForPoseCapture(partial),body,root);
         Vector3f right=f.right().toVector3f(),forward=f.forward().toVector3f(),up=f.up().toVector3f();
         Matrix3f basis=new Matrix3f().setColumn(0,right).setColumn(1,new Vector3f(forward).negate()).setColumn(2,new Vector3f(up).negate());
         Quaternionf gunRotation=new Quaternionf().setFromNormalized(basis);

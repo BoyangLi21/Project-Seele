@@ -771,6 +771,8 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
         tag.putFloat("SeeleNervLogisticsYaw", this.entityData.get(DATA_NERV_LOGISTICS_YAW));
         tag.putInt("SeelePowerTicks", this.getPowerTicks());
         tag.putBoolean("SeeleUmbilicalSevered", this.isUmbilicalSevered());
+        if (this.getUmbilicalAnchor() != null)
+            tag.putLong("SeeleUmbilicalAnchor", this.getUmbilicalAnchor().asLong());
         tag.putFloat("SeelePilotSynchronization", this.getPilotSynchronization());
         tag.putBoolean("SeeleBerserk", this.isBerserk());
         tag.putInt("SeeleBerserkTicks", this.getBerserkTicks());
@@ -853,7 +855,8 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
                 ? Math.max(1, tag.getInt("SeeleBerserkTicks")) : 0);
         this.berserkRecoveryTicks = Math.max(0,
                 tag.getInt("SeeleBerserkRecoveryTicks"));
-        this.setUmbilicalAnchor(null);
+        this.setUmbilicalAnchor(tag.contains("SeeleUmbilicalAnchor") && !this.isUmbilicalSevered()
+                ? BlockPos.of(tag.getLong("SeeleUmbilicalAnchor")) : null);
         ResourceLocation sortieLocation = tag.contains("SeeleSortieDimension")
                 ? ResourceLocation.tryParse(tag.getString("SeeleSortieDimension")) : null;
         this.sortieDestinationDimension = sortieLocation == null ? null
@@ -1126,8 +1129,30 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
      */
     public float getCannonAimPitch()
     {
-        return this.entityData.get(DATA_CANNON_AIM_PITCH);
+        return this.clampPilotWeaponPitch(this.entityData.get(DATA_CANNON_AIM_PITCH),1);
     }
+
+    /** Supported prone fire has a neck/receiver arc, continuous through stance changes. */
+    public float clampPilotWeaponPitch(float pitch,float partial)
+    {
+        float prone=this.rifleProneBlend(partial);
+        return Mth.clamp(pitch,Mth.lerp(prone,MIN_CANNON_AIM_PITCH,-10F),
+                Mth.lerp(prone,MAX_CANNON_AIM_PITCH,16F));
+    }
+    public float clampPilotViewPitch(float pitch,float partial)
+    {
+        if(this.isPilotControlLocked())return pitch;
+        float prone=this.rifleProneBlend(partial);
+        return Mth.clamp(pitch,Mth.lerp(prone,-90F,-10F),Mth.lerp(prone,90F,16F));
+    }
+    public float clampPilotWeaponYaw(float yaw,float partial)
+    {
+        float body=Mth.rotLerp(partial,this.yBodyRotO,this.yBodyRot);
+        float difference=Mth.wrapDegrees(yaw-body),limit=Mth.lerp(this.rifleProneBlend(partial),180F,24F);
+        return yaw+Mth.clamp(difference,-limit,limit)-difference;
+    }
+    public float clampPilotViewYaw(float yaw,float partial)
+    {return this.isPilotControlLocked()?yaw:this.clampPilotWeaponYaw(yaw,partial);}
     private float rifleSignal(int i,EntityDataAccessor<Float> key,float p)
     {
         if(!this.level().isClientSide)return this.entityData.get(key);
@@ -1182,13 +1207,19 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
 
     /** Read-only Phase-A export of the same aim used by weapon gameplay. */
     public Vec3 getAimDirectionForPoseCapture()
+    {return this.getAimDirectionForPoseCapture(1);}
+
+    public Vec3 getAimDirectionForPoseCapture(float partial)
     {
         LivingEntity pilot = this.getPilotEntity();
-        float yaw = pilot == null ? this.getYRot() : pilot.getYRot();
+        float yaw = pilot == null ? this.getYRot() : this.level().isClientSide
+                ? Mth.rotLerp(partial,pilot.yRotO,pilot.getYRot()) : pilot.getYRot();
         float pitch = (this.getWeapon() == WEAPON_CANNON
                 || this.getWeapon() == WEAPON_RIFLE)
-                ? this.getCannonAimPitch() : 0.0F;
-        return Vec3.directionFromRotation(pitch, yaw).normalize();
+                ? pilot!=null&&this.level().isClientSide
+                    ? this.clampPilotWeaponPitch(Mth.lerp(partial,pilot.xRotO,pilot.getXRot()),partial)
+                    : this.getCannonAimPitch() : 0.0F;
+        return Vec3.directionFromRotation(pitch, this.clampPilotWeaponYaw(yaw,partial)).normalize();
     }
 
     /** Final gameplay muzzle socket; null for non-firearm loadouts. */
@@ -1216,7 +1247,8 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
         float bodyYaw = Mth.rotLerp(partialTick, this.yRotO,
                 this.getYRot());
         return Mth.clamp(Mth.wrapDegrees(pilotYaw - bodyYaw),
-                -PILOT_HEAD_YAW_LIMIT, PILOT_HEAD_YAW_LIMIT);
+                -Mth.lerp(this.rifleProneBlend(partialTick), PILOT_HEAD_YAW_LIMIT, 24.0F),
+                Mth.lerp(this.rifleProneBlend(partialTick), PILOT_HEAD_YAW_LIMIT, 24.0F));
     }
 
     public float pilotHeadPitchForRender(float partialTick)
@@ -1226,8 +1258,10 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
         {
             return 0.0F;
         }
+        float low = this.rifleProneBlend(partialTick);
         return Mth.clamp(Mth.lerp(partialTick, pilot.xRotO,
-                pilot.getXRot()), -38.0F, 42.0F);
+                pilot.getXRot()), Mth.lerp(low, -38.0F, -10.0F),
+                Mth.lerp(low, 42.0F, 16.0F));
     }
 
     /** Contact weapons alone are allowed to neutralize an Angel A.T. Field. */
@@ -1577,6 +1611,8 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
     /** World-space tail of the upper-back power plug, shared by cable and sever FX. */
     public Vec3 getUmbilicalSocketPosition()
     {
+        if(this.rifleProneBlend(1)>.01F||this.rifleCrouchBlend(1)>.01F)
+            return this.posedPowerMarker(EvaScale.UMBILICAL_SOCKET_HEIGHT,EvaScale.UMBILICAL_SOCKET_REAR_OFFSET);
         Vec3 rear = this.getRearDirection();
         return this.position()
                 .add(rear.scale(EvaScale.UMBILICAL_SOCKET_REAR_OFFSET))
@@ -1586,10 +1622,20 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
     /** Armour-side receptacle for the rigid upper-back umbilical plug. */
     public Vec3 getUmbilicalMountPosition()
     {
+        if(this.rifleProneBlend(1)>.01F||this.rifleCrouchBlend(1)>.01F)
+            return this.posedPowerMarker(EvaScale.UMBILICAL_MOUNT_HEIGHT,EvaScale.UMBILICAL_MOUNT_REAR_OFFSET);
         Vec3 rear = this.getRearDirection();
         return this.position()
                 .add(rear.scale(EvaScale.UMBILICAL_MOUNT_REAR_OFFSET))
                 .add(0.0D, EvaScale.UMBILICAL_MOUNT_HEIGHT, 0.0D);
+    }
+
+    private Vec3 posedPowerMarker(double height,double rear)
+    {
+        var body=EvaBodyPose.sample(this,1);
+        var matrix=EvaRifleKinematics.world(this,1).mul(body.matrix("torso_upper"));
+        var point=matrix.transformPosition(new org.joml.Vector3f(0,(float)(height/EvaScale.RENDER_SCALE),(float)(rear/EvaScale.RENDER_SCALE)));
+        return new Vec3(point.x,point.y,point.z);
     }
 
     /** Horizontal rear vector shared by dorsal hardware and its renderer. */
@@ -3119,8 +3165,9 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
 
     public void pilotJump(ServerPlayer pilot)
     {
-        if (this.getControllingPassenger() != pilot)
+        if (this.getControllingPassenger() != pilot || this.isPilotProne())
         {
+            this.jumpBufferTicks = 0;
             return;
         }
 
@@ -3149,6 +3196,13 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
 
     private boolean tryConsumeBufferedJump(ServerPlayer pilot)
     {
+        // Prone is a deliberate supported posture. Space must not silently
+        // stand the airframe up or retain a jump for the next stance change.
+        if (this.isPilotProne())
+        {
+            this.jumpBufferTicks = 0;
+            return false;
+        }
         if (this.jumpBufferTicks <= 0 || this.getControllingPassenger() != pilot
                 || this.isPilotControlLocked() || this.jumpCooldown > 0
                 || this.getCannonCharge() > 0
@@ -3168,14 +3222,6 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
         {
             this.setPilotCrouching(pilot, false);
             if (this.isPilotCrouching())
-            {
-                return false;
-            }
-        }
-        if (this.isPilotProne())
-        {
-            this.toggleProne(pilot);
-            if (this.isPilotProne())
             {
                 return false;
             }
@@ -3314,7 +3360,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
                 muzzle.x, muzzle.y, muzzle.z, 3,
                 0.12D, 0.12D, 0.12D, 0.025D);
         level.playSound(null, muzzle.x, muzzle.y, muzzle.z, ModSounds.EVA_RIFLE_FIRE.get(),
-                SoundSource.PLAYERS, 3.2F,
+                SoundSource.PLAYERS, 4.2F,
                 0.93F + this.random.nextFloat() * 0.08F);
     }
 
@@ -3395,8 +3441,10 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
         }
 
         int range = SeeleConfig.COMMON_SPEC.isLoaded()
-                ? SeeleConfig.UMBILICAL_RANGE.get() : 32;
+                ? SeeleConfig.UMBILICAL_RANGE.get() : 768;
         BlockPos anchor = this.getUmbilicalAnchor();
+        if (anchor != null && this.position().distanceToSqr(Vec3.atCenterOf(anchor)) <= (double) range * range)
+            com.projectseele.world.EvaPowerLinkR25.retain(server, anchor);
         boolean anchorValid = anchor != null
                 && server.hasChunkAt(anchor)
                 && server.getBlockEntity(anchor) instanceof UmbilicalPylonBlockEntity
@@ -3407,6 +3455,14 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
         {
             anchor = null;
         }
+        // The surface reel takes over after ascent. Keeping the wet-cage
+        // anchor would draw a lead through the GeoFront roof and consume most
+        // of its usable range before the airframe even walks off the launch pad.
+        if(anchor!=null && anchor.getY()<32 && this.getY()>=64 && this.tickCount%10==0)
+        {
+            BlockPos surface=UmbilicalPylonBlockEntity.findNearest(server,this.position(),Math.min(range,128),32);
+            if(surface!=null)anchor=surface;
+        }
         if (wasConnected && anchor == null
                 && !this.isNervLogisticsLocked())
         {
@@ -3414,7 +3470,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
             // not silently reconnect on the next one-second pylon scan.
             this.entityData.set(DATA_UMBILICAL_SEVERED, true);
         }
-        if (!this.isUmbilicalSevered() && --this.powerCheckCooldown <= 0)
+        if (anchor == null && !this.isUmbilicalSevered() && --this.powerCheckCooldown <= 0)
         {
             anchor = UmbilicalPylonBlockEntity.findNearest(
                     server, this.position(), range);
@@ -3835,10 +3891,9 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
     /** Exact optical/fire ray shared by cannon and pallet SMG. */
     private Vec3 pilotAimDirection(Player pilot)
     {
-        float pitch = Mth.clamp(pilot.getXRot(), MIN_CANNON_AIM_PITCH,
-                MAX_CANNON_AIM_PITCH);
+        float pitch = this.clampPilotWeaponPitch(pilot.getXRot(),1);
         this.entityData.set(DATA_CANNON_AIM_PITCH, pitch);
-        return Vec3.directionFromRotation(pitch, pilot.getYRot()).normalize();
+        return Vec3.directionFromRotation(pitch, this.clampPilotWeaponYaw(pilot.getYRot(),1)).normalize();
     }
 
     // ----- per-tick combat state -----
@@ -5417,7 +5472,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
         float healthBefore = this.getHealth();
         boolean accepted = super.hurt(source, amount);
         float actualHullDamage = Math.max(0.0F, healthBefore - this.getHealth());
-        if (accepted && actualHullDamage >= this.getMaxHealth() * 0.15F
+        if (accepted && actualHullDamage > 0.0F && !this.isNervLogisticsLocked()
                 && this.isUmbilicalConnected())
         {
             this.severUmbilicalFromDamage();
@@ -5689,7 +5744,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
             float aimPitch = !this.isCrucified()
                     && !this.isPilotControlLocked()
                     && (this.getWeapon() == WEAPON_CANNON || this.getWeapon() == WEAPON_RIFLE)
-                    ? Mth.clamp(player.getXRot(), MIN_CANNON_AIM_PITCH, MAX_CANNON_AIM_PITCH)
+                    ? this.clampPilotWeaponPitch(player.getXRot(),1)
                     : 0.0F;
             if (Math.abs(this.getCannonAimPitch() - aimPitch) > 0.01F)
             {
@@ -6147,7 +6202,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
         if(this instanceof EvaPrototypeEntity un&&un.isEyeLaserActive())return EvaUNOptics.eye(un,partial).subtract(0,passenger.getEyeHeight(),0);
         if(this.getWeapon()==WEAPON_RIFLE&&this.isPoweredOn()&&this.getVisualPose()==VISUAL_NORMAL
                 &&!this.isVisuallyAirborneForRender()&&EvaBodyPose.hasSupportedStances())
-            return EvaRifleKinematics.sample(this,partial,this.getAimDirectionForPoseCapture()).eye()
+            return EvaRifleKinematics.sample(this,partial,this.getAimDirectionForPoseCapture(partial)).eye()
                     .subtract(0,passenger.getEyeHeight(),0);
         if((this.getWeapon()==WEAPON_FISTS||this.getWeapon()==WEAPON_KNIFE)&&this.isPoweredOn()&&this.getVisualPose()==VISUAL_NORMAL&&!this.isVisuallyAirborneForRender()&&!this.hasLiveActionForRender(partial)&&EvaBodyPose.hasTerrainStances())
             return EvaBodyPose.opticalEye(this,partial).subtract(0,passenger.getEyeHeight(),0);

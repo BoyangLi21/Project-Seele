@@ -143,6 +143,7 @@ public class ClientEvents
     public static void onRegisterKeyMappings(RegisterKeyMappingsEvent event)
     {
         event.register(Keybinds.CYCLE_WEAPON);
+        event.register(Keybinds.COMMAND_RADIO);
         event.register(Keybinds.TOGGLE_AT_FIELD);
         event.register(Keybinds.EXIT_EVA);
         event.register(Keybinds.STOMP);

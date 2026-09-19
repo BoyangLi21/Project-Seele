@@ -278,3 +278,11 @@ Lux3D 原始网格、本地涂装与蒙皮处理、Pro 原始交付和 Blender �
 - `data/projectseele/nerv_dialogue/profiles.json` 为本项目原创对白，不是原剧台词转录。TV 章节目录用于事件顺序，已实现作战和未来章节分别标识。
 - 夏姆榭尔新的骨骼轨迹和接触代码为本项目编写；现有本机身体依旧是先前登记的私有研究模型，新增动作不会改变原身体素材的许可状态。
 - 开源与视频计划见 [公开准备](OPEN_SOURCE_RELEASE_R24.md) 和 [B 站制作方案](BILIBILI_AND_COMMUNITY_R24.md)。上述文件没有把许可询问信当作已经获得许可。
+
+
+## R25 通信、步枪与可选写实材质
+
+- `tools/build_radio_audio_r25.py` 生成原创卫星电话物品几何及重型步枪声。枪声由冲击噪声、低频衰减和机械尾音合成，无原剧音频。
+- `tools/refine_crouch_support_r25.py` 仅在既有私有动作上调整双腿支撑，私有动作 JSON 留在本地，不加入公开仓库。
+- 机库控制架由项目程序模型修改；`tools/refine_plug_frame_r25.py` 与 `audit_plug_machinery_r25.py` 记录三机插入栓扫掠包络。
+- 写实基础材质候选为 illystray 的 [rotrBLOCKS](https://modrinth.com/resourcepack/rotrblocks)，V87、128×、2D Foliage。固定版本、官方 CDN 和散列见 `tools/realistic_pack_r25.json`。[作者条款](https://illystray.com/terms/) 允许个人使用、禁止重新分发；其 ZIP 和像素不进入 Git 或共享客户端包，使用官方直连下载。保留作者原档，置于 EVA 专用包下方。

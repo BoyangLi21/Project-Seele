@@ -22,14 +22,17 @@ public final class EvaTerrainR11Client
     {
         if(!EvaTerrainR11Review.ENABLED||event.phase!=TickEvent.Phase.END)return;var mc=Minecraft.getInstance();if(mc.player==null||mc.level==null)return;
         if(!saved){saved=true;pause=mc.options.pauseOnLostFocus;oldGui=mc.options.hideGui;oldCamera=mc.options.getCameraType();mc.options.pauseOnLostFocus=false;oldDistance=mc.options.renderDistance().get();if(EvaTerrainR11Review.R19){mc.options.renderDistance().set(8);mc.options.broadcastOptions();}
-            try{folder=mc.gameDirectory.toPath().resolve((EvaTerrainR11Review.R21?"../artifacts/un_models_r21/terrain_"+System.getProperty("projectseele.regionalBuild")+"_":EvaTerrainR11Review.R19?"../artifacts/world_repair_r19/un_terrain_":"../artifacts/world_motion_r11/terrain_visual_")+System.currentTimeMillis()).normalize();java.nio.file.Files.createDirectories(folder);trace=java.nio.file.Files.newBufferedWriter(folder.resolve("frames.jsonl"));}catch(Exception e){throw new IllegalStateException(e);}}
+            try{folder=mc.gameDirectory.toPath().resolve((EvaTerrainR11Review.R25?"../artifacts/facility_r25/terrain_":EvaTerrainR11Review.R21?"../artifacts/un_models_r21/terrain_"+System.getProperty("projectseele.regionalBuild")+"_":EvaTerrainR11Review.R19?"../artifacts/world_repair_r19/un_terrain_":"../artifacts/world_motion_r11/terrain_visual_")+System.currentTimeMillis()).normalize();java.nio.file.Files.createDirectories(folder);trace=java.nio.file.Files.newBufferedWriter(folder.resolve("frames.jsonl"));}catch(Exception e){throw new IllegalStateException(e);}}
         EvaTerrainR11Review.tracked=mc.level.getEntity(EvaTerrainR11Review.actor)!=null;EvaTerrainR11Review.mounted=mc.player.getRootVehicle().getId()==EvaTerrainR11Review.actor;
         mc.options.keyUp.setDown(EvaTerrainR11Review.forward!=0);mc.options.keyJump.setDown(EvaTerrainR11Review.jump);
         mc.options.keySprint.setDown(EvaTerrainR11Review.mounted&&(EvaTerrainR11Review.caseIndex==2||EvaTerrainR11Review.caseIndex==3));
+        if(EvaTerrainR11Review.RIFLE)mc.options.keyAttack.setDown(EvaTerrainR11Review.runningCase&&EvaTerrainR11Review.caseTick%60>=10&&EvaTerrainR11Review.caseTick%60<15);
         mc.options.keyShift.setDown(EvaTerrainR11Review.mounted&&EvaTerrainR11Review.crouchInput);
         mc.player.input.up=EvaTerrainR11Review.forward!=0;mc.player.input.down=false;mc.player.input.forwardImpulse=EvaTerrainR11Review.forward;mc.player.zza=EvaTerrainR11Review.forward;mc.player.xxa=0;mc.player.input.jumping=EvaTerrainR11Review.jump;
-        mc.player.setYRot(EvaTerrainR11Review.heading);mc.player.setXRot(0);
-        if(EvaTerrainR11Review.finished&&++end>35){mc.options.keyUp.setDown(false);mc.options.keyJump.setDown(false);mc.options.keyShift.setDown(false);mc.options.keySprint.setDown(false);if(EvaTerrainR11Review.R19){mc.options.renderDistance().set(oldDistance);mc.options.broadcastOptions();}mc.options.pauseOnLostFocus=pause;mc.options.hideGui=oldGui;mc.options.setCameraType(oldCamera);mc.setCameraEntity(mc.player);try{trace.close();}catch(Exception ignored){}mc.stop();}
+        mc.player.setYRot(EvaTerrainR11Review.heading);
+        mc.player.setXRot(EvaTerrainR11Review.R25&&(EvaTerrainR11Review.caseIndex==5||EvaTerrainR11Review.caseIndex==8)
+                ?(float)(Math.sin(EvaTerrainR11Review.caseTick/32D)*60):0);
+        if(EvaTerrainR11Review.finished&&++end>35){mc.options.keyUp.setDown(false);mc.options.keyJump.setDown(false);mc.options.keyShift.setDown(false);mc.options.keySprint.setDown(false);mc.options.keyAttack.setDown(false);if(EvaTerrainR11Review.R19){mc.options.renderDistance().set(oldDistance);mc.options.broadcastOptions();}mc.options.pauseOnLostFocus=pause;mc.options.hideGui=oldGui;mc.options.setCameraType(oldCamera);mc.setCameraEntity(mc.player);try{trace.close();}catch(Exception ignored){}mc.stop();}
     }
     @SubscribeEvent public static void render(TickEvent.RenderTickEvent event)
     {
@@ -44,7 +47,7 @@ public final class EvaTerrainR11Client
         {
             long now=System.nanoTime();com.google.gson.JsonObject d=new com.google.gson.JsonObject();d.addProperty("case",EvaTerrainR11Review.caseIndex);d.addProperty("tick",EvaTerrainR11Review.caseTick);d.addProperty("frame_ms",previousFrame==0?0:(now-previousFrame)/1e6);previousFrame=now;var p=eva.getPosition(event.renderTickTime);d.addProperty("x",p.x);d.addProperty("y",p.y);d.addProperty("z",p.z);d.addProperty("stance",eva.rifleStanceLevel(event.renderTickTime));d.addProperty("gait",eva.rifleGaitPhase(event.renderTickTime));d.addProperty("run",eva.rifleRunBlend(event.renderTickTime));d.addProperty("air",eva.isVisuallyAirborneForRender());
             var support=com.projectseele.client.render.EvaFootPlacement.LAST.get(eva.getId());if(support!=null){var a=new com.google.gson.JsonArray();for(double v:support)a.add(Double.isFinite(v)?v:0);d.add("foot_support",a);}trace.write(d.toString());trace.newLine();
-            if(EvaTerrainR11Review.runningCase&&EvaTerrainR11Review.caseTick>=(EvaTerrainR11Review.caseIndex==8?350:100)&&Math.abs(eva.getX()-(EvaTerrainR11Review.caseIndex*96+.5))<30&&imageCase!=EvaTerrainR11Review.caseIndex)
+            if(EvaTerrainR11Review.runningCase&&EvaTerrainR11Review.caseTick>=(EvaTerrainR11Review.caseIndex==8&&!EvaTerrainR11Review.R25?350:100)&&Math.abs(eva.getX()-(EvaTerrainR11Review.caseIndex*96+.5))<30&&imageCase!=EvaTerrainR11Review.caseIndex)
             {imageCase=EvaTerrainR11Review.caseIndex;try(var image=net.minecraft.client.Screenshot.takeScreenshot(mc.getMainRenderTarget())){image.writeToFile(folder.resolve("case_"+imageCase+".png"));}}
             if(EvaTerrainR11Review.R19&&EvaTerrainR11Review.runningCase)
             {

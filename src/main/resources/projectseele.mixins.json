@@ -40,6 +40,8 @@
     "client.AircraftPositionSmoothingMixin",
     "client.MtrFrameClockR21Mixin",
     "client.MtrAnnouncementPronunciationMixin",
+    "client.MtrSpokenAnnouncementR25Mixin",
+    "client.MtrSpokenPlatformR25Mixin",
     "client.PianoInventoryOverlayR22Mixin",
     "client.AircraftCorrectionBudgetMixin"
   ],

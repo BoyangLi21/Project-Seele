@@ -55,7 +55,8 @@ public final class EvaBodyPose
     {
         try
         {
-            Path path=Path.of("projectseele-local-maps/eva_body_r11.json");
+            Path path=Path.of(System.getProperty("projectseele.bodyPoseReview","projectseele-local-maps/eva_body_r25.json"));
+            if(!Files.isRegularFile(path))path=Path.of("projectseele-local-maps/eva_body_r11.json");
             if(!Files.isRegularFile(path))path=Path.of("projectseele-local-maps/eva_body_r06.json");
             if(!Files.isRegularFile(path))path=Path.of("projectseele-local-maps/eva_body_r05.json");
             JsonObject all;
@@ -209,6 +210,13 @@ public final class EvaBodyPose
         for(var e:d.grip().entrySet())if(entity.getWeapon()==EvaUnit01Entity.WEAPON_RIFLE&&e.getKey().startsWith("finger_")&&body.rig.containsKey(e.getKey()))
         {
             var c=e.getValue().getAsJsonObject();if(c.has("rotation")){var v=first(c.get("rotation")).mul(Mth.DEG_TO_RAD);body.rotations.put(e.getKey(),new Quaternionf().rotationZYX(v.z,-v.y,-v.x));}
+        }
+        float cervicalOffset=EvaCervicalKinematicsR25.modelOffset(entity,partial)/16F;
+        if(cervicalOffset>0 && body.rig.containsKey("head"))
+        {
+            var bones=new HashMap<>(body.rig);var head=bones.get("head");
+            bones.put("head",new Bone(head.name(),head.parent(),new Vector3f(head.pivot()).add(0,cervicalOffset,cervicalOffset),head.bindRotation()));
+            var corrected=new Sample(Map.copyOf(bones));corrected.rotations.putAll(body.rotations);corrected.positions.putAll(body.positions);body=corrected;
         }
         EvaTerrainSupport.apply(entity,body);EvaImpactResponse.applyBody(body,entity,partial);body.dirty();return body;
     }

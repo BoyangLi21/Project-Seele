@@ -24,7 +24,6 @@ import org.joml.Vector3f;
 public final class EvaUmbilicalCableRenderer
 {
     private static final double RENDER_RANGE = 160.0D;
-    private static final int SEGMENTS = 18;
 
     private EvaUmbilicalCableRenderer() {}
 
@@ -70,11 +69,12 @@ public final class EvaUmbilicalCableRenderer
                 continue;
             }
             Vec3 pylon = Vec3.atCenterOf(anchor).add(0.0D, 0.65D, 0.0D);
-            Vec3 armourMount = unit.getUmbilicalMountPosition();
-            Vec3 plugTail = unit.getUmbilicalSocketPosition();
-            Vec3 rear = unit.getRearDirection();
-            Vec3 right = new Vec3(-rear.z, 0.0D, rear.x);
-            Vec3 up = new Vec3(0.0D, 1.0D, 0.0D);
+            var attachment=EvaPowerAttachmentR25.frame(unit,event.getPartialTick());
+            Vec3 armourMount = attachment.mount();
+            Vec3 plugTail = attachment.socket();
+            Vec3 rear = attachment.rear();
+            Vec3 right = attachment.right();
+            Vec3 up = attachment.up();
             Vec3 collarOuter = plugTail.add(rear.scale(0.35D));
 
             // A small fuel-nozzle-like plug: armour collar, dark rectangular
@@ -102,17 +102,48 @@ public final class EvaUmbilicalCableRenderer
                     0.72F, 0.66F, 0.32F,
                     0.22F, 0.24F, 0.26F, 1.0F);
 
-            double sag = Math.min(10.0D,
-                    pylon.distanceTo(collarOuter) * 0.18D);
-            Vec3 previous = cablePoint(pylon, collarOuter, sag, 0.0D);
-            for (int segment = 1; segment <= SEGMENTS; segment++)
+            var route=new java.util.ArrayList<Vec3>();route.add(collarOuter);
+            Vec3 exit=collarOuter.add(rear.scale(2.2));route.add(exit);
+            var hull=unit.getBoundingBox().inflate(1.5);
+            if(hull.clip(exit,pylon).isPresent())
             {
-                double t = segment / (double) SEGMENTS;
-                Vec3 current = cablePoint(pylon, collarOuter, sag, t);
-                RibbonRenderer.drawStarRibbon(pose, consumer,
-                        vector(previous), vector(current),
-                        0.18F, 0.18F, 0.07F, 0.075F, 0.085F, 1.0F);
-                previous = current;
+                // When the unit turns its front towards the reel, take the
+                // lead around the flank instead of drawing it through its chest.
+                Vec3 lateral=new Vec3(right.x,0,right.z).normalize();
+                if(pylon.subtract(unit.position()).dot(lateral)<0)lateral=lateral.scale(-1);
+                double width=Math.max(16,unit.getBbWidth()*.5+6);
+                Vec3 side=unit.getPosition(event.getPartialTick()).add(lateral.scale(width));
+                route.add(new Vec3(side.x,Math.max(unit.getY()+1.5,
+                        Math.min(exit.y-2,pylon.y+2)),side.z));
+            }
+            route.add(pylon);
+            // Round the support-route corners before applying gravity. Hard
+            // ninety-degree joints made a prone EVA's lead look like a rail.
+            var rounded=new java.util.ArrayList<Vec3>();rounded.add(route.get(0));
+            for(int corner=1;corner<route.size()-1;corner++)
+            {
+                Vec3 previous=route.get(corner-1),joint=route.get(corner),next=route.get(corner+1);
+                double radius=Math.min(6,Math.min(previous.distanceTo(joint),joint.distanceTo(next))*.4);
+                Vec3 entry=joint.add(previous.subtract(joint).normalize().scale(radius));
+                Vec3 leave=joint.add(next.subtract(joint).normalize().scale(radius));
+                rounded.add(entry);
+                for(int step=1;step<=12;step++)
+                {
+                    double t=step/12.0;
+                    rounded.add(entry.scale((1-t)*(1-t)).add(joint.scale(2*(1-t)*t)).add(leave.scale(t*t)));
+                }
+            }
+            rounded.add(pylon);
+            for(int leg=1;leg<rounded.size();leg++)
+            {
+                Vec3 a=rounded.get(leg-1),b=rounded.get(leg);double span=a.distanceTo(b);
+                double sag=span<4?0:Math.min(16,span*.10);int segments=Math.max(2,Math.min(128,(int)Math.ceil(span/2)));
+                Vec3 previous=a;
+                for(int segment=1;segment<=segments;segment++)
+                {
+                    Vec3 current=cablePoint(a,b,sag,segment/(double)segments);
+                    tube(pose,consumer,previous,current,.22F);previous=current;
+                }
             }
         }
         poseStack.popPose();
@@ -121,8 +152,25 @@ public final class EvaUmbilicalCableRenderer
 
     private static Vec3 cablePoint(Vec3 start, Vec3 end, double sag, double t)
     {
-        return start.lerp(end, t).add(0.0D,
-                -Math.sin(Math.PI * t) * sag, 0.0D);
+        Vec3 point = start.lerp(end, t).add(0.0D, -Math.sin(Math.PI * t) * sag, 0.0D);
+        // Reel and back socket sit above the floor. Do not let increased
+        // cable length turn the decorative sag into a subterranean loop.
+        return new Vec3(point.x,Math.max(Math.min(start.y,end.y)-.55,point.y),point.z);
+    }
+
+    private static void tube(Matrix4f pose, VertexConsumer consumer, Vec3 a, Vec3 b, float radius)
+    {
+        Vec3 axis=b.subtract(a).normalize();
+        Vec3 u=axis.cross(Math.abs(axis.y)>.95?new Vec3(1,0,0):new Vec3(0,1,0)).normalize();
+        Vec3 v=axis.cross(u).normalize();
+        for(int side=0;side<10;side++)
+        {
+            double t0=side*Math.PI/5,t1=(side+1)*Math.PI/5;
+            Vec3 r0=u.scale(Math.cos(t0)*radius).add(v.scale(Math.sin(t0)*radius));
+            Vec3 r1=u.scale(Math.cos(t1)*radius).add(v.scale(Math.sin(t1)*radius));
+            float shade=.10F+.08F*(float)Math.max(0,u.scale(Math.cos((t0+t1)/2)).add(v.scale(Math.sin((t0+t1)/2))).y);
+            RibbonRenderer.quadBothSides(pose,consumer,vector(a.add(r0)),vector(b.add(r0)),vector(b.add(r1)),vector(a.add(r1)),shade*.9F,shade,shade*1.05F,1);
+        }
     }
 
     private static Vector3f vector(Vec3 value)

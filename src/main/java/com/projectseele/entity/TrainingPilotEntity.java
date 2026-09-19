@@ -61,9 +61,18 @@ public final class TrainingPilotEntity extends PathfinderMob
         int safeVariant = Math.max(EvaUnit01Entity.UNIT_00,
                 Math.min(EvaUnit01Entity.UNIT_02, variant));
         this.entityData.set(DATA_VARIANT, safeVariant);
-        this.setCustomName(Component.literal(String.format(
-                "NERV DUMMY PILOT / EVA-%02d", safeVariant)));
+        this.setCustomName(Component.literal(pilotName(safeVariant)));
         this.setCustomNameVisible(true);
+    }
+
+    public static String pilotName(int variant)
+    {
+        return switch (variant)
+        {
+            case 0 -> "绫波丽";
+            case 2 -> "惣流·明日香·兰格雷";
+            default -> "碇真嗣";
+        };
     }
 
     public int getTrainingStage()

@@ -43,7 +43,7 @@ public final class NervStaffR24Client
         {
             initialized = true; oldPause = mc.options.pauseOnLostFocus; oldGui = mc.options.hideGui; oldDistance = mc.options.renderDistance().get();
             mc.options.pauseOnLostFocus = false; mc.options.hideGui = false; mc.options.renderDistance().set(6); mc.options.broadcastOptions();
-            folder = mc.gameDirectory.toPath().resolve("../artifacts/facility_r24/native_staff_" + System.currentTimeMillis()).normalize();
+            folder = mc.gameDirectory.toPath().resolve("../artifacts/"+(NervStaffR24Review.R25?"facility_r25":"facility_r24")+"/native_staff_" + System.currentTimeMillis()).normalize();
             try { Files.createDirectories(folder); } catch (Exception failure) { throw new IllegalStateException(failure); }
             NervStaffR24Review.ready = true;
         }
@@ -60,6 +60,12 @@ public final class NervStaffR24Client
         }
         String request = NervStaffR24Review.input;
         if (request.isEmpty() || NervStaffR24Review.inputs.contains(request)) return;
+        if(request.equals("phone"))
+        {
+            if(!mc.player.getMainHandItem().is(com.projectseele.registry.ModItems.SATELLITE_PHONE.get()))return;
+            mc.gameMode.useItem(mc.player,net.minecraft.world.InteractionHand.MAIN_HAND);
+            NervStaffR24Review.inputs.add(request);return;
+        }
         if (!(mc.screen instanceof StaffConversationScreen screen)) return;
         switch (request)
         {
@@ -73,7 +79,10 @@ public final class NervStaffR24Client
             case "deploy", "redeploy" -> { click(screen, "指挥"); click(screen, "整备后发射"); }
             case "cancel" -> click(screen, "取消后续操作");
             case "recover" -> { click(screen, "指挥"); click(screen, "回收"); }
-            case "close", "close_radio" -> screen.keyPressed(256, 0, 0);
+            case "contacts" -> click(screen,"通讯录");
+            case "pilot_contact" -> click(screen,"碇真嗣");
+            case "board_dummy" -> {click(screen,"指挥");click(screen,"驾驶员登机");}
+            case "close", "close_radio", "close_pilot" -> screen.keyPressed(256, 0, 0);
             default -> throw new IllegalStateException(request);
         }
         NervStaffR24Review.inputs.add(request);

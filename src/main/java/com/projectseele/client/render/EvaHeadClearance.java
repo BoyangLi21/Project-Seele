@@ -12,7 +12,7 @@ import java.util.*;
 /** Keep the helmet clear of the shouldered rifle without moving the weapon. */
 final class EvaHeadClearance
 {
-    private record Triangle(Vector3f a,Vector3f b,Vector3f c,Vector3f min,Vector3f max)
+    record Triangle(Vector3f a,Vector3f b,Vector3f c,Vector3f min,Vector3f max)
     {
         Triangle(Vector3f a,Vector3f b,Vector3f c)
         {
@@ -20,7 +20,7 @@ final class EvaHeadClearance
         }
     }
 
-    private record Node(Vector3f min,Vector3f max,Node left,Node right,List<Triangle> triangles) {}
+    record Node(Vector3f min,Vector3f max,Node left,Node right,List<Triangle> triangles) {}
     private record Correction(float lift,float roll,double time) {}
     private static final Map<Integer,List<Triangle>> HEADS=new HashMap<>();
     private static final Map<Integer,Correction> LAST=new HashMap<>();
@@ -41,7 +41,7 @@ final class EvaHeadClearance
         return List.copyOf(result);
     }
 
-    private static List<Triangle> triangles(ResourceLocation resource,String part)
+    static List<Triangle> triangles(ResourceLocation resource,String part)
     {
         float[] points=LocalTriangleMeshLayer.nativeTrianglePositions(resource,part);
         if(points==null)return List.of();
@@ -53,7 +53,7 @@ final class EvaHeadClearance
         return List.copyOf(result);
     }
 
-    private static Node tree(List<Triangle> source)
+    static Node tree(List<Triangle> source)
     {
         var min=new Vector3f(Float.POSITIVE_INFINITY);var max=new Vector3f(Float.NEGATIVE_INFINITY);
         for(var t:source){min.min(t.min());max.max(t.max());}
@@ -88,7 +88,7 @@ final class EvaHeadClearance
         return true;
     }
 
-    private static boolean hits(Node node,Triangle triangle)
+    static boolean hits(Node node,Triangle triangle)
     {
         var a=triangle.min();var b=triangle.max();var c=node.min();var d=node.max();
         if(b.x<c.x||a.x>d.x||b.y<c.y||a.y>d.y||b.z<c.z||a.z>d.z)return false;

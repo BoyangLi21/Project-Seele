@@ -25,7 +25,8 @@ public final class RegionalTransitRidingChecks
     private static final boolean UN_BOARDING="r21-flight-un-boarding".equals(System.getProperty("projectseele.regionalBuild",""));
     private static final boolean R22="r22-flight-riding".equals(System.getProperty("projectseele.regionalBuild",""));
     private static final boolean SURFACE_TRAINS="r22-surface-trains".equals(System.getProperty("projectseele.regionalBuild",""));
-    private static final boolean R22_TRAIN=SURFACE_TRAINS||"r22-train-riding".equals(System.getProperty("projectseele.regionalBuild",""));
+    private static final boolean R25="r25-trains".equals(System.getProperty("projectseele.regionalBuild",""));
+    private static final boolean R22_TRAIN=R25||SURFACE_TRAINS||"r22-train-riding".equals(System.getProperty("projectseele.regionalBuild",""));
     private static final boolean R21=R22||UN_BOARDING||"r21-flight-riding".equals(System.getProperty("projectseele.regionalBuild",""));
     private static final boolean R20=R21||java.util.Set.of("r20-flight-riding","r20-port-boarding").contains(System.getProperty("projectseele.regionalBuild",""));
     private static final boolean R19=R20||System.getProperty("projectseele.regionalBuild","").equals("r19-flight-riding");
@@ -45,8 +46,8 @@ public final class RegionalTransitRidingChecks
     private static volatile java.util.Map<Long,Double> serverVehicleSpeeds=java.util.Map.of();
     private static volatile String subscription="";
     private static volatile boolean done;
-    private static final String[] SERVICES=PORT?new String[]{"P1"}:new String[]{"U1","S1",R22_TRAIN?"R1":"S2",R21?"F2":"F1","C1"};
-    private static final Vec3[] BOARDING=PORT?new Vec3[]{new Vec3(512.5,R20?95:81,469.5)}:new Vec3[]{new Vec3(-330.5,-466,777.5),new Vec3(-1669.5,R22_TRAIN?95:66,-274.5),new Vec3(-2751.5,R22_TRAIN?95:71,-967.5),new Vec3(650.5,81,1235.5),new Vec3(-119.5,81,-207.5)};
+    private static final String[] SERVICES=R25?new String[]{"U2","U1"}:PORT?new String[]{"P1"}:new String[]{"U1","S1",R22_TRAIN?"R1":"S2",R21?"F2":"F1","C1"};
+    private static final Vec3[] BOARDING=R25?new Vec3[]{new Vec3(150.5,-442,-28.5),new Vec3(-330.5,-466,777.5)}:PORT?new Vec3[]{new Vec3(512.5,R20?95:81,469.5)}:new Vec3[]{new Vec3(-330.5,-466,777.5),new Vec3(-1669.5,R22_TRAIN?95:66,-274.5),new Vec3(-2751.5,R22_TRAIN?95:71,-967.5),new Vec3(650.5,81,1235.5),new Vec3(-119.5,81,-207.5)};
     private static int mode=SURFACE_TRAINS?1:MODE.equals("flight-riding")||MODE.equals("bay-boarding")?3:MODE.equals("circle-riding")?4:0;
     private static int age, timer, ridingTicks, dismountTicks;
     private static long vehicleId;
@@ -140,7 +141,7 @@ public final class RegionalTransitRidingChecks
         }
         if(mc.player==null || mc.level==null || mc.getSingleplayerServer()==null)return;
         var server=mc.getSingleplayerServer();var world=server.getWorldPath(LevelResource.ROOT).normalize();
-        if(R22||R22_TRAIN?!world.getFileName().toString().equals("SEELE_R22_REVIEW"):R19?!world.getFileName().toString().equals(R21?"SEELE_R21_REVIEW":R20?"SEELE_R20_REVIEW":"SEELE_R19_NATIVE_REVIEW"):
+        if(R25?!world.getFileName().toString().equals("SEELE_R25_REVIEW"):R22||R22_TRAIN?!world.getFileName().toString().equals("SEELE_R22_REVIEW"):R19?!world.getFileName().toString().equals(R21?"SEELE_R21_REVIEW":R20?"SEELE_R20_REVIEW":"SEELE_R19_NATIVE_REVIEW"):
                 !world.getFileName().toString().equals("SEELE_TV_WORLD_PREVIEW_20260906")
                 &&!(TransitMovieR16Client.ENABLED&&world.getFileName().toString().equals("SEELE_TV_FACILITIES_R16")))throw new IllegalStateException("Wrong transit review save");
         try
@@ -228,7 +229,7 @@ public final class RegionalTransitRidingChecks
                 {
                     require(!(Boolean)riding.getMethod("isRiding",long.class).invoke(null,vehicleId),"native dismount completed");
                     mc.options.keyShift.setDown(false);mode++;timer=0;boarded=false;dispatchRequested=false;boardingAligned=false;nativeBoardingTicks=0;boardingYaw=0;serverVehicleIds=java.util.Set.of();
-                    if(mode==(PORT?1:MODE.equals("train-boarding")?3:MODE.equals("bay-boarding")||R19||TransitMovieR16Client.ENABLED&&MODE.equals("flight-riding")?4:SERVICES.length))
+                    if(mode==(R25?2:PORT?1:MODE.equals("train-boarding")?3:MODE.equals("bay-boarding")||R19||TransitMovieR16Client.ENABLED&&MODE.equals("flight-riding")?4:SERVICES.length))
                     {
                         Files.writeString(world.resolve(PORT?"r07_port_riding_checks.txt":"regional_transit_riding_checks.txt"),String.join("\n",TRACE)+"\nCOMPLETE "+(PORT?(TransitMovieR16Client.ENABLED?"P1 native passenger initialization, full trip and harbor arrival":"P1 natural boarding, full trip and harbor arrival"):MODE.equals("flight-riding")?(TransitMovieR16Client.ENABLED?"F1 round trip":"F1 round trip and C1 circuit"):MODE.equals("circle-riding")?"C1 circuit":MODE.equals("bay-boarding")?"Bay aircraft natural boarding and taxi travel":MODE.equals("train-boarding")?"U1/S1/S2 natural boarding and passenger travel":"U1/S1/S2 trains, F1 round trip and C1 circuit")+" passenger rides\n");
                         Files.deleteIfExists(world.resolve("regional_transit_riding_failure.txt"));
@@ -339,7 +340,7 @@ public final class RegionalTransitRidingChecks
                     if(R22_TRAIN)
                     {
                         var row=new com.google.gson.JsonObject();row.addProperty("service",SERVICES[mode]);row.addProperty("travel",travel);row.addProperty("nativePassengerRegistration",serverRegistered);row.addProperty("stoppedAtNextStation",true);row.addProperty("vehicleId",vehicleId);TRAIN_CHECKS.add(row);
-                        Files.writeString(world.resolve("r23_train_ride_metrics.json"),TRAIN_CHECKS.toString());
+                        Files.writeString(world.resolve(R25?"r25_train_ride_metrics.json":"r23_train_ride_metrics.json"),TRAIN_CHECKS.toString());
                     }
                     if(R19)Files.writeString(world.resolve(UN_BOARDING?"r21_un_boarding_metrics.json":R21?"r21_flight_metrics.json":R20?(PORT?"r20_port_metrics.json":"r20_flight_metrics.json"):"r19_flight_metrics.json"),new com.google.gson.Gson().toJson(java.util.Map.of(
                             "passed",true,"travel",travel,"maxSampleMovement",maxFrameStep,"maxSampleSeconds",maxSampleSeconds,"minimumVisualProgressDelta",minVisualAdvance,"nativePassengerRegistration",true,"oppositeAirportStop",flightVisitedOther,"boardingOnly",UN_BOARDING,"maxPresentationLag",maxPresentationLag,"nativeCoordinateRebases",nativeCoordinateRebases)));
@@ -619,7 +620,7 @@ public final class RegionalTransitRidingChecks
             double x=((Double)call(box,"getMinXMapped")+(Double)call(box,"getMaxXMapped"))/2;
             double z=((Double)call(box,"getMinZMapped")+(Double)call(box,"getMaxZMapped"))/2;
             double sign=Math.signum(x);Vec3 outward=new Vec3(sign*c,0,-sign*s);
-            if(Math.abs(s)>.5?outward.z>-.5:outward.x>-.5)continue;
+            if(!R25&&(Math.abs(s)>.5?outward.z>-.5:outward.x>-.5))continue;
             double floorY=Double.NEGATIVE_INFINITY,insideX=x-sign*.4;
             for(Object floor:(Iterable<?>)cache.getClass().getField("floors").get(cache))
                 if(insideX>=(Double)call(floor,"getMinXMapped")-.05&&insideX<=(Double)call(floor,"getMaxXMapped")+.05
@@ -630,14 +631,18 @@ public final class RegionalTransitRidingChecks
             double distance=door.distanceTo(Minecraft.getInstance().player.position());
             if(distance<best)
             {
-                best=distance;chosen=door.add(outward.scale(1.2));boardingInterior=door.subtract(outward.scale(mode==3?2.2:1.1));boardingYaw=(float)Math.toDegrees(Math.atan2(outward.x,-outward.z));
+                Vec3 approach=door.add(outward.scale(1.2));
                 var level=Minecraft.getInstance().level;double standing=Double.NaN;
                 for(int yy=net.minecraft.util.Mth.floor(door.y)-2;yy<=net.minecraft.util.Mth.floor(door.y);yy++)
                 {
-                    var pos=net.minecraft.core.BlockPos.containing(chosen.x,yy,chosen.z);var shape=level.getBlockState(pos).getCollisionShape(level,pos);
+                    var pos=net.minecraft.core.BlockPos.containing(approach.x,yy,approach.z);var shape=level.getBlockState(pos).getCollisionShape(level,pos);
                     if(!shape.isEmpty()){double top=yy+shape.max(net.minecraft.core.Direction.Axis.Y);if(Math.abs(top-door.y)<=1)standing=top;}
                 }
-                if(Double.isFinite(standing))chosen=new Vec3(chosen.x,standing+.025,chosen.z);
+                // U2 has its passenger platform on the opposite side from
+                // the older U1 fixture. A retaining-wall top is not a platform.
+                if(R25&&(!Double.isFinite(standing)||Math.abs(standing-door.y)>.25))continue;
+                best=distance;chosen=Double.isFinite(standing)?new Vec3(approach.x,standing+.025,approach.z):approach;
+                boardingInterior=door.subtract(outward.scale(mode==3?2.2:1.1));boardingYaw=(float)Math.toDegrees(Math.atan2(outward.x,-outward.z));
             }
         }
         require(chosen!=null,"native train has an accessible platform-side doorway");log("PLATFORM ENTRY "+chosen+" yaw="+boardingYaw+" nativeBodyY="+axis(p,"y"));return chosen;

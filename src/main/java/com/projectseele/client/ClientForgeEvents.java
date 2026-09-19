@@ -157,6 +157,12 @@ public final class ClientForgeEvents
             return;
         }
         EvaUnit01Entity eva = ridden(player);
+        if(eva!=null
+                && (eva.getWeapon()==EvaUnit01Entity.WEAPON_RIFLE||eva.getWeapon()==EvaUnit01Entity.WEAPON_CANNON))
+        {
+            player.setXRot(eva.clampPilotViewPitch(player.getXRot(),1));
+            player.setYRot(eva.clampPilotViewYaw(player.getYRot(),1));
+        }
 
         // While piloting, Shift belongs to the Unit's legs. Clear vanilla's
         // dismount input before LocalPlayer processes it; V is the explicit
@@ -206,6 +212,9 @@ public final class ClientForgeEvents
             damageFlashTicks = 0;
         }
 
+        while (Keybinds.COMMAND_RADIO.consumeClick())
+            SeeleNetwork.CHANNEL.sendToServer(new com.projectseele.network.ServerboundStaffConversationPacket(
+                    new java.util.UUID(0,0), "RADIO"));
         while (Keybinds.CYCLE_WEAPON.consumeClick())
         {
             if (eva != null)

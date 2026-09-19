@@ -20,7 +20,8 @@ import java.util.*;
 @Mod.EventBusSubscriber(modid = ProjectSeele.MODID)
 public final class NervStaffR24Review
 {
-    public static final boolean ENABLED = "r24-staff".equals(System.getProperty("projectseele.regionalBuild", ""));
+    public static final boolean R25 = "r25-staff".equals(System.getProperty("projectseele.regionalBuild", ""));
+    public static final boolean ENABLED = R25 || "r24-staff".equals(System.getProperty("projectseele.regionalBuild", ""));
     public static volatile boolean ready, finished;
     public static volatile String input = "", photo = "";
     public static final Set<String> inputs = java.util.concurrent.ConcurrentHashMap.newKeySet();
@@ -61,7 +62,7 @@ public final class NervStaffR24Review
             if (world == null)
             {
                 world = server.getWorldPath(LevelResource.ROOT).normalize();
-                check("isolated_review_world", world.getFileName().toString().equals("SEELE_R24_TV_REVIEW"));
+                check("isolated_review_world", world.getFileName().toString().equals(R25?"SEELE_R25_REVIEW":"SEELE_R24_TV_REVIEW"));
                 level = server.getLevel(FacilitySchemaV2.DIMENSION); player = server.getPlayerList().getPlayers().get(0);
                 player.setGameMode(GameType.CREATIVE); player.stopRiding(); server.setFlightAllowed(true);
                 player.getAbilities().flying = true; player.onUpdateAbilities();
@@ -90,7 +91,21 @@ public final class NervStaffR24Review
                 check("original_parked_fleet", eva != null && plug != null && EvaLogisticsDirector.status(level, 1).phase().equals("PARKED"));
                 check("pilot_initially_absent", !NervStaffDialogue.boarded(level, 1)); evaId = eva.getUUID(); plugId = plug.getUUID();
                 originalPresses = misato.pressCount(); recoveryPresses = ritsuko.pressCount();
-                NervStaffDialogue.open(player, misato); next(1); photo = "dialogue_greeting"; return;
+                if (R25)
+                {
+                    if(!inputs.contains("phone"))PlugRouteR25Witness.capture(level,world);
+                    var guard = com.projectseele.registry.ModEntities.NERV_STAFF.get().create(level);
+                    guard.assign("r25_review_guard","警卫","guard","misato",player.blockPosition());
+                    check("guard_cannot_launch_even_with_commander_skin",StaffCommandBookR24.request(player,guard,"launch",1)==0);
+                    check("technical_officer_cannot_launch",StaffCommandBookR24.request(player,ritsuko,"launch",1)==0);
+                    check("technical_officer_can_prepare",StaffAuthorityR25.allows(ritsuko,"prepare"));
+                    check("deputy_has_command_authority",StaffAuthorityR25.allows("deputy","fuyutsuki","launch"));
+                    check("operator_cannot_dispatch",!StaffAuthorityR25.allows("operator","maya","board"));
+                    player.setItemInHand(net.minecraft.world.InteractionHand.MAIN_HAND,new net.minecraft.world.item.ItemStack(com.projectseele.registry.ModItems.SATELLITE_PHONE.get()));
+                    if(!inputs.contains("phone")){input="phone";return;}
+                }
+                else NervStaffDialogue.open(player, misato);
+                next(1); photo = "dialogue_greeting"; return;
             }
             if (state == 1)
             {
@@ -157,6 +172,11 @@ public final class NervStaffR24Review
             if (state == 7)
             {
                 if (timer < 180) return;
+                if(R25)
+                {
+                    var unit=EvaLogisticsDirector.canonicalUnit(level,1);
+                    check("surface_reel_takes_over",unit.isUmbilicalConnected()&&unit.getUmbilicalAnchor()!=null&&unit.getUmbilicalAnchor().getY()>=64);
+                }
                 check("pilot_radio_authorized", StaffConversationR24.radioAllowed(player));
                 check("radio_contact_requested", StaffConversationR24.contact(player, "律子") == 1);
                 next(8); photo = "pilot_radio"; return;
@@ -190,7 +210,37 @@ public final class NervStaffR24Review
             {
                 var currentOperator=member("misato");if(currentOperator!=null)misato=currentOperator;
                 check("operator_returned_to_post", misato.position().distanceTo(Vec3.atBottomCenterOf(misato.station())) < 1.2);
-                finish("");
+                if(R25){StaffConversationR24.contact(player,"美里");next(11);input="contacts";photo="phone_contacts";}
+                else finish("");
+            }
+            if(state==11)
+            {
+                if(!inputs.contains("contacts")||!photos.contains("phone_contacts"))return;
+                next(12);input="pilot_contact";photo="pilot_contact";return;
+            }
+            if(state==12)
+            {
+                if(!inputs.contains("pilot_contact")||!photos.contains("pilot_contact"))return;
+                next(13);input="board_dummy";return;
+            }
+            if(state==13)
+            {
+                check("pilot_dispatch_bounded",timer<900);
+                if(!inputs.contains("board_dummy"))return;
+                var pilot=TrainingPilotDirector.pilots(level).stream().filter(p->p.getAssignedVariant()==1).findFirst().orElse(null);
+                var capsule=EntryPlugDirector.canonical(level,1);
+                if(pilot==null||capsule==null||pilot.getVehicle()!=capsule)return;
+                check("real_named_pilot_walked_and_boarded",pilot.getName().getString().equals("碇真嗣"));
+                check("boarding_did_not_auto_launch",EvaLogisticsDirector.status(level,1).phase().equals("PARKED"));
+                check("same_capsule_for_named_pilot",capsule.getUUID().equals(plugId));
+                TrainingPilotDirector.stop(level,1);next(14);input="close_pilot";return;
+            }
+            if(state==14)
+            {
+                check("pilot_return_bounded",timer<900);
+                var pilot=TrainingPilotDirector.pilots(level).stream().filter(p->p.getAssignedVariant()==1).findFirst().orElse(null);
+                if(pilot==null||pilot.isPassenger()||pilot.getTrainingStage()!=TrainingPilotEntity.STAGE_STANDBY)return;
+                check("named_pilot_returned_to_standby",true);finish("");
             }
         }
         catch (Exception failure) { ProjectSeele.LOGGER.error("R24 staff review failed", failure); finish(failure.toString()); }
@@ -200,7 +250,7 @@ public final class NervStaffR24Review
         if(player!=null&&level!=null){player.stopRiding();player.teleportTo(level,27.5,-407,282.5,0,0);}
         var report = new JsonObject(); report.addProperty("error", error); report.add("checks", checks); report.add("motion", route);
         report.addProperty("phase", state); report.addProperty("ticks", age);
-        try { Files.writeString(world.resolve("r24_staff_review.json"), new GsonBuilder().setPrettyPrinting().create().toJson(report)); }
+        try { Files.writeString(world.resolve(R25?"r25_staff_review.json":"r24_staff_review.json"), new GsonBuilder().setPrettyPrinting().create().toJson(report)); }
         catch (Exception failure) { ProjectSeele.LOGGER.error("R24 staff report failed", failure); }
         finished = true;
     }

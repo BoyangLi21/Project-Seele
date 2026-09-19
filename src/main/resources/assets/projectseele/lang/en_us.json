@@ -274,5 +274,7 @@
   "block.projectseele.station_drain": "Station drainage cover",
   "period_fixture.projectseele.parked_bicycle": "Parked utility bicycle",
   "period_fixture.projectseele.vending_machine": "Period drinks vending machine",
-  "period_fixture.projectseele.letter_box": "Street post box"
+  "period_fixture.projectseele.letter_box": "Street post box",
+  "item.projectseele.satellite_phone": "NERV Satellite Handset",
+  "key.projectseele.command_radio": "Command radio / satellite phone"
 }
