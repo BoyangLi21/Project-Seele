@@ -40,7 +40,7 @@ def validate_private_eva_mesh_contracts() -> None:
             source,
         )
     }
-    for name in ("eva_unit00", "eva_unit01", "eva_unit02", "eva_prototype"):
+    for name in ("eva_unit00", "eva_unit01", "eva_unit02", "eva_prototype", "eva_un01"):
         expected = contracts.get(name)
         if expected is None:
             raise ValueError(f"Missing Java mesh contract for {name}")
@@ -117,6 +117,8 @@ def required_mods() -> list[Path]:
         local / "MTR-forge-4.0.5+1.20.1.jar",
         local / "superbwarfare-0.8.9.1-hotfix-mc1.20.1-993063bed-all.jar",
         local / "kotlinforforge-4.12.0-all.jar",
+        local / "Patchouli-1.20.1-85-FORGE.jar",
+        local / "grandpianomod-1.0.0.jar",
         local / "ferritecore-6.0.1-forge.jar",
         local / "modernfix-forge-5.27.83+mc1.20.1.jar",
     ]

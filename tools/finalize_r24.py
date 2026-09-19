@@ -9,7 +9,8 @@ def main():
               'far_view_pass.json','visual_review.json','post_cleanup_readback.json','final_build_pass.json',
               'sbw_native_wake_pass.json','vehicle_rest_equivalence_final.json','vehicle_rest_repeat_equality.json',
               'vehicle_phantom_equivalence.json','natural_resolution_native_pass.json','glow_visual_pass.json',
-              'soft_cross_visual_pass.json','final_camera_campaign_native_pass.json']
+              'soft_cross_visual_pass.json','final_camera_campaign_native_pass.json',
+              'vehicle_manual_native_pass.json','vehicle_manual_server_pass.json','vehicle_manual_pack_pass.json']
     for name in required:assert read(V/name)['passed'],name
     staff=read(V/'staff_native_pass.json');assert not staff['error'] and staff['phase']==10
     assert all(value for value in staff['checks'].values() if isinstance(value,bool))

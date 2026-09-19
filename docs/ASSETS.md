@@ -1,5 +1,7 @@
 # 素材登记簿
 
+> R24 依赖补全：载具手册使用 [Patchouli 1.20.1-85 Forge](https://modrinth.com/mod/patchouli/version/94dtOLgZ)，原作者 VazkiiMods，原项目标示 CC-BY-NC-SA-3.0。只从官方地址下载并校验固定 SHA-512，不把第三方 JAR 改标 MIT 或提交到源码。载具手册文字／图片仍属于 Superb Warfare 原资源；本项目补齐加载依赖和测试，没有宣称重写原手册。
+
 > 合规基线：khara 二创指引（非商业、零官方素材）。本文件登记**所有**非代码资产的来源。
 > 任何新素材入库前先在这里登记。
 
