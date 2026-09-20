@@ -14,7 +14,7 @@ import java.util.*;
 @Mod.EventBusSubscriber(modid = ProjectSeele.MODID)
 public final class StaffPilotOrdersR25
 {
-    private record Order(UUID caller, UUID officer, int unit, long deadline) {}
+    private record Order(UUID caller, UUID officer, int unit, long deadline, boolean standby) {}
     private static final Map<ServerLevel, Map<Integer,Order>> ORDERS = new WeakHashMap<>();
     public static String request(ServerPlayer player, NervStaffEntity npc, int unit)
     {
@@ -24,9 +24,21 @@ public final class StaffPilotOrdersR25
         var command=StaffCommandBookR24.unitOrder(player.serverLevel(),unit);
         if(command!=null&&!command.owner.equals(player.getUUID()))return "这台机体已有其他指挥员的待执行指令，请先联系下令人。";
         if(jobs.containsKey(unit))return "该驾驶员已有登机指令，正在执行。";
-        jobs.put(unit,new Order(player.getUUID(),npc.getUUID(),unit,player.server.getTickCount()+300));
+        jobs.put(unit,new Order(player.getUUID(),npc.getUUID(),unit,player.server.getTickCount()+300,false));
         EvaLogisticsDirector.loadControlTarget(player.serverLevel(),unit);
         return "正在呼叫"+TrainingPilotEntity.pilotName(unit)+"，确认对应机库后开始登机。";
+    }
+    public static String returnToStandby(ServerPlayer player,NervStaffEntity npc,int unit)
+    {
+        if(unit<0||unit>2||!NervStaffDialogue.authorized(player)||!StaffAuthorityR25.allows(npc,"board"))
+            return "本岗位无权调遣驾驶员。";
+        if(StaffCommandBookR24.unitOrder(player.serverLevel(),unit)!=null)
+            return "请先取消待执行的出动指令，并将机体回收至机库。";
+        var jobs=ORDERS.computeIfAbsent(player.serverLevel(),l->new HashMap<>());
+        if(jobs.containsKey(unit))return "该驾驶员的上一条指令尚未结束。";
+        jobs.put(unit,new Order(player.getUUID(),npc.getUUID(),unit,player.server.getTickCount()+300,true));
+        EvaLogisticsDirector.loadControlTarget(player.serverLevel(),unit);
+        return "正在确认机库联锁，随后通知驾驶员离开插入栓、返回待命。";
     }
     @SubscribeEvent public static void tick(TickEvent.ServerTickEvent event)
     {
@@ -45,7 +57,16 @@ public final class StaffPilotOrdersR25
                 {jobs.remove(job.unit());NervStaffDialogue.reply(player,npc,"机库信号超时，登机指令未执行。");continue;}
                 EvaLogisticsDirector.loadControlTarget(level,job.unit());
                 if(EvaLogisticsDirector.canonicalUnit(level,job.unit())==null)continue;
-                jobs.remove(job.unit());var result=TrainingPilotDirector.start(level,job.unit());
+                jobs.remove(job.unit());
+                if(job.standby())
+                {
+                    var entry=EvaFleetSavedData.get(level.getServer()).entry(job.unit()).orElse(null);
+                    if(entry==null||entry.phase()!=EvaFleetSavedData.Phase.PARKED)
+                        NervStaffDialogue.reply(player,npc,"机体还未在机库停稳，请先完成回收。驾驶员继续留在插入栓内。");
+                    else {TrainingPilotDirector.stop(level,job.unit());NervStaffDialogue.reply(player,npc,TrainingPilotEntity.pilotName(job.unit())+"：收到，离开插入栓，返回待命位置。");}
+                    continue;
+                }
+                var result=TrainingPilotDirector.start(level,job.unit());
                 NervStaffDialogue.reply(player,npc,TrainingPilotEntity.pilotName(job.unit())+"："
                         +(result.accepted()?"收到，前往插入栓登机。":result.message()));
             }

@@ -14,6 +14,7 @@ GOALS=[('command','指挥室入口',(28,-406,269)),('hangars','机库',(118,-442
 LIFT_GROUPS=[dict(id='command',points=[(12,y,258) for y in (-448,-423,-419,-409)])]
 PUBLIC_DOMAINS=None;PUBLIC_PATHS=None;RAIL_CURVES=None
 DEBUG_PATHS=None
+LIFT_BOARD_COST=24.;LIFT_VERTICAL_COST=1/.85;LIFT_DIRECT=False;STAIR_COST=math.sqrt(2)
 def main(apply=False,output=None,export_routes=None):
  global OUT
  if output is not None:OUT=Path(output)
@@ -41,7 +42,7 @@ def main(apply=False,output=None,export_routes=None):
  def overlaps(b,height):return b[3]>.205 and b[0]<.795 and b[5]>.205 and b[2]<.795 and b[4]>.01 and b[1]<height
  free=np.array([not any(overlaps(b,1) for b in bs) for bs in sh]);head=np.array([not any(overlaps(b,.79) for b in bs) for bs in sh]);floor=np.array([any(.9<=b[4]<=1.001 and b[0]<=.5<=b[3] and b[2]<=.5<=b[5] for b in bs) for bs in sh]);stairs=np.array(['stairs' in s or 'escalator_step' in s for s in pal])
  forbidden=np.array([s.startswith(('minecraft:water','minecraft:lava','projectseele:lcl')) for s in pal]);free&=~forbidden;head&=~forbidden
- floor&=np.array([not any(t in s for t in ('_wall[','_fence[','_bars[','_sign[','station_departure_board','nerv_direction_panel','escalator_side')) for s in pal])
+ floor&=np.array([not any(t in s for t in ('_wall[','_fence[','_bars[','_sign[','station_departure_board','nerv_direction_panel','escalator_side','chair','stool','command_seat')) for s in pal])
  walk=np.zeros(a.shape,bool);walk[1:-1]=floor[a[:-2]]&free[a[1:-1]]&head[a[2:]]
  if PUBLIC_DOMAINS is not None:
   approved=np.zeros(a.shape,bool)
@@ -76,7 +77,7 @@ def main(apply=False,output=None,export_routes=None):
    keep=walk[aa]&walk[bb]
    if dy:
     support_stair=np.zeros(a.shape,bool);support_stair[1:]=stairs[a[:-1]];keep&=support_stair[aa]|support_stair[bb]
-   rows.extend(index[aa][keep]);cols.extend(index[bb][keep]);weights.extend([math.sqrt(1+dy*dy)]*int(keep.sum()))
+   rows.extend(index[aa][keep]);cols.extend(index[bb][keep]);weights.extend([STAIR_COST if dy else 1.]*int(keep.sum()))
  landings=[];lift_edges=[]
  for lift in LIFT_GROUPS:
   local=[]
@@ -84,8 +85,9 @@ def main(apply=False,output=None,export_routes=None):
    i=nearest(point,7)
    if i is None:raise RuntimeError(('Missing measured lift landing',lift['id'],point))
    local.append((point[1],i));landings.append((point[1],i))
-  for (y,i),(Y,j) in zip(local,local[1:]):
-   rows.extend([i,j]);cols.extend([j,i]);weights.extend([24+abs(Y-y)/.85]*2);lift_edges.append(dict(id=lift['id'],a=i,b=j))
+  pairs=[(a,b) for k,a in enumerate(local) for b in local[k+1:]] if LIFT_DIRECT else zip(local,local[1:])
+  for (y,i),(Y,j) in pairs:
+   rows.extend([i,j]);cols.extend([j,i]);weights.extend([LIFT_BOARD_COST+abs(Y-y)*LIFT_VERTICAL_COST]*2);lift_edges.append(dict(id=lift['id'],a=i,b=j))
  graph=sparse.coo_matrix((weights,(rows,cols)),shape=(n,n)).tocsr()
  # Door 18 is the documented public entrance to the command hall. The old
  # target was inside the glazed operator island beside Misato, not its entry.
@@ -93,7 +95,8 @@ def main(apply=False,output=None,export_routes=None):
  if any(i is None for i in gids):raise RuntimeError(('Missing measured destination floor',list(zip(goals,gids))))
  distances,predecessors=dijkstra(graph,directed=True,indices=gids,return_predecessors=True)
  reachable=np.zeros(a.shape,bool);reachable[tuple(coords[np.isfinite(distances).all(axis=0)].T)]=True
- np.savez_compressed(OUT/'measured_public_space.npz',blocks=measured,palette=np.asarray(pal),reachable=reachable,lo=LO,hi=HI)
+ np.savez_compressed(OUT/'measured_public_space.npz',blocks=measured,palette=np.asarray(pal),reachable=reachable,walkable=walk,lo=LO,hi=HI)
+ if LIFT_DIRECT:np.savez_compressed(OUT/'walkable_graph.npz',coords=coords[:,[2,0,1]]+LO,indptr=graph.indptr,indices=graph.indices,weights=graph.data)
  if export_routes is not None:
   keep=np.flatnonzero(np.isfinite(distances).all(axis=0));remap=np.full(n,-1,np.int32);remap[keep]=np.arange(len(keep))
   next_steps=predecessors[:,keep].T.copy()

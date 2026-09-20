@@ -104,17 +104,26 @@ public final class EvaUmbilicalCableRenderer
 
             var route=new java.util.ArrayList<Vec3>();route.add(collarOuter);
             Vec3 exit=collarOuter.add(rear.scale(2.2));route.add(exit);
-            var hull=unit.getBoundingBox().inflate(1.5);
+            var hull=unit.getBoundingBox().inflate(3);
             if(hull.clip(exit,pylon).isPresent())
             {
                 // When the unit turns its front towards the reel, take the
                 // lead around the flank instead of drawing it through its chest.
+                Vec3 back=unit.getRearDirection();
+                double width=Math.max(16,unit.getBbWidth()*.5+6);
+                Vec3 centre=unit.getPosition(event.getPartialTick());
+                double rearDistance=exit.subtract(centre).dot(back);
+                Vec3 rearCorner=exit.add(back.scale(Math.max(0,width-rearDistance)));
+                route.add(rearCorner);
                 Vec3 lateral=new Vec3(right.x,0,right.z).normalize();
                 if(pylon.subtract(unit.position()).dot(lateral)<0)lateral=lateral.scale(-1);
-                double width=Math.max(16,unit.getBbWidth()*.5+6);
-                Vec3 side=unit.getPosition(event.getPartialTick()).add(lateral.scale(width));
-                route.add(new Vec3(side.x,Math.max(unit.getY()+1.5,
-                        Math.min(exit.y-2,pylon.y+2)),side.z));
+                if(hull.clip(rearCorner,pylon).isPresent())
+                {
+                    Vec3 rearSide=rearCorner.add(lateral.scale(width));route.add(rearSide);
+                    Vec3 side=centre.add(lateral.scale(width));
+                    route.add(new Vec3(side.x,Math.max(unit.getY()+1.5,
+                            Math.min(exit.y-2,pylon.y+2)),side.z));
+                }
             }
             route.add(pylon);
             // Round the support-route corners before applying gravity. Hard
@@ -123,7 +132,7 @@ public final class EvaUmbilicalCableRenderer
             for(int corner=1;corner<route.size()-1;corner++)
             {
                 Vec3 previous=route.get(corner-1),joint=route.get(corner),next=route.get(corner+1);
-                double radius=Math.min(6,Math.min(previous.distanceTo(joint),joint.distanceTo(next))*.4);
+                double radius=Math.min(2.5,Math.min(previous.distanceTo(joint),joint.distanceTo(next))*.4);
                 Vec3 entry=joint.add(previous.subtract(joint).normalize().scale(radius));
                 Vec3 leave=joint.add(next.subtract(joint).normalize().scale(radius));
                 rounded.add(entry);

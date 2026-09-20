@@ -20,12 +20,14 @@ import java.util.*;
 @Mod.EventBusSubscriber(modid = ProjectSeele.MODID)
 public final class NervStaffR24Review
 {
-    public static final boolean R25 = "r25-staff".equals(System.getProperty("projectseele.regionalBuild", ""));
+    public static final boolean R26 = "r26-staff".equals(System.getProperty("projectseele.regionalBuild", ""));
+    public static final boolean R25 = R26 || "r25-staff".equals(System.getProperty("projectseele.regionalBuild", ""));
     public static final boolean ENABLED = R25 || "r24-staff".equals(System.getProperty("projectseele.regionalBuild", ""));
     public static volatile boolean ready, finished;
     public static volatile String input = "", photo = "";
     public static final Set<String> inputs = java.util.concurrent.ConcurrentHashMap.newKeySet();
     public static final Set<String> photos = java.util.concurrent.ConcurrentHashMap.newKeySet();
+    public static volatile boolean rackRenderedDuringClosing;
     private static int state, timer, age, originalPresses, recoveryPresses;
     private static boolean preparePowered, launchPowered, recoveryPowered;
     private static Path world;
@@ -62,7 +64,7 @@ public final class NervStaffR24Review
             if (world == null)
             {
                 world = server.getWorldPath(LevelResource.ROOT).normalize();
-                check("isolated_review_world", world.getFileName().toString().equals(R25?"SEELE_R25_REVIEW":"SEELE_R24_TV_REVIEW"));
+                check("isolated_review_world", world.getFileName().toString().equals(R26?"SEELE_R26_REVIEW":R25?"SEELE_R25_REVIEW":"SEELE_R24_TV_REVIEW"));
                 level = server.getLevel(FacilitySchemaV2.DIMENSION); player = server.getPlayerList().getPlayers().get(0);
                 player.setGameMode(GameType.CREATIVE); player.stopRiding(); server.setFlightAllowed(true);
                 player.getAbilities().flying = true; player.onUpdateAbilities();
@@ -79,6 +81,26 @@ public final class NervStaffR24Review
                 row.addProperty("npc", misato.position().toString()); row.addProperty("pressed", misato.pressCount());
                 row.addProperty("unit_phase", EvaLogisticsDirector.status(level, 1).phase()); route.add(row);
             }
+            if(R26&&state>=6&&state<=9)
+            {
+                var frame=EvaLogisticsDirector.canonicalUnit(level,1);
+                if(frame!=null)
+                {
+                    String phase=EvaLogisticsDirector.status(level,1).phase();
+                    if(Set.of("PLUG_INSERTING","PLUG_LOCKING").contains(phase))check("rack_stowed_during_insertion",frame.carrierRiseProgress(1)<.001F);
+                    if(frame.getY()<64&&frame.isEntryPlugInserted()&&frame.getPilotEntity()!=null)
+                        check("underground_internal_battery",!frame.isUmbilicalConnected()&&frame.getPowerTicks()>0&&frame.getPowerTicks()<=6000);
+                    if(phase.equals("TO_SILO"))check("rack_raised_for_transfer",frame.carrierRiseProgress(1)>.99F);
+                }
+                for(var actor:List.of(misato,ritsuko))
+                {
+                    for(var at:List.of(actor.blockPosition(),actor.blockPosition().below()))
+                    {
+                        String block=net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(level.getBlockState(at).getBlock()).getPath();
+                        check("staff_do_not_step_on_seats",!block.contains("chair")&&!block.endsWith("_stool"));
+                    }
+                }
+            }
             if (state == 0)
             {
                 misato = member("misato"); ritsuko = member("ritsuko");
@@ -90,6 +112,7 @@ public final class NervStaffR24Review
                 if(Set.of("DESCENDING","TO_HANGAR","FILLING").contains(coldPhase))return;
                 check("original_parked_fleet", eva != null && plug != null && EvaLogisticsDirector.status(level, 1).phase().equals("PARKED"));
                 check("pilot_initially_absent", !NervStaffDialogue.boarded(level, 1)); evaId = eva.getUUID(); plugId = plug.getUUID();
+                if(R26&&!inputs.contains("greet")){input="greet";return;}
                 originalPresses = misato.pressCount(); recoveryPresses = ritsuko.pressCount();
                 if (R25)
                 {
@@ -177,6 +200,8 @@ public final class NervStaffR24Review
                     var unit=EvaLogisticsDirector.canonicalUnit(level,1);
                     check("surface_reel_takes_over",unit.isUmbilicalConnected()&&unit.getUmbilicalAnchor()!=null&&unit.getUmbilicalAnchor().getY()>=64);
                 }
+                if(R26&&!inputs.contains("radio_key")){input="radio_key";return;}
+                if(R26)check("pilot_radio_hotkey",inputs.contains("radio_key"));
                 check("pilot_radio_authorized", StaffConversationR24.radioAllowed(player));
                 check("radio_contact_requested", StaffConversationR24.contact(player, "律子") == 1);
                 next(8); photo = "pilot_radio"; return;
@@ -233,14 +258,14 @@ public final class NervStaffR24Review
                 check("real_named_pilot_walked_and_boarded",pilot.getName().getString().equals("碇真嗣"));
                 check("boarding_did_not_auto_launch",EvaLogisticsDirector.status(level,1).phase().equals("PARKED"));
                 check("same_capsule_for_named_pilot",capsule.getUUID().equals(plugId));
-                TrainingPilotDirector.stop(level,1);next(14);input="close_pilot";return;
+                if(R26){next(14);input="standby_dummy";}else{TrainingPilotDirector.stop(level,1);next(14);input="close_pilot";}return;
             }
             if(state==14)
             {
                 check("pilot_return_bounded",timer<900);
                 var pilot=TrainingPilotDirector.pilots(level).stream().filter(p->p.getAssignedVariant()==1).findFirst().orElse(null);
                 if(pilot==null||pilot.isPassenger()||pilot.getTrainingStage()!=TrainingPilotEntity.STAGE_STANDBY)return;
-                check("named_pilot_returned_to_standby",true);finish("");
+                check("named_pilot_returned_to_standby",true);if(R26)check("native_standby_button",inputs.contains("standby_dummy"));finish("");
             }
         }
         catch (Exception failure) { ProjectSeele.LOGGER.error("R24 staff review failed", failure); finish(failure.toString()); }
@@ -248,9 +273,10 @@ public final class NervStaffR24Review
     private static void finish(String error)
     {
         if(player!=null&&level!=null){player.stopRiding();player.teleportTo(level,27.5,-407,282.5,0,0);}
+        if(R26)checks.addProperty("rack_rendered_until_surface_hatch_closed",rackRenderedDuringClosing);
         var report = new JsonObject(); report.addProperty("error", error); report.add("checks", checks); report.add("motion", route);
         report.addProperty("phase", state); report.addProperty("ticks", age);
-        try { Files.writeString(world.resolve(R25?"r25_staff_review.json":"r24_staff_review.json"), new GsonBuilder().setPrettyPrinting().create().toJson(report)); }
+        try { Files.writeString(world.resolve(R26?"r26_staff_review.json":R25?"r25_staff_review.json":"r24_staff_review.json"), new GsonBuilder().setPrettyPrinting().create().toJson(report)); }
         catch (Exception failure) { ProjectSeele.LOGGER.error("R24 staff report failed", failure); }
         finished = true;
     }

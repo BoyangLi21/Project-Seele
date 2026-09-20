@@ -31,7 +31,8 @@ import java.util.*;
 public final class RegionalSpatialAuditDriver
 {
     private static final boolean COMBINED=Set.of("r10-world","r20-civil-annex").contains(System.getProperty("projectseele.regionalBuild",""));
-    private static final boolean R25="r25-collision".equals(System.getProperty("projectseele.regionalBuild",""));
+    private static final boolean R26="r26-collision".equals(System.getProperty("projectseele.regionalBuild",""));
+    private static final boolean R25=R26||"r25-collision".equals(System.getProperty("projectseele.regionalBuild",""));
     private static final boolean R24=R25||"r24-collision".equals(System.getProperty("projectseele.regionalBuild",""));
     private static final boolean R23=R24||"r23-collision".equals(System.getProperty("projectseele.regionalBuild",""));
     private static final boolean R21=R23||"r21-collision".equals(System.getProperty("projectseele.regionalBuild",""));
@@ -80,7 +81,7 @@ public final class RegionalSpatialAuditDriver
     {
         if(!ENABLED||done||event.phase!=TickEvent.Phase.END)return;
         var server=event.getServer();Path world=server.getWorldPath(LevelResource.ROOT).normalize();
-        if(!world.getFileName().toString().equals(R25?"SEELE_R25_REVIEW":R24?"SEELE_R24_TV_REVIEW":R23?"SEELE_R22_REVIEW":R21?"SEELE_R21_REVIEW":R20?"SEELE_R20_REVIEW":R19?"SEELE_R19_NATIVE_REVIEW":"SEELE_TV_WORLD_PREVIEW_20260906"))throw new IllegalStateException("Wrong quality audit world");
+        if(!world.getFileName().toString().equals(R26?"SEELE_R26_REVIEW":R25?"SEELE_R25_REVIEW":R24?"SEELE_R24_TV_REVIEW":R23?"SEELE_R22_REVIEW":R21?"SEELE_R21_REVIEW":R20?"SEELE_R20_REVIEW":R19?"SEELE_R19_NATIVE_REVIEW":"SEELE_TV_WORLD_PREVIEW_20260906"))throw new IllegalStateException("Wrong quality audit world");
         ServerLevel level=server.getLevel(FacilitySchemaV2.DIMENSION);
         if(level!=null)level.resetEmptyTime();
         try
@@ -121,7 +122,7 @@ public final class RegionalSpatialAuditDriver
                     }
                     Files.writeString(world.resolve("quality_terrain_survey.json"),GSON.toJson(heights));
                 }
-                cases=JsonParser.parseString(Files.readString(world.resolve(R25?"r25_walk_cases.json":R24?"r24_walk_cases.json":R23?"r23_walk_cases.json":"quality_walk_cases.json"))).getAsJsonArray();
+                cases=JsonParser.parseString(Files.readString(world.resolve(R26?"r26_walk_cases.json":R25?"r25_walk_cases.json":R24?"r24_walk_cases.json":R23?"r23_walk_cases.json":"quality_walk_cases.json"))).getAsJsonArray();
                 ProjectSeele.LOGGER.info("SPATIAL NATIVE shapes={} cases={} playerStep={}",shapes.size(),cases.size(),player.maxUpStep());
             }
             if(Files.exists(world.resolve("regional_stop_requested")))
@@ -162,18 +163,23 @@ public final class RegionalSpatialAuditDriver
                 if(test.has("readingBoard"))
                 {
                     var b=test.getAsJsonArray("readingBoard");BlockPos at=new BlockPos(b.get(0).getAsInt(),b.get(1).getAsInt(),b.get(2).getAsInt());
+                    boolean wayfinding=test.has("readingWayfinding")&&test.get("readingWayfinding").getAsBoolean();
                     if(!(level.getBlockEntity(at) instanceof com.projectseele.world.StationDepartureBoardBlockEntity board)
-                            || !board.routeMap() || board.rows().size()<4)
+                            || (wayfinding?board.rows().size()<3:!board.routeMap()||board.rows().size()<4))
                     {finish(test,"missing_complete_station_diagram");return;}
-                    var target=Vec3.atCenterOf(at).add(0,.3,0);
+                    var outline=level.getBlockState(at).getShape(level,at);
+                    if(outline.isEmpty()){finish(test,"missing_sign_outline");return;}
+                    var target=outline.bounds().getCenter().add(Vec3.atLowerCornerOf(at));
                     var hit=level.clip(new net.minecraft.world.level.ClipContext(player.getEyePosition(),target,
                             net.minecraft.world.level.ClipContext.Block.OUTLINE,net.minecraft.world.level.ClipContext.Fluid.NONE,player));
-                    if(!hit.getBlockPos().equals(at)){finish(test,"station_diagram_obstructed");return;}
+                    if(hit.getType()!=net.minecraft.world.phys.HitResult.Type.BLOCK||!hit.getBlockPos().equals(at)){finish(test,"station_diagram_obstructed");return;}
                 }
                 if(test.has("commandButton"))
                 {
                     var b=test.getAsJsonArray("commandButton");BlockPos button=new BlockPos(b.get(0).getAsInt(),b.get(1).getAsInt(),b.get(2).getAsInt());
-                    var state=level.getBlockState(button);var point=state.getShape(level,button).bounds().getCenter().add(Vec3.atLowerCornerOf(button));var eye=player.getEyePosition();
+                    var state=level.getBlockState(button);var shape=state.getShape(level,button);
+                    if(shape.isEmpty()){finish(test,"command_button_missing");return;}
+                    var point=shape.bounds().getCenter().add(Vec3.atLowerCornerOf(button));var eye=player.getEyePosition();
                     var hit=level.clip(new net.minecraft.world.level.ClipContext(eye,point.add(point.subtract(eye).normalize().scale(.03)),net.minecraft.world.level.ClipContext.Block.OUTLINE,net.minecraft.world.level.ClipContext.Fluid.NONE,player));
                     if(eye.distanceTo(point)>4.5||!hit.getBlockPos().equals(button)){finish(test,"command_button_not_physically_reachable");return;}
                     if(!com.projectseele.world.CommandRoomSlidingDoorDirector.handleUse(player,button)){finish(test,"command_button_rejected");return;}

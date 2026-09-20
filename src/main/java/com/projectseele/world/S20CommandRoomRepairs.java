@@ -201,6 +201,8 @@ public final class S20CommandRoomRepairs
 
     private static int applySeatStandard(ServerLevel level)
     {
+        if(java.nio.file.Files.isRegularFile(level.getServer().getWorldPath(
+                net.minecraft.world.level.storage.LevelResource.ROOT).resolve("facility_chairs_r26.json")))return 0;
         BlockState seat = level.getBlockState(REFERENCE_SEAT);
         BlockState arm = level.getBlockState(REFERENCE_ARM);
         BlockState banner = level.getBlockState(REFERENCE_BANNER);

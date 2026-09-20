@@ -93,9 +93,13 @@ public final class TvFacilityMeshes
             double distance=mc.gameRenderer.getMainCamera().getPosition().distanceTo(unit.carrierRenderPosition(partial).add(0,30,0));
             opacity=(float)net.minecraft.util.Mth.clamp((distance-17)/23,.10,1);
         }
-        draw("carrier_deck",poses,light);draw("carrier_spine",poses,light,opacity);
+        draw("carrier_deck",poses,light);
+        poses.pushPose();
+        poses.translate(0,-64*(1-unit.carrierRiseProgress(partial)),0);
+        draw("carrier_spine",poses,light,opacity);
         float release=unit.getLaunchPhase()==EvaUnit01Entity.LAUNCH_CLEAR?ramp(1-(unit.getLaunchTicks()-partial)/18F,0,1):0;
         poses.pushPose();poses.translate(0,0,-3*release);draw("carrier_clamp",poses,light,opacity);poses.popPose();
+        poses.popPose();
     }
     public static void pressureDoors(PoseStack poses,int light,float open)
     {

@@ -16,7 +16,8 @@ import java.util.*;
 @Mod.EventBusSubscriber(modid = "projectseele", value = Dist.CLIENT)
 public final class NervStaffR24Client
 {
-    private static boolean initialized, oldPause, oldGui;
+    private static boolean initialized, oldPause, oldGui, radioKeyQueued;
+    private static int greetingTicks;
     private static int oldDistance, end, settled;
     private static String photo = "";
     private static Path folder;
@@ -43,7 +44,7 @@ public final class NervStaffR24Client
         {
             initialized = true; oldPause = mc.options.pauseOnLostFocus; oldGui = mc.options.hideGui; oldDistance = mc.options.renderDistance().get();
             mc.options.pauseOnLostFocus = false; mc.options.hideGui = false; mc.options.renderDistance().set(6); mc.options.broadcastOptions();
-            folder = mc.gameDirectory.toPath().resolve("../artifacts/"+(NervStaffR24Review.R25?"facility_r25":"facility_r24")+"/native_staff_" + System.currentTimeMillis()).normalize();
+            folder = mc.gameDirectory.toPath().resolve("../artifacts/"+(NervStaffR24Review.R26?"facility_r26":NervStaffR24Review.R25?"facility_r25":"facility_r24")+"/native_staff_" + System.currentTimeMillis()).normalize();
             try { Files.createDirectories(folder); } catch (Exception failure) { throw new IllegalStateException(failure); }
             NervStaffR24Review.ready = true;
         }
@@ -60,6 +61,24 @@ public final class NervStaffR24Client
         }
         String request = NervStaffR24Review.input;
         if (request.isEmpty() || NervStaffR24Review.inputs.contains(request)) return;
+        if(request.equals("greet"))
+        {
+            if(greetingTicks==0)
+            {
+                var npc=mc.level.getEntitiesOfClass(com.projectseele.entity.NervStaffEntity.class,mc.player.getBoundingBox().inflate(16),n->n.skin().equals("misato")).stream().findFirst().orElse(null);
+                if(npc==null)return;
+                mc.gameMode.interact(mc.player,npc,net.minecraft.world.InteractionHand.MAIN_HAND);
+            }
+            if(++greetingTicks<20)return;
+            if(mc.screen instanceof StaffConversationScreen)throw new IllegalStateException("Right-click opened a dialogue window");
+            NervStaffR24Review.inputs.add(request);return;
+        }
+        if(request.equals("radio_key"))
+        {
+            if(!radioKeyQueued){mc.setScreen(null);net.minecraft.client.KeyMapping.click(com.projectseele.client.Keybinds.COMMAND_RADIO.getKey());radioKeyQueued=true;return;}
+            if(mc.screen instanceof StaffConversationScreen channel&&channel.snapshot().radio())NervStaffR24Review.inputs.add(request);
+            return;
+        }
         if(request.equals("phone"))
         {
             if(!mc.player.getMainHandItem().is(com.projectseele.registry.ModItems.SATELLITE_PHONE.get()))return;
@@ -81,6 +100,7 @@ public final class NervStaffR24Client
             case "recover" -> { click(screen, "指挥"); click(screen, "回收"); }
             case "contacts" -> click(screen,"通讯录");
             case "pilot_contact" -> click(screen,"碇真嗣");
+            case "standby_dummy" -> {click(screen,"指挥");click(screen,"下机返回待命");}
             case "board_dummy" -> {click(screen,"指挥");click(screen,"驾驶员登机");}
             case "close", "close_radio", "close_pilot" -> screen.keyPressed(256, 0, 0);
             default -> throw new IllegalStateException(request);

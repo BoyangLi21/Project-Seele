@@ -160,19 +160,21 @@ public final class StaffConversationR24
             }
             send(player, npc, session, false); return;
         }
-        if (request.startsWith("BOARD:") || request.startsWith("PILOT:"))
+        if (request.startsWith("BOARD:") || request.startsWith("PILOT:") || request.startsWith("STANDBY:"))
         {
             try
             {
-                int unit = Integer.parseInt(request.substring(6));
+                int unit = Integer.parseInt(request.substring(request.indexOf(':')+1));
                 if (unit < 0 || unit > 2) return;
-                if (request.startsWith("BOARD:"))
+                if (request.startsWith("BOARD:") || request.startsWith("STANDBY:"))
                 {
                     if (!NervStaffDialogue.authorized(player) || !StaffAuthorityR25.allows(npc, "board"))
                         session.reply = "本岗位无权调遣驾驶员，请联络美里、律子或冬月。";
                     else
                     {
-                        session.reply = StaffPilotOrdersR25.request(player,npc,unit);
+                        session.reply = request.startsWith("STANDBY:")
+                                ? StaffPilotOrdersR25.returnToStandby(player,npc,unit)
+                                : StaffPilotOrdersR25.request(player,npc,unit);
                     }
                 }
                 else

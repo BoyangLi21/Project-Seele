@@ -25,10 +25,11 @@ public final class FacilityLiftsR25
     {
         if (!level.dimension().equals(FacilitySchemaV2.DIMENSION) || !ACTIVE.computeIfAbsent(level,
                 l -> Files.isRegularFile(l.getServer().getWorldPath(LevelResource.ROOT).resolve("facility_lifts_r25.json")))) return List.of();
+        boolean internal=Files.isRegularFile(level.getServer().getWorldPath(LevelResource.ROOT).resolve("facility_lifts_r26.json"));
         var east = new S20PhysicalElevatorDirector.LiftSpec(EAST,
-                java.util.stream.IntStream.of(-448,-434,-420,-406,-392).mapToObj(y ->
+                java.util.Arrays.stream(internal?new int[]{-461,-448,-434,-420,-406,-392,-378,-364}:new int[]{-448,-434,-420,-406,-392}).mapToObj(y ->
                         new S20PhysicalElevatorDirector.Landing("东翼 " + y + " · 指挥室联络",
-                                new BlockPos(73,y,253),Direction.SOUTH)).toList());
+                                new BlockPos(internal?66:73,y,internal?302:253),Direction.SOUTH)).toList());
         var west = new S20PhysicalElevatorDirector.LiftSpec(OBSERVATION,
                 new S20PhysicalElevatorDirector.Landing("机库登机层",new BlockPos(-29,-394,-278),Direction.NORTH),
                 new S20PhysicalElevatorDirector.Landing("三机观察廊",new BlockPos(-29,-367,-278),Direction.NORTH));

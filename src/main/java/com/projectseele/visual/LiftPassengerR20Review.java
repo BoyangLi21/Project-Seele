@@ -20,7 +20,8 @@ public final class LiftPassengerR20Review
 {
     private static final boolean DESCENT="r22-lift-descend".equals(System.getProperty("projectseele.regionalBuild",""));
     private static final boolean ALL="r22-lifts-all".equals(System.getProperty("projectseele.regionalBuild",""));
-    private static final boolean R25="r25-lifts".equals(System.getProperty("projectseele.regionalBuild",""));
+    private static final boolean R26="r26-lifts".equals(System.getProperty("projectseele.regionalBuild",""));
+    private static final boolean R25=R26||"r25-lifts".equals(System.getProperty("projectseele.regionalBuild",""));
     public static final boolean R22=R25||ALL||DESCENT||"r22-lifts".equals(System.getProperty("projectseele.regionalBuild",""));
     private static final boolean R21="r21-lifts".equals(System.getProperty("projectseele.regionalBuild",""));
     public static final boolean ENABLED=R22||R21||Set.of("r20-lift","r20-lift-rest").contains(System.getProperty("projectseele.regionalBuild",""));
@@ -38,14 +39,14 @@ public final class LiftPassengerR20Review
         ProjectSeele.LOGGER.warn("R21 LIFT DAMAGE {}",r);
     }
     private static double minimumFloorError=100,maximumWallOverflow;
-    private static final String[] IDS=R25?new String[]{FacilityLiftsR25.EAST,FacilityLiftsR25.EAST,FacilityLiftsR25.EAST,FacilityLiftsR25.EAST,FacilityLiftsR25.EAST,FacilityLiftsR25.EAST,FacilityLiftsR25.OBSERVATION,FacilityLiftsR25.OBSERVATION}:new String[]{S20PhysicalElevatorDirector.COMMAND_REAR_LIFT_ID,S20PhysicalElevatorDirector.COMMAND_REAR_LIFT_ID,S20PhysicalElevatorDirector.SURFACE_TRANSIT_LIFT_ID,S20PhysicalElevatorDirector.SURFACE_TRANSIT_LIFT_ID,NervLiftPassengerSync.GATEWAY,NervLiftPassengerSync.GATEWAY,S20PhysicalElevatorDirector.COMPACT_CAGE_LIFT_ID,S20PhysicalElevatorDirector.COMPACT_CAGE_LIFT_ID,S20PhysicalElevatorDirector.COMMANDER_OFFICE_LIFT_ID,S20PhysicalElevatorDirector.COMMANDER_OFFICE_LIFT_ID};
-    private static final int[] FROM=R25?new int[]{-448,-392,-434,-420,-406,-448,-394,-367}:new int[]{-566,-448,-442,81,-466,81,-442,-370,-388,-340};
-    private static final int[] TO=R25?new int[]{-392,-434,-420,-406,-448,-434,-367,-394}:new int[]{-448,-566,81,-442,81,-466,-370,-394,-340,-388};
+    private static final String[] IDS=R26?new String[]{FacilityLiftsR25.EAST,FacilityLiftsR25.EAST,FacilityLiftsR25.EAST,FacilityLiftsR25.EAST,FacilityLiftsR25.EAST,FacilityLiftsR25.EAST,FacilityLiftsR25.EAST,FacilityLiftsR25.EAST,FacilityLiftsR25.OBSERVATION,FacilityLiftsR25.OBSERVATION}:R25?new String[]{FacilityLiftsR25.EAST,FacilityLiftsR25.EAST,FacilityLiftsR25.EAST,FacilityLiftsR25.EAST,FacilityLiftsR25.EAST,FacilityLiftsR25.EAST,FacilityLiftsR25.OBSERVATION,FacilityLiftsR25.OBSERVATION}:new String[]{S20PhysicalElevatorDirector.COMMAND_REAR_LIFT_ID,S20PhysicalElevatorDirector.COMMAND_REAR_LIFT_ID,S20PhysicalElevatorDirector.SURFACE_TRANSIT_LIFT_ID,S20PhysicalElevatorDirector.SURFACE_TRANSIT_LIFT_ID,NervLiftPassengerSync.GATEWAY,NervLiftPassengerSync.GATEWAY,S20PhysicalElevatorDirector.COMPACT_CAGE_LIFT_ID,S20PhysicalElevatorDirector.COMPACT_CAGE_LIFT_ID,S20PhysicalElevatorDirector.COMMANDER_OFFICE_LIFT_ID,S20PhysicalElevatorDirector.COMMANDER_OFFICE_LIFT_ID};
+    private static final int[] FROM=R26?new int[]{-461,-364,-448,-434,-420,-406,-392,-378,-394,-367}:R25?new int[]{-448,-392,-434,-420,-406,-448,-394,-367}:new int[]{-566,-448,-442,81,-466,81,-442,-370,-388,-340};
+    private static final int[] TO=R26?new int[]{-364,-448,-434,-420,-406,-392,-378,-461,-367,-394}:R25?new int[]{-392,-434,-420,-406,-448,-434,-367,-394}:new int[]{-448,-566,81,-442,81,-466,-370,-394,-340,-388};
     private static void require(boolean value,String why){if(!value)throw new IllegalStateException(why);}
     @SubscribeEvent public static void tick(TickEvent.ServerTickEvent e)
     {
         if(!ENABLED||finished||e.phase!=TickEvent.Phase.END||!clientReady||e.getServer().getPlayerList().getPlayers().isEmpty())return;
-        Path world=e.getServer().getWorldPath(LevelResource.ROOT).normalize();require(world.getFileName().toString().equals(R25?"SEELE_R25_REVIEW":R22?"SEELE_R22_REVIEW":R21?"SEELE_R21_REVIEW":"SEELE_R20_REVIEW"),"Lift review boundary");
+        Path world=e.getServer().getWorldPath(LevelResource.ROOT).normalize();require(world.getFileName().toString().equals(R26?"SEELE_R26_REVIEW":R25?"SEELE_R25_REVIEW":R22?"SEELE_R22_REVIEW":R21?"SEELE_R21_REVIEW":"SEELE_R20_REVIEW"),"Lift review boundary");
         var player=e.getServer().getPlayerList().getPlayers().get(0);var level=e.getServer().getLevel(FacilitySchemaV2.DIMENSION);
         try
         {

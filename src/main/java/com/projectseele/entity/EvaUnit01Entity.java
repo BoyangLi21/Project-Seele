@@ -712,6 +712,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
         this.entityData.define(DATA_ENTRY_PLUG_INSERTED, false);
         this.entityData.define(DATA_NERV_LOGISTICS_LOCKED, false);
         this.entityData.define(DATA_NERV_LOGISTICS_YAW, SILO_BAY_YAW);
+        this.entityData.define(DATA_CARRIER_RISE_R26,0F);
         this.entityData.define(DATA_VISUAL_POSE, VISUAL_NORMAL);
         this.entityData.define(DATA_LAUNCH_PHASE, LAUNCH_IDLE);
         this.entityData.define(DATA_LAUNCH_TICKS, 0);
@@ -770,6 +771,8 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
         tag.putBoolean("SeeleNervLogisticsLocked", this.isNervLogisticsLocked());
         tag.putFloat("SeeleNervLogisticsYaw", this.entityData.get(DATA_NERV_LOGISTICS_YAW));
         tag.putInt("SeelePowerTicks", this.getPowerTicks());
+        tag.putBoolean("SeeleBatterySession",this.batterySessionArmed);
+        tag.putFloat("SeeleCarrierRise",this.entityData.get(DATA_CARRIER_RISE_R26));
         tag.putBoolean("SeeleUmbilicalSevered", this.isUmbilicalSevered());
         if (this.getUmbilicalAnchor() != null)
             tag.putLong("SeeleUmbilicalAnchor", this.getUmbilicalAnchor().asLong());
@@ -855,6 +858,8 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
                 ? Math.max(1, tag.getInt("SeeleBerserkTicks")) : 0);
         this.berserkRecoveryTicks = Math.max(0,
                 tag.getInt("SeeleBerserkRecoveryTicks"));
+        this.batterySessionArmed=tag.getBoolean("SeeleBatterySession");
+        this.entityData.set(DATA_CARRIER_RISE_R26,tag.getFloat("SeeleCarrierRise"));
         this.setUmbilicalAnchor(tag.contains("SeeleUmbilicalAnchor") && !this.isUmbilicalSevered()
                 ? BlockPos.of(tag.getLong("SeeleUmbilicalAnchor")) : null);
         ResourceLocation sortieLocation = tag.contains("SeeleSortieDimension")
@@ -989,6 +994,11 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
     {
         return this.berserkRecoveryTicks;
     }
+
+    private static final EntityDataAccessor<Float> DATA_CARRIER_RISE_R26 = SynchedEntityData.defineId(EvaUnit01Entity.class,EntityDataSerializers.FLOAT);
+    private float oldCarrierRiseR26;
+    public void setCarrierRiseProgress(float progress) { this.entityData.set(DATA_CARRIER_RISE_R26,Mth.clamp(progress,0,1)); }
+    public float carrierRiseProgress(float partial) { return Mth.lerp(partial,this.oldCarrierRiseR26,this.entityData.get(DATA_CARRIER_RISE_R26)); }
 
     public int getPowerCapacityTicks()
     {
@@ -1131,6 +1141,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
     {
         return this.clampPilotWeaponPitch(this.entityData.get(DATA_CANNON_AIM_PITCH),1);
     }
+    private boolean batterySessionArmed;
 
     /** Supported prone fire has a neck/receiver arc, continuous through stance changes. */
     public float clampPilotWeaponPitch(float pitch,float partial)
@@ -3431,6 +3442,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
                 && this.getPilotEntity() != null;
         if (!controlCircuitClosed)
         {
+            this.batterySessionArmed = false;
             this.setUmbilicalAnchor(null);
             if (this.isInsideActiveAssignedHangar(server))
             {
@@ -3440,9 +3452,17 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
             return;
         }
 
+        if (!this.batterySessionArmed)
+        {
+            this.entityData.set(DATA_POWER_TICKS, this.getPowerCapacityTicks());
+            this.batterySessionArmed = true;
+        }
+        boolean surfacePower = this.getY() >= 64 && this.getLaunchPhase() != LAUNCH_ASCENT
+                && (!this.isNervLogisticsLocked() || this.getY() >= 80);
         int range = SeeleConfig.COMMON_SPEC.isLoaded()
                 ? SeeleConfig.UMBILICAL_RANGE.get() : 768;
         BlockPos anchor = this.getUmbilicalAnchor();
+        if (!surfacePower || anchor != null && anchor.getY()<32) anchor=null;
         if (anchor != null && this.position().distanceToSqr(Vec3.atCenterOf(anchor)) <= (double) range * range)
             com.projectseele.world.EvaPowerLinkR25.retain(server, anchor);
         boolean anchorValid = anchor != null
@@ -3463,17 +3483,17 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
             BlockPos surface=UmbilicalPylonBlockEntity.findNearest(server,this.position(),Math.min(range,128),32);
             if(surface!=null)anchor=surface;
         }
-        if (wasConnected && anchor == null
+        if (surfacePower && wasConnected && anchor == null
                 && !this.isNervLogisticsLocked())
         {
             // A cable that was pulled past its limit or lost its socket does
             // not silently reconnect on the next one-second pylon scan.
             this.entityData.set(DATA_UMBILICAL_SEVERED, true);
         }
-        if (anchor == null && !this.isUmbilicalSevered() && --this.powerCheckCooldown <= 0)
+        if (surfacePower && anchor == null && !this.isUmbilicalSevered() && --this.powerCheckCooldown <= 0)
         {
             anchor = UmbilicalPylonBlockEntity.findNearest(
-                    server, this.position(), range);
+                    server, this.position(), range,32);
             this.powerCheckCooldown = 20;
         }
 
@@ -3907,6 +3927,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
     @Override
     public void aiStep()
     {
+        this.oldCarrierRiseR26=this.entityData.get(DATA_CARRIER_RISE_R26);
         FIRST_BATTLE.clientPhysics(this);
         if(this.isFirstBattleActive())
         {
@@ -5079,6 +5100,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
 
     private void finishTransferredSortie(float yaw)
     {
+        this.setCarrierRiseProgress(0);
         this.entityData.set(DATA_LAUNCH_PHASE, LAUNCH_IDLE);
         this.entityData.set(DATA_LAUNCH_TICKS, 0);
         // A completed or aborted launch is a hard boundary for the cockpit

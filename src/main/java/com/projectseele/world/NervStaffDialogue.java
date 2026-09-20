@@ -35,6 +35,11 @@ public final class NervStaffDialogue
         say(player,npc.getName().getString(),line);
         StaffConversationR24.note(player,npc,line);
     }
+    public static void greet(ServerPlayer player,NervStaffEntity npc)
+    {
+        say(player,npc.getName().getString(),StaffDialogueCatalogR24.line(
+                npc.skin(),npc.staffRole(),"greeting",player.tickCount/40+npc.getId()));
+    }
     private static MutableComponent option(String text,String command)
     {return Component.literal("["+text+"] ").withStyle(s->s.withColor(ChatFormatting.GOLD).withClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND,command)));}
     public static String stage(String value)

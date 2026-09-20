@@ -869,7 +869,7 @@ public final class EvaHangarBuilder
     /** Top of the suspension, where the crane cables meet the rail. */
     public static int craneRailAboveBed()
     {
-        return CHAMBER_HEIGHT - 1;
+        return 70;
     }
 
     /**

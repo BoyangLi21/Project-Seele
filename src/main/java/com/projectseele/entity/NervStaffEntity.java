@@ -52,6 +52,8 @@ public final class NervStaffEntity extends PathfinderMob
         float t=age<6?net.minecraft.util.Mth.clamp(age/6,0,1):age<10?1:net.minecraft.util.Mth.clamp((16-age)/6,0,1);
         return t*t*(3-2*t);
     }
+    @Override protected net.minecraft.world.entity.ai.navigation.PathNavigation createNavigation(Level level)
+    {return new StaffNavigationR26(this,level);}
     public boolean beginPressGesture(BlockPos target)
     {
         if(entityData.get(PRESS_START)<0){entityData.set(PRESS_TARGET,target.immutable());entityData.set(PRESS_START,level().getGameTime());entityData.set(ACTIVITY,2);}
@@ -97,7 +99,7 @@ public final class NervStaffEntity extends PathfinderMob
     {
         if(hand!=InteractionHand.MAIN_HAND)return InteractionResult.PASS;
         if(player instanceof net.minecraft.server.level.ServerPlayer server)
-        {if(player.isShiftKeyDown())NervStaffDialogue.openChat(server,this);else NervStaffDialogue.open(server,this);}
+        {NervStaffDialogue.greet(server,this);}
         return InteractionResult.sidedSuccess(level().isClientSide);
     }
     @Override public boolean removeWhenFarAway(double distance){return false;}

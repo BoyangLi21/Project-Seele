@@ -227,8 +227,8 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
         boolean nervFloodlit = entity.isNervLogisticsLocked()
                 || entity instanceof com.projectseele.entity.EvaPrototypeEntity prototype && prototype.isInsideTestHangar()
                 || entity.getLaunchPhase() == EvaUnit01Entity.LAUNCH_ASCENT;
-        if (entity.hasActiveCarrierMotion()
-                || entity.isNervLogisticsLocked() && !entity.isExperimentalUnit() && entity.getY() < 0)
+        if (!entity.isExperimentalUnit() && (entity.hasActiveCarrierMotion()
+                || entity.getLaunchPhase()==EvaUnit01Entity.LAUNCH_CLEAR || entity.carrierRiseProgress(partialTick)>.001F))
         {
             // The deck is one rigid piece of the rendered EVA assembly.  It
             // has no independent entity, packet clock or culling lifetime.

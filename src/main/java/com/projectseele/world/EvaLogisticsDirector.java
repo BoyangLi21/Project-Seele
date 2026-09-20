@@ -1206,6 +1206,15 @@ public final class EvaLogisticsDirector
         BlockPos hangar = hangarBed(level, variant);
         BlockPos silo = lowerLiftBed(level, variant);
         BlockPos surface = surfaceLiftBed(level, variant);
+        float rackRise = switch(entry.phase())
+        {
+            case DRAINING -> com.projectseele.entity.EvaDorsalMechanism.smooth(entry.ticks()/100F);
+            case TO_SILO, SILO_READY, DESCENDING, TO_HANGAR -> 1F;
+            case FILLING -> 1-com.projectseele.entity.EvaDorsalMechanism.smooth(entry.ticks()/80F);
+            case DEPLOYED -> unit.getLaunchPhase()==EvaUnit01Entity.LAUNCH_CLEAR ? 1F : 0F;
+            default -> 0F;
+        };
+        unit.setCarrierRiseProgress(rackRise);
         NervCarrierVisuals.updateLclSurface(level, unit,
                 hangar.getX() + 0.5D, hangar.getY(),
                 hangar.getZ() + 0.5D, visualLclLevel(entry));
@@ -1583,6 +1592,13 @@ public final class EvaLogisticsDirector
                 NervCarrierVisuals.update(level, unit,
                         hangar.getX() + 0.5D, hangar.getY(),
                         hangar.getZ() + 0.5D, restraint);
+                if(ticks<80)
+                {
+                    // Close the fixed restraints and sink the transfer rack
+                    // before the reverse capsule sweep enters that volume.
+                    put(level,variant,entry.withPhase(Phase.FILLING,ticks,entry.carrier(),entry.lclLayers()));
+                    break;
+                }
                 EntryPlugCarrierEntity plug =
                         EntryPlugDirector.canonical(level, variant);
                 if (plug == null)

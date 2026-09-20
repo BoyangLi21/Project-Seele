@@ -240,6 +240,8 @@ public final class EvaHud
         ChatFormatting synchroColour = synchro < 25.0F ? ChatFormatting.RED
                 : synchro >= 50.0F ? ChatFormatting.GREEN : ChatFormatting.GOLD;
         String syncText=String.format("SYNCHRO  %.1f%%",synchro);
+        String radioHint=Keybinds.COMMAND_RADIO.getTranslatedKeyMessage().getString()+"  指挥通信";
+        guiGraphics.drawString(gui.getFont(),radioHint,m+6,height-m-15,0xFFB8D4C0);
         guiGraphics.drawString(gui.getFont(),Component.literal(syncText).withStyle(synchroColour),width-12-gui.getFont().width(syncText),m+6,NERV_ORANGE);
         String roleKey = eva.isExperimentalUnit()?"hud.projectseele.role_experimental":switch (eva.getUnitVariant())
         {

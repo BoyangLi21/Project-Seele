@@ -107,8 +107,9 @@ public final class StaffConversationScreen extends Screen
             int half = (panelWidth - 28) / 2;
             addButton("整备后发射", x + 12, controlsY + 44, half, () -> send("整备后发射 0" + unit), permitted("deploy"));
             addButton("取消后续操作", x + 16 + half, controlsY + 44, half, () -> send("停止操作"), true);
-            addButton("驾驶员登机", x + 12, controlsY + 66, half, () -> send("BOARD:" + unit), permitted("board"));
-            addButton("部署就近武器井", x + 16 + half, controlsY + 66, half, () -> send("WEAPONS"), permitted("weapons"));
+            addButton("驾驶员登机", x + 12, controlsY + 66, column, () -> send("BOARD:" + unit), permitted("board"));
+            addButton("下机返回待命", x + 16 + column, controlsY + 66, column, () -> send("STANDBY:" + unit), permitted("board"));
+            addButton("部署武器井", x + 20 + column*2, controlsY + 66, column, () -> send("WEAPONS"), permitted("weapons"));
         }
         else if(tab==2)
         {
