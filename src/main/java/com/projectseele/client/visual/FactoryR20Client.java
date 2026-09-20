@@ -33,8 +33,9 @@ public final class FactoryR20Client
         if(!FactoryR20Review.ENABLED||e.phase!=TickEvent.Phase.END)return;var mc=Minecraft.getInstance();mc.options.pauseOnLostFocus=false;if(mc.screen instanceof PauseScreen)mc.setScreen(null);
         if(FactoryR20Review.finished){if(distance>=0){mc.options.renderDistance().set(distance);mc.options.broadcastOptions();mc.options.hideGui=oldGui;distance=-1;}if(!closing){writer.shutdown();closing=true;}if(writer.isTerminated()&&++exit==1&&folder!=null){try{JsonObject report=new JsonObject();report.addProperty("source","Unmodified native framebuffer; real F5 pilot camera and carrier motion");report.addProperty("dropped",dropped);report.addProperty("write_failure",frameError);report.add("frames",frames);Files.writeString(folder.resolve("frames.json"),report.toString());}catch(Exception x){throw new IllegalStateException(x);}}if(exit>30)mc.stop();return;}
         if(mc.player==null||mc.level==null||mc.screen!=null)return;
-        if(distance<0){distance=mc.options.renderDistance().get();oldGui=mc.options.hideGui;mc.options.hideGui=true;mc.options.renderDistance().set(10);mc.options.broadcastOptions();mc.options.setCameraType(CameraType.THIRD_PERSON_BACK);folder=mc.gameDirectory.toPath().resolve(("r21-factory".equals(System.getProperty("projectseele.regionalBuild",""))?"../artifacts/world_repair_r21/factory/native_cycle_":"../artifacts/world_rebuild_r20/factory/native_cycle_")+System.currentTimeMillis());try{Files.createDirectories(folder);}catch(Exception x){throw new IllegalStateException(x);}}
+        if(distance<0){distance=mc.options.renderDistance().get();oldGui=mc.options.hideGui;mc.options.hideGui=true;mc.options.renderDistance().set(10);mc.options.broadcastOptions();mc.options.setCameraType(CameraType.THIRD_PERSON_BACK);folder=mc.gameDirectory.toPath().resolve((FactoryR20Review.R27?"../artifacts/facility_r27/native_cycle_":"r21-factory".equals(System.getProperty("projectseele.regionalBuild",""))?"../artifacts/world_repair_r21/factory/native_cycle_":"../artifacts/world_rebuild_r20/factory/native_cycle_")+System.currentTimeMillis());try{Files.createDirectories(folder);}catch(Exception x){throw new IllegalStateException(x);}}
         FactoryR20Review.ready=true;age++;
+        if(FactoryR20Review.R27)mc.options.setCameraType(age%180<90?CameraType.THIRD_PERSON_BACK:CameraType.THIRD_PERSON_FRONT);
         if(!inputPhase.equals(FactoryR20Review.phase)){inputPhase=FactoryR20Review.phase;phaseTicks=0;}else phaseTicks++;
         if("r21-factory".equals(System.getProperty("projectseele.regionalBuild","")))
         {
@@ -62,7 +63,8 @@ public final class FactoryR20Client
         JsonObject f=new JsonObject();String name=String.format("frame_%05d.jpg",frames.size());f.addProperty("file",name);f.addProperty("seconds",(now-began)/1e9);f.addProperty("phase",phase);f.addProperty("fps",mc.getFps());f.addProperty("mechanical_closeup",cameraView()!=null);
         var camera=mc.gameRenderer.getMainCamera().getPosition();f.addProperty("camera_x",camera.x);f.addProperty("camera_y",camera.y);f.addProperty("camera_z",camera.z);
         var eva=com.projectseele.world.EvaPilotResolver.controlTarget(mc.player);
-        if(eva!=null){var p=eva.carrierRenderPosition(mc.getFrameTime());f.addProperty("carrier",eva.hasActiveCarrierMotion());f.addProperty("eva_x",p.x);f.addProperty("eva_y",p.y);f.addProperty("eva_z",p.z);}
+        f.addProperty("locked_capsule",!(mc.player.getVehicle() instanceof com.projectseele.entity.EntryPlugCarrierEntity plug)||plug.isLockedToEva());
+        if(eva!=null){var p=eva.hasActiveCarrierMotion()?eva.carrierRenderPosition(mc.getFrameTime()):eva.getPosition(mc.getFrameTime());f.addProperty("carrier",eva.hasActiveCarrierMotion());f.addProperty("locked",eva.isNervLogisticsLocked());f.addProperty("camera_type",mc.options.getCameraType().name());f.addProperty("eva_x",p.x);f.addProperty("eva_y",p.y);f.addProperty("eva_z",p.z);}
         var im=Screenshot.takeScreenshot(mc.getMainRenderTarget());frames.add(f);writer.execute(()->{try(im){NativeReviewFrames.writeJpeg(im,folder.resolve(name));}catch(Exception x){frameError=x.toString();}});
     }
 }

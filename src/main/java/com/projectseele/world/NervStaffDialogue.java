@@ -102,6 +102,13 @@ public final class NervStaffDialogue
             case CANCEL -> { return StaffCommandBookR24.cancel(player,npc,intent.unit()); }
             case ACTION ->
             {
+                if(intent.subject().startsWith("city_"))
+                {
+                    if(!authorized(player)||!StaffAuthorityR25.allows(npc,intent.subject()))
+                    {reply(player,npc,"城市升降由总指挥席的冬月负责，请联络冬月。");return 0;}
+                    if(npc.busy()||StaffCommandBookR24.order(npc)!=null){reply(player,npc,"正在操作控制台，请稍候。");return 0;}
+                    return beginNativeAction(player,npc,intent.subject(),-1);
+                }
                 if(intent.subject().equals("board"))
                 {reply(player,npc,StaffPilotOrdersR25.request(player,npc,intent.unit()));return 1;}
                 return StaffCommandBookR24.request(player,npc,intent.subject(),intent.unit());
@@ -127,6 +134,12 @@ public final class NervStaffDialogue
                 }
                 else if(intent.subject().equals("campaign"))
                     reply(player,npc,com.projectseele.event.TvCampaignDirector.briefing(player));
+                else if(intent.subject().equals("city"))
+                {
+                    var origin=IntegratedNervMapBuilder.tokyo3Origin(player.serverLevel());
+                    int depth=Tokyo3RetractionDirector.depth(player.serverLevel(),origin);
+                    reply(player,npc,"第三新东京市当前下沉深度："+depth+" 米。城市升降由最高指挥席的冬月操作；电话中联络冬月后选择「城市」。");
+                }
                 else if(intent.subject().equals("directions"))
                     reply(player,npc,npc.staffRole().startsWith("un_")
                         ?"请沿基地的人员标线前往车辆区、航空区或试验机库，避开滑行道和舱门作业范围。总部步行引导仅在地下总部公共通道内可用。"
@@ -163,22 +176,34 @@ public final class NervStaffDialogue
         if(!StaffAuthorityR25.allows(npc,op)||!authorized(player)||npc.busy())return 0;
         BlockPos control=NervOperationsConsole.staffControl(player.serverLevel(),op,variant);
         if(control==null||!(player.serverLevel().getBlockState(control).getBlock() instanceof ButtonBlock)){reply(player,npc,"对应实体按键不可用，操作中止。");return 0;}
-        BlockPos approach=approach(npc,control);
+        BlockPos approach=approach(npc,control,op.startsWith("city_"));
         if(approach==null){reply(player,npc,"通往按键的路径受阻，请先清理控制台旁的通道。");return 0;}
+        if(op.startsWith("city_"))
+        {
+            npc.begin(player.getUUID(),op,variant,control,approach);
+            reply(player,npc,"收到。我去操作城市"+(op.equals("city_rise")?"升起":"降下")+"按键。执行前仍检查城市运行状态。");return 1;
+        }
         EvaLogisticsDirector.loadControlTarget(player.serverLevel(),variant);
         npc.begin(player.getUUID(),op,variant,control,approach);reply(player,npc,"收到。我去操作 EVA-"+String.format(Locale.ROOT,"%02d",variant)+" 的"+(op.equals("prepare")?"整备":op.equals("launch")?"发射":"回收")+"按键。联锁检查仍然有效。");return 1;
     }
-    private static BlockPos approach(NervStaffEntity npc,BlockPos button)
+    private static BlockPos approach(NervStaffEntity npc,BlockPos button,boolean city)
     {
         var level=(ServerLevel)npc.level();List<BlockPos> options=new ArrayList<>();var buttonState=level.getBlockState(button);
-        var facing=buttonState.getValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.HORIZONTAL_FACING);Vec3 outward=Vec3.atLowerCornerOf(facing.getNormal());
+        var facing=buttonState.getValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.HORIZONTAL_FACING);
+        var normal=switch(buttonState.getValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.ATTACH_FACE))
+        {case FLOOR->net.minecraft.core.Direction.UP;case CEILING->net.minecraft.core.Direction.DOWN;case WALL->facing;};
+        Vec3 outward=Vec3.atLowerCornerOf(normal.getNormal());
+        Vec3 contact=Vec3.atLowerCornerOf(button).add(buttonState.getShape(level,button).bounds().getCenter());
         for(BlockPos p:BlockPos.betweenClosed(button.offset(-3,-3,-3),button.offset(3,0,3)))
         {
+            // City keys sit on a desk. Approach from the posted dais floor,
+            // never select the desktop/button as a shorter standing position.
+            if(city&&p.getY()!=npc.station().getY())continue;
             if(!level.hasChunkAt(p)||level.getBlockState(p.below()).getCollisionShape(level,p.below()).isEmpty())continue;
             if(!level.noCollision(npc,new AABB(p.getX()+.2,p.getY()+.01,p.getZ()+.2,p.getX()+.8,p.getY()+1.8,p.getZ()+.8)))continue;
             Vec3 eye=Vec3.atBottomCenterOf(p).add(0,1.5,0);
-            if(eye.distanceToSqr(Vec3.atCenterOf(button))>6.25||eye.subtract(Vec3.atCenterOf(button)).dot(outward)<.3)continue;
-            var hit=level.clip(new net.minecraft.world.level.ClipContext(eye,Vec3.atCenterOf(button),net.minecraft.world.level.ClipContext.Block.COLLIDER,net.minecraft.world.level.ClipContext.Fluid.NONE,npc));
+            if(eye.distanceToSqr(contact)>6.25||eye.subtract(contact).dot(outward)<.3)continue;
+            var hit=level.clip(new net.minecraft.world.level.ClipContext(eye,contact,net.minecraft.world.level.ClipContext.Block.COLLIDER,net.minecraft.world.level.ClipContext.Fluid.NONE,npc));
             if(hit.getType()!=HitResult.Type.MISS&&!hit.getBlockPos().equals(button))continue;options.add(p.immutable());
         }
         options.sort(Comparator.<BlockPos>comparingDouble(p->Vec3.atBottomCenterOf(p).distanceToSqr(Vec3.atCenterOf(button))).thenComparingDouble(p->npc.distanceToSqr(Vec3.atBottomCenterOf(p))));
@@ -188,10 +213,15 @@ public final class NervStaffDialogue
     public static void tickTask(NervStaffEntity npc,UUID owner,String operation,int variant,BlockPos control,BlockPos approach,int ticks)
     {
         var level=(ServerLevel)npc.level();var player=level.getServer().getPlayerList().getPlayer(owner);
+        boolean city=operation.equals("city_rise")||operation.equals("city_lower");
         if(ticks%40==0&&"r15-staff-controls".equals(System.getProperty("projectseele.regionalBuild","")))ProjectSeele.LOGGER.info("STAFF CONTROL TRACE actor={} pos={} target={} navDone={} onGround={} loaded={}",npc.memberId(),npc.position(),approach,npc.getNavigation().isDone(),npc.onGround(),EvaLogisticsDirector.status(level,variant).loaded());
-        if(player==null||player.level()!=level||(StaffCommandBookR24.order(npc)==null&&player.distanceToSqr(npc)>48*48)||!authorized(player)||!StaffAuthorityR25.allows(npc,operation)||ticks>300)
-        {StaffCommandBookR24.failed(npc,"按键操作已中止：通讯中断、权限改变或路径超时。");npc.finishTask();return;}
-        if(ticks%20==0&&!EvaLogisticsDirector.status(level,variant).loaded())EvaLogisticsDirector.loadControlTarget(level,variant);
+        if(player==null||player.level()!=level||(StaffCommandBookR24.order(npc)==null&&player.distanceToSqr(npc)>48*48&&!(city&&StaffConversationR24.radioAllowed(player)))||!authorized(player)||!StaffAuthorityR25.allows(npc,operation)||ticks>300)
+        {
+            if(city&&player!=null)reply(player,npc,"城市按键操作已中止：通讯中断、权限改变或路径超时。");
+            else StaffCommandBookR24.failed(npc,"按键操作已中止：通讯中断、权限改变或路径超时。");
+            npc.finishTask();return;
+        }
+        if(!city&&ticks%20==0&&!EvaLogisticsDirector.status(level,variant).loaded())EvaLogisticsDirector.loadControlTarget(level,variant);
         if(npc.distanceToSqr(Vec3.atBottomCenterOf(approach))>.16)
         {
             if(npc.getNavigation().isDone()&&npc.distanceToSqr(Vec3.atBottomCenterOf(approach))<1.2)
@@ -203,7 +233,7 @@ public final class NervStaffDialogue
         float facing=(float)Math.toDegrees(Math.atan2(-(control.getX()+.5-npc.getX()),control.getZ()+.5-npc.getZ()));
         npc.setYRot(net.minecraft.util.Mth.approachDegrees(npc.getYRot(),facing,18));npc.yBodyRot=npc.getYRot();
         if(Math.abs(net.minecraft.util.Mth.wrapDegrees(facing-npc.getYRot()))>12)return;
-        if(!EvaLogisticsDirector.status(level,variant).loaded()&&ticks<240)return;
+        if(!city&&!EvaLogisticsDirector.status(level,variant).loaded()&&ticks<240)return;
         if(!npc.beginPressGesture(control))return;
         var state=level.getBlockState(control);
         if(!(state.getBlock() instanceof ButtonBlock)||state.getValue(ButtonBlock.POWERED))
@@ -212,7 +242,15 @@ public final class NervStaffDialogue
         // Physical depression and the existing authoritative console dispatcher are
         // separate in the original player interaction hook. Invoke each exactly once.
         state.use(level,player,InteractionHand.MAIN_HAND,new BlockHitResult(Vec3.atCenterOf(control),net.minecraft.core.Direction.UP,control,false));
-        boolean handled=NervOperationsConsole.handleUse(player,control);var status=EvaLogisticsDirector.status(level,variant);
+        boolean handled=NervOperationsConsole.handleUse(player,control);
+        if(city)
+        {
+            var result=handled?NervOperationsConsole.lastOutcome(level,player,control):null;
+            reply(player,npc,result!=null&&result.accepted()?"城市"+(operation.equals("city_rise")?"升起":"降下")+"指令已接受。":"城市控制未接受指令："+(result==null?"控制台无响应。":result.message()));
+            ProjectSeele.LOGGER.info("STAFF CITY actor={} operation={} button={} accepted={}",npc.memberId(),operation,control,result!=null&&result.accepted());
+            npc.finishTask();return;
+        }
+        var status=EvaLogisticsDirector.status(level,variant);
         var outcome=handled?NervOperationsConsole.lastOutcome(level,player,control):null;
         boolean accepted=outcome!=null&&outcome.accepted();
         if(StaffCommandBookR24.order(npc)==null||accepted&&!operation.equals("launch"))

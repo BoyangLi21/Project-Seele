@@ -20,7 +20,8 @@ import java.util.*;
 public final class FactoryR20Review
 {
     private static final boolean R21="r21-factory".equals(System.getProperty("projectseele.regionalBuild",""));
-    public static final boolean ENABLED=R21||"r20-factory".equals(System.getProperty("projectseele.regionalBuild",""));
+    public static final boolean R27="r27-factory".equals(System.getProperty("projectseele.regionalBuild",""));
+    public static final boolean ENABLED=R27||R21||"r20-factory".equals(System.getProperty("projectseele.regionalBuild",""));
     public static volatile boolean ready,finished;public static volatile String phase="setup";
     private static int age,state,timer;private static Path world;private static ServerLevel level;private static ServerPlayer player;
     private static UUID evaId,plugId;private static final JsonArray samples=new JsonArray();private static Vec3 last;
@@ -29,11 +30,12 @@ public final class FactoryR20Review
     @SubscribeEvent public static void tick(TickEvent.ServerTickEvent event)
     {
         if(!ENABLED||finished||!ready||event.phase!=TickEvent.Phase.END)return;
+        if(R27&&!FuyutsukiR27Review.finished)return;
         try
         {
             if(world==null)
             {
-                world=event.getServer().getWorldPath(LevelResource.ROOT).normalize();require(world.getFileName().toString().equals(R21?"SEELE_R21_REVIEW":"SEELE_R20_REVIEW"),"Review world boundary");
+                world=event.getServer().getWorldPath(LevelResource.ROOT).normalize();require(world.getFileName().toString().equals(R27?"SEELE_R27_REVIEW":R21?"SEELE_R21_REVIEW":"SEELE_R20_REVIEW"),"Review world boundary");
                 level=event.getServer().getLevel(FacilitySchemaV2.DIMENSION);player=event.getServer().getPlayerList().getPlayers().get(0);player.stopRiding();player.setGameMode(GameType.CREATIVE);player.teleportTo(level,30.5,-394,-267.5,0,0);
             }
             require(++age<14000,"Cycle timeout: "+phase);timer++;
@@ -69,7 +71,11 @@ public final class FactoryR20Review
                 case 2 ->
                 {
                     require(!current.equals("PLUG_FAULT"),"Plug fault");
-                    if(current.equals("SILO_READY")){require(Math.abs(eva.getY()+410)<.3&&Math.abs(eva.getZ()+35.5)<.3,"High launch arrival");require(EvaLogisticsDirector.requestLaunch(level,1).accepted(),"Launch rejected");next("launch");}
+                    if(current.equals("SILO_READY"))
+                    {
+                        if(R27&&++siloFrames<140)return;
+                        require(Math.abs(eva.getY()+410)<.3&&Math.abs(eva.getZ()+35.5)<.3,"High launch arrival");require(EvaLogisticsDirector.requestLaunch(level,1).accepted(),"Launch rejected");next("launch");
+                    }
                 }
                 case 3 ->{if(current.equals("DEPLOYED")){require(NervSiloDoorEntity.hasClosedSurfaceSupport(level,new BlockPos(30,79,-36)),"Surface support absent");next("free_surface_hold");}}
                 case 4 ->
@@ -94,5 +100,6 @@ public final class FactoryR20Review
             ProjectSeele.LOGGER.error("R20 factory review failed "+phase,e);try{Files.writeString(world.resolve("r20_factory_failure.txt"),phase+"\n"+e+"\n"+samples);}catch(Exception ignored){}finished=true;
         }
     }
+    private static int siloFrames;
     private FactoryR20Review(){}
 }

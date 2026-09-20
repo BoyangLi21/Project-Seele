@@ -71,6 +71,15 @@ public final class StaffIntentR24
         if (NEGATIVE.matcher(text).find())
             return new Intent(Kind.INVALID, "收到，不执行动作。", unit);
 
+        if (text.matches(".*(?:城市|第三新东京市).*(?:升起|上升|降下|下降|沉降).*"))
+        {
+            if (QUESTION.matcher(text).find()) return new Intent(Kind.TOPIC, "city", -1);
+            boolean up=text.contains("升起")||text.contains("上升");
+            boolean down=text.contains("降下")||text.contains("下降")||text.contains("沉降");
+            if(up==down)return new Intent(Kind.INVALID,"请明确选择城市升起或城市降下。",-1);
+            return new Intent(Kind.ACTION,up?"city_rise":"city_lower",-1);
+        }
+
         String body = UNIT.matcher(text).replaceAll("").strip();
         body = POLITE.matcher(body).replaceFirst("").replaceAll("[\\s,，]+", "")
                 .replaceFirst("(?:一下|吧|。|!|！)+$", "");

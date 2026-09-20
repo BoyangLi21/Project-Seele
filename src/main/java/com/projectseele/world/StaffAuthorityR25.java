@@ -12,6 +12,7 @@ public final class StaffAuthorityR25
     public static boolean allows(String role, String skin, String operation)
     {
         if (Set.of("guard", "un_guard", "medic", "technician", "un_crew").contains(role)) return false;
+        if (operation.equals("city_rise") || operation.equals("city_lower")) return skin.equals("fuyutsuki");
         if (skin.equals("misato") || skin.equals("fuyutsuki"))
             return Set.of("prepare", "launch", "recover", "deploy", "board", "weapons", "campaign").contains(operation);
         if (skin.equals("ritsuko")) return Set.of("prepare", "recover", "board").contains(operation);

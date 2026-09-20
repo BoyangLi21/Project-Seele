@@ -83,8 +83,10 @@ public abstract class CameraMixin
             long now=System.nanoTime();
             double dt=Math.min(.1,Math.max(0,(now-projectseele$carrierFrame)/1e9));
             Vec3 base=controlled.hasActiveCarrierMotion()?controlled.carrierRenderPosition(partialTick):controlled.getPosition(partialTick);
-            if(projectseele$carrierCameraId!=controlled.getId())projectseele$carrierPivotHeight=Math.max(25,Math.min(55,(subject.getVehicle() instanceof EntryPlugCarrierEntity plug?plug.getInterpolatedPilotEyePosition(partialTick):subject.getEyePosition(partialTick)).y-base.y));
-            else projectseele$carrierPivotHeight+=(30-projectseele$carrierPivotHeight)*(1-Math.exp(-1.5*dt));
+            // A 60-metre EVA needs a chest-height orbit even when the silo
+            // wall contracts its zoom. Never inherit the low rider seat or
+            // ease back toward the old 30-metre waist pivot.
+            projectseele$carrierPivotHeight=48;
             Vec3 pivot=base.add(0,projectseele$carrierPivotHeight,0);
             this.setPosition(pivot.x,pivot.y,pivot.z);
             double available=Math.max(.25,this.getMaxZoom(4)-2.0);

@@ -460,6 +460,8 @@ public final class NervOperationsConsole
     /** Returns true only for one of the seven exact NERV command buttons. */
     public static BlockPos staffControl(ServerLevel level,String operation,int variant)
     {
+        if(FacilityWorldPolicy.isS20Rebuild(level.getServer()) && (operation.equals("city_rise") || operation.equals("city_lower")))
+            return S24CoordinateTransform.apply(level.getServer(),S20_AUTHORED_CONTROLS[operation.equals("city_rise")?0:1]);
         if(variant<0||variant>2||!FacilityWorldPolicy.isS20Rebuild(level.getServer()))return null;
         int offset=switch(operation){case "prepare"->6;case "launch"->9;case "recover"->12;default->-1;};
         return offset<0?null:S24CoordinateTransform.apply(level.getServer(),S20_AUTHORED_CONTROLS[offset+2-variant]);

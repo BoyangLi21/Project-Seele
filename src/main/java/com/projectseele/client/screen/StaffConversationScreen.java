@@ -65,6 +65,7 @@ public final class StaffConversationScreen extends Screen
         addButton("指挥", x + 84, y + 29, 68, () -> switchTab(1), view.canCommand());
         addButton("作战记录", x + 156, y + 29, 88, () -> { switchTab(2); send("TOPIC:campaign"); }, true);
         addButton("通讯录", x + 248, y + 29, 68, () -> switchTab(4), view.radio());
+        if(view.skin().equals("fuyutsuki"))addButton("城市",x+320,y+29,68,()->switchTab(5),permitted("city_rise"));
         addButton("关闭", x + panelWidth - 60, y + 8, 48, this::onClose, true);
         int controlsY = controlsTop();
         int column = (panelWidth - 32) / 3;
@@ -117,6 +118,13 @@ public final class StaffConversationScreen extends Screen
             int half = (panelWidth - 28) / 2;
             addButton("接受当前作战", x + 12, controlsY + 22, half, () -> send("CAMPAIGN:begin"), permitted("campaign"));
             addButton("撤销当前作战", x + 16 + half, controlsY + 22, half, () -> send("CAMPAIGN:cancel"), permitted("campaign"));
+        }
+        else if (tab == 5)
+        {
+            int half=(panelWidth-28)/2;
+            addButton("城市升起",x+12,controlsY,half,()->send("城市升起"),permitted("city_rise"));
+            addButton("城市降下",x+16+half,controlsY,half,()->send("城市降下"),permitted("city_lower"));
+            addButton("查询城市状态",x+12,controlsY+22,panelWidth-24,()->send("TOPIC:city"),true);
         }
         else if (tab == 4)
         {
