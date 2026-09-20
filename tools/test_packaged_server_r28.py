@@ -18,8 +18,9 @@ def main(resume=False):
     shutil.copy2(ROOT/'.Codex/server-pack-cache'/spec['filename'],installer)
     assert hashlib.sha1(installer.read_bytes()).hexdigest()==spec['sha1']
     java=Path.home()/'jdks/jdk-17.0.19+10/bin/java.exe'
-    with (OUT/'forge_install.log').open('w',encoding='utf8') as log:
-        subprocess.run([str(java),'-jar',str(installer),'--installServer'],cwd=TEST,stdout=log,stderr=subprocess.STDOUT,check=True,timeout=1800)
+    if not resume:
+        with (OUT/'forge_install.log').open('w',encoding='utf8') as log:
+            subprocess.run([str(java),'-jar',str(installer),'--installServer'],cwd=TEST,stdout=log,stderr=subprocess.STDOUT,check=True,timeout=1800)
     # Reuse this machine's existing development-server acceptance only in
     # the disposable test. The files distributed to the user retain false.
     assert 'eula=true' in (ROOT/'run/eula.txt').read_text(encoding='utf8')
@@ -34,7 +35,7 @@ def main(resume=False):
         for line in proc.stdout:events.put(line)
         events.put(None)
     threading.Thread(target=consume,daemon=True).start()
-    start=time.monotonic();ready_at=None;stopping=False;lines=[];witness=False
+    start=time.monotonic();ready_at=None;stopping=False;lines=[];witness=False;next_witness=0;commander=False
     with (OUT/'production_server.log').open('w',encoding='utf8') as log:
         while True:
             try:line=events.get(timeout=1)
@@ -42,12 +43,16 @@ def main(resume=False):
             if line is None:break
             if line:
                 log.write(line);log.flush();lines.append(line)
+                if 'R28_FUYUTSUKI_POST_LOADED' in line:commander=True
                 if 'Done (' in line and ready_at is None:
                     ready_at=time.monotonic();print('Production Forge server ready',flush=True)
-                    proc.stdin.write('execute in projectseele:geofront run forceload add -12 3\nexecute in projectseele:geofront run forceload add 27 277\n');proc.stdin.flush()
-            if ready_at and not witness and time.monotonic()-ready_at>12:
+                    # The entity-ticking centre needs its surrounding chunks,
+                    # not just a single FULL block-data column.
+                    proc.stdin.write('execute in projectseele:geofront run forceload add -12 3\nexecute in projectseele:geofront run forceload add 11 261 43 293\n');proc.stdin.flush()
+            if ready_at and not commander and time.monotonic()-ready_at>12 and time.monotonic()>=next_witness:
                 proc.stdin.write('execute in projectseele:geofront run data get block -12 81 3\nexecute in projectseele:geofront as @e[type=projectseele:nerv_staff,nbt={StaffId:"fuyutsuki"},x=27,y=-406,z=277,distance=..2] run say R28_FUYUTSUKI_POST_LOADED\nexecute in projectseele:geofront run time query daytime\n');proc.stdin.flush();witness=True
-            if ready_at and not stopping and time.monotonic()-ready_at>25:
+                next_witness=time.monotonic()+10
+            if ready_at and commander and not stopping and time.monotonic()-ready_at>25:
                 proc.stdin.write('stop\n');proc.stdin.flush();stopping=True
             if time.monotonic()-start>600:
                 if proc.poll() is None:proc.stdin.write('stop\n');proc.stdin.flush()
@@ -57,7 +62,7 @@ def main(resume=False):
     code=proc.wait(timeout=60);text=''.join(lines)
     checks={'exit_zero':code==0,'forge_ready':ready_at is not None,'seele_initialized':'Project SEELE initialized' in text,'surface_pylon_loaded':'projectseele:umbilical_pylon' in text,'clean_save':'Saving chunks' in text,'no_fatal':not any(s in text for s in ('Failed to start the minecraft server','Missing mandatory dependencies','Mixin apply failed','Exception in server tick loop','Encountered an unexpected exception'))}
     checks['commander_post_loaded']='R28_FUYUTSUKI_POST_LOADED' in text
-    proof={'passed':all(checks.values()),'checks':checks,'mod_sha256':base.sha256(next((TEST/'mods').glob('projectseele-*.jar'))),'scope':'Reobfuscated private R28 JAR, production Forge 47.4.10, imported complete world, loaded GeoFront pylon and existing Fuyutsuki at new commander post, clean shutdown; loopback-only, 5 GiB test heap. No remote client login asserted.'}
+    proof={'passed':all(checks.values()),'checks':checks,'mod_sha256':base.sha256(next((TEST/'mods').glob('projectseele-*.jar'))),'scope':'Reobfuscated private R28 JAR, production Forge 47.4.10, imported complete world, loaded GeoFront pylon and existing Fuyutsuki at new commander post, clean shutdown; Minecraft listener bound to 127.0.0.1:25569, 5 GiB test heap. No remote client login asserted.'}
     (OUT/'production_check.json').write_text(json.dumps(proof,ensure_ascii=False,indent=2),encoding='utf8');print(json.dumps(proof,indent=2),flush=True)
     assert proof['passed']
 
