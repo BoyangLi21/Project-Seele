@@ -707,7 +707,7 @@ public final class S20CommandPresentationDirector
                 56.0D, -390.0D, 320.0D);
         for (NervCommandSeatEntity seat : level.getEntitiesOfClass(
                 NervCommandSeatEntity.class, commandRoom,
-                entity -> entity.getTags().stream()
+                entity -> !entity.getTags().contains("seele_office_seat") && entity.getTags().stream()
                         .noneMatch(live::contains)))
         {
             seat.ejectPassengers();

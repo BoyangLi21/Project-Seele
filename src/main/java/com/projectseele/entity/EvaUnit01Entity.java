@@ -1008,7 +1008,15 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
 
     public boolean isUmbilicalConnected()
     {
-        return this.entityData.get(DATA_POWER_CONNECTED);
+        return this.entityData.get(DATA_POWER_CONNECTED) || this.isCarrierPowerConnected();
+    }
+
+    public boolean isCarrierPowerConnected()
+    {
+        return !this.isBerserk() && !this.isExperimentalUnit() && this.isEntryPlugInserted()
+                && this.getPilotEntity()!=null && this.isNervLogisticsLocked()
+                && this.carrierRiseProgress(1)>=.999F
+                && !(this.getY()>=80 && this.getLaunchPhase()!=LAUNCH_ASCENT);
     }
 
     public boolean isUmbilicalSevered()
@@ -1065,7 +1073,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
     @Nullable
     public BlockPos getUmbilicalAnchor()
     {
-        if (!this.isUmbilicalConnected())
+        if (!this.entityData.get(DATA_POWER_CONNECTED))
         {
             return null;
         }
@@ -1619,14 +1627,21 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
         return this.getEntryPlugSocketTransform().translation();
     }
 
+    /** Measured rear armour depth differs between the three NERV and two UN bodies. */
+    public double powerMountRearOffset()
+    {
+        return this.isExperimentalUnit()?(this.experimentalAssetName().equals("eva_un01")?3.87D:4.13D):this.getUnitVariant()==UNIT_01?4.11D:4.06D;
+    }
+    public double powerSocketRearOffset(){return this.powerMountRearOffset()+2.2D;}
+
     /** World-space tail of the upper-back power plug, shared by cable and sever FX. */
     public Vec3 getUmbilicalSocketPosition()
     {
         if(this.rifleProneBlend(1)>.01F||this.rifleCrouchBlend(1)>.01F)
-            return this.posedPowerMarker(EvaScale.UMBILICAL_SOCKET_HEIGHT,EvaScale.UMBILICAL_SOCKET_REAR_OFFSET);
+            return this.posedPowerMarker(EvaScale.UMBILICAL_SOCKET_HEIGHT,this.powerSocketRearOffset());
         Vec3 rear = this.getRearDirection();
         return this.position()
-                .add(rear.scale(EvaScale.UMBILICAL_SOCKET_REAR_OFFSET))
+                .add(rear.scale(this.powerSocketRearOffset()))
                 .add(0.0D, EvaScale.UMBILICAL_SOCKET_HEIGHT, 0.0D);
     }
 
@@ -1634,10 +1649,10 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
     public Vec3 getUmbilicalMountPosition()
     {
         if(this.rifleProneBlend(1)>.01F||this.rifleCrouchBlend(1)>.01F)
-            return this.posedPowerMarker(EvaScale.UMBILICAL_MOUNT_HEIGHT,EvaScale.UMBILICAL_MOUNT_REAR_OFFSET);
+            return this.posedPowerMarker(EvaScale.UMBILICAL_MOUNT_HEIGHT,this.powerMountRearOffset());
         Vec3 rear = this.getRearDirection();
         return this.position()
-                .add(rear.scale(EvaScale.UMBILICAL_MOUNT_REAR_OFFSET))
+                .add(rear.scale(this.powerMountRearOffset()))
                 .add(0.0D, EvaScale.UMBILICAL_MOUNT_HEIGHT, 0.0D);
     }
 
@@ -3358,19 +3373,43 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
                         dust.x, dust.y, dust.z, 26,
                         0.72D, 0.72D, 0.72D, 0.24D);
                 level.sendParticles(ParticleTypes.POOF,
-                        dust.x, dust.y, dust.z, 9,
-                        0.48D, 0.48D, 0.48D, 0.08D);
+                        dust.x, dust.y, dust.z, 42,
+                        1.6D, 1.6D, 1.6D, 0.18D);
+                level.sendParticles(ParticleTypes.LARGE_SMOKE,
+                        dust.x, dust.y, dust.z, 30, 1.2D, 1.8D, 1.2D, 0.10D);
+                level.sendParticles(ParticleTypes.CAMPFIRE_COSY_SMOKE,
+                        dust.x, dust.y, dust.z, 12, 1.6D, .7D, 1.6D, .05D);
             }
         }
         else
         {
             level.sendParticles(ParticleTypes.CRIT, end.x, end.y, end.z,
                     9, 0.35D, 0.35D, 0.35D, 0.18D);
+            if(entityHit!=null)level.sendParticles(ParticleTypes.LARGE_SMOKE,
+                    end.x,end.y,end.z,24,1.2D,1.6D,1.2D,.12D);
         }
         level.sendParticles(ParticleTypes.SMOKE,
                 muzzle.x, muzzle.y, muzzle.z, 3,
                 0.12D, 0.12D, 0.12D, 0.025D);
-        level.playSound(null, muzzle.x, muzzle.y, muzzle.z, ModSounds.EVA_RIFLE_FIRE.get(),
+        if(entityHit!=null||blockHit.getType()!=net.minecraft.world.phys.HitResult.Type.MISS)
+        {
+            // Vanilla's ordinary particle packets stop at 32 metres, shorter
+            // than an EVA engagement. Deliver distant impact smoke to the
+            // pilot and nearby observers without doubling the close effect.
+            for(ServerPlayer observer:level.players())
+                if(observer.distanceToSqr(end)>32*32 && (observer==pilot||observer.distanceToSqr(this)<256*256))
+                {
+                    level.sendParticles(observer,ParticleTypes.LARGE_SMOKE,true,end.x,end.y,end.z,30,1.2D,1.8D,1.2D,.10D);
+                    level.sendParticles(observer,ParticleTypes.POOF,true,end.x,end.y,end.z,42,1.6D,1.6D,1.6D,.18D);
+                }
+        }
+        // Superb's gun sounds are data-driven sound definitions, not static
+        // registry entries. A direct sound event works like /playsound and
+        // resolves its existing client resource without copying the audio.
+        var rifleSound=net.minecraftforge.fml.ModList.get().isLoaded("superbwarfare")
+                ? net.minecraft.sounds.SoundEvent.createVariableRangeEvent(new net.minecraft.resources.ResourceLocation("superbwarfare","ntw_20_fire_3p"))
+                : ModSounds.EVA_RIFLE_FIRE.get();
+        level.playSound(null, muzzle.x, muzzle.y, muzzle.z, rifleSound,
                 SoundSource.PLAYERS, 4.2F,
                 0.93F + this.random.nextFloat() * 0.08F);
     }
@@ -3456,6 +3495,17 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
         {
             this.entityData.set(DATA_POWER_TICKS, this.getPowerCapacityTicks());
             this.batterySessionArmed = true;
+        }
+        if(this.isCarrierPowerConnected())
+        {
+            // The travelling rack has its own collector and short rear lead.
+            // It never masquerades as a fixed block pylon or drags a cable
+            // through the full shaft during ascent.
+            this.setUmbilicalAnchor(null);
+            this.entityData.set(DATA_POWER_TICKS,Math.min(this.getPowerCapacityTicks(),
+                    this.getPowerTicks()+Math.max(1,Mth.ceil(this.getPowerCapacityTicks()/100F))));
+            this.entityData.set(DATA_UMBILICAL_SEVERED,false);
+            this.powerCheckCooldown=0;return;
         }
         boolean surfacePower = this.getY() >= 64 && this.getLaunchPhase() != LAUNCH_ASCENT
                 && (!this.isNervLogisticsLocked() || this.getY() >= 80);
@@ -4409,8 +4459,11 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
         }
         double distance = Math.max(0.0D,
                 this.launchTargetY() - (this.launchBedPos.getY() + 1.0D));
-        return Math.max(LAUNCH_ASCENT_TICKS,
+        int originalTicks=Math.max(LAUNCH_ASCENT_TICKS,
                 Mth.ceil(distance / CONTINUOUS_ASCENT_BLOCKS_PER_TICK));
+        // Accelerate only the underground catapult curve. Surface hatch
+        // closing, support retention and the 18-tick release stay unchanged.
+        return this.launchContinuousRoute?Math.max(1,Mth.ceil(originalTicks/5.0D)):originalTicks;
     }
 
     private void tickSortieParkingLock()

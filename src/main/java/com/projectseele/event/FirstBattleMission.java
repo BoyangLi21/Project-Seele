@@ -135,6 +135,7 @@ public final class FirstBattleMission
                 if(!level.addFreshEntity(angel))continue;
                 data.missionAngel=angel.getUUID();data.missionLastPos=angel.blockPosition();data.setDirty();
                 TvCampaignDirector.firstBattleBound(level,data.missionOwner,angel.getUUID());
+                com.projectseele.world.NervStaffDialogue.say(player,"葛城美里 · 作战通信","目标就在前方。先站稳，注意它两侧的手臂。攻击没有奏效就报告，别只顾着往前冲。");
                 ProjectSeele.LOGGER.info("R10 MISSION Angel deployed {}",angel.getUUID());
             }
             if(level.getEntity(data.missionAngel) instanceof SachielEntity angel)

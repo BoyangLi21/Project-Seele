@@ -31,13 +31,13 @@ public final class EvaScale
      * the body.
      */
     public static final double UMBILICAL_MOUNT_HEIGHT =
-            25.10D * WORLD_MULTIPLIER;
+            21.50D * WORLD_MULTIPLIER;
     public static final double UMBILICAL_MOUNT_REAR_OFFSET =
-            2.15D * WORLD_MULTIPLIER;
+            2.055D * WORLD_MULTIPLIER;
     public static final double UMBILICAL_SOCKET_HEIGHT =
-            24.55D * WORLD_MULTIPLIER;
+            21.35D * WORLD_MULTIPLIER;
     public static final double UMBILICAL_SOCKET_REAR_OFFSET =
-            3.25D * WORLD_MULTIPLIER;
+            3.155D * WORLD_MULTIPLIER;
 
     /**
      * Entry plugs do not scale one-for-one with an EVA. The airframe doubled

@@ -64,11 +64,21 @@ public final class EvaUmbilicalCableRenderer
         for (EvaUnit01Entity unit : units)
         {
             BlockPos anchor = unit.getUmbilicalAnchor();
-            if (anchor == null)
+            boolean rack=unit.isCarrierPowerConnected();
+            if (anchor == null && !rack)
             {
                 continue;
             }
-            Vec3 pylon = Vec3.atCenterOf(anchor).add(0.0D, 0.65D, 0.0D);
+            Vec3 pylon = rack?unit.carrierRenderPosition(event.getPartialTick()).add(0,47,0)
+                    .add(unit.getRearDirection().scale(9.3))
+                    :Vec3.atCenterOf(anchor).add(0.0D, 0.65D, 0.0D);
+            if(!rack&&unit.getLaunchPhase()==EvaUnit01Entity.LAUNCH_CLEAR)
+            {
+                float handoff=net.minecraft.util.Mth.clamp((18-unit.getLaunchTicks()+event.getPartialTick())/18F,0,1);
+                handoff=handoff*handoff*(3-2*handoff);
+                Vec3 travelling=unit.carrierRenderPosition(event.getPartialTick()).add(0,47,0).add(unit.getRearDirection().scale(9.3));
+                pylon=travelling.lerp(pylon,handoff);
+            }
             var attachment=EvaPowerAttachmentR25.frame(unit,event.getPartialTick());
             Vec3 armourMount = attachment.mount();
             Vec3 plugTail = attachment.socket();
@@ -77,35 +87,27 @@ public final class EvaUmbilicalCableRenderer
             Vec3 up = attachment.up();
             Vec3 collarOuter = plugTail.add(rear.scale(0.35D));
 
-            // A small fuel-nozzle-like plug: armour collar, dark rectangular
-            // body, orange safety band and a short lower grip.  Drawing real
-            // closed boxes gives the cable an unmistakable physical endpoint
-            // without borrowing a luminous beam material.
-            drawOrientedBox(pose, consumer,
-                    armourMount.lerp(plugTail, 0.16D), right, up, rear,
-                    1.12F, 0.92F, 0.36F,
-                    0.28F, 0.31F, 0.34F, 1.0F);
-            drawOrientedBox(pose, consumer,
-                    armourMount.lerp(plugTail, 0.57D), right, up, rear,
-                    0.78F, 0.70F, 1.05F,
-                    0.10F, 0.12F, 0.14F, 1.0F);
-            drawOrientedBox(pose, consumer,
-                    armourMount.lerp(plugTail, 0.76D), right, up, rear,
-                    0.88F, 0.76F, 0.18F,
-                    0.88F, 0.30F, 0.04F, 1.0F);
-            Vec3 gripCentre = plugTail.subtract(up.scale(0.72D))
-                    .subtract(rear.scale(0.22D));
-            drawOrientedBox(pose, consumer, gripCentre, right, up, rear,
-                    0.34F, 0.78F, 0.30F,
-                    0.11F, 0.12F, 0.13F, 1.0F);
-            drawOrientedBox(pose, consumer, collarOuter, right, up, rear,
-                    0.72F, 0.66F, 0.32F,
-                    0.22F, 0.24F, 0.26F, 1.0F);
+            // Machined bayonet collar, tapered strain relief and separate
+            // locking dogs share the final torso socket frame in every pose.
+            sleeve(pose,consumer,armourMount.subtract(rear.scale(.12)),armourMount.add(rear.scale(.40)),right,up,.85F,.85F,.43F,.47F,.44F);
+            sleeve(pose,consumer,armourMount.add(rear.scale(.40)),plugTail.subtract(rear.scale(.18)),right,up,.70F,.56F,.19F,.24F,.22F);
+            sleeve(pose,consumer,plugTail.subtract(rear.scale(.20)),collarOuter,right,up,.60F,.32F,.58F,.37F,.09F);
+            for(int ring=0;ring<6;ring++)
+            {
+                Vec3 at=armourMount.lerp(plugTail,.38+ring*.065);
+                sleeve(pose,consumer,at,at.add(rear.scale(.10)),right,up,.70F,.70F,.09F,.11F,.11F);
+            }
+            for(int side:new int[]{-1,1})
+            {
+                Vec3 at=armourMount.add(right.scale(side*.91)).add(rear.scale(.47));
+                drawOrientedBox(pose,consumer,at,right,up,rear,.18F,.34F,.5F,.48F,.52F,.48F,1);
+                drawOrientedBox(pose,consumer,at.add(up.scale(.38)),right,up,rear,.12F,.065F,.24F,.12F,.75F,.40F,1);
+            }
 
             var route=new java.util.ArrayList<Vec3>();route.add(collarOuter);
             Vec3 exit=collarOuter.add(rear.scale(2.2));route.add(exit);
             var hull=unit.getBoundingBox().inflate(3);
-            if(hull.clip(exit,pylon).isPresent())
+            if(!rack&&hull.clip(exit,pylon).isPresent())
             {
                 // When the unit turns its front towards the reel, take the
                 // lead around the flank instead of drawing it through its chest.
@@ -165,6 +167,19 @@ public final class EvaUmbilicalCableRenderer
         // Reel and back socket sit above the floor. Do not let increased
         // cable length turn the decorative sag into a subterranean loop.
         return new Vec3(point.x,Math.max(Math.min(start.y,end.y)-.55,point.y),point.z);
+    }
+
+    private static void sleeve(Matrix4f pose,VertexConsumer out,Vec3 a,Vec3 b,Vec3 right,Vec3 up,
+                               float ra,float rb,float r,float g,float blue)
+    {
+        for(int i=0;i<24;i++)
+        {
+            double t=i*Math.PI/12,u=(i+1)*Math.PI/12;
+            Vec3 n=right.scale(Math.cos(t)).add(up.scale(Math.sin(t))),m=right.scale(Math.cos(u)).add(up.scale(Math.sin(u)));
+            float shade=.72F+.28F*(float)Math.max(0,Math.sin((t+u)/2));
+            RibbonRenderer.quadBothSides(pose,out,vector(a.add(n.scale(ra))),vector(b.add(n.scale(rb))),vector(b.add(m.scale(rb))),vector(a.add(m.scale(ra))),r*shade,g*shade,blue*shade,1);
+            RibbonRenderer.quadBothSides(pose,out,vector(a),vector(a.add(n.scale(ra))),vector(a.add(m.scale(ra))),vector(a),r,g,blue,1);
+        }
     }
 
     private static void tube(Matrix4f pose, VertexConsumer consumer, Vec3 a, Vec3 b, float radius)

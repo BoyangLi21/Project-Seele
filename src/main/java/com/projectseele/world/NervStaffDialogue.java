@@ -37,8 +37,8 @@ public final class NervStaffDialogue
     }
     public static void greet(ServerPlayer player,NervStaffEntity npc)
     {
-        say(player,npc.getName().getString(),StaffDialogueCatalogR24.line(
-                npc.skin(),npc.staffRole(),"greeting",player.tickCount/40+npc.getId()));
+        say(player,npc.getName().getString(),StaffDialogueCatalogR24.next(
+                player,npc.skin(),npc.staffRole(),"greeting"));
     }
     private static MutableComponent option(String text,String command)
     {return Component.literal("["+text+"] ").withStyle(s->s.withColor(ChatFormatting.GOLD).withClickEvent(new ClickEvent(ClickEvent.Action.RUN_COMMAND,command)));}
@@ -144,7 +144,7 @@ public final class NervStaffDialogue
                     reply(player,npc,npc.staffRole().startsWith("un_")
                         ?"请沿基地的人员标线前往车辆区、航空区或试验机库，避开滑行道和舱门作业范围。总部步行引导仅在地下总部公共通道内可用。"
                         :NervWayfindingR24.describe(player));
-                else reply(player,npc,StaffDialogueCatalogR24.line(npc.skin(),npc.staffRole(),intent.subject(),player.tickCount/100));
+                else reply(player,npc,StaffDialogueCatalogR24.next(player,npc.skin(),npc.staffRole(),intent.subject()));
                 return 1;
             }
         }
@@ -260,9 +260,7 @@ public final class NervStaffDialogue
     }
     public static void pilot(ServerPlayer player,TrainingPilotEntity pilot)
     {
-        int v=pilot.getAssignedVariant();String line=switch(v){case 0->"明白。等待指令。";case 2->"准备好了。先确认轨道和供电，别把程序弄乱。";default->"我在。出击前请再确认一次同步状态。";};
-        String stage=switch(pilot.getTrainingStage()){case TrainingPilotEntity.STAGE_IN_PLUG->"插入栓内，等待连接";case TrainingPilotEntity.STAGE_LINKED->"神经连接已建立";case TrainingPilotEntity.STAGE_STANDBY->"待命";default->"前往登机位置";};
-        say(player,TrainingPilotEntity.pilotName(v),line+" 当前："+stage+"。");
+        say(player,TrainingPilotEntity.pilotName(pilot.getAssignedVariant()),PilotRadioR28.response(player,pilot,true));
     }
     private NervStaffDialogue() {}
 }

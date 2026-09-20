@@ -20,6 +20,13 @@ public final class FactoryR20Client
     private static volatile String frameError="";private static boolean oldGui;
     private static final ThreadPoolExecutor writer=new ThreadPoolExecutor(2,2,0,TimeUnit.SECONDS,new ArrayBlockingQueue<>(8),r->{Thread t=new Thread(r,"r20-factory-frames");t.setDaemon(true);return t;});
     public record CameraView(net.minecraft.world.phys.Vec3 position,net.minecraft.world.phys.Vec3 target){}
+    @SubscribeEvent public static void sound(net.minecraftforge.client.event.sound.PlaySoundEvent event)
+    {
+        if(!FactoryR20Review.R28_VISUAL||event.getSound()==null)return;
+        var id=event.getSound().getLocation();
+        if(id.toString().equals("superbwarfare:ntw_20_fire_3p")&&Minecraft.getInstance().getSoundManager().getSoundEvent(id)!=null)
+            com.projectseele.visual.FieldR28Review.ntwSoundsPlayed++;
+    }
     public static CameraView cameraView()
     {
         if(!FactoryR20Review.ENABLED||!Boolean.getBoolean("projectseele.factoryCinematic")||!FactoryR20Review.phase.equals("prepare_transfer"))return null;
@@ -33,9 +40,9 @@ public final class FactoryR20Client
         if(!FactoryR20Review.ENABLED||e.phase!=TickEvent.Phase.END)return;var mc=Minecraft.getInstance();mc.options.pauseOnLostFocus=false;if(mc.screen instanceof PauseScreen)mc.setScreen(null);
         if(FactoryR20Review.finished){if(distance>=0){mc.options.renderDistance().set(distance);mc.options.broadcastOptions();mc.options.hideGui=oldGui;distance=-1;}if(!closing){writer.shutdown();closing=true;}if(writer.isTerminated()&&++exit==1&&folder!=null){try{JsonObject report=new JsonObject();report.addProperty("source","Unmodified native framebuffer; real F5 pilot camera and carrier motion");report.addProperty("dropped",dropped);report.addProperty("write_failure",frameError);report.add("frames",frames);Files.writeString(folder.resolve("frames.json"),report.toString());}catch(Exception x){throw new IllegalStateException(x);}}if(exit>30)mc.stop();return;}
         if(mc.player==null||mc.level==null||mc.screen!=null)return;
-        if(distance<0){distance=mc.options.renderDistance().get();oldGui=mc.options.hideGui;mc.options.hideGui=true;mc.options.renderDistance().set(10);mc.options.broadcastOptions();mc.options.setCameraType(CameraType.THIRD_PERSON_BACK);folder=mc.gameDirectory.toPath().resolve((FactoryR20Review.R27?"../artifacts/facility_r27/native_cycle_":"r21-factory".equals(System.getProperty("projectseele.regionalBuild",""))?"../artifacts/world_repair_r21/factory/native_cycle_":"../artifacts/world_rebuild_r20/factory/native_cycle_")+System.currentTimeMillis());try{Files.createDirectories(folder);}catch(Exception x){throw new IllegalStateException(x);}}
+        if(distance<0){distance=mc.options.renderDistance().get();oldGui=mc.options.hideGui;mc.options.hideGui=true;mc.options.renderDistance().set(10);mc.options.broadcastOptions();mc.options.setCameraType(CameraType.THIRD_PERSON_BACK);folder=mc.gameDirectory.toPath().resolve((FactoryR20Review.R28?"../artifacts/facility_r28/native_cycle_":FactoryR20Review.R27?"../artifacts/facility_r27/native_cycle_":"r21-factory".equals(System.getProperty("projectseele.regionalBuild",""))?"../artifacts/world_repair_r21/factory/native_cycle_":"../artifacts/world_rebuild_r20/factory/native_cycle_")+System.currentTimeMillis());try{Files.createDirectories(folder);}catch(Exception x){throw new IllegalStateException(x);}}
         FactoryR20Review.ready=true;age++;
-        if(FactoryR20Review.R27)mc.options.setCameraType(age%180<90?CameraType.THIRD_PERSON_BACK:CameraType.THIRD_PERSON_FRONT);
+        if(FactoryR20Review.R27||FactoryR20Review.R28)mc.options.setCameraType(age%180<90?CameraType.THIRD_PERSON_BACK:CameraType.THIRD_PERSON_FRONT);
         if(!inputPhase.equals(FactoryR20Review.phase)){inputPhase=FactoryR20Review.phase;phaseTicks=0;}else phaseTicks++;
         if("r21-factory".equals(System.getProperty("projectseele.regionalBuild","")))
         {
@@ -48,7 +55,12 @@ public final class FactoryR20Client
             if(free&&phaseTicks==135)KeyMapping.click(mc.options.keyUse.getKey());
         }
         if(!FactoryR20Review.phase.equals("setup")&&!FactoryR20Review.phase.equals("board"))
-        {mc.player.setYRot(180);mc.player.yRotO=180;mc.player.setXRot(12);mc.player.xRotO=12;}
+        {
+            var eva=com.projectseele.world.EvaPilotResolver.controlTarget(mc.player);
+            float yaw=FactoryR20Review.R28_VISUAL&&eva!=null&&eva.isCarrierPowerConnected()?230:180;
+            float pitch=FactoryR20Review.R28_VISUAL&&FactoryR20Review.phase.equals("free_surface_hold")?35:12;
+            mc.player.setYRot(yaw);mc.player.yRotO=yaw;mc.player.setXRot(pitch);mc.player.xRotO=pitch;
+        }
     }
     @SubscribeEvent public static void render(TickEvent.RenderTickEvent e)
     {

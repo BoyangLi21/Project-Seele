@@ -92,6 +92,7 @@ public final class TrainingPilotEntity extends PathfinderMob
         if (!this.level().isClientSide)
         {
             TrainingPilotDirector.tickPilot(this);
+            com.projectseele.world.PilotRadioR28.tick(this);
         }
     }
 

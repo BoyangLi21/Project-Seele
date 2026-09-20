@@ -68,6 +68,9 @@ public final class TvCampaignDirector
         if (replay.active != null || replay.missionOwner != null) return message(player, "已有独立迎击或重播占用作战区，请先结束该行动。", false);
         if (chapter.id().equals("sachiel") && !FirstBattleMission.begin(player)) return 0;
         data.owner = player.getUUID(); data.active = chapter.id(); data.phase = "approach"; data.notice = ""; data.angel = null; data.lastPosition = null; data.setDirty();
+        NervStaffDialogue.say(player, "葛城美里 · 作战通信", chapter.id().equals("sachiel")
+                ? "初号机编入迎击。先到机库登机，整备完成后我来协调发射。不要一个人把所有步骤都扛下来。"
+                : "这次的目标与上次不同。先观察它的攻击，再决定接近的方向。撤回路线也要记住。");
         return message(player, "作战已接受。" + chapter.briefing(), true);
     }
     public static int cancel(ServerPlayer player)
@@ -95,7 +98,11 @@ public final class TvCampaignDirector
         var data = TvCampaignSavedData.get(level);
         if (data.phase.equals("cancel") || !data.finish(chapter, owner, angel)) return;
         var player = level.getServer().getPlayerList().getPlayer(owner);
-        if (player != null) message(player, data.notice, true);
+        if (player != null)
+        {
+            message(player, data.notice, true);
+            NervStaffDialogue.say(player, "葛城美里 · 作战通信", "目标已确认消失。先别急着动，检查供电和机体状态，我们准备接你回来。");
+        }
         ProjectSeele.LOGGER.info("TV CAMPAIGN completed={} owner={} target={}", chapter, owner, angel);
     }
     @SubscribeEvent public static void death(LivingDeathEvent event)

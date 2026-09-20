@@ -99,6 +99,11 @@ public final class TvFacilityMeshes
         draw("carrier_spine",poses,light,opacity);
         float release=unit.getLaunchPhase()==EvaUnit01Entity.LAUNCH_CLEAR?ramp(1-(unit.getLaunchTicks()-partial)/18F,0,1):0;
         poses.pushPose();poses.translate(0,0,-3*release);draw("carrier_clamp",poses,light,opacity);poses.popPose();
+        poses.pushPose();
+        poses.translate(0,0,6*(1-ramp(unit.carrierRiseProgress(partial),.80F,1))+4*release);
+        draw("carrier_contacts_"+unit.getUnitVariant(),poses,light,opacity);
+        poses.popPose();
+        draw("carrier_power_reel",poses,light,opacity);
         poses.popPose();
     }
     public static void pressureDoors(PoseStack poses,int light,float open)

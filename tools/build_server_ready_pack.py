@@ -330,8 +330,8 @@ def build_server(root: Path, guide: str) -> None:
     write_text(root / "server.properties", server_properties())
     write_text(root / "user_jvm_args.txt", jvm_args())
     write_text(root / "README_SERVER_CN.txt", guide)
-    guide_file=ROOT / "docs" / "MANUAL_ACCEPTANCE_R27.md"
-    if guide_file.exists():copy_file(guide_file,root / "R27_TEST_GUIDE_CN.md")
+    guide_file=ROOT / "docs" / "MANUAL_ACCEPTANCE_R28.md"
+    if guide_file.exists():copy_file(guide_file,root / "R28_TEST_GUIDE_CN.md")
     elif (ROOT / "docs" / "MANUAL_ACCEPTANCE_R25.md").exists():copy_file(ROOT / "docs" / "MANUAL_ACCEPTANCE_R25.md",root / "R25_TEST_GUIDE_CN.md")
     else:copy_file(ROOT / "docs" / "MANUAL_ACCEPTANCE_R24.md", root / "R24_TEST_GUIDE_CN.md")
     write_text(
@@ -360,8 +360,8 @@ def build_client(root: Path, guide: str) -> None:
         root / "resourcepacks" / "eva_real_model",
     )
     write_text(root / "README_CLIENT_CN.txt", guide)
-    guide_file=ROOT / "docs" / "MANUAL_ACCEPTANCE_R27.md"
-    if guide_file.exists():copy_file(guide_file,root / "R27_TEST_GUIDE_CN.md")
+    guide_file=ROOT / "docs" / "MANUAL_ACCEPTANCE_R28.md"
+    if guide_file.exists():copy_file(guide_file,root / "R28_TEST_GUIDE_CN.md")
     elif (ROOT / "docs" / "MANUAL_ACCEPTANCE_R25.md").exists():copy_file(ROOT / "docs" / "MANUAL_ACCEPTANCE_R25.md",root / "R25_TEST_GUIDE_CN.md")
     else:copy_file(ROOT / "docs" / "MANUAL_ACCEPTANCE_R24.md", root / "R24_TEST_GUIDE_CN.md")
     write_text(

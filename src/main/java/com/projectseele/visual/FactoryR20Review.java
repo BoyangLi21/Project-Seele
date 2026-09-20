@@ -21,7 +21,9 @@ public final class FactoryR20Review
 {
     private static final boolean R21="r21-factory".equals(System.getProperty("projectseele.regionalBuild",""));
     public static final boolean R27="r27-factory".equals(System.getProperty("projectseele.regionalBuild",""));
-    public static final boolean ENABLED=R27||R21||"r20-factory".equals(System.getProperty("projectseele.regionalBuild",""));
+    public static final boolean R28_VISUAL="r28-visual-factory".equals(System.getProperty("projectseele.regionalBuild",""));
+    public static final boolean R28=R28_VISUAL||"r28-factory".equals(System.getProperty("projectseele.regionalBuild",""));
+    public static final boolean ENABLED=R28||R27||R21||"r20-factory".equals(System.getProperty("projectseele.regionalBuild",""));
     public static volatile boolean ready,finished;public static volatile String phase="setup";
     private static int age,state,timer;private static Path world;private static ServerLevel level;private static ServerPlayer player;
     private static UUID evaId,plugId;private static final JsonArray samples=new JsonArray();private static Vec3 last;
@@ -31,11 +33,12 @@ public final class FactoryR20Review
     {
         if(!ENABLED||finished||!ready||event.phase!=TickEvent.Phase.END)return;
         if(R27&&!FuyutsukiR27Review.finished)return;
+        if(R28&&!FieldR28Review.seatsFinished)return;
         try
         {
             if(world==null)
             {
-                world=event.getServer().getWorldPath(LevelResource.ROOT).normalize();require(world.getFileName().toString().equals(R27?"SEELE_R27_REVIEW":R21?"SEELE_R21_REVIEW":"SEELE_R20_REVIEW"),"Review world boundary");
+                world=event.getServer().getWorldPath(LevelResource.ROOT).normalize();require(world.getFileName().toString().equals(R28?"SEELE_FIELD_R28_REVIEW":R27?"SEELE_R27_REVIEW":R21?"SEELE_R21_REVIEW":"SEELE_R20_REVIEW"),"Review world boundary");
                 level=event.getServer().getLevel(FacilitySchemaV2.DIMENSION);player=event.getServer().getPlayerList().getPlayers().get(0);player.stopRiding();player.setGameMode(GameType.CREATIVE);player.teleportTo(level,30.5,-394,-267.5,0,0);
             }
             require(++age<14000,"Cycle timeout: "+phase);timer++;
@@ -73,7 +76,7 @@ public final class FactoryR20Review
                     require(!current.equals("PLUG_FAULT"),"Plug fault");
                     if(current.equals("SILO_READY"))
                     {
-                        if(R27&&++siloFrames<140)return;
+                        if((R27||R28)&&++siloFrames<140)return;
                         require(Math.abs(eva.getY()+410)<.3&&Math.abs(eva.getZ()+35.5)<.3,"High launch arrival");require(EvaLogisticsDirector.requestLaunch(level,1).accepted(),"Launch rejected");next("launch");
                     }
                 }
@@ -81,6 +84,13 @@ public final class FactoryR20Review
                 case 4 ->
                 {
                     require(eva.getY()>80.7,"Fell through arrival hatch");
+                    if(R28_VISUAL&&timer==25)
+                    {
+                        eva.installExternalArmament(EvaUnit01Entity.WEAPON_RIFLE);
+                        for(int i=0;i<6&&eva.getWeapon()!=EvaUnit01Entity.WEAPON_RIFLE;i++)eva.cycleWeapon(player);
+                        require(eva.getWeapon()==EvaUnit01Entity.WEAPON_RIFLE,"Visual firing loadout");
+                    }
+                    if(R28_VISUAL&&(timer==100||timer==140))eva.fireRifle(player);
                     if(timer>180){eva.setYRot(90);eva.yBodyRot=90;eva.yHeadRot=90;require(EvaLogisticsDirector.requestRecovery(level,1).accepted(),"Recover rejected");next("recover_from_sideways");}
                 }
                 case 5 ->

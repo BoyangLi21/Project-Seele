@@ -25,8 +25,8 @@ final class EvaPowerAttachmentR25
     {
         if(root==null)return;var torso=model.getBone("torso_upper").orElse(null);if(torso==null)return;
         var m=new Matrix4f(root).mul(EvaRigTransforms.model(torso));
-        FRAMES.put(eva,new Frame(point(m,EvaScale.UMBILICAL_MOUNT_HEIGHT,EvaScale.UMBILICAL_MOUNT_REAR_OFFSET),
-                point(m,EvaScale.UMBILICAL_SOCKET_HEIGHT,EvaScale.UMBILICAL_SOCKET_REAR_OFFSET),
+        FRAMES.put(eva,new Frame(point(m,EvaScale.UMBILICAL_MOUNT_HEIGHT,eva.powerMountRearOffset()),
+                point(m,EvaScale.UMBILICAL_SOCKET_HEIGHT,eva.powerSocketRearOffset()),
                 axis(m,1,0,0),axis(m,0,1,0),axis(m,0,0,1),eva.level().getGameTime()));
     }
     static Frame frame(EvaUnit01Entity eva,float partial)

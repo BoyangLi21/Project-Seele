@@ -194,8 +194,7 @@ public final class StaffConversationR24
     {
         EvaLogisticsDirector.loadControlTarget(player.serverLevel(),unit);
         var pilot=TrainingPilotDirector.pilots(player.serverLevel()).stream().filter(p->p.getAssignedVariant()==unit).findFirst().orElse(null);
-        return com.projectseele.entity.TrainingPilotEntity.pilotName(unit)+"："+(pilot==null?"频道待接入。":switch(pilot.getTrainingStage())
-        {case 1->"已在插入栓内，等待接入。";case 2->"同步已建立。";case 0->"正在前往登机位置。";default->"在待命位置，等待登机指令。";});
+        return com.projectseele.entity.TrainingPilotEntity.pilotName(unit)+"："+(pilot==null?"频道待接入。":PilotRadioR28.response(player,pilot,false));
     }
 
     public static int contact(ServerPlayer player, String name)

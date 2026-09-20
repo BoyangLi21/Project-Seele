@@ -1034,6 +1034,14 @@ public final class IntegratedNervMapBuilder
         return lift(index).surfaceBed().offset(SHAFT_OUTER_RADIUS + 2, 2, 0);
     }
 
+    private static BlockPos surfacePowerPylon(ServerLevel level,int index)
+    {
+        if(java.nio.file.Files.isRegularFile(level.getServer().getWorldPath(
+                net.minecraft.world.level.storage.LevelResource.ROOT).resolve("r28_surface_power.json")))
+            return new BlockPos(new int[]{-12,30,72}[index],81,3);
+        return surfacePowerPylon(index);
+    }
+
     /**
      * S20-only repair for the lower pressure walls removed with the pyramid
      * interior. The north carrier aperture remains open by design; the other
@@ -1135,7 +1143,7 @@ public final class IntegratedNervMapBuilder
             }
             set(level, lowerPowerPylon(index),
                     ModBlocks.UMBILICAL_PYLON.get().defaultBlockState());
-            set(level, surfacePowerPylon(index),
+            set(level, surfacePowerPylon(level,index),
                     ModBlocks.UMBILICAL_PYLON.get().defaultBlockState());
         }
     }
@@ -1146,7 +1154,7 @@ public final class IntegratedNervMapBuilder
         {
             if (!level.getBlockState(lowerPowerPylon(index))
                     .is(ModBlocks.UMBILICAL_PYLON.get())
-                    || !level.getBlockState(surfacePowerPylon(index))
+                    || !level.getBlockState(surfacePowerPylon(level,index))
                     .is(ModBlocks.UMBILICAL_PYLON.get()))
             {
                 return false;

@@ -63,5 +63,13 @@ public final class StaffDialogueCatalogR24
         return "我在岗位上。你需要了解哪一项情况？";
     }
 
+    public static String next(net.minecraft.server.level.ServerPlayer player, String skin, String role, String topic)
+    {
+        String key = "SeeleDialogueR28_" + skin + "_" + topic;
+        int index = player.getPersistentData().getInt(key);
+        player.getPersistentData().putInt(key, index == Integer.MAX_VALUE ? 0 : index + 1);
+        return line(skin, role, topic, index);
+    }
+
     private StaffDialogueCatalogR24() {}
 }

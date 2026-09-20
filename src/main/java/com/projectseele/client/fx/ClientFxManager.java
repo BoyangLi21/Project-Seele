@@ -160,6 +160,7 @@ public final class ClientFxManager
 
     public static void addRifleTracer(ClientboundRifleTracerPacket packet)
     {
+        if(com.projectseele.visual.FactoryR20Review.R28_VISUAL)com.projectseele.visual.FieldR28Review.receivedRifleTracers++;
         Vec3 fallback = new Vec3(packet.x1, packet.y1, packet.z1);
         ACTIVE.add(new RifleTracer(packet.entityId, fallback,
                 new Vec3(packet.x2, packet.y2, packet.z2)));
