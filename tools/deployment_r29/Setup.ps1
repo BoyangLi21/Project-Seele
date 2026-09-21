@@ -1,4 +1,4 @@
-param([ValidateSet('Server','Client')][string]$Kind, [string]$Java = 'java')
+param([ValidateSet('Server','Client')][string]$Kind, [string]$Java = 'java', [string[]]$CacheDirectory = @())
 $ErrorActionPreference = 'Stop'
 Set-Location -LiteralPath $PSScriptRoot
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
@@ -19,6 +19,16 @@ if ($Kind -eq 'Server') {
 }
 $valid = (Test-Path -LiteralPath $target) -and ((Get-FileHash -LiteralPath $target -Algorithm $algorithm).Hash -eq $expected)
 if (-not $valid) {
+    foreach ($cache in $CacheDirectory) {
+        $cached = Join-Path $cache $spec.filename
+        if ((Test-Path -LiteralPath $cached) -and ((Get-FileHash -LiteralPath $cached -Algorithm $algorithm).Hash -eq $expected)) {
+            Copy-Item -LiteralPath $cached -Destination $target -Force
+            $valid = $true
+            break
+        }
+    }
+}
+if (-not $valid) {
     $partial = $target + '.download'
     Write-Host "Downloading from the official source: $url"
     Invoke-WebRequest -Uri $url -OutFile $partial -UseBasicParsing -UserAgent 'Mozilla/5.0 Project-SEELE/26'
@@ -36,8 +46,8 @@ if ($Kind -eq 'Server') {
     $found = $false
     for ($i = 0; $i -lt $lines.Length; $i++) {
         if ($lines[$i].StartsWith('resourcePacks:')) {
-            $packs = @($lines[$i].Substring(14) | ConvertFrom-Json)
-            $packs = @($packs | Where-Object { $_ -ne $key -and $_ -ne 'file/eva_real_model' })
+            $packs = ConvertFrom-Json -InputObject $lines[$i].Substring(14)
+            $packs = @(foreach ($pack in $packs) { if ($pack -ne $key -and $pack -ne 'file/eva_real_model') { $pack } })
             $packs += @($key, 'file/eva_real_model')
             $lines[$i] = 'resourcePacks:' + (ConvertTo-Json -InputObject @($packs) -Compress)
             $found = $true
@@ -48,7 +58,8 @@ if ($Kind -eq 'Server') {
     $found = $false
     for ($i = 0; $i -lt $lines.Length; $i++) {
         if ($lines[$i].StartsWith('incompatibleResourcePacks:')) {
-            $accepted = @($lines[$i].Substring(26) | ConvertFrom-Json)
+            $accepted = @(ConvertFrom-Json -InputObject $lines[$i].Substring(26))
+            $accepted = @(foreach ($pack in $accepted) { $pack })
             if ($accepted -notcontains $key) { $accepted += $key }
             $lines[$i] = 'incompatibleResourcePacks:' + (ConvertTo-Json -InputObject @($accepted) -Compress)
             $found = $true
