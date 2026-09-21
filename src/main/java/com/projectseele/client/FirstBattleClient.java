@@ -69,6 +69,10 @@ public final class FirstBattleClient
         if(EvaCommandFeedClient.isOpticalRenderPass())
             return new FirstBattleClip.CameraPose(FirstBattleClip.point(spec,true,"eye_blocks",time),FirstBattleClip.point(spec,true,"look_blocks",time),70);
         capture(eva,camera);var shot=FirstBattleClip.camera(spec,time);Vec3 p=shot.position(),target=shot.target();
+        // Cut on the detonation flash to a wide skyline view. The return
+        // below still hands control back through the original camera blend.
+        if(time>=FirstBattleClip.DEATH_TICK/20F&&time<FirstBattleClip.RETURN_TICK/20F)
+        {p=FirstBattleClip.world(spec,new Vec3(0,90,-205));target=FirstBattleClip.world(spec,new Vec3(0,140,25));}
         if(time<1.2F)
         {
             float mix=FirstBattleClip.smooth(time/1.2F);p=entryPosition.lerp(p,mix);target=entryTarget.lerp(target,mix);
@@ -106,7 +110,7 @@ public final class FirstBattleClient
     {
         var eva=actor();if(eva==null)return;float time=eva.firstBattleSignals().time(eva,1);
         if(EvaCommandFeedClient.isOpticalRenderPass()){event.setFOV(70);return;}
-        double mix=FirstBattleClip.smooth(time/1.2F)*(1-FirstBattleClip.smooth((time-21.6F)/1.4F));event.setFOV(event.getFOV()*(1-mix)+70*mix);
+        double mix=FirstBattleClip.smooth(time/1.2F)*(1-FirstBattleClip.smooth((time-21.6F)/1.4F));double directed=70+10*FirstBattleClip.smooth((time-18.3F)/.3F);event.setFOV(event.getFOV()*(1-mix)+directed*mix);
     }
     @SubscribeEvent public static void key(InputEvent.Key event)
     {

@@ -951,6 +951,7 @@ public final class EvaHangarBuilder
                                int variant, boolean open)
     {
         BlockPos bed = hangarBed(origin, variant);
+        int gateTop = FacilityLayoutR29.active(level.getServer()) ? -370-bed.getY() : 66;
         // The moving gate is narrower than the wet vessel. Fixed returns
         // must remain sealed even while the central transport opening moves.
         for(int side:new int[]{-1,1})for(int x=CORRIDOR_HALF_WIDTH+1;x<=HALF_WIDTH;x++)
@@ -964,14 +965,14 @@ public final class EvaHangarBuilder
         for (int x = -CORRIDOR_HALF_WIDTH;
              x <= CORRIDOR_HALF_WIDTH; x++)
         {
-            for (int y = 1; y <= 66; y++)
+            for (int y = 1; y <= gateTop; y++)
             {
                 BlockPos position = new BlockPos(bed.getX() + x,
                         bed.getY() + y, origin.getZ() + GATE_Z);
                 if (open)
                 {
                     if (Math.abs(x) == CORRIDOR_HALF_WIDTH
-                            || y == 1 || y == 66)
+                            || y == 1 || y == gateTop)
                     {
                         set(level, position,
                                 Blocks.IRON_BLOCK.defaultBlockState());
@@ -984,7 +985,7 @@ public final class EvaHangarBuilder
                 else
                 {
                     boolean edge = Math.abs(x) == CORRIDOR_HALF_WIDTH
-                            || y == 1 || y == 66;
+                            || y == 1 || y == gateTop;
                     set(level, position, edge
                             ? Blocks.IRON_BLOCK.defaultBlockState()
                             : Blocks.BARRIER.defaultBlockState());

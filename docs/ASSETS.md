@@ -286,3 +286,9 @@ Lux3D 原始网格、本地涂装与蒙皮处理、Pro 原始交付和 Blender �
 - `tools/refine_crouch_support_r25.py` 仅在既有私有动作上调整双腿支撑，私有动作 JSON 留在本地，不加入公开仓库。
 - 机库控制架由项目程序模型修改；`tools/refine_plug_frame_r25.py` 与 `audit_plug_machinery_r25.py` 记录三机插入栓扫掠包络。
 - 写实基础材质候选为 illystray 的 [rotrBLOCKS](https://modrinth.com/resourcepack/rotrblocks)，V87、128×、2D Foliage。固定版本、官方 CDN 和散列见 `tools/realistic_pack_r25.json`。[作者条款](https://illystray.com/terms/) 允许个人使用、禁止重新分发；其 ZIP 和像素不进入 Git 或共享客户端包，使用官方直连下载。保留作者原档，置于 EVA 专用包下方。
+
+## R29 运输机与核爆声画
+
+- `tools/build_un_transport_r29.py` 生成原创 UN 垂直起降运输机及自行载台，几何接入既有设施网格；没有下载或改编第三方飞机网格。
+- `tools/build_finale_audio_r29.py` 以固定种子合成 `angel_nuclear_finale.ogg`，不含电影、动画或现实爆炸录音。烟云和十字架为实时程序几何。
+- 可选 [Complementary Unbound r5.3](https://modrinth.com/shader/complementary-unbound) 保留作者原文件，使用 [Oculus](https://modrinth.com/mod/oculus) 加载。固定官方 CDN 与 SHA-512 见 `tools/city_shaders_r29.json`；不将光影 ZIP 放入本仓库或交付压缩包，客户端脚本从作者来源下载。

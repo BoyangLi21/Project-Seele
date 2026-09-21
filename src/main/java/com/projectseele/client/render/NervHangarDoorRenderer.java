@@ -54,6 +54,7 @@ public final class NervHangarDoorRenderer
         int facilityLight = LightTexture.FULL_BRIGHT;
         double slide = door.getOpenProgress(partialTick) * 17.0D;
         poses.pushPose();
+        poses.scale(1,door.visualHeight()/65F,1);
         TvFacilityMeshes.pressureDoors(poses,facilityLight,door.getOpenProgress(partialTick));
         splitLogo(poses, buffers, slide,door.getVariant()==3);
         poses.popPose();

@@ -213,8 +213,11 @@ public final class ClientForgeEvents
         }
 
         while (Keybinds.COMMAND_RADIO.consumeClick())
-            SeeleNetwork.CHANNEL.sendToServer(new com.projectseele.network.ServerboundStaffConversationPacket(
-                    new java.util.UUID(0,0), "RADIO"));
+        {
+            if(eva instanceof com.projectseele.entity.EvaPrototypeEntity)
+                SeeleNetwork.CHANNEL.sendToServer(new com.projectseele.network.ServerboundUNCommandPacket("open",0,0,0));
+            else SeeleNetwork.CHANNEL.sendToServer(new com.projectseele.network.ServerboundStaffConversationPacket(new java.util.UUID(0,0), "RADIO"));
+        }
         while (Keybinds.CYCLE_WEAPON.consumeClick())
         {
             if (eva != null)
@@ -265,6 +268,7 @@ public final class ClientForgeEvents
             }
         }
         while(Keybinds.UN_EYE_LASER.consumeClick())if(eva instanceof com.projectseele.entity.EvaPrototypeEntity)send(ServerboundEvaControlPacket.ACTION_UN_EYE_LASER);
+        while(Keybinds.UN_FLIGHT.consumeClick())if(eva instanceof com.projectseele.entity.EvaPrototypeEntity)send(ServerboundEvaControlPacket.ACTION_UN_FLIGHT);
         while (Keybinds.COMMANDER_POSE.consumeClick())
         {
             if (player.isPassenger())
@@ -325,7 +329,13 @@ public final class ClientForgeEvents
                 send(rawSprint ? ServerboundEvaControlPacket.ACTION_SPRINT_START
                         : ServerboundEvaControlPacket.ACTION_SPRINT_STOP);
             }
-            handleJumpInput(eva, rawJump);
+            if(eva instanceof com.projectseele.entity.EvaPrototypeEntity un&&un.isUNFlying())
+            {
+                int mask=(rawJump?1:0)|(rawCrouch?2:0);un.setFlightInput(mask);
+                if(player.tickCount%3==0)SeeleNetwork.CHANNEL.sendToServer(new ServerboundEvaControlPacket(ServerboundEvaControlPacket.ACTION_UN_FLIGHT_INPUT,mask));
+                clearJumpRequest();
+            }
+            else handleJumpInput(eva, rawJump);
             minecraft.options.keyShift.setDown(false);
             player.setShiftKeyDown(false);
         }
@@ -337,6 +347,8 @@ public final class ClientForgeEvents
             // behind the GUI.
             if (eva != null)
             {
+                if(eva instanceof com.projectseele.entity.EvaPrototypeEntity un&&un.isUNFlying())
+                {un.setFlightInput(0);if(player.tickCount%3==0)SeeleNetwork.CHANNEL.sendToServer(new ServerboundEvaControlPacket(ServerboundEvaControlPacket.ACTION_UN_FLIGHT_INPUT,0));}
                 if (crouchHeld)
                 {
                     send(ServerboundEvaControlPacket.ACTION_CROUCH_STOP);

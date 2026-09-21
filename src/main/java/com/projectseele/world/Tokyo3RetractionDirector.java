@@ -135,6 +135,8 @@ public final class Tokyo3RetractionDirector
     public static RequestResult request(ServerLevel level, BlockPos origin,
                                         boolean retract)
     {
+        if (!retract && CityBattlefieldR29.combatActive(level))
+            return new RequestResult(false, "城市中心正在交战，请先结束或取消作战，再恢复城市。");
         retireLegacyS20Districts(level, origin);
         if (!SeeleConfig.dynamicTokyo3RetractionEnabled())
         {

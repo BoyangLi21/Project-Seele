@@ -7,6 +7,7 @@ import com.projectseele.entity.SachielEntity;
 import com.projectseele.registry.ModEntities;
 import com.projectseele.world.EvaPilotResolver;
 import com.projectseele.world.FirstBattleSavedData;
+import com.projectseele.world.CityBattlefieldR29;
 import net.minecraft.commands.Commands;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
@@ -61,7 +62,7 @@ public final class FirstBattleMission
                 a->a.isAlive()&&a.getTags().contains("seele_first_battle_mission")).isEmpty())
         {player.displayClientMessage(Component.literal("迎击区域仍有未归档的任务目标，本次不会重复生成使徒。"),false);return false;}
         data.missionOwner=player.getUUID();data.missionAngel=null;data.missionLastPos=null;data.missionCancelRequested=false;data.missionMissingTicks=0;data.setDirty();Site s=site(level);
-        player.displayClientMessage(Component.literal("作战命令：驾驶初号机前往东北迎击大道。目标区域 X "+(int)s.hero.x+" / Z "+(int)s.hero.z+"。削弱使徒后将进入自主作战演出。"),false);return true;
+        player.displayClientMessage(Component.literal("作战命令：驾驶初号机前往"+CityBattlefieldR29.name(level)+"。目标区域 X "+(int)s.hero.x+" / Z "+(int)s.hero.z+"。削弱使徒后将进入自主作战演出。"),false);return true;
     }
     public static boolean cancel(ServerPlayer player)
     {
@@ -127,7 +128,8 @@ public final class FirstBattleMission
             var eva=EvaPilotResolver.controlTarget(player);double distance=eva==null?player.position().distanceTo(s.hero):eva.position().distanceTo(s.hero);
             if(data.missionAngel==null)
             {
-                bar.setName(Component.literal("初号机 · 前往东北迎击大道 / "+Math.round(distance)+" m"));bar.setProgress(1);
+                bar.setName(Component.literal("初号机 · 前往"+CityBattlefieldR29.name(level)+" / "+Math.round(distance)+" m"));bar.setProgress(1);
+                String blocked=CityBattlefieldR29.obstruction(level);if(!blocked.isEmpty()){bar.setName(Component.literal(blocked));continue;}
                 if(eva==null||eva.level()!=level||eva.getUnitVariant()!=EvaUnit01Entity.UNIT_01||eva.isExperimentalUnit()||distance>90)continue;
                 loadTarget(level,BlockPos.containing(s.angel));SachielEntity angel=ModEntities.SACHIEL.get().create(level);if(angel==null)continue;
                 angel.moveTo(s.angel.x,s.angel.y,s.angel.z,s.yaw+180,0);angel.yBodyRot=angel.yHeadRot=s.yaw+180;angel.setPersistenceRequired();angel.addTag("seele_first_battle_mission");angel.addTag("seele_first_battle_replay");angel.setTarget(eva);

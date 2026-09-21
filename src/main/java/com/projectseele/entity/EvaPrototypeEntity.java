@@ -11,6 +11,48 @@ import net.minecraft.network.chat.Component;
 /** Independent experimental airframe; it never occupies a canonical Unit-01 fleet slot. */
 public final class EvaPrototypeEntity extends EvaUnit01Entity
 {
+    private static final net.minecraft.network.syncher.EntityDataAccessor<Boolean> FLIGHT=net.minecraft.network.syncher.SynchedEntityData.defineId(EvaPrototypeEntity.class,net.minecraft.network.syncher.EntityDataSerializers.BOOLEAN);
+    private static final net.minecraft.network.syncher.EntityDataAccessor<Boolean> LANDING=net.minecraft.network.syncher.SynchedEntityData.defineId(EvaPrototypeEntity.class,net.minecraft.network.syncher.EntityDataSerializers.BOOLEAN);
+    private int flightInput,noPilotFlightTicks;
+    private long flightInputAt;
+    public boolean isUNFlying(){return entityData.get(FLIGHT);}
+    public boolean isUNLanding(){return entityData.get(LANDING);}
+    public void setFlightInput(int mask){flightInput=mask&3;flightInputAt=level().getGameTime();}
+    public void stopUNFlight(){entityData.set(FLIGHT,false);entityData.set(LANDING,false);flightInput=0;setNoGravity(false);}
+    public void landUNFlight(){if(isUNFlying())entityData.set(LANDING,true);}
+    public void toggleUNFlight(net.minecraft.server.level.ServerPlayer pilot)
+    {
+        if(getPilotEntity()!=pilot)return;
+        if(getUNSerial()!=1){pilot.sendSystemMessage(Component.literal("飞行系统仅配置于 EVA-UN-01。"));return;}
+        if(isUNFlying()){entityData.set(LANDING,!isUNLanding());pilot.sendSystemMessage(Component.literal(isUNLanding()?"UN-01 自动降落中。":"UN-01 恢复悬停。"));return;}
+        if(isNervLogisticsLocked()||!isPoweredOn()||getActivationTicks()>0||isInsideTestHangar()||isPilotProne()||isPilotCrouching()||isFirstBattleActive())
+        {pilot.sendSystemMessage(Component.literal("请先完成接入、站立并离开机库，再开启飞行。"));return;}
+        entityData.set(FLIGHT,true);entityData.set(LANDING,false);flightInput=0;noPilotFlightTicks=0;setNoGravity(true);
+        pilot.sendSystemMessage(Component.literal("UN-01 飞行开启：WASD 平移，空格上升，Shift 下降，Ctrl 加速；F 自动降落。"));
+    }
+    @Override public boolean isNoGravity(){return isUNFlying()||super.isNoGravity();}
+    @Override public void setPilotCrouching(net.minecraft.server.level.ServerPlayer p,boolean crouching){if(!isUNFlying())super.setPilotCrouching(p,crouching);}
+    @Override public void toggleProne(net.minecraft.server.level.ServerPlayer p){if(!isUNFlying())super.toggleProne(p);}
+    @Override public void pilotJump(net.minecraft.server.level.ServerPlayer p){if(!isUNFlying())super.pilotJump(p);}
+    @Override public void pilotJump(net.minecraft.server.level.ServerPlayer p,int id){if(!isUNFlying())super.pilotJump(p,id);}
+    @Override public void travel(Vec3 input)
+    {
+        if(!isUNFlying()){super.travel(input);return;}
+        if(isNervLogisticsLocked()){setDeltaMovement(Vec3.ZERO);return;}
+        if(!isControlledByLocalInstance())return;
+        double vertical=isUNLanding()?-.48:level().getGameTime()-flightInputAt>10?0:((flightInput&1)!=0?1:0)-((flightInput&2)!=0?1:0);
+        double speed=isPilotSprinting()?2.8:1.65;
+        Vec3 horizontal=new Vec3(input.x,0,input.z);
+        if(horizontal.lengthSqr()>1)horizontal=horizontal.normalize();
+        horizontal=horizontal.yRot((float)-Math.toRadians(getYRot())).scale(isUNLanding()?0:speed);
+        Vec3 wanted=horizontal.add(0,vertical*(isUNLanding()?1:1.25),0);
+        Vec3 velocity=getDeltaMovement().lerp(wanted,.14);
+        move(net.minecraft.world.entity.MoverType.SELF,velocity);
+        setDeltaMovement(horizontalCollision?new Vec3(0,velocity.y,0):velocity);
+        if(verticalCollision)setDeltaMovement(getDeltaMovement().multiply(1,0,1));
+        fallDistance=0;
+        if(!level().isClientSide&&onGround()&&(isUNLanding()||vertical<0)){stopUNFlight();setDeltaMovement(Vec3.ZERO);}
+    }
     public int getUNSerial(){return entityData.get(UN_SERIAL);}
     public void setUNSerial(int serial){entityData.set(UN_SERIAL,net.minecraft.util.Mth.clamp(serial,0,1));}
     @Override public String experimentalAssetName(){return getUNSerial()==1?"eva_un01":"eva_prototype";}
@@ -22,7 +64,7 @@ public final class EvaPrototypeEntity extends EvaUnit01Entity
     private static final net.minecraft.network.syncher.EntityDataAccessor<org.joml.Vector3f> LASER_END=net.minecraft.network.syncher.SynchedEntityData.defineId(EvaPrototypeEntity.class,net.minecraft.network.syncher.EntityDataSerializers.VECTOR3);
     private static final net.minecraft.network.syncher.EntityDataAccessor<Integer> UN_SERIAL=net.minecraft.network.syncher.SynchedEntityData.defineId(EvaPrototypeEntity.class,net.minecraft.network.syncher.EntityDataSerializers.INT);
     private final EvaPoseSignalClock eyeClock=new EvaPoseSignalClock();
-    @Override protected void defineSynchedData(){super.defineSynchedData();entityData.define(UN_SERIAL,0);entityData.define(LASER_AGE,-1);entityData.define(LASER_COOLDOWN,0);entityData.define(EYE_YAW,0F);entityData.define(EYE_PITCH,0F);entityData.define(LASER_END,new org.joml.Vector3f());}
+    @Override protected void defineSynchedData(){super.defineSynchedData();entityData.define(FLIGHT,false);entityData.define(LANDING,false);entityData.define(UN_SERIAL,0);entityData.define(LASER_AGE,-1);entityData.define(LASER_COOLDOWN,0);entityData.define(EYE_YAW,0F);entityData.define(EYE_PITCH,0F);entityData.define(LASER_END,new org.joml.Vector3f());}
     public boolean isEyeLaserActive(){return entityData.get(LASER_AGE)>=0;}
     public float eyeLaserAge(float partial){return level().isClientSide?eyeClock.sample(FirstBattleSignals.clientFrameTime()):entityData.get(LASER_AGE);}
     public int eyeLaserCooldown(){return entityData.get(LASER_COOLDOWN);}
@@ -40,6 +82,13 @@ public final class EvaPrototypeEntity extends EvaUnit01Entity
     @Override public void tick()
     {
         super.tick();if(level().isClientSide)return;com.projectseele.world.UNRecoveryR22.remember(this);com.projectseele.world.UNPlugDirector.tick(this);if(eyeLaserCooldown()>0)entityData.set(LASER_COOLDOWN,eyeLaserCooldown()-1);
+        if(isUNFlying())
+        {
+            if(getPilotEntity()==null){if(++noPilotFlightTicks>100)landUNFlight();}else noPilotFlightTicks=0;
+            if(isNervLogisticsLocked()||getUNSerial()!=1)stopUNFlight();
+            else if(onGround()&&(isUNLanding()||(flightInput&2)!=0)&&tickCount>5){stopUNFlight();setDeltaMovement(Vec3.ZERO);}
+            fallDistance=0;
+        }
         if(!isEyeLaserActive())return;
         if(!(getPilotEntity() instanceof net.minecraft.server.level.ServerPlayer pilot)||!isPoweredOn()||isPilotControlLocked()){entityData.set(LASER_AGE,-1);return;}
         int age=entityData.get(LASER_AGE)+1;entityData.set(LASER_AGE,age);if(age<8)eyeAim(pilot);if(age==8)fireEyeLaser(pilot);if(age>=20)entityData.set(LASER_AGE,-1);
@@ -65,8 +114,8 @@ public final class EvaPrototypeEntity extends EvaUnit01Entity
         if("r11-mechanics".equals(System.getProperty("projectseele.regionalBuild","")))com.projectseele.ProjectSeele.LOGGER.info("R11 EYE PULSE origin={} end={} hit={} direction={}",eye,end,hit==null?"none":hit.getEntity().getType(),direction);
     }
     @Override public void onSyncedDataUpdated(net.minecraft.network.syncher.EntityDataAccessor<?> key){super.onSyncedDataUpdated(key);if(key.equals(LASER_AGE)&&eyeClock!=null&&level().isClientSide)eyeClock.accept(entityData.get(LASER_AGE),false,true);}
-    @Override public void addAdditionalSaveData(net.minecraft.nbt.CompoundTag t){super.addAdditionalSaveData(t);t.putInt("UNSerial",getUNSerial());t.putInt("UNEyeCooldown",eyeLaserCooldown());}
-    @Override public void readAdditionalSaveData(net.minecraft.nbt.CompoundTag t){super.readAdditionalSaveData(t);setUNSerial(t.getInt("UNSerial"));entityData.set(LASER_COOLDOWN,t.getInt("UNEyeCooldown"));entityData.set(LASER_AGE,-1);}
+    @Override public void addAdditionalSaveData(net.minecraft.nbt.CompoundTag t){super.addAdditionalSaveData(t);t.putInt("UNSerial",getUNSerial());t.putInt("UNEyeCooldown",eyeLaserCooldown());t.putBoolean("UNFlight",isUNFlying());t.putBoolean("UNLanding",isUNLanding());}
+    @Override public void readAdditionalSaveData(net.minecraft.nbt.CompoundTag t){super.readAdditionalSaveData(t);setUNSerial(t.getInt("UNSerial"));entityData.set(LASER_COOLDOWN,t.getInt("UNEyeCooldown"));entityData.set(LASER_AGE,-1);entityData.set(FLIGHT,getUNSerial()==1&&t.getBoolean("UNFlight"));entityData.set(LANDING,t.getBoolean("UNLanding"));}
     public EvaPrototypeEntity(EntityType<? extends EvaUnit01Entity> type,Level level)
     {
         super(type,level);

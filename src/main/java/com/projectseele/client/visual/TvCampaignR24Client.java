@@ -25,8 +25,8 @@ public final class TvCampaignR24Client
         if(!TvCampaignR24Review.ENABLED||event.phase!=TickEvent.Phase.END)return;var mc=Minecraft.getInstance();if(mc.player==null||mc.level==null)return;
         if(!started)
         {
-            started=true;oldPause=mc.options.pauseOnLostFocus;oldGui=mc.options.hideGui;oldDistance=mc.options.renderDistance().get();mc.options.pauseOnLostFocus=false;mc.options.renderDistance().set(12);mc.options.broadcastOptions();
-            folder=mc.gameDirectory.toPath().resolve("../artifacts/facility_r24/native_campaign_"+System.currentTimeMillis()).normalize();try{Files.createDirectories(folder);}catch(Exception e){throw new IllegalStateException(e);}TvCampaignR24Review.ready=true;
+            started=true;oldPause=mc.options.pauseOnLostFocus;oldGui=mc.options.hideGui;oldDistance=mc.options.renderDistance().get();mc.options.pauseOnLostFocus=false;mc.options.renderDistance().set(TvCampaignR24Review.R29?20:12);mc.options.broadcastOptions();
+            folder=mc.gameDirectory.toPath().resolve((TvCampaignR24Review.R29?"../artifacts/facility_r29/native_campaign_":"../artifacts/facility_r24/native_campaign_")+System.currentTimeMillis()).normalize();try{Files.createDirectories(folder);}catch(Exception e){throw new IllegalStateException(e);}TvCampaignR24Review.ready=true;
         }
         if(TvCampaignR24Review.finished)
         {

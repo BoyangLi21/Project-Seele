@@ -15,11 +15,13 @@ public final class SachielStrike
     }
     private static Vec3 world(Matrix4f root,float x,float y,float z){return new Vec3(root.transformPosition(new Vector3f(x,y,z).div(16)));}
     public static Frame sample(SachielEntity actor,float partial)
+    {return sample(actor,actor.strikeAge(partial),partial);}
+    public static Frame sample(SachielEntity actor,float age,float partial)
     {
-        float age=actor.strikeAge(partial);Matrix4f root=root(actor,partial);Vec3 shoulder=world(root,40.344577F,172.915088F,0),rest=world(root,45.523135F,122.333827F,-42.753209F),chamber=world(root,48,162,2);
+        Matrix4f root=root(actor,partial);Vec3 shoulder=world(root,40.344577F,172.915088F,0),rest=world(root,45.523135F,122.333827F,-42.753209F),chamber=world(root,48,162,2);
         Vec3 direction=actor.strikeAim().subtract(shoulder).normalize();double reach=actor.strikeAim().distanceTo(shoulder);
         Vec3 contact=shoulder.add(direction.scale(Math.min(27,Math.max(8,reach-(actor.strikeMode()==2?8:1)))));
-        float prepare=EvaDorsalMechanism.smooth(age/12),drive=EvaDorsalMechanism.smooth((age-12)/6),returning=EvaDorsalMechanism.smooth((age-25)/17);
+        float prepare=CombatMotionR29.chamber(age),drive=CombatMotionR29.drive(age),returning=CombatMotionR29.release(age);
         Vec3 hand=rest.lerp(chamber,prepare).lerp(contact,drive).lerp(rest,returning);
         float extension=actor.strikeMode()==2?EvaDorsalMechanism.smooth((age-18)/5)*(1-EvaDorsalMechanism.smooth((age-26)/8)):0;
         Vec3 tip=hand.add(direction.scale(extension*Math.min(38,Math.max(2,reach-shoulder.distanceTo(contact)+2))));

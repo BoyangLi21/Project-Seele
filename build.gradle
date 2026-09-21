@@ -352,6 +352,9 @@ dependencies {
     if (project.hasProperty('lowEndClient') || project.hasProperty('optimizedClient')) {
         runtimeOnly fg.deobf('local:embeddium:0.3.31+mc1.20.1')
     }
+    if (project.hasProperty('cityShaders')) {
+        runtimeOnly fg.deobf('local:oculus:mc1.20.1-1.8.0')
+    }
     if (project.hasProperty('clientOcclusion')) {
         runtimeOnly fg.deobf('local:entityculling-forge:1.7.3-mc1.20.1')
     }
@@ -446,8 +449,14 @@ tasks.register('verifyEvaPoseTransition', JavaExec) {
     classpath = sourceSets.test.runtimeClasspath
     mainClass = 'com.projectseele.client.render.EvaPoseTransitionTest'
 }
+tasks.register('verifyLaunchMotionR29', JavaExec) {
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.projectseele.world.LaunchMotionR29Test'
+}
 tasks.named('check').configure {
     dependsOn 'verifyEvaPoseTransition'
+    dependsOn 'verifyLaunchMotionR29'
 }
 
 tasks.register('verifyEvaVideoCodec', JavaExec) {
@@ -468,6 +477,13 @@ tasks.register('verifyBiomeCornerCache', JavaExec) {
     doFirst { workingDir.mkdirs() }
 }
 tasks.named('check').configure { dependsOn 'verifyBiomeCornerCache' }
+
+tasks.register('verifyCombatMotionR29', JavaExec) {
+    dependsOn testClasses
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.projectseele.entity.CombatMotionR29Test'
+}
+tasks.named('check').configure { dependsOn 'verifyCombatMotionR29' }
 
 // Compile/prepare with ForgeGradle, then release the build JVM before playing.
 // Export only explicitly changed environment values, not the user's full env.

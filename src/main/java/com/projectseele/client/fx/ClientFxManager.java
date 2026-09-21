@@ -87,6 +87,9 @@ public final class ClientFxManager
     }
 
     public static void addNukeFx(com.projectseele.network.ClientboundNukeFxPacket packet)
+    { addNukeFx(packet, true); }
+
+    public static void addNukeFx(com.projectseele.network.ClientboundNukeFxPacket packet, boolean withSound)
     {
         Vec3 pos = new Vec3(packet.x, packet.y, packet.z);
         float configuredIntensity = fxIntensity();
@@ -121,7 +124,7 @@ public final class ClientFxManager
             }
         }
         Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.level != null)
+        if (minecraft.level != null && withSound)
         {
             minecraft.level.playLocalSound(packet.x, packet.y, packet.z,
                     packet.angelCross ? ModSounds.CROSS_EXPLOSION.get() : SoundEvents.GENERIC_EXPLODE,

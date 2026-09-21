@@ -23,10 +23,12 @@ public final class TvCampaignR24Review
 {
     private static final String MODE=System.getProperty("projectseele.regionalBuild","");
     private static final boolean SAVE_MODE=MODE.equals("r24-campaign-save"),RESUME_MODE=MODE.equals("r24-campaign-resume");
-    public static final boolean ENABLED=MODE.equals("r24-campaign")||SAVE_MODE||RESUME_MODE;
+    public static final boolean R29=MODE.equals("r29-campaign");
+    public static final boolean ENABLED=R29||MODE.equals("r24-campaign")||SAVE_MODE||RESUME_MODE;
     public static volatile boolean ready,finished;
     public static volatile String input="",photo="";
     public static volatile int entityId=-1;
+    public static volatile int finalePackets;
     public static final Set<String> inputs=java.util.concurrent.ConcurrentHashMap.newKeySet(),photos=java.util.concurrent.ConcurrentHashMap.newKeySet();
     public static volatile float maxWhipRigError;
     public static volatile int whipRigSamples;
@@ -46,6 +48,7 @@ public final class TvCampaignR24Review
     private static float originalHealth;
     private static net.minecraft.world.phys.Vec3 surface;
     private static String failure="";
+    private static boolean cityRiseRequested,skipChecked,skipSent;
     private static final JsonObject checks=new JsonObject();
     private static JsonObject restart;
     private static final TicketType<net.minecraft.world.level.ChunkPos> REVIEW_ACTOR_TICKET=TicketType.create("r24_review_actor",Comparator.comparingLong(net.minecraft.world.level.ChunkPos::toLong),100);
@@ -59,7 +62,7 @@ public final class TvCampaignR24Review
             var server=event.getServer();if(server.getPlayerList().getPlayers().isEmpty())return;
             if(world==null)
             {
-                world=server.getWorldPath(LevelResource.ROOT).normalize();check("isolated_world",world.getFileName().toString().equals("SEELE_R24_TV_REVIEW"));
+                world=server.getWorldPath(LevelResource.ROOT).normalize();check("isolated_world",world.getFileName().toString().equals(R29?"SEELE_FIELD_R29_REVIEW":"SEELE_R24_TV_REVIEW"));
                 level=server.getLevel(FacilitySchemaV2.DIMENSION);player=server.getPlayerList().getPlayers().get(0);
                 var data=TvCampaignSavedData.get(level);
                 if(RESUME_MODE)
@@ -184,6 +187,15 @@ public final class TvCampaignR24Review
             if(stage==90){cleanupTick();return;}
             if(stage==0&&timer>70)
             {
+                if(R29)
+                {
+                    var origin=IntegratedNervMapBuilder.tokyo3Origin(level);
+                    if(!cityRiseRequested)
+                    {cityRiseRequested=true;check("city_rise_requested",Tokyo3RetractionDirector.depth(level,origin)==0||Tokyo3RetractionDirector.request(level,origin,false).accepted());}
+                    var city=Tokyo3RetractionSavedData.get(level).get(origin).orElseThrow();
+                    if(city.depth()!=0||city.targetDepth()!=0||city.cursor()!=0||city.voxelCursor()!=0)return;
+                    check("raised_city_blocks_battle",!CityBattlefieldR29.obstruction(level).isEmpty());photo="city_raised";if(!photos.contains(photo))return;
+                }
                 var previous=FirstBattleSavedData.get(level);
                 if(previous.missionOwner!=null||previous.active!=null){if(timer>600)throw new IllegalStateException("Previous isolated encounter did not retire");return;}
                 check("radio_contact",StaffConversationR24.contact(player,"美里")==1);next(1);input="briefing";return;
@@ -199,15 +211,27 @@ public final class TvCampaignR24Review
                 {if(timer>120)throw new IllegalStateException("UI dispatch was not accepted");return;}
                 if(timer<50)return;check("dispatch_does_not_spawn_at_distance",data.angel==null);
                 check("duplicate_dispatch_rejected",TvCampaignDirector.begin(player)==0);
+                if(R29)
+                {check("city_descent_requested",Tokyo3RetractionDirector.request(level,IntegratedNervMapBuilder.tokyo3Origin(level),true).accepted());next(25);input="close";return;}
                 next(3);input="close";
-                relocate(new net.minecraft.world.phys.Vec3(356.5,81,-459.5),0);return;
+                relocate(new net.minecraft.world.phys.Vec3(R29?32.5:356.5,81,R29?195.5:-459.5),0);return;
+            }
+            if(stage==25)
+            {
+                if(!CityBattlefieldR29.obstruction(level).isEmpty())return;
+                check("retracted_city_ready",true);next(3);relocate(new net.minecraft.world.phys.Vec3(32.5,81,195.5),0);return;
             }
             if(stage==3)
             {
                 if(data.angel==null)return;angel=data.angel;
-                if(timer%20==0)ProjectSeele.LOGGER.info("R24 FIRST APPROACH eva={} player={} target={} ticking={}",eva.position(),player.position(),level.getEntity(angel),level.isPositionEntityTicking(new BlockPos(356,81,-426)));
+                if(timer%20==0)ProjectSeele.LOGGER.info("R24 FIRST APPROACH eva={} player={} target={} ticking={}",eva.position(),player.position(),level.getEntity(angel),level.isPositionEntityTicking(new BlockPos(R29?32:356,81,R29?229:-426)));
                 if(level.getEntity(angel)==null&&timer<90)return;
                 check("bound_first_angel",level.getEntity(angel) instanceof SachielEntity);
+                if(R29)
+                {
+                    var p=level.getEntity(angel).position();check("target_in_city",p.x>=-144&&p.x<=207&&p.z>=41&&p.z<=392);
+                    check("rise_rejected_during_combat",!Tokyo3RetractionDirector.request(level,IntegratedNervMapBuilder.tokyo3Origin(level),false).accepted());
+                }
                 var enemy=(SachielEntity)level.getEntity(angel);enemy.setNoAi(true);enemy.setTarget(null);enemy.setDeltaMovement(net.minecraft.world.phys.Vec3.ZERO);
                 check("wrong_target_not_credited",!data.finish("sachiel",player.getUUID(),UUID.randomUUID()));
                 // The fixture teleports from the silo. Allow real destination
@@ -224,7 +248,9 @@ public final class TvCampaignR24Review
             if(stage==4)
             {
                 if(timer>150&&timer<240)photo="first_battle_director";
+                if(R29&&timer>392&&timer<430)photo="nuclear_cross_finale";
                 if(data.chapter!=1)return;check("native_first_battle_callback",data.completed.equals(List.of("sachiel"))&&data.active.isEmpty());
+                if(R29)check("one_finale_packet",finalePackets==1);
                 next(45);return;
             }
             if(stage==45)
@@ -235,9 +261,21 @@ public final class TvCampaignR24Review
                 if(timer>200&&clientBattleActive)throw new IllegalStateException("Client retained completed cinematic state for more than ten seconds");
                 if(timer<40||clientBattleActive)return;
                 check("client_received_control_return",!clientBattleActive);
-                relocate(new net.minecraft.world.phys.Vec3(356.5,81,-459.5),0);
+                relocate(new net.minecraft.world.phys.Vec3(R29?32.5:356.5,81,R29?195.5:-459.5),0);
                 if(timer<60)return;
+                if(R29&&!skipChecked)
+                {
+                    var probe=ModEntities.SACHIEL.get().create(level);probe.moveTo(32.5,81,229.5,180,0);probe.setNoAi(true);probe.setPersistenceRequired();probe.addTag("seele_first_battle_replay");
+                    check("skip_probe_added",level.addFreshEntity(probe));angel=probe.getUUID();check("skip_probe_started",FirstBattleDirector.tryStart(probe,eva,true));next(46);return;
+                }
                 check("second_chapter_dispatch",TvCampaignDirector.begin(player)==1);next(5);return;
+            }
+            if(stage==46)
+            {
+                if(timer>40&&!skipSent){check("skip_accepted",FirstBattleDirector.skip(player));FirstBattleDirector.skip(player);skipSent=true;}
+                if(timer>120&&FirstBattleSavedData.get(level).active==null)
+                {check("repeat_skip_no_duplicate_finale",finalePackets==2);check("replay_does_not_advance_chapter",data.chapter==1&&data.completed.equals(List.of("sachiel")));skipChecked=true;next(45);return;}
+                if(timer>400)throw new IllegalStateException("Skipped encounter did not release control");return;
             }
             if(stage==5)
             {
@@ -332,7 +370,7 @@ public final class TvCampaignR24Review
     {
         var report=new JsonObject();report.addProperty("passed",error.isEmpty());report.addProperty("error",error);report.addProperty("stage",stage);report.addProperty("ticks",age);report.add("checks",checks);
         report.addProperty("fixture",SAVE_MODE?"Real shutdown checkpoint with original ridden EVA and live Shamshel; return and original campaign restoration happen in the separate resume JVM":"original EVA and capsule through native launch/recovery; explicit test relocation and controlled test damage; campaign progress restored");
-        try{Files.writeString(world.resolve(RESUME_MODE?"r24_campaign_resume_review.json":SAVE_MODE?"r24_campaign_save_review.json":"r24_campaign_review.json"),new GsonBuilder().setPrettyPrinting().create().toJson(report));}catch(Exception ignored){}
+        try{Files.writeString(world.resolve(R29?"r29_campaign_review.json":RESUME_MODE?"r24_campaign_resume_review.json":SAVE_MODE?"r24_campaign_save_review.json":"r24_campaign_review.json"),new GsonBuilder().setPrettyPrinting().create().toJson(report));}catch(Exception ignored){}
         finished=true;
     }
     private TvCampaignR24Review(){}

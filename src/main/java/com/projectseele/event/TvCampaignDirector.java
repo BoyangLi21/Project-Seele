@@ -55,7 +55,7 @@ public final class TvCampaignDirector
         { case "approach" -> "作战已接受，等待初号机抵达"; case "combat" -> "目标正在交战"; case "cancel" -> "正在解除目标登记"; default -> "记录暂停，请查看提示"; };
         return "TV 1995 · 第 " + chapter.episode() + " 话 / " + chapter.title() + "\n"
                 + (chapter.playable() ? "可执行作战" : "后续制作档案 · 尚不可开始") + " · 已归档 " + data.completed.size() + " 章\n"
-                + activity + "\n" + chapter.briefing() + "\n" + data.notice;
+                + activity + "\n" + chapter.briefing().replace("东北迎击大道", CityBattlefieldR29.name(level)) + "\n" + CityBattlefieldR29.obstruction(level) + "\n" + data.notice;
     }
     public static int begin(ServerPlayer player)
     {
@@ -71,7 +71,7 @@ public final class TvCampaignDirector
         NervStaffDialogue.say(player, "葛城美里 · 作战通信", chapter.id().equals("sachiel")
                 ? "初号机编入迎击。先到机库登机，整备完成后我来协调发射。不要一个人把所有步骤都扛下来。"
                 : "这次的目标与上次不同。先观察它的攻击，再决定接近的方向。撤回路线也要记住。");
-        return message(player, "作战已接受。" + chapter.briefing(), true);
+        return message(player, "作战已接受。" + chapter.briefing().replace("东北迎击大道", CityBattlefieldR29.name(level)) + "\n" + CityBattlefieldR29.obstruction(level), true);
     }
     public static int cancel(ServerPlayer player)
     {
@@ -201,7 +201,9 @@ public final class TvCampaignDirector
             {
                 var eva = EvaPilotResolver.controlTarget(player);
                 double distance = (eva == null ? player.position() : eva.position()).distanceTo(site.hero);
-                bar.setName(Component.literal("第4使徒迎击 · 前往东北大道 / " + Math.round(distance) + " m")); bar.setProgress(1);
+                bar.setName(Component.literal("第4使徒迎击 · 前往" + CityBattlefieldR29.name(level) + " / " + Math.round(distance) + " m")); bar.setProgress(1);
+                String blocked = CityBattlefieldR29.obstruction(level);
+                if (!blocked.isEmpty()) { bar.setName(Component.literal(blocked)); continue; }
                 if (eva == null || eva.getUnitVariant() != EvaUnit01Entity.UNIT_01 || eva.isExperimentalUnit()
                         || eva.isNervLogisticsLocked() || !eva.isPoweredOn() || distance > 90) continue;
                 load(level, BlockPos.containing(site.angel));

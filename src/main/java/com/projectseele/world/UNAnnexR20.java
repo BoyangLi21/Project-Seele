@@ -121,14 +121,14 @@ public final class UNAnnexR20
             }
         }
         var unit=airframe(l);
-        if(unit!=null)
+        if(unit!=null&&!UNAirLiftR29.ownsMotion(l,1))
         {
             UUID old=HOISTS.remove(l);if(old!=null&&l.getEntity(old) instanceof NervCarrierPlatformEntity crane)crane.discard();
             if(s.phase==MilitaryR07Director.Phase.OPEN){unit.setNervLogisticsLocked(false);unit.setNoGravity(false);}
             else if(unit.position().distanceTo(HOME)<4&&!unit.isVehicle())
             {
                 unit.setNervLogisticsLocked(true);unit.setNoGravity(true);
-                if(unit.isUmbilicalSevered()||unit.isEntryPlugInserted()||unit.getPowerTicks()>0||unit.getWeapon()!=com.projectseele.entity.EvaUnit01Entity.WEAPON_FISTS)unit.enterHangarStandby();
+                if(unit.isUmbilicalSevered()||unit.isEntryPlugInserted()||unit.getWeapon()!=com.projectseele.entity.EvaUnit01Entity.WEAPON_FISTS)unit.enterHangarStandby();
             }
         }
         // Before an approved model is installed, retain the empty bay's hoist.

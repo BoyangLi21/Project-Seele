@@ -215,6 +215,7 @@ public final class EvaPoseGraph
         EvaMotionEngineV2.BoneWrites transitions = EvaPoseTransition.apply(
                 entity, model, partialTick);
         var jointWrites=entity.getMotionLabPhysicsPreview()==0&&!entity.isFirstBattleActive()?EvaArmArticulation.apply(model):EvaMotionEngineV2.BoneWrites.empty();
+        var flight=UNFlightPoseR29.apply(entity,model,partialTick,modelToWorld);
         var firearm=EvaRifleContactRig.apply(entity,model,partialTick,modelToWorld);
         var terrain=EvaFootPlacement.apply(entity,model,partialTick,modelToWorld);
         var optics=EvaUNLaserPose.apply(entity,model,modelToWorld);
@@ -223,7 +224,9 @@ public final class EvaPoseGraph
         var fingers=EvaHandPoseR28.apply(entity,model,partialTick);
         EvaPowerAttachmentR25.capture(entity,model,modelToWorld);
         Set<String> jointR=new LinkedHashSet<>(jointWrites.rotationBones());jointR.addAll(firearm.rotationBones());
+        jointR.addAll(flight.rotationBones());
         Set<String> jointP=new LinkedHashSet<>(jointWrites.positionBones());jointP.addAll(firearm.positionBones());
+        jointP.addAll(flight.positionBones());
         jointR.addAll(terrain.rotationBones());jointP.addAll(terrain.positionBones());
         jointR.addAll(optics.rotationBones());jointR.addAll(dorsal.rotationBones());
         jointR.addAll(shoulders.rotationBones());

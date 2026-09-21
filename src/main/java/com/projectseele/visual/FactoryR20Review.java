@@ -21,7 +21,8 @@ public final class FactoryR20Review
 {
     private static final boolean R21="r21-factory".equals(System.getProperty("projectseele.regionalBuild",""));
     public static final boolean R27="r27-factory".equals(System.getProperty("projectseele.regionalBuild",""));
-    public static final boolean R28_VISUAL="r28-visual-factory".equals(System.getProperty("projectseele.regionalBuild",""));
+    public static final boolean R29="r29-factory".equals(System.getProperty("projectseele.regionalBuild",""));
+    public static final boolean R28_VISUAL=R29||"r28-visual-factory".equals(System.getProperty("projectseele.regionalBuild",""));
     public static final boolean R28=R28_VISUAL||"r28-factory".equals(System.getProperty("projectseele.regionalBuild",""));
     public static final boolean ENABLED=R28||R27||R21||"r20-factory".equals(System.getProperty("projectseele.regionalBuild",""));
     public static volatile boolean ready,finished;public static volatile String phase="setup";
@@ -38,7 +39,7 @@ public final class FactoryR20Review
         {
             if(world==null)
             {
-                world=event.getServer().getWorldPath(LevelResource.ROOT).normalize();require(world.getFileName().toString().equals(R28?"SEELE_FIELD_R28_REVIEW":R27?"SEELE_R27_REVIEW":R21?"SEELE_R21_REVIEW":"SEELE_R20_REVIEW"),"Review world boundary");
+                world=event.getServer().getWorldPath(LevelResource.ROOT).normalize();require(world.getFileName().toString().equals(R29?"SEELE_FIELD_R29_REVIEW":R28?"SEELE_FIELD_R28_REVIEW":R27?"SEELE_R27_REVIEW":R21?"SEELE_R21_REVIEW":"SEELE_R20_REVIEW"),"Review world boundary");
                 level=event.getServer().getLevel(FacilitySchemaV2.DIMENSION);player=event.getServer().getPlayerList().getPlayers().get(0);player.stopRiding();player.setGameMode(GameType.CREATIVE);player.teleportTo(level,30.5,-394,-267.5,0,0);
             }
             require(++age<14000,"Cycle timeout: "+phase);timer++;
@@ -90,7 +91,7 @@ public final class FactoryR20Review
                         for(int i=0;i<6&&eva.getWeapon()!=EvaUnit01Entity.WEAPON_RIFLE;i++)eva.cycleWeapon(player);
                         require(eva.getWeapon()==EvaUnit01Entity.WEAPON_RIFLE,"Visual firing loadout");
                     }
-                    if(R28_VISUAL&&(timer==100||timer==140))eva.fireRifle(player);
+                    if(R29&&timer>=100&&timer<140||!R29&&R28_VISUAL&&(timer==100||timer==140))eva.fireRifle(player);
                     if(timer>180){eva.setYRot(90);eva.yBodyRot=90;eva.yHeadRot=90;require(EvaLogisticsDirector.requestRecovery(level,1).accepted(),"Recover rejected");next("recover_from_sideways");}
                 }
                 case 5 ->

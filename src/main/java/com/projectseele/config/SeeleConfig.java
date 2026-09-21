@@ -214,7 +214,7 @@ public final class SeeleConfig
                 .defineInRange("range", 192.0D, 16.0D, 1024.0D);
         EVA_RIFLE_INTERVAL_TICKS = common
                 .comment("Minimum ticks between automatic pallet-SMG pulses.")
-                .defineInRange("intervalTicks", 3, 1, 40);
+                .defineInRange("intervalTicks", 2, 1, 40);
         common.pop();
 
         common.push("positron_cannon");

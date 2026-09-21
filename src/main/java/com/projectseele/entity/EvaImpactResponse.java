@@ -11,7 +11,8 @@ public final class EvaImpactResponse
     public record Pose(float pitch,float roll,float head,float energy) {}
     public static void add(LivingEntity actor,long tick,Vec3 direction,float strength,float height)
     {
-        var list=HITS.computeIfAbsent(actor,e->new ArrayList<>());list.removeIf(i->tick-i.tick>24);list.add(new Impulse(tick,direction,(float)Math.min(1.3,strength),height));if(list.size()>5)list.remove(0);
+        if(!Double.isFinite(direction.lengthSqr())||!Float.isFinite(strength)||strength<=0)return;
+        var list=HITS.computeIfAbsent(actor,e->new ArrayList<>());list.removeIf(i->tick-i.tick>24);list.add(new Impulse(tick,direction.normalize(),(float)Math.min(1.3,strength),height));if(list.size()>5)list.remove(0);
     }
     public static Pose sample(LivingEntity entity,float partial)
     {
@@ -19,9 +20,12 @@ public final class EvaImpactResponse
         var list=HITS.get(entity);if(list==null)return new Pose(0,0,0,0);double p=0,r=0,h=0,e=0;double yaw=Math.toRadians(entity.yBodyRot);Vec3 forward=new Vec3(-Math.sin(yaw),0,Math.cos(yaw)),right=new Vec3(forward.z,0,-forward.x);
         for(var hit:list)
         {
-            double t=(entity.level().getGameTime()+partial-hit.tick)/20D;if(t<0||t>1.2)continue;
-            double shape=Math.sin(t*18)*Math.exp(-t*7.5)*2.3*hit.strength;
-            p+=shape*hit.direction.dot(forward)*.115;r-=shape*hit.direction.dot(right)*.105;h+=shape*(hit.height>.78?1.4:.45)*.065;e=Math.max(e,Math.abs(shape));
+            double t=entity.level().getGameTime()+partial-hit.tick;if(t<0||t>=24)continue;
+            double shape=CombatMotionR29.recoil(t)*hit.strength;
+            p+=shape*hit.direction.dot(forward)*.17;r-=shape*hit.direction.dot(right)*.15;
+            // Head lag follows the same force; rear and side hits must not all nod forward.
+            h+=CombatMotionR29.recoil(t-1.5)*hit.strength*hit.direction.dot(forward)*(hit.height>.78?.08:.025);
+            e=Math.max(e,CombatMotionR29.brace(t)*hit.strength);
         }
         float weight=entity instanceof EvaUnit01Entity eva?(eva.isPilotProne()?.3F:eva.hasLiveActionForRender(partial)?.4F:1):1;
         return new Pose((float)Math.max(-.20,Math.min(.20,p))*weight,(float)Math.max(-.20,Math.min(.20,r))*weight,(float)Math.max(-.16,Math.min(.16,h))*weight,(float)e);

@@ -12,7 +12,7 @@ import net.minecraftforge.network.simple.SimpleChannel;
  */
 public final class SeeleNetwork
 {
-    private static final String PROTOCOL_VERSION = "32";
+    private static final String PROTOCOL_VERSION = "33";
 
     public static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(
             new ResourceLocation(ProjectSeele.MODID, "main"),
@@ -23,6 +23,13 @@ public final class SeeleNetwork
     public static void register()
     {
         int id = 0;
+        CHANNEL.messageBuilder(ServerboundUNCommandPacket.class,id++,NetworkDirection.PLAY_TO_SERVER)
+                .encoder(ServerboundUNCommandPacket::encode).decoder(ServerboundUNCommandPacket::new).consumerMainThread(ServerboundUNCommandPacket::handle).add();
+        CHANNEL.messageBuilder(ClientboundUNStatusPacket.class,id++,NetworkDirection.PLAY_TO_CLIENT)
+                .encoder(ClientboundUNStatusPacket::encode).decoder(ClientboundUNStatusPacket::new).consumerMainThread(ClientboundUNStatusPacket::handle).add();
+        CHANNEL.messageBuilder(ClientboundBattleFinalePacket.class,id++,NetworkDirection.PLAY_TO_CLIENT)
+                .encoder(ClientboundBattleFinalePacket::encode).decoder(ClientboundBattleFinalePacket::new)
+                .consumerMainThread(ClientboundBattleFinalePacket::handle).add();
         CHANNEL.messageBuilder(ClientboundImpactResponsePacket.class,id++,NetworkDirection.PLAY_TO_CLIENT)
                 .encoder(ClientboundImpactResponsePacket::encode).decoder(ClientboundImpactResponsePacket::new)
                 .consumerMainThread(ClientboundImpactResponsePacket::handle).add();

@@ -1431,7 +1431,11 @@ public final class EntryPlugDirector
             // sitting on a floating model.
             player.setInvisible(true);
         }
-        if (passenger == null && (plug.getInsertionStage()
+        boolean emptyUNLoading=plug.isIndependentUNPlug()
+                &&plug.getLinkedEva() instanceof com.projectseele.entity.EvaPrototypeEntity un
+                &&UNAirLiftR29.emptyLoading(un)
+                &&un.getPersistentData().getUUID("UNPlug").equals(plug.getUUID());
+        if (passenger == null && !emptyUNLoading && (plug.getInsertionStage()
                 == EntryPlugCarrierEntity.STAGE_OCCUPIED
                 || plug.getInsertionStage()
                 == EntryPlugCarrierEntity.STAGE_SUSPENDED))

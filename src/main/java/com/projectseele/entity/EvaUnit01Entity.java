@@ -1008,6 +1008,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
 
     public boolean isUmbilicalConnected()
     {
+        if (this.isExperimentalUnit()) return false;
         return this.entityData.get(DATA_POWER_CONNECTED) || this.isCarrierPowerConnected();
     }
 
@@ -1529,7 +1530,8 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
         if (this.level().isClientSide || plug.getVehicle() != this
                 || !plug.isLockedToEva()
                 || !(plug.getFirstPassenger() instanceof Player
-                    || plug.getFirstPassenger() instanceof TrainingPilotEntity))
+                    || plug.getFirstPassenger() instanceof TrainingPilotEntity
+                    || this instanceof EvaPrototypeEntity un && com.projectseele.world.UNAirLiftR29.emptyLoading(un)))
         {
             return false;
         }
@@ -1950,6 +1952,10 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
         // server collision body and every render frame sample one curve.
         double eased = progress * progress * progress
                 * (progress * (progress * 6.0D - 15.0D) + 10.0D);
+        if (this.getLaunchPhase() == LAUNCH_ASCENT
+                && this.entityData.get(DATA_CARRIER_FROM_Y) < -200
+                && this.entityData.get(DATA_CARRIER_TO_Y) >= 80)
+            eased = com.projectseele.world.LaunchMotionR29.progress(progress);
         return new Vec3(
                 Mth.lerp(eased,
                         this.entityData.get(DATA_CARRIER_FROM_X),
@@ -3331,6 +3337,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
             return;
         }
         this.rifleCooldown = this.synchronizedCooldown(SeeleConfig.EVA_RIFLE_INTERVAL_TICKS.get());
+        if("r29-factory".equals(System.getProperty("projectseele.regionalBuild","")))com.projectseele.visual.FieldR28Review.rifleTicks.add(level.getGameTime());
         Vec3 look = this.pilotAimDirection(pilot);
         EvaRifleKinematics.Frame rifle = EvaRifleKinematics.sample(this,1,look);
         Vec3 muzzle = rifle.muzzle();
@@ -3467,6 +3474,14 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
     {
         if (!(this.level() instanceof ServerLevel server))
         {
+            return;
+        }
+        if (this.isExperimentalUnit())
+        {
+            this.setUmbilicalAnchor(null);
+            this.entityData.set(DATA_POWER_TICKS, this.getPowerCapacityTicks());
+            this.entityData.set(DATA_UMBILICAL_SEVERED, false);
+            this.batterySessionArmed = this.isEntryPlugInserted() && this.getPilotEntity() != null;
             return;
         }
         if (this.isBerserk())
@@ -4461,9 +4476,10 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
                 this.launchTargetY() - (this.launchBedPos.getY() + 1.0D));
         int originalTicks=Math.max(LAUNCH_ASCENT_TICKS,
                 Mth.ceil(distance / CONTINUOUS_ASCENT_BLOCKS_PER_TICK));
-        // Accelerate only the underground catapult curve. Surface hatch
-        // closing, support retention and the 18-tick release stay unchanged.
-        return this.launchContinuousRoute?Math.max(1,Mth.ceil(originalTicks/5.0D)):originalTicks;
+        // The speed impression belongs to the first rail segment. Compressing
+        // the entire 491 m route to 33 ticks erased the climb between launch
+        // and arrival. Both sides sample the same staged curve above.
+        return originalTicks;
     }
 
     private void tickSortieParkingLock()

@@ -254,7 +254,7 @@ public final class EvaHud
 
         int powerTicks = eva.getPowerTicks();
         int powerSeconds = Math.max(0, powerTicks / 20);
-        Component powerStatus = eva.isUmbilicalConnected()
+        Component powerStatus = eva.isExperimentalUnit() ? Component.literal("核能反应堆 · 在线") : eva.isUmbilicalConnected()
                 ? (powerTicks < eva.getPowerCapacityTicks()
                     ? Component.translatable(
                             "hud.projectseele.power_external_charging",
@@ -276,7 +276,7 @@ public final class EvaHud
         guiGraphics.fill(m + 6, m + 29, m + 106, m + 33, 0xA0202020);
         guiGraphics.fill(m + 6, m + 29,
                 m + 6 + Math.round(100.0F * powerFraction), m + 33,
-                eva.isUmbilicalConnected() ? 0xFF43E874
+                eva.isExperimentalUnit()||eva.isUmbilicalConnected() ? 0xFF43E874
                         : powerSeconds <= 60 ? 0xFFE03535 : 0xFFE89A22);
 
         int heading = Math.floorMod(Math.round(player.getYRot()), 360);

@@ -323,15 +323,15 @@ def jvm_args() -> str:
 """
 
 
-def build_server(root: Path, guide: str) -> None:
+def build_server(root: Path, guide: str, revision: str = 'R28') -> None:
     copy_runtime_mods(root / "mods")
     copy_configs(root / "config", client=False)
     copy_local_maps_without_commander_skin(root / "projectseele-local-maps")
     write_text(root / "server.properties", server_properties())
     write_text(root / "user_jvm_args.txt", jvm_args())
     write_text(root / "README_SERVER_CN.txt", guide)
-    guide_file=ROOT / "docs" / "MANUAL_ACCEPTANCE_R28.md"
-    if guide_file.exists():copy_file(guide_file,root / "R28_TEST_GUIDE_CN.md")
+    guide_file=ROOT / "docs" / f"MANUAL_ACCEPTANCE_{revision}.md"
+    if guide_file.exists():copy_file(guide_file,root / f"{revision}_TEST_GUIDE_CN.md")
     elif (ROOT / "docs" / "MANUAL_ACCEPTANCE_R25.md").exists():copy_file(ROOT / "docs" / "MANUAL_ACCEPTANCE_R25.md",root / "R25_TEST_GUIDE_CN.md")
     else:copy_file(ROOT / "docs" / "MANUAL_ACCEPTANCE_R24.md", root / "R24_TEST_GUIDE_CN.md")
     write_text(
@@ -341,12 +341,13 @@ def build_server(root: Path, guide: str) -> None:
     write_manifest(root, "server-files")
 
 
-def build_client(root: Path, guide: str) -> None:
+def build_client(root: Path, guide: str, revision: str = 'R28', city_shaders: bool = False) -> None:
     copy_runtime_mods(root / "mods")
     copy_configs(root / "config", client=True)
     copy_local_maps_without_commander_skin(root / "projectseele-local-maps")
     local = ROOT / ".Codex" / "local-mods"
     client_only = [local / "embeddium-0.3.31+mc1.20.1.jar"]
+    if city_shaders:client_only.append(local/'oculus-mc1.20.1-1.8.0.jar')
     client_only.extend(local / row['filename'] for row in json.loads((ROOT/'tools/client_navigation_r19.json').read_text()))
     missing = [path for path in client_only if not path.is_file()]
     if missing:
@@ -360,8 +361,8 @@ def build_client(root: Path, guide: str) -> None:
         root / "resourcepacks" / "eva_real_model",
     )
     write_text(root / "README_CLIENT_CN.txt", guide)
-    guide_file=ROOT / "docs" / "MANUAL_ACCEPTANCE_R28.md"
-    if guide_file.exists():copy_file(guide_file,root / "R28_TEST_GUIDE_CN.md")
+    guide_file=ROOT / "docs" / f"MANUAL_ACCEPTANCE_{revision}.md"
+    if guide_file.exists():copy_file(guide_file,root / f"{revision}_TEST_GUIDE_CN.md")
     elif (ROOT / "docs" / "MANUAL_ACCEPTANCE_R25.md").exists():copy_file(ROOT / "docs" / "MANUAL_ACCEPTANCE_R25.md",root / "R25_TEST_GUIDE_CN.md")
     else:copy_file(ROOT / "docs" / "MANUAL_ACCEPTANCE_R24.md", root / "R24_TEST_GUIDE_CN.md")
     write_text(
@@ -388,7 +389,7 @@ def build_world(root: Path) -> None:
     # R19 retires the LOD cache after observed underground transparency errors.
 
 
-def validate_outputs(server_zip: Path, world_zip: Path, client_zip: Path) -> None:
+def validate_outputs(server_zip: Path, world_zip: Path, client_zip: Path, city_shaders: bool = False) -> None:
     def project_jar_bytes(archive: zipfile.ZipFile) -> bytes:
         candidates = [
             name for name in archive.namelist()
@@ -447,8 +448,10 @@ def validate_outputs(server_zip: Path, world_zip: Path, client_zip: Path) -> Non
             raise ValueError("Client archive is missing the R04 Unit-01 animation")
         mod_names = [name for name in names if name.startswith("mods/") and name.endswith(".jar")]
         navigation_count=len(json.loads((ROOT/'tools/client_navigation_r19.json').read_text()))
-        if len(mod_names) != len(required_mods()) + 1 + navigation_count:
+        if len(mod_names) != len(required_mods()) + 1 + navigation_count + int(city_shaders):
             raise ValueError(f"Client mod count mismatch: {len(mod_names)}")
+        if city_shaders and 'mods/oculus-mc1.20.1-1.8.0.jar' not in names:
+            raise ValueError('Missing approved R29 shader loader')
         if any('distanthorizons' in name.lower() or 'acedium' in name.lower() or 'farsight' in name.lower() for name in names):
             raise ValueError('An unapproved terrain renderer entered the default client pack')
         client_project_jar = project_jar_bytes(archive)

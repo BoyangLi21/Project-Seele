@@ -12,7 +12,7 @@ public final class ShamshelWhipMotion
     public static final int CYCLE = 34, CONTACT_START = 12, CONTACT_END = 23;
     private static final float[][] PIVOTS = {{51.868429F,155.598410F,-11.655827F},
             {60.027508F,121.796513F,-29.139567F},{62.941464F,87.994615F,-52.451220F},{60.610299F,54.192717F,-67.603795F}};
-    public static float smooth(float x) { x = Mth.clamp(x, 0, 1); return x*x*(3-2*x); }
+    public static float smooth(float x) {return (float)CombatMotionR29.ease(x);}
     public static float envelope(float age) { return age < 0 ? 0 : smooth(age/10)*(1-smooth((age-23)/11)); }
     public static Vector3f rotation(int side, int segment, int activeSide, float age, float clock)
     {
@@ -23,7 +23,8 @@ public final class ShamshelWhipMotion
                 side*((segment==0?.72F:.11F)*(1-2*drive))*weight,
                 side*(segment==0?.13F:.045F)*weight);
     }
-    public static float bodyPitch(float age) { return -.04F*envelope(age); }
+    public static float bodyPitch(float age) { return (.035F-.085F*smooth((age-11)/9))*envelope(age); }
+    public static float bodyYaw(int side,float age) {return side*(.07F-.14F*smooth((age-11)/9))*envelope(age);}
     private static Vector3f pivot(int side, int index)
     {
         float[] p=PIVOTS[index]; return new Vector3f(-side*p[0],p[1],p[2]).div(16);
@@ -36,7 +37,7 @@ public final class ShamshelWhipMotion
         Vec3 origin=actor.level().isClientSide?actor.getPosition(partial):actor.position();
         float yaw=actor.isSweeping()?actor.sweepYaw():(actor.level().isClientSide?Mth.rotLerp(partial,actor.yBodyRotO,actor.yBodyRot):actor.yBodyRot);
         var matrix=new Matrix4f().translation(origin.toVector3f()).rotateY((float)Math.toRadians(180-yaw)).scale(5);
-        rotate(matrix,new Vector3f(0,93.822528F/16,0),new Vector3f(bodyPitch(age),0,0));
+        rotate(matrix,new Vector3f(0,93.822528F/16,0),new Vector3f(bodyPitch(age),bodyYaw(side,age),0));
         List<Vec3> points=new ArrayList<>();
         for(int i=0;i<4;i++)
         {

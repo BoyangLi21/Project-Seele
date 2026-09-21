@@ -37,6 +37,7 @@ public class SachielEntity extends Monster implements Angel, GeoEntity, SiegeAnc
     private static final net.minecraft.network.syncher.EntityDataAccessor<Integer> STRIKE_MODE=net.minecraft.network.syncher.SynchedEntityData.defineId(SachielEntity.class,net.minecraft.network.syncher.EntityDataSerializers.INT);
     private static final net.minecraft.network.syncher.EntityDataAccessor<org.joml.Vector3f> STRIKE_AIM=net.minecraft.network.syncher.SynchedEntityData.defineId(SachielEntity.class,net.minecraft.network.syncher.EntityDataSerializers.VECTOR3);
     private final EvaPoseSignalClock strikeClock=new EvaPoseSignalClock();private boolean strikeHit;private LivingEntity strikeTarget;
+    private float committedStrikeYaw;
     public boolean isStrikeActive(){return entityData.get(STRIKE_AGE)>=0;}
     public int strikeMode(){return entityData.get(STRIKE_MODE);}
     public float strikeAge(float partial){return level().isClientSide?strikeClock.sample(FirstBattleSignals.clientFrameTime()):entityData.get(STRIKE_AGE);}
@@ -46,20 +47,25 @@ public class SachielEntity extends Monster implements Angel, GeoEntity, SiegeAnc
     public boolean beginStrike(LivingEntity target,int mode)
     {
         if(level().isClientSide||isStrikeActive()||isFirstBattleActive()||!target.isAlive())return false;
-        strikeTarget=target;strikeHit=false;entityData.set(STRIKE_MODE,mode);entityData.set(STRIKE_AIM,target.position().add(0,target.getBbHeight()*.84,0).toVector3f());entityData.set(STRIKE_AGE,0);getNavigation().stop();return true;
+        strikeTarget=target;strikeHit=false;committedStrikeYaw=yBodyRot;entityData.set(STRIKE_MODE,mode);entityData.set(STRIKE_AIM,target.position().add(0,target.getBbHeight()*.84,0).toVector3f());entityData.set(STRIKE_AGE,0);getNavigation().stop();return true;
     }
     private void tickStrike()
     {
         int age=entityData.get(STRIKE_AGE)+1;entityData.set(STRIKE_AGE,age);getNavigation().stop();setDeltaMovement(getDeltaMovement().multiply(.45,1,.45));
+        setYRot(committedStrikeYaw);yBodyRot=yHeadRot=committedStrikeYaw;
+        if(age==12)playSound(com.projectseele.registry.ModSounds.EVA_SWING.get(),1.2F,.65F);
         if(age>=16&&age<=27&&!strikeHit&&strikeTarget!=null&&strikeTarget.isAlive())
         {
-            var f=SachielStrike.sample(this,1);Vec3 start=strikeMode()==2?f.hand():f.hand().subtract(f.direction().scale(4));Vec3 tip=strikeMode()==2?f.tip():f.hand().add(f.direction().scale(2));
+            for(int sample=0;sample<=4&&!strikeHit;sample++)
+            {
+            var f=SachielStrike.sample(this,age-1+sample/4F,1);Vec3 start=strikeMode()==2?f.hand():f.hand().subtract(f.direction().scale(4));Vec3 tip=strikeMode()==2?f.tip():f.hand().add(f.direction().scale(2));
             var wall=level().clip(new net.minecraft.world.level.ClipContext(start,tip,net.minecraft.world.level.ClipContext.Block.COLLIDER,net.minecraft.world.level.ClipContext.Fluid.NONE,this));
             var contact=strikeTarget.getBoundingBox().inflate(1.1).clip(start,wall.getLocation());
             if(contact.isPresent())
             {
                 strikeHit=true;boolean hit=com.projectseele.event.EvaHitFeedback.hurt(strikeTarget,damageSources().mobAttack(this),strikeMode()==2?55:(float)getAttributeValue(Attributes.ATTACK_DAMAGE),contact.get(),f.direction());
                 if(hit){strikeTarget.push(f.direction().x*.65,.16,f.direction().z*.65);playSound(com.projectseele.registry.ModSounds.EVA_IMPACT.get(),1.1F,.7F);}
+            }
             }
         }
         if(age>=42){entityData.set(STRIKE_AGE,-1);strikeTarget=null;}

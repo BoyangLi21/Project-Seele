@@ -38,6 +38,7 @@ public final class UNRecoveryR22
     }
     public static UUID identity(ServerLevel l,int serial){return serial==0?MilitaryR07Director.state(l).entities.get("prototype"):UNAnnexR20.state(l).unitId;}
     public static Vec3 home(int serial){return serial==0?new Vec3(6442.5,77,-6205.5):UNAnnexR20.HOME;}
+    public static BlockPos lastKnownPosition(ServerLevel level,UUID id){return locations(level).positions.get(id);}
     private static void load(ServerLevel l,BlockPos p)
     {
         for(int x=(p.getX()>>4)-1;x<=(p.getX()>>4)+1;x++)for(int z=(p.getZ()>>4)-1;z<=(p.getZ()>>4)+1;z++)
@@ -46,6 +47,11 @@ public final class UNRecoveryR22
     public static int request(CommandSourceStack source,int serial,boolean reset)
     {
         var l=source.getServer().getLevel(FacilitySchemaV2.DIMENSION);if(l==null||identity(l,serial)==null){source.sendFailure(Component.literal("没有该 UN 机体的已登记身份，未生成替代机"));return 0;}
+        if(UNAirLiftR29.active(l,serial))
+        {
+            if(reset)UNAirLiftR29.abortForMaintenance(l,serial);
+            else {source.sendFailure(Component.literal("运输任务仍在执行，请先取消运输并等待安全返回；管理员可用 reset 紧急复位。"));return 0;}
+        }
         JOBS.computeIfAbsent(l,k->new HashMap<>()).put(serial,new Job(serial,reset,source,source.getServer().getTickCount()));
         source.sendSuccess(()->Component.literal("EVA-UN-0"+serial+"：正在定位原机体与插入栓"),false);return 1;
     }
@@ -59,6 +65,7 @@ public final class UNRecoveryR22
             load(l,locations(l).positions.getOrDefault(id,BlockPos.containing(home)));load(l,BlockPos.containing(home));
             if(event.getServer().getTickCount()-job.started()>200){job.source().sendFailure(Component.literal("原机体或插入栓仍未加载，未删除或复制实体"));it.remove();continue;}
             if(!(l.getEntity(id) instanceof EvaPrototypeEntity eva))continue;
+            eva.stopUNFlight();
             load(l,eva.blockPosition());var data=eva.getPersistentData();
             if(data.hasUUID("UNPlug"))
             {

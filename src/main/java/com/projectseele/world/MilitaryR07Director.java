@@ -250,13 +250,13 @@ public final class MilitaryR07Director
             }
         }
         Entity unit=entity(level,data,"prototype");
-        if(unit instanceof EvaPrototypeEntity prototype)
+        if(unit instanceof EvaPrototypeEntity prototype&&!UNAirLiftR29.ownsMotion(level,0))
         {
             if(data.phase==Phase.OPEN){prototype.setNervLogisticsLocked(false);prototype.setNoGravity(false);}
             else if(prototype.position().distanceTo(HOME)<4&&!prototype.isVehicle())
             {
                 prototype.setNervLogisticsLocked(true);prototype.setNoGravity(true);
-                if(prototype.isUmbilicalSevered()||prototype.isEntryPlugInserted()||prototype.getPowerTicks()>0||prototype.getWeapon()!=com.projectseele.entity.EvaUnit01Entity.WEAPON_FISTS)
+                if(prototype.isUmbilicalSevered()||prototype.isEntryPlugInserted()||prototype.getWeapon()!=com.projectseele.entity.EvaUnit01Entity.WEAPON_FISTS)
                     prototype.enterHangarStandby();
             }
         }

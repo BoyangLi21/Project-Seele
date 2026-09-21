@@ -20,6 +20,10 @@ import java.util.Map;
 public final class RigidCapsuleGpu
 {
     private static ShaderInstance shader;
+    private static boolean shaderApiResolved,externalShader;
+    private static Object shaderApi;
+    private static java.lang.reflect.Method shaderPackActive;
+    private static long shaderQueryTick=Long.MIN_VALUE;
     private static final Map<Object,VertexBuffer> PARTS=new IdentityHashMap<>();
     public static long drawCalls;
     @SubscribeEvent public static void register(RegisterShadersEvent event)throws IOException
@@ -29,7 +33,10 @@ public final class RigidCapsuleGpu
     public static boolean draw(Object key,float[] vertices,int stride,float px,float py,float pz,
                                ResourceLocation texture,PoseStack poses,int light,int overlay)
     {
-        if(shader==null||Boolean.getBoolean("projectseele.disableRigidCapsuleGpu"))return false;
+        // Oculus supplies an extended entity vertex pipeline. Our private
+        // shader bypasses it and loses rigid armour while weighted seams stay
+        // visible. Let its normal VertexConsumer handle the complete mesh.
+        if(shader==null||Boolean.getBoolean("projectseele.disableRigidCapsuleGpu")||externalShaderActive())return false;
         VertexBuffer mesh=PARTS.get(key);
         if(mesh==null)
         {
@@ -57,6 +64,28 @@ public final class RigidCapsuleGpu
     {
         Runnable release=()->{PARTS.values().forEach(VertexBuffer::close);PARTS.clear();};
         if(RenderSystem.isOnRenderThread())release.run();else RenderSystem.recordRenderCall(release::run);
+    }
+    private static boolean externalShaderActive()
+    {
+        if(!shaderApiResolved)
+        {
+            shaderApiResolved=true;
+            if(!net.minecraftforge.fml.ModList.get().isLoaded("oculus"))return false;
+            try
+            {
+                var api=Class.forName("net.irisshaders.iris.api.v0.IrisApi");shaderApi=api.getMethod("getInstance").invoke(null);shaderPackActive=api.getMethod("isShaderPackInUse");
+            }
+            catch(ReflectiveOperationException error){externalShader=true;ProjectSeele.LOGGER.warn("Oculus API unavailable; using standard entity vertices",error);}
+        }
+        if(shaderPackActive==null)return externalShader;
+        long now=System.nanoTime()/50_000_000L;
+        if(now!=shaderQueryTick)
+        {
+            shaderQueryTick=now;
+            try{externalShader=(boolean)shaderPackActive.invoke(shaderApi);}
+            catch(ReflectiveOperationException error){externalShader=true;}
+        }
+        return externalShader;
     }
     private RigidCapsuleGpu() {}
 }

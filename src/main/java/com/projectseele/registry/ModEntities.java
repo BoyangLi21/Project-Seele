@@ -31,6 +31,9 @@ public class ModEntities
 {
     public static final DeferredRegister<EntityType<?>> ENTITY_TYPES =
             DeferredRegister.create(ForgeRegistries.ENTITY_TYPES, ProjectSeele.MODID);
+    public static final RegistryObject<EntityType<com.projectseele.entity.UNTransportEntity>> UN_TRANSPORT=ENTITY_TYPES.register("un_transport",
+            ()->EntityType.Builder.<com.projectseele.entity.UNTransportEntity>of(com.projectseele.entity.UNTransportEntity::new,MobCategory.MISC)
+                    .sized(8,8).clientTrackingRange(48).updateInterval(1).fireImmune().build("un_transport"));
 
     public static final RegistryObject<EntityType<RamielEntity>> RAMIEL = ENTITY_TYPES.register("ramiel",
             () -> EntityType.Builder.of(RamielEntity::new, MobCategory.MONSTER)

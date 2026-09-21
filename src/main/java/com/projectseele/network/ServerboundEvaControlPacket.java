@@ -36,6 +36,8 @@ public class ServerboundEvaControlPacket
     public static final int ACTION_TAKE_ARMAMENT = 17;
     public static final int ACTION_SKIP_FIRST_BATTLE = 18;
     public static final int ACTION_UN_EYE_LASER=19;
+    public static final int ACTION_UN_FLIGHT=20;
+    public static final int ACTION_UN_FLIGHT_INPUT=21;
 
     public final int action;
     public final int requestId;
@@ -115,6 +117,8 @@ public class ServerboundEvaControlPacket
                     case ACTION_SELF_LAUNCH -> eva.releaseLaunchFromPilot(sender);
                     case ACTION_SKIP_FIRST_BATTLE -> com.projectseele.event.FirstBattleDirector.skip(sender);
                     case ACTION_UN_EYE_LASER -> {if(eva instanceof com.projectseele.entity.EvaPrototypeEntity un)un.requestEyeLaser(sender);}
+                    case ACTION_UN_FLIGHT -> {if(eva instanceof com.projectseele.entity.EvaPrototypeEntity un)un.toggleUNFlight(sender);}
+                    case ACTION_UN_FLIGHT_INPUT -> {if(eva instanceof com.projectseele.entity.EvaPrototypeEntity un&&un.isUNFlying()&&requestId>=0&&requestId<=3)un.setFlightInput(requestId);}
                     case ACTION_TAKE_ARMAMENT ->
                     {
                         if (eva.level() instanceof net.minecraft.server.level.ServerLevel level)

@@ -567,7 +567,7 @@ public final class EntryPlugCarrierEntity extends PathfinderMob
     public boolean lockToEva(EvaUnit01Entity unit)
     {
         if (this.level().isClientSide || unit.level() != this.level()
-                || !this.isVehicle())
+                || (!this.isVehicle() && !(unit instanceof EvaPrototypeEntity un && com.projectseele.world.UNAirLiftR29.emptyLoading(un))))
         {
             return false;
         }

@@ -26,6 +26,15 @@ public final class UNPlugDirector
     {
         var d=eva.getPersistentData();return d.contains("UNHomeX")&&eva.position().distanceTo(new Vec3(d.getDouble("UNHomeX"),d.getDouble("UNHomeY"),d.getDouble("UNHomeZ")))<4;
     }
+    public static boolean prepareEmptyForTransport(EvaPrototypeEntity eva)
+    {
+        var plug=capsule(eva);
+        if(plug==null||plug.isVehicle()||!atDock(eva)||!UNAirLiftR29.active((ServerLevel)eva.level(),eva.getUNSerial()))return false;
+        if(plug.isLockedToEva())return true;
+        if(plug.getInsertionStage()!=EntryPlugCarrierEntity.STAGE_SUSPENDED)return false;
+        eva.getPersistentData().putBoolean("UNTransportAutoload",true);
+        return plug.transitionInsertionStage(EntryPlugCarrierEntity.STAGE_SUSPENDED,EntryPlugCarrierEntity.STAGE_OCCUPIED);
+    }
     public static RigidTransform dock(EvaPrototypeEntity eva)
     {
         var d=eva.getPersistentData();double yaw=Math.toRadians(d.getFloat("UNHomeYaw"));Vec3 rear=new Vec3(Math.sin(yaw),0,-Math.cos(yaw));
@@ -63,13 +72,13 @@ public final class UNPlugDirector
                 RigidTransform previous=dock(eva);boolean clear=true;
                 for(int i=1;i<=80;i++){RigidTransform next=EntryPlugKinematics.insertionTransform(eva,dock(eva),i/80D);if(!clear(level,eva,plug,previous,next)){clear=false;break;}previous=next;}
                 if(clear){plug.transitionInsertionStage(stage,EntryPlugCarrierEntity.STAGE_INSERTING);d.putInt("UNSequenceTicks",0);plug.clearInsertionAbortRequest();}
-                else {d.putInt("UNSequenceTicks",0);plug.getFirstPassenger().stopRiding();ProjectSeele.LOGGER.warn("EVA-UN crane preflight obstructed; capsule held at dock");}
+                else {d.putInt("UNSequenceTicks",0);if(plug.getFirstPassenger()!=null)plug.getFirstPassenger().stopRiding();d.putBoolean("UNTransportAutoload",false);ProjectSeele.LOGGER.warn("EVA-UN crane preflight obstructed; capsule held at dock");}
             }
             hoist(level,eva,plug);return;
         }
         if(stage==EntryPlugCarrierEntity.STAGE_INSERTING)
         {
-            if(!plug.isVehicle()||plug.isInsertionAbortRequested())
+            if((!plug.isVehicle()&&!UNAirLiftR29.emptyLoading(eva))||plug.isInsertionAbortRequested())
             {plug.transitionInsertionStage(stage,EntryPlugCarrierEntity.STAGE_ABORT_RETURNING);return;}
             EvaDorsalMechanism.prepare(eva,++tick);d.putInt("UNSequenceTicks",tick);
             double p=EvaDorsalMechanism.smooth((tick-36)/154F);RigidTransform next=EntryPlugKinematics.insertionTransform(eva,dock(eva),p);
@@ -128,7 +137,9 @@ public final class UNPlugDirector
     }
     private static void diagnoseClearance(ServerLevel level,EvaPrototypeEntity eva,EntryPlugCarrierEntity plug,AABB bounds,String kind)
     {
-        if(!System.getProperty("projectseele.regionalBuild","").startsWith("r21-un-base")&&!"r22-un-base".equals(System.getProperty("projectseele.regionalBuild","")))return;
+        String review=System.getProperty("projectseele.regionalBuild","");
+        if(!review.startsWith("r21-un-base")&&!review.equals("r22-un-base")&&!review.startsWith("r29-"))return;
+        if(review.startsWith("r29-")&&level.getGameTime()%20!=0)return;
         try
         {
             var report=new com.google.gson.JsonObject();report.addProperty("unit",eva.getUNSerial());report.addProperty("kind",kind);report.addProperty("bounds",bounds.toString());var cells=new com.google.gson.JsonArray();

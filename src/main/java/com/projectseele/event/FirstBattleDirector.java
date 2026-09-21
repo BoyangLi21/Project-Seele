@@ -175,7 +175,10 @@ public final class FirstBattleDirector
     {
         var record=data.active;if(record==null||record.deathResolved)return;record.deathResolved=true;data.setDirty();
         Vec3 p=angel==null?eva.position().add(0,40,0):FirstBattleClip.point(record.spec,false,"core_blocks",Math.min(18.6F,record.age/20F));
-        CrossExplosionFX.spawn(level,p,1.8F);sound(level,p,ModSounds.EVA_CORE_BREAK.get(),2.2F);level.sendParticles(ParticleTypes.CAMPFIRE_SIGNAL_SMOKE,p.x,p.y,p.z,90,12,15,12,.04);
+        var finale=new com.projectseele.network.ClientboundBattleFinalePacket(p.x,record.spec.origin().y,p.z);
+        for(var observer:level.players())
+            if(observer==pilot||observer.position().distanceToSqr(p)<1024*1024)
+                com.projectseele.network.SeeleNetwork.CHANNEL.send(net.minecraftforge.network.PacketDistributor.PLAYER.with(()->observer),finale);
         if(angel!=null)angel.finishFirstBattle(eva,pilot);
         ProjectSeele.LOGGER.info("R10 FIRST BATTLE DEATH ONCE angel={} pilot={} age={}",record.angel,record.pilot,record.age);
     }

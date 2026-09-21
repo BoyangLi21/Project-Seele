@@ -55,7 +55,7 @@ def run_prepared(path,env=None):
     return subprocess.call([command[0],'@'+str(args.resolve())],cwd=d['workingDirectory'],env=child)
 
 def main():
-    ap=argparse.ArgumentParser();ap.add_argument('--world',default=DEFAULT_WORLD);ap.add_argument('--heap',default='6G');ap.add_argument('--review');ap.add_argument('--prepare-only',action='store_true');ap.add_argument('--prepared-file',type=Path);ap.add_argument('--native-capture',action='store_true');ap.add_argument('--battle-clip',type=Path);ap.add_argument('--far-view');ap.add_argument('--movie-only',action='store_true');ap.add_argument('--gpu-terrain',action='store_true');a=ap.parse_args()
+    ap=argparse.ArgumentParser();ap.add_argument('--world',default=DEFAULT_WORLD);ap.add_argument('--heap',default='6G');ap.add_argument('--review');ap.add_argument('--prepare-only',action='store_true');ap.add_argument('--prepared-file',type=Path);ap.add_argument('--native-capture',action='store_true');ap.add_argument('--battle-clip',type=Path);ap.add_argument('--far-view');ap.add_argument('--movie-only',action='store_true');ap.add_argument('--gpu-terrain',action='store_true');ap.add_argument('--city-shaders',action='store_true');a=ap.parse_args()
     if a.prepared_file:return run_prepared(a.prepared_file,java_environment()[1])
     if not (ROOT/'run/saves'/a.world/'level.dat').is_file():raise FileNotFoundError('The selected world is not installed')
     if not (ROOT/'run/resourcepacks/eva_real_model/pack.mcmeta').is_file():raise FileNotFoundError('The private EVA resource pack is not installed')
@@ -72,6 +72,9 @@ def main():
     if a.gpu_terrain:
         from fetch_gpu_client_r19 import ensure_local as ensure_gpu
         ensure_gpu();command.append('-PgpuTerrain')
+    if a.city_shaders:
+        from fetch_city_shaders_r29 import install as install_city_shaders
+        install_city_shaders(True);command.append('-PcityShaders')
     if a.native_capture:command.append('-PnativeCapture')
     if a.review:command.append('-PregionalBuild='+a.review)
     if a.review in ('r21-flight-riding','r22-flight-riding'):command.append('-PtvTransitCapture')

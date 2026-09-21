@@ -134,6 +134,7 @@ public class ShamshelEntity extends Monster implements Angel, SiegeAnchorAware, 
             for(int sample=0;sample<=4;sample++)
             {
                 var points=ShamshelWhipMotion.points(this,age-1+sample/4F,1);
+                var previous=ShamshelWhipMotion.points(this,age-1.25F+sample/4F,1);
                 for(int i=1;i<points.size();i++)
                 {
                     Vec3 from=points.get(i-1),to=points.get(i);
@@ -144,7 +145,8 @@ public class ShamshelEntity extends Monster implements Angel, SiegeAnchorAware, 
                     {
                         var contact=victim.getBoundingBox().inflate(.7).clip(from,end);
                         if(contact.isEmpty()&&!victim.getBoundingBox().inflate(.7).contains(from))continue;
-                        hitVictims.add(victim.getUUID());Vec3 direction=end.subtract(from).normalize();
+                        hitVictims.add(victim.getUUID());Vec3 motion=points.get(i).subtract(previous.get(i));
+                        Vec3 direction=motion.lengthSqr()>1e-6?motion.normalize():end.subtract(from).normalize();
                         if(com.projectseele.event.EvaHitFeedback.hurt(victim,damageSources().mobAttack(this),30F,contact.orElse(from),direction))
                             victim.push(direction.x*.8,.22,direction.z*.8);
                     }

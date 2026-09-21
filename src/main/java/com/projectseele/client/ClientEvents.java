@@ -93,6 +93,7 @@ public class ClientEvents
                 NervSiloDoorRenderer::new);
         event.registerEntityRenderer(ModEntities.NERV_HANGAR_DOOR.get(),
                 NervHangarDoorRenderer::new);
+        event.registerEntityRenderer(ModEntities.UN_TRANSPORT.get(),com.projectseele.client.render.UNTransportRenderer::new);
         event.registerEntityRenderer(ModEntities.NERV_SLIDING_DOOR.get(),
                 NervSlidingDoorRenderer::new);
         event.registerEntityRenderer(ModEntities.NERV_LIFT_DOOR.get(),
@@ -152,6 +153,7 @@ public class ClientEvents
         event.register(Keybinds.SELF_LAUNCH);
         event.register(Keybinds.COMMANDER_POSE);
         event.register(Keybinds.UN_EYE_LASER);
+        event.register(Keybinds.UN_FLIGHT);
         event.register(Keybinds.ULTRAMAN_TRANSFORM);
     }
 

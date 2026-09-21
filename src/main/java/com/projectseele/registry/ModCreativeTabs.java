@@ -29,6 +29,7 @@ public class ModCreativeTabs
                         output.accept(ModItems.TERMINAL_DOGMA_ACCESS_CARD.get());
                         output.accept(ModItems.NERV_EMPLOYEE_CARD.get());
                         output.accept(ModItems.SATELLITE_PHONE.get());
+                        output.accept(ModItems.UN_SATELLITE_PHONE.get());
                         output.accept(ModItems.NERV_WORKSTATION.get());
                         output.accept(ModItems.NERV_SERVER_RACK.get());
                         output.accept(ModItems.NERV_STORAGE_PANEL.get());
