@@ -33,6 +33,7 @@ public final class CommandRoomSlidingDoorDirector
             ".projectseele_command_sliding_doors_r01.json";
     private static final Map<MinecraftServer, RuntimeConfig> CONFIG =
             new WeakHashMap<>();
+    private static final Map<ServerLevel,Map<Integer,Long>> PENDING_OPEN=new WeakHashMap<>();
     private static final List<DoorSpec> DOORS = List.of(
             door(0, 8, -429, 282, Direction.NORTH),
             door(1, 13, -429, 282, Direction.NORTH),
@@ -74,16 +75,23 @@ public final class CommandRoomSlidingDoorDirector
             {
                 continue;
             }
-            if (!level.hasChunkAt(spec.lower()))
+            if (!level.hasChunkAt(spec.lower())||!level.isPositionEntityTicking(spec.lower()))
             {
                 continue;
             }
             NervSlidingDoorEntity door = NervSlidingDoorEntity.reconcile(
                     level, spec.id(), spec.axisX(), spec.centre());
+            var pending=PENDING_OPEN.get(level);
+            if(door!=null&&pending!=null&&pending.containsKey(spec.id()))
+            {
+                long until=pending.remove(spec.id());if(until>=level.getGameTime())door.requestOpen();
+            }
             if (door != null && spec.redstonePowered(level))
             {
                 door.requestRedstoneOpen();
             }
+            if(door!=null&&spec.id()==18&&!level.getEntitiesOfClass(ServerPlayer.class,spec.apertureBounds().inflate(2.2,.15,2.2),p->!p.isSpectator()).isEmpty())
+                door.requestRedstoneOpen();
         }
     }
 
@@ -102,6 +110,10 @@ public final class CommandRoomSlidingDoorDirector
         {
             return false;
         }
+        // Block data can arrive before the non-saving door entity can tick.
+        // Retain the press across that attachment boundary instead of losing it.
+        PENDING_OPEN.computeIfAbsent(level,l->new HashMap<>()).put(spec.id(),level.getGameTime()+200);
+        if(!level.isPositionEntityTicking(spec.lower()))return true;
         NervSlidingDoorEntity door = NervSlidingDoorEntity.reconcile(
                 level, spec.id(), spec.axisX(), spec.centre());
         if (door == null)
@@ -137,6 +149,15 @@ public final class CommandRoomSlidingDoorDirector
             }
         }
     }
+    public static boolean passageReady(ServerLevel level,BlockPos button)
+    {
+        Integer id=config(level).buttons().get(button);DoorSpec spec=id==null?null:spec(id);
+        if(spec==null||!level.isPositionEntityTicking(spec.lower()))return false;
+        var door=level.getEntitiesOfClass(NervSlidingDoorEntity.class,spec.apertureBounds().inflate(3),e->e.getDoorId()==id)
+                .stream().min(java.util.Comparator.comparingInt(Entity::getId)).orElse(null);
+        if(door==null||door.getOpenProgress(1)<.82)return false;
+        return spec.aperture().stream().allMatch(p->level.getBlockState(p).getCollisionShape(level,p).isEmpty());
+    }
 
     public static boolean apertureOccupied(ServerLevel level, int doorId)
     {
@@ -155,6 +176,7 @@ public final class CommandRoomSlidingDoorDirector
         synchronized (CONFIG)
         {
             CONFIG.clear();
+            PENDING_OPEN.clear();
         }
     }
 

@@ -33,7 +33,7 @@ def ensure_private_pack(game,review=False):
             original=list(selected)
             if required not in selected:selected.append(required)
             extra='file/'+(review if isinstance(review,str) else 'eva_un_r21_review')
-            selected=[p for p in selected if p not in ('file/eva_un_r21_review','file/eva_access_r22_review','file/eva_tv_r24_review')]
+            selected=[p for p in selected if p not in ('file/eva_un_r21_review','file/eva_access_r22_review','file/eva_tv_r24_review','file/eva_un_r30_review')]
             if review:selected.append(extra)
             if original==selected:return
             lines[index]='resourcePacks:'+json.dumps(selected,ensure_ascii=False,separators=(',',':'))
@@ -66,8 +66,9 @@ def main():
     if (ROOT/'run/resourcepacks/rotrblocks-v87-128x-2d.zip').is_file():
         from fetch_realistic_pack_r25 import install as ensure_realistic_pack
         ensure_realistic_pack(ROOT/'run',True)
-    review_pack='eva_tv_r24_review' if a.review and a.review.startswith('r24-') else 'eva_access_r22_review' if a.review and a.review.startswith('r22-') else 'eva_un_r21_review'
-    ensure_private_pack(ROOT/'run',review_pack if a.review and a.review.startswith(('r21-','r22-','r24-')) and (ROOT/'run/resourcepacks'/review_pack/'pack.mcmeta').exists() else False)
+    un_review=bool(a.review and a.review.startswith('r30-un-'))
+    review_pack='eva_un_r30_review' if un_review else 'eva_tv_r24_review' if a.review and a.review.startswith('r24-') else 'eva_access_r22_review' if a.review and a.review.startswith('r22-') else 'eva_un_r21_review'
+    ensure_private_pack(ROOT/'run',review_pack if a.review and (un_review or a.review.startswith(('r21-','r22-','r24-'))) and (ROOT/'run/resourcepacks'/review_pack/'pack.mcmeta').exists() else False)
     command=[str(ROOT/'gradlew.bat'),'--no-daemon','writeClientLaunchR17','-PstrictHighDetail=true','-PoptimizedClient','-PexactTerrain','-PclientNavigation','-PclientHeap='+a.heap,'-PquickPlayWorld='+a.world]
     if a.gpu_terrain:
         from fetch_gpu_client_r19 import ensure_local as ensure_gpu
@@ -82,6 +83,14 @@ def main():
     if a.far_view:command.append('-PfarViewOnly='+a.far_view)
     if a.movie_only:command.append('-PfirstBattleMovieOnly')
     subprocess.run(command,cwd=ROOT,env=env,check=True)
+    if un_review:
+        launch=ROOT/'.Codex/client-launch-r17.json';spec=json.loads(launch.read_text(encoding='utf8'))
+        for property_name,file in [('bodyPoseReview','eva_body_r30_review.json'),('dorsalPoseReview','eva_dorsal_r30_review.json')]:
+            assert (ROOT/'run/projectseele-local-maps'/file).is_file()
+            spec['command'].insert(1,'-Dprojectseele.'+property_name+'=projectseele-local-maps/'+file)
+        launch.write_text(json.dumps(spec),encoding='utf8')
+        if a.city_shaders:
+            setting=ROOT/'run/shaderpacks/ComplementaryUnbound_r5.3.zip.txt';lines=setting.read_text(encoding='utf8').splitlines();lines=[s for s in lines if not s.startswith('RP_MODE=')];setting.write_text('\n'.join(lines+['RP_MODE=3'])+'\n',encoding='utf8')
     if a.prepare_only:return 0
     # Automated reviews choose their own view distances after entry. Avoid
     # first loading the full 24-chunk play profile just to discard it then.

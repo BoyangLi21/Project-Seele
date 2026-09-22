@@ -121,8 +121,11 @@ public final class LocalTriangleMeshLayer<T extends GeoAnimatable> extends GeoRe
                 && meshLocation.getPath().endsWith("eva_pallet_smg.mesh.json"))
         {
             if (this.getRenderer() instanceof EvaUnit01Renderer renderer)
-                EvaUnit01Renderer.rememberRifleMuzzle(eva.getId(), renderer.renderedMeshPoint(
-                        pose, new Vector3f(part.muzzleX(), part.muzzleY(), part.muzzleZ()), eva, partialTick));
+            {
+                var muzzle=renderer.renderedMeshPoint(pose,new Vector3f(part.muzzleX(),part.muzzleY(),part.muzzleZ()),eva,partialTick);
+                EvaUnit01Renderer.rememberRifleMuzzle(eva.getId(),muzzle);
+                com.projectseele.client.visual.UNR29Client.captureRifle(eva,muzzle);
+            }
         }
         VertexConsumer targetBuffer = this.textureSelector == null ? buffer
                 : bufferSource.getBuffer(RenderType.entityCutoutNoCull(

@@ -38,6 +38,7 @@ public final class UNPhoneScreen extends Screen
         int third=(w-40)/3;
         button("机库排液",x+10,y+155,third,()->send("drain"));button("机库舱门",x+20+third,y+155,third,()->send("door"));button("机库注液",x+30+third*2,y+155,third,()->send("fill"));
         button("接入驾驶舱",x+10,y+180,size,()->send("board"));button("刷新状态",x+20+size,y+180,size,()->send("status"));
+        button("平台送回机库",x+10,y+205,w-20,()->send("dock"));
     }
     private void send(String action)
     {
@@ -57,7 +58,7 @@ public final class UNPhoneScreen extends Screen
         g.drawString(font,title,x+10,y+10,0xFFE1F4FF,false);
         String status=serial==0?view.unit00():view.unit01();g.drawWordWrap(font,Component.literal(status),x+10,y+52,w-20,0xFFC2D8E5);
         g.drawString(font,"X",x+10,y+85,0xFFFFFFFF,false);g.drawString(font,"Z",x+127,y+85,0xFFFFFFFF,false);
-        g.drawWordWrap(font,Component.literal(view.reply()),x+10,y+209,w-20,0xFFF0D696);
+        g.drawWordWrap(font,Component.literal(view.reply()),x+10,y+234,w-20,0xFFF0D696);
         super.render(g,mx,my,partial);
     }
 }

@@ -22,7 +22,8 @@ public final class RegionalStationPhoto
     private static final String MODE=System.getProperty("projectseele.regionalBuild","");
     private static final boolean R10_MODELS=MODE.equals("r10-models")||MODE.equals("r10-choreography");
     private static final boolean R16=MODE.equals("r16-photos");
-    private static final boolean R07=MODE.equals("r07-photos")||MODE.equals("r10-world")||R10_MODELS||R16,DETAIL=R07||MODE.equals("detail-photos");
+    private static final boolean R30=MODE.equals("r30-lighting-photos");
+    private static final boolean R07=MODE.equals("r07-photos")||MODE.equals("r10-world")||R10_MODELS||R16,DETAIL=R30||R07||MODE.equals("detail-photos");
     private static final boolean ENABLED=MODE.equals("station-photo")||MODE.equals("quality-photos")||DETAIL;
     private record View(String file,Vec3 position,float yaw,float pitch,String action,int warmup,
                         java.util.List<net.minecraft.core.BlockPos> requiredSections)
@@ -49,7 +50,7 @@ public final class RegionalStationPhoto
         if(!ENABLED||event.phase!=TickEvent.Phase.END)return;
         Minecraft mc=Minecraft.getInstance();if(mc.player==null||mc.getSingleplayerServer()==null)return;
         var server=mc.getSingleplayerServer();Path world=server.getWorldPath(LevelResource.ROOT).normalize();
-        if(!world.getFileName().toString().equals(R16?"SEELE_TV_FACILITIES_R16":R10_MODELS?"SEELE_ANGEL_MODEL_REVIEW_R10":"SEELE_TV_WORLD_PREVIEW_20260906"))return;
+        if(!world.getFileName().toString().equals(R30?"SEELE_FIELD_R30_REVIEW":R16?"SEELE_TV_FACILITIES_R16":R10_MODELS?"SEELE_ANGEL_MODEL_REVIEW_R10":"SEELE_TV_WORLD_PREVIEW_20260906"))return;
         try
         {
             if(finishing)
@@ -66,7 +67,7 @@ public final class RegionalStationPhoto
             {
                 if(DETAIL)
                 {
-                    var data=com.google.gson.JsonParser.parseString(Files.readString(world.resolve(R07?"r07_photo_views.json":"regional_photo_views.json"))).getAsJsonArray();
+                    var data=com.google.gson.JsonParser.parseString(Files.readString(world.resolve(R30?"r30_photo_views.json":R07?"r07_photo_views.json":"regional_photo_views.json"))).getAsJsonArray();
                     java.util.List<View> views=new java.util.ArrayList<>();
                     for(var item:data)
                     {
@@ -101,6 +102,24 @@ public final class RegionalStationPhoto
                     if(R10_MODELS&&action.startsWith("pose:"))
                     {
                         com.projectseele.visual.AngelModelR10Review.seek(Float.parseFloat(action.substring(5)));actionReady=true;
+                    }
+                    else if(R30&&action.startsWith("lights_"))
+                    {
+                        var at=new net.minecraft.core.BlockPos(26,-405,275);var lever=level.getBlockState(at);
+                        boolean on=action.equals("lights_on");level.setBlock(at,lever.setValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.POWERED,on),3);actionReady=true;
+                    }
+                    else if(R30&&action.equals("airboards"))
+                    {
+                        var observations=new com.google.gson.JsonArray();boolean valid=true;
+                        for(var at:java.util.List.of(new net.minecraft.core.BlockPos(420,76,77),new net.minecraft.core.BlockPos(451,76,41)))
+                        {
+                            if(!(level.getBlockEntity(at) instanceof com.projectseele.world.StationDepartureBoardBlockEntity board)){valid=false;continue;}
+                            var row=new com.google.gson.JsonObject();row.addProperty("pos",at.toShortString());row.addProperty("platform",board.linkedPlatformId());row.addProperty("title",board.title());
+                            row.add("departures",new com.google.gson.Gson().toJsonTree(board.departureTimes()));row.add("rows",new com.google.gson.Gson().toJsonTree(board.rows()));observations.add(row);
+                            valid&=board.linkedPlatformId()==5148309000717330621L&&!board.departureTimes().isEmpty()&&board.title().contains("航班动态")
+                                    &&board.rows().stream().allMatch(s->s.contains("联合国"));
+                        }
+                        if(valid){try{Files.writeString(world.resolve("r30_terminal_departures.json"),observations.toString());}catch(java.io.IOException e){throw new IllegalStateException(e);}actionReady=true;}
                     }
                     else if(action.equals("open"))
                     {

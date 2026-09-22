@@ -16,6 +16,11 @@ import java.util.UUID;
 public final class UNPlugDirector
 {
     private static final Map<UUID,UUID> CRANES=new HashMap<>();
+    public static void resetCraneR30(EvaPrototypeEntity eva)
+    {
+        UUID id=CRANES.remove(eva.getUUID());if(id!=null&&eva.level() instanceof ServerLevel level&&level.getEntity(id) instanceof NervCarrierPlatformEntity crane)crane.discard();
+        eva.getPersistentData().putInt("UNSequenceTicks",0);
+    }
     public static EntryPlugCarrierEntity capsule(EvaPrototypeEntity eva)
     {
         CompoundTag data=eva.getPersistentData();

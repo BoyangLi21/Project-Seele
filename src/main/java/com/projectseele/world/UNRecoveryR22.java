@@ -73,8 +73,8 @@ public final class UNRecoveryR22
             }
             var plug=UNPlugDirector.capsule(eva);if(plug==null)continue;
             var pilot=eva.getPilotEntity();var passengers=new ArrayList<net.minecraft.world.entity.Entity>();passengers.addAll(plug.getPassengers());passengers.addAll(eva.getPassengers());
-            eva.setNervLogisticsLocked(true);eva.setNoGravity(true);eva.setDeltaMovement(Vec3.ZERO);
-            eva.teleportTo(home.x,home.y,home.z);eva.setYRot(0);eva.setYBodyRot(0);eva.setYHeadRot(0);eva.setXRot(0);eva.resetFallDistance();
+            eva.normalizeAfterTransportR30(true);UNPlugDirector.resetCraneR30(eva);
+            eva.teleportTo(home.x,home.y,home.z);eva.moveOnNervCarrier(home.x,home.y,home.z,0);eva.resetFallDistance();
             eva.setNervLogisticsLocked(false);eva.setNervLogisticsLocked(true);
             data.putDouble("UNHomeX",home.x);data.putDouble("UNHomeY",home.y);data.putDouble("UNHomeZ",home.z);data.putFloat("UNHomeYaw",0);
             boolean extracting=!job.reset()&&pilot!=null&&plug.getInsertionStage()==EntryPlugCarrierEntity.STAGE_LOCKED;

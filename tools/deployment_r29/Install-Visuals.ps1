@@ -49,7 +49,9 @@ $lines = @($lines) + @('enableShaders=true', ('shaderPack=' + $shader.filename))
 [IO.File]::WriteAllLines($config, $lines, $utf8)
 $settings = Join-Path (Join-Path $GameDirectory 'shaderpacks') ($shader.filename + '.txt')
 if (-not (Test-Path -LiteralPath $settings)) {
-    [IO.File]::WriteAllText($settings, "SHADOW_QUALITY=1`nshadowDistance=128.0`nWATER_REFLECT_QUALITY=2`nBLOCK_REFLECT_QUALITY=1`nLIGHTSHAFT_QUALI_DEFINE=1`nSSAO_QUALI_DEFINE=2`nFXAA_DEFINE=1`nDETAIL_QUALITY=2`nCLOUD_QUALITY=2`nCOLORED_LIGHTING=0`nENTITY_SHADOWS_DEFINE=-1`nCAVE_FOG=false`nAMBIENT_MULT=110`nBLOOM_STRENGTH=0.081`n", $utf8)
+    $profile = "SHADOW_QUALITY=1`nshadowDistance=128.0`nWATER_REFLECT_QUALITY=2`nBLOCK_REFLECT_QUALITY=1`nLIGHTSHAFT_QUALI_DEFINE=1`nSSAO_QUALI_DEFINE=2`nFXAA_DEFINE=1`nDETAIL_QUALITY=2`nCLOUD_QUALITY=2`nCOLORED_LIGHTING=0`nENTITY_SHADOWS_DEFINE=-1`nCAVE_FOG=false`nAMBIENT_MULT=110`nBLOOM_STRENGTH=0.081`n"
+    if (Test-Path -LiteralPath (Join-Path $GameDirectory 'resourcepacks\eva_real_model\assets\projectseele\eva\un_models_r30.json')) { $profile += "RP_MODE=3`n" }
+    [IO.File]::WriteAllText($settings, $profile, $utf8)
 }
 Write-Host "Visuals ready in: $GameDirectory"
 Write-Host 'Complementary Unbound r5.3 enabled. Existing valid files were reused.'

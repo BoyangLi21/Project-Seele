@@ -17,8 +17,8 @@ final class EvaArmArticulation
             var upper=model.getBone("arm_"+side).orElse(null);var lower=model.getBone("forearm_"+side).orElse(null);var wrist=model.getBone("wrist_"+side).orElse(null);var hand=model.getBone("hand_"+side).orElse(null);
             if(upper==null||lower==null||wrist==null||hand==null)continue;
             var target=EvaRigTransforms.point(hand,EvaRigTransforms.pivot(hand),root);var orientation=EvaRigTransforms.rotation(EvaRigTransforms.model(hand));
-            var shoulder=EvaRigTransforms.point(upper,EvaRigTransforms.pivot(upper),root);var elbow=EvaRigTransforms.point(upper,EvaRigTransforms.elbow(side),root);
-            float reach=EvaRigTransforms.elbow(side).sub(EvaRigTransforms.pivot(upper)).length()+EvaRigTransforms.pivot(hand).sub(EvaRigTransforms.elbow(side)).length();
+            var centre=EvaRigTransforms.elbow(lower,side);var shoulder=EvaRigTransforms.point(upper,EvaRigTransforms.pivot(upper),root);var elbow=EvaRigTransforms.point(upper,centre,root);
+            float reach=new Vector3f(centre).sub(EvaRigTransforms.pivot(upper)).length()+EvaRigTransforms.pivot(hand).sub(centre).length();
             if(target.distance(shoulder)>reach-.001F)continue;
             EvaRigTransforms.solveArm(upper,lower,wrist,hand,side,target,orientation,elbow.sub(shoulder),root);
             rotations.addAll(Set.of("arm_"+side,"forearm_"+side,"wrist_"+side,"hand_"+side));positions.addAll(Set.of("forearm_"+side,"wrist_"+side,"hand_"+side));

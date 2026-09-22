@@ -489,5 +489,32 @@
         "stream": false
       }
     ]
+  },
+  "pa_signal_r30": {
+    "subtitle": "subtitles.projectseele.pa_signal_r30",
+    "sounds": [
+      {
+        "name": "projectseele:pa_signal_r30",
+        "attenuation_distance": 160
+      }
+    ]
+  },
+  "pa_blue_r30": {
+    "subtitle": "subtitles.projectseele.pa_blue_r30",
+    "sounds": [
+      {
+        "name": "projectseele:pa_blue_r30",
+        "attenuation_distance": 160
+      }
+    ]
+  },
+  "pa_alert_r30": {
+    "subtitle": "subtitles.projectseele.pa_alert_r30",
+    "sounds": [
+      {
+        "name": "projectseele:pa_alert_r30",
+        "attenuation_distance": 160
+      }
+    ]
   }
 }

@@ -19,8 +19,8 @@ import java.util.*;
 @Mod.EventBusSubscriber(modid="projectseele",value=Dist.CLIENT)
 public final class UNFlightPoseR29
 {
-    private record Pose(long frame,float weight){}
-    private record Jets(Vec3 left,Vec3 right,long frame){}
+    private record Pose(long frame,float weight,float gimbal){}
+    private record Jets(Vec3 left,Vec3 right,Vec3 leftAxis,Vec3 rightAxis,long frame){}
     private static final Map<EvaPrototypeEntity,Pose> POSES=new WeakHashMap<>();
     private static final Map<EvaPrototypeEntity,Jets> JETS=new WeakHashMap<>();
     private static final Map<String,Vector3f> SOLES=new HashMap<>();
@@ -43,9 +43,14 @@ public final class UNFlightPoseR29
     public static EvaMotionEngineV2.BoneWrites apply(EvaUnit01Entity eva,BakedGeoModel model,float partial,Matrix4f root)
     {
         if(!(eva instanceof EvaPrototypeEntity un)||un.getUNSerial()!=1)return EvaMotionEngineV2.BoneWrites.empty();
+        if(eva.isNervLogisticsLocked()||eva.hasActiveCarrierMotion()||eva.isLaunchSequenceActive())
+        {POSES.remove(un);JETS.remove(un);return stowNozzles(model,65);}
         long now=System.nanoTime();var old=POSES.get(un);float target=un.isUNFlying()?1:0;
-        float weight=old==null?target:old.weight+(target-old.weight)*(float)(1-Math.exp(-Math.min(.1,(now-old.frame)/1e9)*9));POSES.put(un,new Pose(now,weight));
-        if(weight<.001)return EvaMotionEngineV2.BoneWrites.empty();Set<String> changed=new HashSet<>(),positions=new HashSet<>();
+        float blend=old==null?1:(float)(1-Math.exp(-Math.min(.1,(now-old.frame)/1e9)*9));
+        float weight=old==null?target:old.weight+(target-old.weight)*blend;
+        float gimbalTarget=un.isUNFlying()?65-50*(float)Math.min(1,un.getDeltaMovement().horizontalDistance()/2.8):65;
+        float gimbal=old==null?gimbalTarget:old.gimbal+(gimbalTarget-old.gimbal)*blend;POSES.put(un,new Pose(now,weight,gimbal));
+        if(weight<.001)return stowNozzles(model,gimbal);Set<String> changed=new HashSet<>(),positions=new HashSet<>();
         for(String side:List.of("l","r"))
         {
             for(var entry:Map.of("leg_",-9F,"shin_",18F,"ankle_",0F,"foot_",-9F).entrySet())
@@ -53,14 +58,31 @@ public final class UNFlightPoseR29
                 String name=entry.getKey()+side;var bone=model.getBone(name).orElse(null);if(bone==null)continue;var bind=bone.getInitialSnapshot();
                 float goal=bind.getRotX()+(float)Math.toRadians(entry.getValue());bone.setRotX(bone.getRotX()+(goal-bone.getRotX())*weight);bone.setRotY(bone.getRotY()+(bind.getRotY()-bone.getRotY())*weight);bone.setRotZ(bone.getRotZ()+(bind.getRotZ()-bone.getRotZ())*weight);changed.add(name);
             }
-            var shin=model.getBone("shin_"+side).orElse(null);if(shin!=null){EvaRigTransforms.hinge(shin,EvaRigTransforms.pivot(shin).add(0,11.4F/16,0));positions.add("shin_"+side);}
+            var shin=model.getBone("shin_"+side).orElse(null);if(shin!=null){EvaRigTransforms.hinge(shin,EvaRigTransforms.knee(shin));positions.add("shin_"+side);}
+            var nozzle=model.getBone("r30_thruster_"+side).orElse(null);if(nozzle!=null){nozzle.setRotX((float)Math.toRadians(gimbal));nozzle.setRotY(0);nozzle.setRotZ(0);changed.add(nozzle.getName());}
         }
         if(un.isUNFlying()&&root!=null)
         {
-            var left=model.getBone("foot_l").orElse(null);var right=model.getBone("foot_r").orElse(null);
-            if(left!=null&&right!=null){var a=EvaRigTransforms.point(left,sole("l"),root);var b=EvaRigTransforms.point(right,sole("r"),root);JETS.put(un,new Jets(new Vec3(a.x,a.y,a.z),new Vec3(b.x,b.y,b.z),now));}
+            var left=model.getBone("r30_thruster_l").orElse(null);var right=model.getBone("r30_thruster_r").orElse(null);
+            if(left!=null&&right!=null)
+            {
+                var a=EvaRigTransforms.point(left,EvaRigTransforms.pivot(left).add(0,0,6.25F/16),root);var b=EvaRigTransforms.point(right,EvaRigTransforms.pivot(right).add(0,0,6.25F/16),root);
+                var da=new Matrix4f(root).mul(EvaRigTransforms.model(left)).transformDirection(new Vector3f(0,0,1)).normalize();var db=new Matrix4f(root).mul(EvaRigTransforms.model(right)).transformDirection(new Vector3f(0,0,1)).normalize();
+                JETS.put(un,new Jets(new Vec3(a.x,a.y,a.z),new Vec3(b.x,b.y,b.z),new Vec3(da.x,da.y,da.z),new Vec3(db.x,db.y,db.z),now));
+            }
+            else
+            {
+                left=model.getBone("foot_l").orElse(null);right=model.getBone("foot_r").orElse(null);
+                if(left!=null&&right!=null){var a=EvaRigTransforms.point(left,sole("l"),root);var b=EvaRigTransforms.point(right,sole("r"),root);JETS.put(un,new Jets(new Vec3(a.x,a.y,a.z),new Vec3(b.x,b.y,b.z),new Vec3(0,-1,0),new Vec3(0,-1,0),now));}
+            }
         }
         return new EvaMotionEngineV2.BoneWrites(Set.copyOf(changed),Set.copyOf(positions),"MOTION_ENGINE_LIVE_ACTION");
+    }
+    private static EvaMotionEngineV2.BoneWrites stowNozzles(BakedGeoModel model,float degrees)
+    {
+        Set<String> changed=new HashSet<>();
+        for(String side:List.of("l","r"))model.getBone("r30_thruster_"+side).ifPresent(b->{b.setRotX((float)Math.toRadians(degrees));b.setRotY(0);b.setRotZ(0);changed.add(b.getName());});
+        return new EvaMotionEngineV2.BoneWrites(Set.copyOf(changed),Set.of(),"MOTION_ENGINE_LIVE_ACTION");
     }
     @SubscribeEvent public static void render(RenderLevelStageEvent event)
     {
@@ -71,9 +93,10 @@ public final class UNFlightPoseR29
         {
             var un=entry.getKey();var jet=entry.getValue();if(un.level()!=mc.level||!un.isUNFlying()||System.nanoTime()-jet.frame>250_000_000L)continue;
             float length=6+(float)Math.min(1.5,Math.abs(un.getDeltaMovement().y))*5;
-            for(Vec3 point:List.of(jet.left,jet.right))
+            for(int side=0;side<2;side++)
             {
-                Vector3f a=point.toVector3f(),b=point.add(0,-length,0).toVector3f();
+                Vec3 point=side==0?jet.left:jet.right,direction=side==0?jet.leftAxis:jet.rightAxis;
+                Vector3f a=point.toVector3f(),b=point.add(direction.scale(length)).toVector3f();
                 RibbonRenderer.drawSoftStarRibbon(m,out,a,b,.85F,.1F,.32F,.72F,1,.75F);
                 RibbonRenderer.drawSoftStarRibbon(m,out,a,b,.32F,.02F,.92F,.97F,1,.90F);
             }

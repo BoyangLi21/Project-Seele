@@ -45,6 +45,8 @@ def fit(source,target,old_frame,manifest,unit):
   normal=np.cross(b-a,c-a);length=np.linalg.norm(normal)
   if length<1e-9:return
   normal/=length;pivot=np.asarray(parts[bone]['pivot']);uv=[(colour%4+.5)/4,(colour//4+.5)/3]
+  if 'r30_palette_region' in mesh:
+   palette=mesh['r30_palette_region'];uv[0]=palette['u0']+uv[0]*palette['width']
   # Runtime mesh positions reflect X on import. Its stored normals therefore
   # point opposite the raw Geo-space triangle winding.
   for p in (c,b,a):parts[bone]['vertices'].extend([*(p-pivot),*uv,*normal])

@@ -20,6 +20,7 @@ def install(enable=False):
         # External, ordinary user settings: leave the author's ZIP unchanged.
         settings='SHADOW_QUALITY=1\nshadowDistance=128.0\nWATER_REFLECT_QUALITY=2\nBLOCK_REFLECT_QUALITY=1\nLIGHTSHAFT_QUALI_DEFINE=1\nSSAO_QUALI_DEFINE=2\nFXAA_DEFINE=1\nDETAIL_QUALITY=2\nCLOUD_QUALITY=2\nCOLORED_LIGHTING=0\nENTITY_SHADOWS_DEFINE=-1\n'
         settings+='CAVE_FOG=false\nAMBIENT_MULT=110\nBLOOM_STRENGTH=0.081\n'
+        if (ROOT/'run/resourcepacks/eva_real_model/assets/projectseele/eva/un_models_r30.json').is_file():settings+='RP_MODE=3\n'
         (ROOT/'run/shaderpacks'/(shader+'.txt')).write_text(settings,encoding='utf8')
     print('Verified Oculus and Complementary Unbound; enabled='+str(enable))
 if __name__=='__main__':

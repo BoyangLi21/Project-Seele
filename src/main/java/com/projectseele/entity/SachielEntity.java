@@ -43,11 +43,11 @@ public class SachielEntity extends Monster implements Angel, GeoEntity, SiegeAnc
     public float strikeAge(float partial){return level().isClientSide?strikeClock.sample(FirstBattleSignals.clientFrameTime()):entityData.get(STRIKE_AGE);}
     public Vec3 strikeAim(){return new Vec3(entityData.get(STRIKE_AIM));}
     @Override public void onSyncedDataUpdated(net.minecraft.network.syncher.EntityDataAccessor<?> key){super.onSyncedDataUpdated(key);if(key.equals(STRIKE_AGE)&&strikeClock!=null&&level().isClientSide)strikeClock.accept(entityData.get(STRIKE_AGE),false,true);}
-    @Override public boolean doHurtTarget(net.minecraft.world.entity.Entity entity){return entity instanceof LivingEntity living&&beginStrike(living,1);}
+    @Override public boolean doHurtTarget(net.minecraft.world.entity.Entity entity){return entity instanceof LivingEntity living&&beginStrike(living,getRandom().nextBoolean()?1:3);}
     public boolean beginStrike(LivingEntity target,int mode)
     {
         if(level().isClientSide||isStrikeActive()||isFirstBattleActive()||!target.isAlive())return false;
-        strikeTarget=target;strikeHit=false;committedStrikeYaw=yBodyRot;entityData.set(STRIKE_MODE,mode);entityData.set(STRIKE_AIM,target.position().add(0,target.getBbHeight()*.84,0).toVector3f());entityData.set(STRIKE_AGE,0);getNavigation().stop();return true;
+        mode=Math.max(1,Math.min(3,mode));strikeTarget=target;strikeHit=false;committedStrikeYaw=yBodyRot;entityData.set(STRIKE_MODE,mode);entityData.set(STRIKE_AIM,target.position().add(0,target.getBbHeight()*(mode==3?.62:.84),0).toVector3f());entityData.set(STRIKE_AGE,0);getNavigation().stop();return true;
     }
     private void tickStrike()
     {
@@ -64,7 +64,11 @@ public class SachielEntity extends Monster implements Angel, GeoEntity, SiegeAnc
             if(contact.isPresent())
             {
                 strikeHit=true;boolean hit=com.projectseele.event.EvaHitFeedback.hurt(strikeTarget,damageSources().mobAttack(this),strikeMode()==2?55:(float)getAttributeValue(Attributes.ATTACK_DAMAGE),contact.get(),f.direction());
-                if(hit){strikeTarget.push(f.direction().x*.65,.16,f.direction().z*.65);playSound(com.projectseele.registry.ModSounds.EVA_IMPACT.get(),1.1F,.7F);}
+                if(hit)
+                {
+                    if(!(strikeTarget instanceof EvaUnit01Entity))strikeTarget.push(f.direction().x*.65,.16,f.direction().z*.65);
+                    var p=contact.get();level().playSound(null,p.x,p.y,p.z,net.minecraft.sounds.SoundEvent.createFixedRangeEvent(com.projectseele.registry.ModSounds.EVA_IMPACT.get().getLocation(),384F),net.minecraft.sounds.SoundSource.HOSTILE,2.4F,.7F);
+                }
             }
             }
         }

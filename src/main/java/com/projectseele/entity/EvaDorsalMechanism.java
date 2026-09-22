@@ -14,6 +14,7 @@ public final class EvaDorsalMechanism
     private static final EntityDataAccessor<Float> BOW = SynchedEntityData.defineId(EvaUnit01Entity.class, EntityDataSerializers.FLOAT);
     private static final Map<EvaUnit01Entity, View> VIEWS = new WeakHashMap<>();
     public static boolean bootstrap() { return true; }
+    public static void clearViewR30(EvaUnit01Entity eva){VIEWS.remove(eva);}
     private static final class View
     {
         final EvaPoseSignalClock open = new EvaPoseSignalClock(), bow = new EvaPoseSignalClock();

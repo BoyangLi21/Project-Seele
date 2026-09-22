@@ -292,3 +292,12 @@ Lux3D 原始网格、本地涂装与蒙皮处理、Pro 原始交付和 Blender �
 - `tools/build_un_transport_r29.py` 生成原创 UN 垂直起降运输机及自行载台，几何接入既有设施网格；没有下载或改编第三方飞机网格。
 - `tools/build_finale_audio_r29.py` 以固定种子合成 `angel_nuclear_finale.ogg`，不含电影、动画或现实爆炸录音。烟云和十字架为实时程序几何。
 - 可选 [Complementary Unbound r5.3](https://modrinth.com/shader/complementary-unbound) 保留作者原文件，使用 [Oculus](https://modrinth.com/mod/oculus) 加载。固定官方 CDN 与 SHA-512 见 `tools/city_shaders_r29.json`；不将光影 ZIP 放入本仓库或交付压缩包，客户端脚本从作者来源下载。
+
+
+## R30 设施、广播与 UN 模型
+
+- `nerv_sign_post`、室内灯具细部和机场候机区配置为本项目编写的原创几何与布局；固定灯具和可切换指挥室照明不依靠后期抬亮截图。
+- `pa_signal_r30.ogg`、`pa_blue_r30.ogg`、`pa_alert_r30.ogg` 使用原创短句和 Microsoft 标准普通话神经语音，通过既有 edge-tts 环境生成；未使用原剧录音或模仿原配音演员。生成器 `tools/build_mission_audio_r30.py`，本机来源、时长和散列在 `artifacts/facility_r30/mission_audio/sources.json`。
+- UN 原始网格分别来自本轮既有 Lux3D 任务 `3672326`、`3672329`。本地工具保留比例与原 UV，重新分区、制作独立骨架、关节、手指、光学部件、铭记和背部喷口，并在 Blender 中烘焙新涂装；不是将原始生成结果直接作为成品。原件、编辑模型与检查记录留在本机私有工件目录。
+- 材质按 [shaderLABS LabPBR 1.3](https://shaderlabs.org/wiki/LabPBR_Material_Standard) 编码，配有 4K 基色、粗糙度/金属度、LabPBR 和受供电状态控制的发光资源。法线贴图采用平法线，曲面细节由实际几何及顶点法线提供，未把平图宣称为细节烘焙。
+- R30 的五个 ZIP 是用户现有文件的私人部署备份。独立材质、光影包内保留已下载的作者原始 ZIP 和说明，不进入 Git，也不作为项目公开开源发布物。

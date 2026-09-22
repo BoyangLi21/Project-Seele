@@ -18,11 +18,17 @@ public final class UNTransportEntity extends Entity
     private static final EntityDataAccessor<Integer> KIND=SynchedEntityData.defineId(UNTransportEntity.class,EntityDataSerializers.INT);
     private static final EntityDataAccessor<Integer> CARGO_ID=SynchedEntityData.defineId(UNTransportEntity.class,EntityDataSerializers.INT);
     private static final EntityDataAccessor<Float> DEPLOY=SynchedEntityData.defineId(UNTransportEntity.class,EntityDataSerializers.FLOAT);
+    private static final EntityDataAccessor<Boolean> NERV=SynchedEntityData.defineId(UNTransportEntity.class,EntityDataSerializers.BOOLEAN);
+    private static final EntityDataAccessor<Float> HOIST=SynchedEntityData.defineId(UNTransportEntity.class,EntityDataSerializers.FLOAT);
     private float rig,oldRig,jaw=1,oldJaw=1;
     private double tx,ty,tz;private float targetYaw;private int interpolation;
     public UNTransportEntity(EntityType<? extends UNTransportEntity> type,Level level)
     {super(type,level);noPhysics=true;noCulling=true;setNoGravity(true);setInvulnerable(true);}
-    @Override protected void defineSynchedData(){entityData.define(SERIAL,0);entityData.define(CARGO,false);entityData.define(KIND,0);entityData.define(CARGO_ID,-1);entityData.define(DEPLOY,0F);}
+    @Override protected void defineSynchedData(){entityData.define(SERIAL,0);entityData.define(CARGO,false);entityData.define(KIND,0);entityData.define(CARGO_ID,-1);entityData.define(DEPLOY,0F);entityData.define(NERV,false);entityData.define(HOIST,84F);}
+    public float hoistDistance(){return entityData.get(HOIST);}
+    public void setHoistDistance(float length){entityData.set(HOIST,Mth.clamp(length,84,144));}
+    public boolean isNerv(){return entityData.get(NERV);}
+    public void setNerv(){entityData.set(NERV,true);}
     public void configure(int serial,boolean cargo){entityData.set(SERIAL,serial);entityData.set(CARGO,cargo);}
     public int serial(){return entityData.get(SERIAL);}
     public boolean carrying(){return entityData.get(CARGO);}
@@ -32,7 +38,7 @@ public final class UNTransportEntity extends Entity
     public void cargo(int id,boolean attached,float deployment){entityData.set(CARGO_ID,id);entityData.set(CARGO,attached);entityData.set(DEPLOY,Mth.clamp(deployment,0,1));}
     public float rig(float partial){return Mth.lerp(partial,oldRig,rig);}
     public float jaws(float partial){return Mth.lerp(partial,oldJaw,jaw);}
-    @Override public AABB getBoundingBoxForCulling(){return groundCart()?new AABB(getX()-15,getY()-3,getZ()-17,getX()+15,getY()+9,getZ()+17):new AABB(getX()-74,getY()-85,getZ()-60,getX()+74,getY()+22,getZ()+60);}
+    @Override public AABB getBoundingBoxForCulling(){return groundCart()?new AABB(getX()-15,getY()-3,getZ()-17,getX()+15,getY()+9,getZ()+17):new AABB(getX()-74,getY()-hoistDistance()-1,getZ()-60,getX()+74,getY()+22,getZ()+60);}
     @Override public boolean shouldRenderAtSqrDistance(double distance){return distance<1600*1600;}
     @Override public void lerpTo(double x,double y,double z,float yaw,float pitch,int steps,boolean teleport)
     {tx=x;ty=y;tz=z;targetYaw=yaw;interpolation=3;}
@@ -48,8 +54,8 @@ public final class UNTransportEntity extends Entity
             setYRot(getYRot()+Mth.wrapDegrees(targetYaw-getYRot())/interpolation);interpolation--;
         }
     }
-    @Override protected void addAdditionalSaveData(CompoundTag tag){tag.putInt("UNSerial",serial());tag.putBoolean("Cargo",carrying());tag.putInt("Kind",entityData.get(KIND));tag.putFloat("Deploy",entityData.get(DEPLOY));}
-    @Override protected void readAdditionalSaveData(CompoundTag tag){configure(tag.getInt("UNSerial"),tag.getBoolean("Cargo"));entityData.set(KIND,tag.getInt("Kind"));entityData.set(DEPLOY,tag.getFloat("Deploy"));}
+    @Override protected void addAdditionalSaveData(CompoundTag tag){tag.putInt("UNSerial",serial());tag.putBoolean("Cargo",carrying());tag.putInt("Kind",entityData.get(KIND));tag.putFloat("Deploy",entityData.get(DEPLOY));tag.putBoolean("NervAircraft",isNerv());tag.putFloat("HoistDistance",hoistDistance());}
+    @Override protected void readAdditionalSaveData(CompoundTag tag){configure(tag.getInt("UNSerial"),tag.getBoolean("Cargo"));entityData.set(KIND,tag.getInt("Kind"));entityData.set(DEPLOY,tag.getFloat("Deploy"));entityData.set(NERV,tag.getBoolean("NervAircraft"));setHoistDistance(tag.contains("HoistDistance")?tag.getFloat("HoistDistance"):84);}
     @Override public Packet<ClientGamePacketListener> getAddEntityPacket(){return NetworkHooks.getEntitySpawningPacket(this);}
     @Override public boolean isPickable(){return false;}
     @Override public boolean isPushable(){return false;}

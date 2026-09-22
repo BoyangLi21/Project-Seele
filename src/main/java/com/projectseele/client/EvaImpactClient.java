@@ -14,7 +14,13 @@ public final class EvaImpactClient
 {
     public static void receive(ClientboundImpactResponsePacket p)
     {
-        var level=Minecraft.getInstance().level;if(level!=null&&level.getEntity(p.entity()) instanceof LivingEntity actor)EvaImpactResponse.add(actor,p.tick(),p.direction(),p.strength(),p.height());
+        var mc=Minecraft.getInstance();var level=mc.level;
+        if(level!=null&&level.getEntity(p.entity()) instanceof LivingEntity actor)
+        {
+            EvaImpactResponse.add(actor,p.tick(),p.direction(),p.strength(),p.height());
+            if(actor instanceof com.projectseele.entity.EvaUnit01Entity eva&&mc.player!=null&&EvaPilotResolver.controlTarget(mc.player)==eva)
+                EvaImpactResponse.displace(eva,p.direction(),p.strength());
+        }
     }
     @SubscribeEvent public static void camera(ViewportEvent.ComputeCameraAngles event)
     {

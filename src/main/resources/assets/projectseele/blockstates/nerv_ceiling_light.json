@@ -1,0 +1,16 @@
+{
+  "variants": {
+    "hanging=true,lit=true": {
+      "model": "projectseele:block/nerv_ceiling_light_on"
+    },
+    "hanging=true,lit=false": {
+      "model": "projectseele:block/nerv_ceiling_light_off"
+    },
+    "hanging=false,lit=true": {
+      "model": "projectseele:block/nerv_floor_guide_on"
+    },
+    "hanging=false,lit=false": {
+      "model": "projectseele:block/nerv_floor_guide_off"
+    }
+  }
+}

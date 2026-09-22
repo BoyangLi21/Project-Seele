@@ -27,6 +27,10 @@ final class EvaRigTransforms
     }
     static Vector3f point(GeoBone bone,Vector3f point,Matrix4f root) { return new Matrix4f(root).mul(model(bone)).transformPosition(new Vector3f(point)); }
     static Vector3f elbow(String side) { return new Vector3f(side.equals("l")?-23.489652F:23.489652F,123.435069F,7.737214F).div(16); }
+    static Vector3f elbow(GeoBone lower,String side)
+    {for(var child:lower.getChildBones())if(child.getName().equals("r30_elbow_socket_"+side))return pivot(child);return elbow(side);}
+    static Vector3f knee(GeoBone lower)
+    {for(var child:lower.getChildBones())if(child.getName().startsWith("r30_knee_socket_"))return pivot(child);return pivot(lower).add(0,11.4F/16,0);}
     static void hinge(GeoBone bone,Vector3f centre)
     {
         var delta=new Vector3f(centre).sub(pivot(bone));var q=new Quaternionf().rotationZYX(bone.getRotZ(),bone.getRotY(),bone.getRotX());
@@ -46,11 +50,11 @@ final class EvaRigTransforms
     static double solveArm(GeoBone upper,GeoBone lower,GeoBone wrist,GeoBone hand,String side,
                            Vector3f target,Quaternionf handRotation,Vector3f pole,Matrix4f root)
     {
-        return solveChain(upper,lower,wrist,hand,elbow(side),target,handRotation,pole,root);
+        return solveChain(upper,lower,wrist,hand,elbow(lower,side),target,handRotation,pole,root);
     }
     static double solveLeg(GeoBone upper,GeoBone lower,GeoBone ankle,GeoBone foot,Vector3f target,Quaternionf rotation,Vector3f pole,Matrix4f root)
     {
-        return solveChain(upper,lower,ankle,foot,pivot(lower).add(0,11.4F/16,0),target,rotation,pole,root);
+        return solveChain(upper,lower,ankle,foot,knee(lower),target,rotation,pole,root);
     }
     static double solveGenericArm(GeoBone upper,GeoBone lower,GeoBone hand,Vector3f target,Quaternionf rotation,Vector3f pole,Matrix4f root)
     {return solveChain(upper,lower,hand,hand,pivot(lower),target,rotation,pole,root);}

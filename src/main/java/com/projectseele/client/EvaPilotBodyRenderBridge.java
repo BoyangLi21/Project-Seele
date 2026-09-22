@@ -25,7 +25,7 @@ public final class EvaPilotBodyRenderBridge
         var mc=Minecraft.getInstance();
         if(mc.player==null||!mc.options.getCameraType().isFirstPerson())return;
         var eva=EvaPilotResolver.controlTarget(mc.getCameraEntity());
-        if(eva==null||!eva.isPoweredOn()||rendered==eva.getId())return;
+        if(eva==null||(!eva.isPoweredOn()&&!com.projectseele.entity.EvaShutdownR30.displayed(eva))||rendered==eva.getId())return;
         float partial=event.getPartialTick();var camera=event.getCamera().getPosition();
         var buffers=mc.renderBuffers().bufferSource();var dispatcher=mc.getEntityRenderDispatcher();
         dispatcher.render(eva,Mth.lerp(partial,eva.xOld,eva.getX())-camera.x,

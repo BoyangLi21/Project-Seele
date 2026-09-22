@@ -31,8 +31,9 @@ import java.util.*;
 public final class RegionalSpatialAuditDriver
 {
     private static final boolean COMBINED=Set.of("r10-world","r20-civil-annex").contains(System.getProperty("projectseele.regionalBuild",""));
+    private static final boolean R30=Set.of("r30-shapes","r30-collision").contains(System.getProperty("projectseele.regionalBuild",""));
     private static final boolean R29_TOUR="r29-worldtour".equals(System.getProperty("projectseele.regionalBuild",""));
-    private static final boolean R29=R29_TOUR||"r29-collision".equals(System.getProperty("projectseele.regionalBuild",""));
+    private static final boolean R29=R30||R29_TOUR||"r29-collision".equals(System.getProperty("projectseele.regionalBuild",""));
     private static final boolean R28=R29||"r28-collision".equals(System.getProperty("projectseele.regionalBuild",""));
     private static final boolean R26=R28||"r26-collision".equals(System.getProperty("projectseele.regionalBuild",""));
     private static final boolean R25=R26||"r25-collision".equals(System.getProperty("projectseele.regionalBuild",""));
@@ -57,6 +58,7 @@ public final class RegionalSpatialAuditDriver
     private static double distance,maxRise,fallSpeed;
     private static int doorInteractions;
     private static int mechanismWait;
+    private static int commandDoorWait;
     private static final JsonArray TRACE=new JsonArray();
     private static ServerLevel activeLevel;
     private static final Map<BlockPos,BlockState> RESTORE=new LinkedHashMap<>();
@@ -84,7 +86,7 @@ public final class RegionalSpatialAuditDriver
     {
         if(!ENABLED||done||event.phase!=TickEvent.Phase.END)return;
         var server=event.getServer();Path world=server.getWorldPath(LevelResource.ROOT).normalize();
-        if(!world.getFileName().toString().equals(R29?"SEELE_FIELD_R29_REVIEW":R28?"SEELE_FIELD_R28_REVIEW":R26?"SEELE_R26_REVIEW":R25?"SEELE_R25_REVIEW":R24?"SEELE_R24_TV_REVIEW":R23?"SEELE_R22_REVIEW":R21?"SEELE_R21_REVIEW":R20?"SEELE_R20_REVIEW":R19?"SEELE_R19_NATIVE_REVIEW":"SEELE_TV_WORLD_PREVIEW_20260906"))throw new IllegalStateException("Wrong quality audit world");
+        if(!world.getFileName().toString().equals(R30?"SEELE_FIELD_R30_REVIEW":R29?"SEELE_FIELD_R29_REVIEW":R28?"SEELE_FIELD_R28_REVIEW":R26?"SEELE_R26_REVIEW":R25?"SEELE_R25_REVIEW":R24?"SEELE_R24_TV_REVIEW":R23?"SEELE_R22_REVIEW":R21?"SEELE_R21_REVIEW":R20?"SEELE_R20_REVIEW":R19?"SEELE_R19_NATIVE_REVIEW":"SEELE_TV_WORLD_PREVIEW_20260906"))throw new IllegalStateException("Wrong quality audit world");
         ServerLevel level=server.getLevel(FacilitySchemaV2.DIMENSION);
         if(level!=null)level.resetEmptyTime();
         try
@@ -125,7 +127,7 @@ public final class RegionalSpatialAuditDriver
                     }
                     Files.writeString(world.resolve("quality_terrain_survey.json"),GSON.toJson(heights));
                 }
-                cases=JsonParser.parseString(Files.readString(world.resolve(R29?"r29_walk_cases.json":R28?"r28_walk_cases.json":R26?"r26_walk_cases.json":R25?"r25_walk_cases.json":R24?"r24_walk_cases.json":R23?"r23_walk_cases.json":"quality_walk_cases.json"))).getAsJsonArray();
+                cases=JsonParser.parseString(Files.readString(world.resolve(R30?"r30_walk_cases.json":R29?"r29_walk_cases.json":R28?"r28_walk_cases.json":R26?"r26_walk_cases.json":R25?"r25_walk_cases.json":R24?"r24_walk_cases.json":R23?"r23_walk_cases.json":"quality_walk_cases.json"))).getAsJsonArray();
                 ProjectSeele.LOGGER.info("SPATIAL NATIVE shapes={} cases={} playerStep={}",shapes.size(),cases.size(),player.maxUpStep());
             }
             if(Files.exists(world.resolve("regional_stop_requested")))
@@ -186,7 +188,7 @@ public final class RegionalSpatialAuditDriver
                     var hit=level.clip(new net.minecraft.world.level.ClipContext(eye,point.add(point.subtract(eye).normalize().scale(.03)),net.minecraft.world.level.ClipContext.Block.OUTLINE,net.minecraft.world.level.ClipContext.Fluid.NONE,player));
                     if(eye.distanceTo(point)>4.5||!hit.getBlockPos().equals(button)){finish(test,"command_button_not_physically_reachable");return;}
                     if(!com.projectseele.world.CommandRoomSlidingDoorDirector.handleUse(player,button)){finish(test,"command_button_rejected");return;}
-                    mechanismWait=20;doorInteractions++;
+                    commandDoorWait=200;doorInteractions++;
                 }
                 if(test.has("interactBlocks"))
                 {
@@ -228,6 +230,14 @@ public final class RegionalSpatialAuditDriver
                     {finish(test,"door_did_not_open");return;}
                 }
             }
+            if(commandDoorWait>0)
+            {
+                var b=test.getAsJsonArray("commandButton");var button=new BlockPos(b.get(0).getAsInt(),b.get(1).getAsInt(),b.get(2).getAsInt());
+                var chunk=new ChunkPos(button);level.getChunkSource().addRegionTicket(TICKET,chunk,3,chunk);
+                if(!com.projectseele.world.CommandRoomSlidingDoorDirector.passageReady(level,button))
+                {if(--commandDoorWait==0)finish(test,"command_door_did_not_clear");return;}
+                commandDoorWait=0;
+            }
             if(mechanismWait>0){mechanismWait--;return;}
             for(int n=0;n<120;n++)
             {
@@ -250,7 +260,16 @@ public final class RegionalSpatialAuditDriver
                 if(distance>=.18 && Math.hypot(now.x-old.x,now.z-old.z)<.0001)stalled++;else stalled=0;
                 if(steps%4==0||stalled>0)TRACE.add(position(now));
                 if(stalled==1&&openReachableDoor()){stalled=0;continue;}
-                if(stalled>=8){finish(test,"blocked_by_native_collision");break;}
+                if(stalled>=8)
+                {
+                    if(test.has("barrier"))
+                    {
+                        var boundary=test.getAsJsonObject("barrier");double coordinate=boundary.get("axis").getAsString().equals("x")?now.x:now.z;
+                        double gap=Math.abs(coordinate-boundary.get("plane").getAsDouble());
+                        finish(test,gap>=.25&&gap<=.75&&Math.abs(now.y-start.y)<.16?"pass":"barrier_not_reached");
+                    }
+                    else finish(test,"blocked_by_native_collision");break;
+                }
                 if(steps>stepLimit){finish(test,"timeout");break;}
             }
         }
@@ -302,6 +321,11 @@ public final class RegionalSpatialAuditDriver
         JsonObject result=test.deepCopy();result.addProperty("status",status);result.add("actual",position(player.position()));
         result.addProperty("waypointsReached",waypoint);result.addProperty("nativeDoorInteractions",doorInteractions);
         result.addProperty("maxRise",maxRise);result.addProperty("playerStep",player.maxUpStep());result.add("trace",TRACE.deepCopy());RESULTS.add(result);
+        if(test.has("commandButton"))
+        {
+            var doors=new JsonArray();for(var door:activeLevel.getEntitiesOfClass(com.projectseele.entity.NervSlidingDoorEntity.class,player.getBoundingBox().inflate(8)))
+            {var d=new JsonObject();d.addProperty("id",door.getDoorId());d.addProperty("entity",door.getId());d.addProperty("ticks",door.tickCount);d.addProperty("open",door.getOpenProgress(1));d.addProperty("target",door.requestedOpenProgress());d.addProperty("entityTicking",activeLevel.isPositionEntityTicking(door.blockPosition()));doors.add(d);}result.add("doorRuntime",doors);
+        }
         if(!status.equals("pass"))
         {
             var nearby=new JsonArray();var at=player.blockPosition();

@@ -72,7 +72,8 @@ public final class LocalVisualAssetFingerprint
                 || R19_CONTRACTS.containsKey(assetName) && R19_CONTRACTS.get(assetName).matches(meshTag,mesh)
                 || R21_CONTRACTS.containsKey(assetName) && R21_CONTRACTS.get(assetName).matches(meshTag,mesh)
                 || R22_CONTRACTS.containsKey(assetName) && R22_CONTRACTS.get(assetName).matches(meshTag,mesh)
-                || R23_CONTRACTS.containsKey(assetName) && R23_CONTRACTS.get(assetName).matches(meshTag,mesh));
+                || R23_CONTRACTS.containsKey(assetName) && R23_CONTRACTS.get(assetName).matches(meshTag,mesh)
+                || matchesR30(assetName,sourcePack,resources,meshTag));
         boolean valid = complete && sameSource && meshMatches;
         String reason = !complete ? "missing-resource"
                 : !sameSource ? "mixed-resource-packs"
@@ -82,6 +83,22 @@ public final class LocalVisualAssetFingerprint
                 sourcePack, valid, reason);
         ProjectSeele.LOGGER.info("Local visual asset fingerprint: {}", fingerprint.description());
         return fingerprint;
+    }
+    private static boolean matchesR30(String name,String pack,Map<String,ResourceDigest> resources,String tag)
+    {
+        if(!name.equals("eva_prototype")&&!name.equals("eva_un01"))return false;
+        var manifest=Minecraft.getInstance().getResourceManager().getResource(resource("eva/un_models_r30.json"));if(manifest.isEmpty()||!pack.equals(manifest.get().sourcePackId()))return false;
+        try(var reader=manifest.get().openAsReader())
+        {
+            var all=com.google.gson.JsonParser.parseReader(reader).getAsJsonObject();if(!all.get("schema").getAsString().equals("projectseele.un-models-r30.v1"))return false;
+            var model=all.getAsJsonObject("models").getAsJsonObject(name);if(model==null||model.get("triangles").getAsInt()<200000)return false;
+            if(!tag.startsWith("triangle-mesh-"+model.get("triangles").getAsInt()+"-p"+model.get("parts").getAsInt()+"-"))return false;
+            for(var entry:resources.entrySet())if(!model.getAsJsonObject("sha256").get(entry.getKey()).getAsString().equals(entry.getValue().sha256()))return false;
+            for(var entry:model.getAsJsonObject("pbr").entrySet())
+            {var actual=digest(resource(entry.getKey()));if(!actual.present()||!actual.sourcePack().equals(pack)||!actual.sha256().equals(entry.getValue().getAsString()))return false;}
+            return true;
+        }
+        catch(Exception error){ProjectSeele.LOGGER.warn("R30 model manifest rejected for {}",name,error);return false;}
     }
 
     private static ResourceLocation resource(String path)

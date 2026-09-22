@@ -18,11 +18,12 @@ public final class StationDepartureBoardBlockEntity extends BlockEntity
     private boolean warned;
     private boolean wayfinding;
     private boolean routeMap;
+    private boolean airService;
     private long linkedPlatformId = -1, nativeClock;
     private long preferredPlatformId = -1;
     private List<Long> departures = List.of();
     public StationDepartureBoardBlockEntity(BlockPos pos, BlockState state) { super(ModBlockEntities.STATION_DEPARTURE_BOARD.get(),pos,state); }
-    public String title() { return wayfinding ? route : route + "  发车信息 · 北京时间"; }
+    public String title() { return wayfinding ? route : route + (airService?"  航班动态 · 北京时间":"  发车信息 · 北京时间"); }
     public String station() { return station; }
     public List<String> rows() { return rows; }
     public boolean routeMap() { return routeMap; }
@@ -53,6 +54,7 @@ public final class StationDepartureBoardBlockEntity extends BlockEntity
         tag.putString("Row0",rows.isEmpty()?"":rows.get(0));tag.putString("Row1",rows.size()>1?rows.get(1):"");
         tag.putBoolean("Wayfinding",wayfinding);tag.putString("Row2",rows.size()>2?rows.get(2):"");
         tag.putLong("NativePlatformId",preferredPlatformId);
+        tag.putBoolean("AirService",airService);
         if (routeMap)
         {
             var map = new net.minecraft.nbt.ListTag();
@@ -64,6 +66,7 @@ public final class StationDepartureBoardBlockEntity extends BlockEntity
     {
         super.load(tag);platform=BlockPos.of(tag.getLong("PlatformCentre"));station=tag.getString("Station");route=tag.getString("Route");
         wayfinding=tag.getBoolean("Wayfinding");
+        airService=tag.getBoolean("AirService");
         preferredPlatformId=tag.contains("NativePlatformId")?tag.getLong("NativePlatformId"):-1;
         rows=wayfinding&&!tag.getString("Row2").isEmpty()?List.of(tag.getString("Row0"),tag.getString("Row1"),tag.getString("Row2")):tag.getString("Row1").isEmpty()?List.of(tag.getString("Row0")):List.of(tag.getString("Row0"),tag.getString("Row1"));
         routeMap = wayfinding && tag.contains("MapRows", net.minecraft.nbt.Tag.TAG_LIST);

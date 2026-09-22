@@ -17,11 +17,12 @@ public final class EvaFootPlacement
     private static final Map<Integer,Map<String,Vector3f[]>> GEOMETRY=new HashMap<>();
     public static final Map<Integer,double[]> LAST=new HashMap<>();
     public static void clear(){GEOMETRY.clear();LAST.clear();}
-    private static Map<String,Vector3f[]> feet(int variant)
+    private static Map<String,Vector3f[]> feet(EvaUnit01Entity eva)
     {
-        return GEOMETRY.computeIfAbsent(variant,v->{
+        return GEOMETRY.computeIfAbsent(EvaBodyPose.rigKey(eva),v->{
             Map<String,Vector3f[]> result=new HashMap<>();
-            try(var reader=Minecraft.getInstance().getResourceManager().getResource(new ResourceLocation("projectseele","mesh/eva_unit0"+v+".mesh.json")).orElseThrow().openAsReader())
+            String asset=eva.isExperimentalUnit()?eva.experimentalAssetName():"eva_unit0"+v;
+            try(var reader=Minecraft.getInstance().getResourceManager().getResource(new ResourceLocation("projectseele","mesh/"+asset+".mesh.json")).orElseThrow().openAsReader())
             {
                 var parts=JsonParser.parseReader(reader).getAsJsonObject().getAsJsonObject("parts");
                 for(String side:List.of("l","r"))
@@ -50,21 +51,24 @@ public final class EvaFootPlacement
     public static EvaMotionEngineV2.BoneWrites apply(EvaUnit01Entity eva,BakedGeoModel model,float partial,Matrix4f root)
     {
         LAST.remove(eva.getId());
-        if(root==null||!eva.isPoweredOn()||eva.isCrucified()||eva.hasActiveCarrierMotion()||eva.isExperimentalUnit()||eva.isFirstBattleActive()||eva.isVisuallyAirborneForRender()||eva.isNervLogisticsLocked()||eva.isLaunchSequenceActive()||eva.isBerserk()||eva.getActivationTicks()>0||eva.getVisualPose()!=0||eva.hasLiveActionForRender(partial)||eva.rifleStanceLevel(partial)>1.01F)return EvaMotionEngineV2.BoneWrites.empty();
-        var mesh=feet(eva.getUnitVariant());Set<String> changed=new LinkedHashSet<>();double[] witness=new double[6];int index=0;
+        if(root==null||!eva.isPoweredOn()||eva.isCrucified()||eva.hasActiveCarrierMotion()||eva.isExperimentalUnit()&&!EvaBodyPose.hasOwnUnRig(eva)||eva.isFirstBattleActive()||eva.isVisuallyAirborneForRender()||eva.isNervLogisticsLocked()||eva.isLaunchSequenceActive()||eva.isBerserk()||eva.getActivationTicks()>0||eva.getVisualPose()!=0||eva.hasLiveActionForRender(partial)||eva.rifleStanceLevel(partial)>1.01F)return EvaMotionEngineV2.BoneWrites.empty();
+        var mesh=feet(eva);Set<String> changed=new LinkedHashSet<>();double[] witness=new double[6];int index=0;
         for(String s:List.of("l","r"))
         {
             var foot=model.getBone("foot_"+s).orElse(null);var leg=model.getBone("leg_"+s).orElse(null);var shin=model.getBone("shin_"+s).orElse(null);var ankle=model.getBone("ankle_"+s).orElse(null);
             if(foot==null||leg==null||shin==null||ankle==null||!mesh.containsKey(s))continue;
-            Matrix4f matrix=new Matrix4f(root).mul(EvaRigTransforms.model(foot));Vector3f lowest=null;
-            for(Vector3f rest:mesh.get(s)){Vector3f v=matrix.transformPosition(new Vector3f(rest));if(lowest==null||v.y<lowest.y)lowest=v;}
+            Matrix4f matrix=new Matrix4f(root).mul(EvaRigTransforms.model(foot));Vector3f selected=null;float minimum=Float.POSITIVE_INFINITY;
+            // Dense sole meshes need one scalar reduction, not tens of thousands
+            // of temporary vectors per frame. The minimum remains exact.
+            for(Vector3f rest:mesh.get(s)){float y=matrix.m01()*rest.x+matrix.m11()*rest.y+matrix.m21()*rest.z+matrix.m31();if(y<minimum){minimum=y;selected=rest;}}
+            if(selected==null)continue;Vector3f lowest=matrix.transformPosition(new Vector3f(selected));
             double ground=ground(eva,lowest),lift=lowest.y-eva.getY();
             double plant=1-Math.max(0,Math.min(1,(lift-.35)/1.7));
             double correction=Double.isFinite(ground)?Math.max(-2.6,Math.min(2.6,ground+.05-lowest.y))*plant:0;
             witness[index++]=lowest.y;witness[index++]=ground;witness[index++]=correction;
             if(Math.abs(correction)<.025)continue;
             Vector3f target=EvaRigTransforms.point(foot,EvaRigTransforms.pivot(foot),root).add(0,(float)correction,0);
-            Vector3f hip=EvaRigTransforms.point(leg,EvaRigTransforms.pivot(leg),root);Vector3f knee=EvaRigTransforms.point(leg,EvaRigTransforms.pivot(shin).add(0,11.4F/16,0),root);
+            Vector3f hip=EvaRigTransforms.point(leg,EvaRigTransforms.pivot(leg),root);Vector3f knee=EvaRigTransforms.point(leg,EvaRigTransforms.knee(shin),root);
             EvaRigTransforms.solveLeg(leg,shin,ankle,foot,target,EvaRigTransforms.rotation(matrix),knee.sub(hip),root);
             changed.addAll(List.of("leg_"+s,"shin_"+s,"ankle_"+s,"foot_"+s));
         }

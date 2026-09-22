@@ -30,6 +30,7 @@ public final class EvaHitFeedback
         Vec3 direction=c!=null&&c.target==target?c.direction:target.position().subtract(origin).normalize();
         float strength=(float)Math.min(1.2,.22+Math.sqrt(event.getAmount()/Math.max(1,target.getMaxHealth()))*2.0);
         float height=(float)Math.max(0,Math.min(1,(point.y-target.getY())/target.getBbHeight()));long tick=level.getGameTime();EvaImpactResponse.add(target,tick,direction,strength,height);
+        if(target instanceof EvaUnit01Entity eva)EvaImpactResponse.displace(eva,direction,strength);
         SeeleNetwork.CHANNEL.send(PacketDistributor.TRACKING_ENTITY_AND_SELF.with(()->target),new ClientboundImpactResponsePacket(target.getId(),tick,direction,strength,height));
         level.sendParticles(target instanceof EvaUnit01Entity?ParticleTypes.ELECTRIC_SPARK:ParticleTypes.DAMAGE_INDICATOR,point.x,point.y,point.z,8,.55,.55,.55,.07);
         level.sendParticles(ParticleTypes.POOF,point.x,point.y,point.z,5,.45,.45,.45,.04);

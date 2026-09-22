@@ -154,7 +154,9 @@ public final class TrainingPilotDirector
         BlockPos start = route.get(0);
         LAST_SAFE_FEET.put(variant, start);
         pilot.assignVariant(variant);
+        pilot.setNoAi(false);pilot.setNoGravity(false);
         pilot.setTrainingStage(TrainingPilotEntity.STAGE_WALKING);
+        pilot.getPersistentData().putString("SeelePilotRouteR30","board");
         pilot.moveTo(start.getX() + 0.5D, start.getY(), start.getZ() + 0.5D,
                 0.0F, 0.0F);
         // The operations room lies outside the wet-cage simulation distance.
@@ -232,6 +234,10 @@ public final class TrainingPilotDirector
             return;
         }
         int variant = pilot.getAssignedVariant();
+        if(pilot.getVehicle() instanceof EntryPlugCarrierEntity savedPlug&&savedPlug.getAssignedVariant()==variant
+                ||pilot.getVehicle() instanceof EvaUnit01Entity savedEva&&savedEva.getUnitVariant()==variant)
+            ACTIVE_REMOTE_PILOTS.add(variant);
+        if(!ACTIVE_REMOTE_PILOTS.contains(variant)&&!RETURNING_PILOTS.contains(variant))resumeSavedRouteR30(level,pilot);
         if (!ACTIVE_REMOTE_PILOTS.contains(variant)
                 && !RETURNING_PILOTS.contains(variant))
         {
@@ -247,14 +253,13 @@ public final class TrainingPilotDirector
             }
             pilot.setInvisible(true);
             EvaUnit01Entity linked = plug.getLinkedEva();
-            if (linked != null)
+            if (linked != null&&plug.isLockedToEva())
             {
                 pilot.setTrainingStage(TrainingPilotEntity.STAGE_LINKED);
-                float yaw = linked.getYRot();
-                pilot.setYRot(yaw);
-                pilot.setXRot(linked.getXRot());
-                pilot.yBodyRot = yaw;
-                pilot.yHeadRot = yaw;
+                if(!NervPilotCombatR30.controls(linked))
+                {
+                    float yaw = linked.getYRot();pilot.setYRot(yaw);pilot.setXRot(linked.getXRot());pilot.yBodyRot=yaw;pilot.yHeadRot=yaw;
+                }
             }
             else
             {
@@ -275,11 +280,10 @@ public final class TrainingPilotDirector
             // +/-34 degree sine sweep made the command-room feed pan
             // continuously, which reads as a camera fault rather than as a
             // pilot.
-            float yaw = unit.getYRot();
-            pilot.setYRot(yaw);
-            pilot.setXRot(unit.getXRot());
-            pilot.yBodyRot = yaw;
-            pilot.yHeadRot = yaw;
+            if(!NervPilotCombatR30.controls(unit))
+            {
+                float yaw=unit.getYRot();pilot.setYRot(yaw);pilot.setXRot(unit.getXRot());pilot.yBodyRot=yaw;pilot.yHeadRot=yaw;
+            }
             return;
         }
 
@@ -456,6 +460,7 @@ public final class TrainingPilotDirector
         pilot.setInvisible(false);
         pilot.setTrainingStage(TrainingPilotEntity.STAGE_WALKING);
         ACTIVE_REMOTE_PILOTS.remove(variant);
+        pilot.getPersistentData().putString("SeelePilotRouteR30","return");
         RETURNING_PILOTS.add(variant);
         BOARDING_ROUTES.put(variant, List.copyOf(route));
         BOARDING_LEG.put(variant, 1);
@@ -491,6 +496,9 @@ public final class TrainingPilotDirector
                                                TrainingPilotEntity pilot,
                                                List<BlockPos> route)
     {
+        // Older display-only pilots can carry NoAI in their saved entity data.
+        // A real boarding/return order must restore native navigation and gravity.
+        pilot.setNoAi(false);pilot.setNoGravity(false);
         int variant = pilot.getAssignedVariant();
         BlockPos finalTarget = route.get(route.size() - 1);
         if (pilot.position().distanceToSqr(Vec3.atBottomCenterOf(finalTarget))
@@ -608,6 +616,7 @@ public final class TrainingPilotDirector
     private static void parkPilot(ServerLevel level,
                                   TrainingPilotEntity pilot)
     {
+        pilot.getPersistentData().putString("SeelePilotRouteR30","standby");
         clearRouteState(pilot.getAssignedVariant());
         holdAtStandby(level, pilot);
     }
@@ -628,6 +637,25 @@ public final class TrainingPilotDirector
         MOVING,
         ARRIVED,
         FAILED
+    }
+    private static void resumeSavedRouteR30(ServerLevel level,TrainingPilotEntity pilot)
+    {
+        String intent=pilot.getPersistentData().getString("SeelePilotRouteR30");
+        if(!intent.equals("board")&&!intent.equals("return"))return;
+        int variant=pilot.getAssignedVariant();var route=new ArrayList<>(validatedBoardingRoute(level,variant,FacilityV2EvaRuntime.ready(level,variant)));
+        if(route.size()<2)return;if(intent.equals("return"))java.util.Collections.reverse(route);
+        int leg=1;double best=Double.MAX_VALUE;
+        for(int i=1;i<route.size();i++)
+        {
+            Vec3 a=Vec3.atBottomCenterOf(route.get(i-1)),b=Vec3.atBottomCenterOf(route.get(i)),ab=b.subtract(a);
+            double t=ab.lengthSqr()<1e-8?1:Mth.clamp(pilot.position().subtract(a).dot(ab)/ab.lengthSqr(),0,1);
+            double distance=pilot.position().distanceToSqr(a.add(ab.scale(t)));if(distance<best){best=distance;leg=i;}
+        }
+        if(best>36){pilot.getPersistentData().putString("SeelePilotRouteR30","standby");return;}
+        BOARDING_ROUTES.put(variant,List.copyOf(route));BOARDING_LEG.put(variant,leg);CLOSEST_APPROACH.remove(variant);STALLED_TICKS.remove(variant);
+        if(isSafeFeet(level,pilot.blockPosition()))LAST_SAFE_FEET.put(variant,pilot.blockPosition());
+        if(intent.equals("return"))RETURNING_PILOTS.add(variant);else ACTIVE_REMOTE_PILOTS.add(variant);
+        pilot.setNoAi(false);pilot.setNoGravity(false);
     }
 
     private static BlockPos nearestSafeFeet(ServerLevel level,

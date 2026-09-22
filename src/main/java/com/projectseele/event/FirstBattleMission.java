@@ -125,12 +125,12 @@ public final class FirstBattleMission
             }
             var player=event.getServer().getPlayerList().getPlayer(data.missionOwner);if(player==null)continue;
             if(data.active!=null){bar.setVisible(false);continue;}bar.setVisible(true);bar.addPlayer(player);
-            var eva=EvaPilotResolver.controlTarget(player);double distance=eva==null?player.position().distanceTo(s.hero):eva.position().distanceTo(s.hero);
+            var eva=TvCampaignDirector.combatEvaR30(player);var campaign=com.projectseele.world.TvCampaignSavedData.get(level);int assigned=campaign.active.equals("sachiel")?campaign.assignedVariant:EvaUnit01Entity.UNIT_01;double distance=eva==null?player.position().distanceTo(s.hero):eva.position().distanceTo(s.hero);
             if(data.missionAngel==null)
             {
                 bar.setName(Component.literal("初号机 · 前往"+CityBattlefieldR29.name(level)+" / "+Math.round(distance)+" m"));bar.setProgress(1);
                 String blocked=CityBattlefieldR29.obstruction(level);if(!blocked.isEmpty()){bar.setName(Component.literal(blocked));continue;}
-                if(eva==null||eva.level()!=level||eva.getUnitVariant()!=EvaUnit01Entity.UNIT_01||eva.isExperimentalUnit()||distance>90)continue;
+                if(eva==null||eva.level()!=level||eva.getUnitVariant()!=assigned||eva.isExperimentalUnit()||distance>90)continue;
                 loadTarget(level,BlockPos.containing(s.angel));SachielEntity angel=ModEntities.SACHIEL.get().create(level);if(angel==null)continue;
                 angel.moveTo(s.angel.x,s.angel.y,s.angel.z,s.yaw+180,0);angel.yBodyRot=angel.yHeadRot=s.yaw+180;angel.setPersistenceRequired();angel.addTag("seele_first_battle_mission");angel.addTag("seele_first_battle_replay");angel.setTarget(eva);
                 if(!level.noCollision(angel,angel.getBoundingBox())){player.displayClientMessage(Component.literal("迎击区域被占用，清空大道后会继续出动。"),true);continue;}

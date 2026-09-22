@@ -6,6 +6,7 @@ public final class EvaPoseSignalClock
     private float from,to,raw;
     private long start;
     private boolean initialized;
+    public void snap(float value){from=to=raw=value;start=System.nanoTime();initialized=true;}
     public float sample(long now)
     {
         float t=Math.max(0,Math.min(1,(now-start)/50_000_000F));

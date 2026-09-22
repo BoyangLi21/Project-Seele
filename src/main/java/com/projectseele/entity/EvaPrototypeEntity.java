@@ -82,6 +82,7 @@ public final class EvaPrototypeEntity extends EvaUnit01Entity
     @Override public void tick()
     {
         super.tick();if(level().isClientSide)return;com.projectseele.world.UNRecoveryR22.remember(this);com.projectseele.world.UNPlugDirector.tick(this);if(eyeLaserCooldown()>0)entityData.set(LASER_COOLDOWN,eyeLaserCooldown()-1);
+        if(com.projectseele.world.UNAirLiftR29.waitingForDock(this)){setNervLogisticsLocked(true);setNoGravity(true);setDeltaMovement(Vec3.ZERO);}
         if(isUNFlying())
         {
             if(getPilotEntity()==null){if(++noPilotFlightTicks>100)landUNFlight();}else noPilotFlightTicks=0;

@@ -278,5 +278,11 @@
   "subtitles.projectseele.angel_nuclear_finale": "使徒核心爆裂，冲击波与持续低频轰鸣",
   "item.projectseele.un_satellite_phone": "联合国卫星电话",
   "key.projectseele.un_flight": "UN-01 飞行 / 自动降落",
-  "entity.projectseele.un_transport": "联合国重型运输机"
+  "entity.projectseele.un_transport": "联合国重型运输机",
+  "block.projectseele.nerv_ceiling_light": "NERV 吸顶照明灯",
+  "block.projectseele.nerv_alert_light": "NERV 薄型警报灯",
+  "block.projectseele.nerv_sign_post": "NERV 指示牌立柱",
+  "subtitles.projectseele.pa_signal_r30": "发现异常反应。",
+  "subtitles.projectseele.pa_blue_r30": "波形蓝色，是使徒。",
+  "subtitles.projectseele.pa_alert_r30": "全员进入第一战斗配置。"
 }

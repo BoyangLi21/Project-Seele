@@ -1,0 +1,36 @@
+{
+  "variants": {
+    "arm=false,facing=north": {
+      "model": "projectseele:block/nerv_sign_post",
+      "y": 0
+    },
+    "arm=true,facing=north": {
+      "model": "projectseele:block/nerv_sign_post_arm",
+      "y": 0
+    },
+    "arm=false,facing=east": {
+      "model": "projectseele:block/nerv_sign_post",
+      "y": 90
+    },
+    "arm=true,facing=east": {
+      "model": "projectseele:block/nerv_sign_post_arm",
+      "y": 90
+    },
+    "arm=false,facing=south": {
+      "model": "projectseele:block/nerv_sign_post",
+      "y": 180
+    },
+    "arm=true,facing=south": {
+      "model": "projectseele:block/nerv_sign_post_arm",
+      "y": 180
+    },
+    "arm=false,facing=west": {
+      "model": "projectseele:block/nerv_sign_post",
+      "y": 270
+    },
+    "arm=true,facing=west": {
+      "model": "projectseele:block/nerv_sign_post_arm",
+      "y": 270
+    }
+  }
+}

@@ -524,10 +524,12 @@ public final class EvaLogisticsDirector
     {
         Vec3 motion=unit.getDeltaMovement();
         if(motion.horizontalDistanceSqr()>RECOVERY_MAX_SPEED_SQR)return false;
+        if(NervAirLiftR30.waitingAtHead(unit)&&!NervAirLiftR30.ownsMotion(unit)&&motion.lengthSqr()<.001)return true;
         // An unpiloted, grounded EVA retains the next gravity impulse in
-        // deltaMovement (-0.1764 in the current rig). It is not a real fall.
+        // deltaMovement. Its magnitude follows the airframe's gravity attribute.
         // Verify actual support; a stale onGround bit is insufficient.
-        if(motion.y>Math.sqrt(RECOVERY_MAX_SPEED_SQR)||motion.y<-.25)return false;
+        double gravity=unit.getAttributeValue(net.minecraftforge.common.ForgeMod.ENTITY_GRAVITY.get());
+        if(motion.y>Math.sqrt(RECOVERY_MAX_SPEED_SQR)||motion.y<-(gravity+.07))return false;
         if(motion.y<-Math.sqrt(RECOVERY_MAX_SPEED_SQR)&&!unit.onGround())return false;
         int supported=0;
         for(double[] offset:new double[][]{{0,0},{-3,0},{3,0},{0,-2},{0,2}})
@@ -598,6 +600,7 @@ public final class EvaLogisticsDirector
             return new ActionResult(false, label(variant)
                     + " must be motionless before surface command authorizes recovery.");
         }
+        unit.getPersistentData().remove("R30AwaitingNervRecovery");
         unit.prepareForNervRecovery();
         unit.setNervLogisticsLocked(true);
         unit.moveOnNervCarrier(surface.getX() + 0.5D,
@@ -1211,7 +1214,7 @@ public final class EvaLogisticsDirector
             case DRAINING -> com.projectseele.entity.EvaDorsalMechanism.smooth(entry.ticks()/100F);
             case TO_SILO, SILO_READY, DESCENDING, TO_HANGAR -> 1F;
             case FILLING -> 1-com.projectseele.entity.EvaDorsalMechanism.smooth(entry.ticks()/80F);
-            case DEPLOYED -> unit.getLaunchPhase()==EvaUnit01Entity.LAUNCH_CLEAR ? 1F : 0F;
+            case DEPLOYED -> unit.getLaunchPhase()==EvaUnit01Entity.LAUNCH_CLEAR||NervAirLiftR30.waitingAtHead(unit) ? 1F : 0F;
             default -> 0F;
         };
         unit.setCarrierRiseProgress(rackRise);
@@ -1554,9 +1557,10 @@ public final class EvaLogisticsDirector
             }
             case DEPLOYED ->
             {
+                if(NervAirLiftR30.ownsMotion(unit)||NervAirLiftR30.waitingAtHead(unit))break;
                 double dx = unit.getX() - (surface.getX() + 0.5D);
                 double dz = unit.getZ() - (surface.getZ() + 0.5D);
-                boolean trainingStandby = unit.isTrainingPilotActive()
+                boolean trainingStandby = unit.isTrainingPilotActive()&&!NervPilotCombatR30.controls(unit)
                         && dx * dx + dz * dz <= 2.25D
                         && Math.abs(unit.getY() - (surface.getY() + 1.0D)) <= 8.0D;
                 if (trainingStandby)
@@ -1777,6 +1781,11 @@ public final class EvaLogisticsDirector
         return IntegratedNervMapBuilder.lowerLiftBed(level,variant).equals(bed);
     }
 
+    public static BlockPos surfaceTransportBedR30(ServerLevel level,int variant)
+    {
+        if(variant<0||variant>2)throw new IllegalArgumentException("Invalid NERV unit");
+        return surfaceLiftBed(level,variant);
+    }
     private static BlockPos surfaceLiftBed(ServerLevel level, int variant)
     {
         if (FacilityV2EvaRuntime.ready(level, variant))

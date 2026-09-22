@@ -163,6 +163,7 @@ public final class EvaPoseGraph
     }
     public static Snapshot commit(EvaUnit01Entity entity,BakedGeoModel model,float partialTick,org.joml.Matrix4f modelToWorld)
     {
+        EvaMechanicalResetR30.apply(entity);
         if (!contract.ready())
         {
             return Snapshot.empty();
@@ -222,7 +223,6 @@ public final class EvaPoseGraph
         var dorsal=EvaDorsalPose.apply(entity,model);
         var shoulders=EvaShoulderClearanceR25.apply(entity,model,modelToWorld,partialTick);
         var fingers=EvaHandPoseR28.apply(entity,model,partialTick);
-        EvaPowerAttachmentR25.capture(entity,model,modelToWorld);
         Set<String> jointR=new LinkedHashSet<>(jointWrites.rotationBones());jointR.addAll(firearm.rotationBones());
         jointR.addAll(flight.rotationBones());
         Set<String> jointP=new LinkedHashSet<>(jointWrites.positionBones());jointP.addAll(firearm.positionBones());
@@ -238,6 +238,9 @@ public final class EvaPoseGraph
             Set<String> p=new LinkedHashSet<>(motionWrites.positionBones());p.addAll(firearm.positionBones());
             motionWrites=new EvaMotionEngineV2.BoneWrites(Set.copyOf(r),Set.copyOf(p),"MOTION_ENGINE_LIVE_ACTION");
         }
+        var shutdown=EvaShutdownPoseR30.apply(entity,model,partialTick);
+        if(!shutdown.rotationBones().isEmpty())motionWrites=shutdown;
+        EvaPowerAttachmentR25.capture(entity,model,modelToWorld);
         EvaPoseTransition.recordFinal(entity,model);
         Snapshot committed = snapshot(
                 entity, partialTick, motionWrites, transitions, firearm, true);

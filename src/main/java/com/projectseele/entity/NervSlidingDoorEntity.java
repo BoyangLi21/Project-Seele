@@ -141,8 +141,10 @@ public final class NervSlidingDoorEntity extends Entity
 
     public float getOpenProgress(float partialTick)
     {
+        if(!this.level().isClientSide)return this.entityData.get(DATA_OPEN);
         return Mth.lerp(partialTick, this.clientOpenO, this.clientOpen);
     }
+    public float requestedOpenProgress(){return this.entityData.get(DATA_TARGET);}
 
     public void requestOpen()
     {
@@ -191,7 +193,11 @@ public final class NervSlidingDoorEntity extends Entity
             }
             for (int index = 1; index < matches.size(); index++)
             {
-                matches.get(index).discard();
+                var duplicate=matches.get(index);
+                if(duplicate.entityData.get(DATA_TARGET)>.5F)
+                {door.entityData.set(DATA_TARGET,1F);door.holdTicks=Math.max(door.holdTicks,duplicate.holdTicks);}
+                door.entityData.set(DATA_OPEN,Math.max(door.entityData.get(DATA_OPEN),duplicate.entityData.get(DATA_OPEN)));
+                duplicate.discard();
             }
         }
         return door;

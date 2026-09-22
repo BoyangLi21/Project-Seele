@@ -361,7 +361,7 @@ dependencies {
     if (project.hasProperty('gpuTerrain')) {
         runtimeOnly fg.deobf('local:acedium:0.2.7-beta')
     }
-    if (project.hasProperty('lowEndClient') || project.hasProperty('optimizedClient') || project.hasProperty('distantHorizons')) {
+    if (project.hasProperty('lowEndClient') || project.hasProperty('optimizedClient') || project.hasProperty('optimizedServer') || project.hasProperty('distantHorizons')) {
         runtimeOnly fg.deobf('local:ferritecore:6.0.1-forge')
         runtimeOnly fg.deobf('local:modernfix-forge:5.27.83+mc1.20.1')
     }

@@ -1,0 +1,96 @@
+package com.projectseele.visual;
+
+import com.google.gson.*;
+import com.mojang.authlib.GameProfile;
+import com.projectseele.entity.*;
+import com.projectseele.registry.ModItems;
+import com.projectseele.world.*;
+import net.minecraft.server.level.*;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.storage.LevelResource;
+import net.minecraft.world.phys.Vec3;
+import net.minecraftforge.common.util.*;
+import net.minecraftforge.event.TickEvent;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod;
+import java.nio.file.*;
+import java.util.*;
+
+/** Original-identity UN outbound/wreck recovery/intake and NERV surface recovery. */
+@Mod.EventBusSubscriber(modid="projectseele")
+public final class AirLiftR30Review
+{
+    private static final boolean ENABLED="r30-airlift".equals(System.getProperty("projectseele.regionalBuild",""));
+    private static final TicketType<ChunkPos> TICKET=TicketType.create("r30_airlift_review",Comparator.comparingLong(ChunkPos::toLong),100);
+    private static boolean done;private static int age,stage,timer;private static FakePlayer operator;private static UUID unId,plugId,nervId;
+    private static final JsonObject report=new JsonObject();private static final Set<String> phases=new TreeSet<>();
+    private static void check(String label,boolean value){report.addProperty(label,value);if(!value)throw new IllegalStateException(label);}
+    private static void next(int s){stage=s;timer=0;com.projectseele.ProjectSeele.LOGGER.info("R30 AIRLIFT REVIEW stage={}",stage);}
+    @SubscribeEvent public static void tick(TickEvent.ServerTickEvent event)
+    {
+        if(!ENABLED||done||event.phase!=TickEvent.Phase.END)return;var server=event.getServer();var path=server.getWorldPath(LevelResource.ROOT).normalize();
+        if(!path.getFileName().toString().equals("SEELE_FIELD_R30_REVIEW"))throw new IllegalStateException("Wrong airlift review world");
+        var l=server.getLevel(FacilitySchemaV2.DIMENSION);if(l==null)return;l.resetEmptyTime();
+        try
+        {
+            if(Files.deleteIfExists(path.resolve("regional_stop_requested"))){report.addProperty("passed",false);report.addProperty("error","Review stopped for diagnosis");finish(l,path);return;}
+            if(++age<60)return;check("bounded_run",age<18000);timer++;
+            if(operator==null)
+            {
+                operator=FakePlayerFactory.get(l,new GameProfile(UUID.fromString("ca19e174-a03b-47a7-adf7-41508fda0e30"),"R30AirController"));operator.getInventory().add(new ItemStack(ModItems.NERV_EMPLOYEE_CARD.get()));operator.getInventory().add(new ItemStack(ModItems.SATELLITE_PHONE.get()));
+                unId=UNRecoveryR22.identity(l,0);nervId=EvaFleetSavedData.get(server).canonicalId(1).orElseThrow();check("registered_original_un",unId!=null);
+            }
+            String up=UNAirLiftR29.phaseName(l,0),np=NervAirLiftR30.phaseName(l);phases.add(stage+":"+up+":"+np);
+            if(stage>0){check("no_un_transport_hold",!up.equals("HOLD"));check("no_nerv_transport_hold",!np.equals("HOLD"));}
+            if(timer%100==0)com.projectseele.ProjectSeele.LOGGER.info("R30 AIRLIFT REVIEW stage={} ticks={} un={} nerv={} status={}",stage,timer,up,np,stage<4?UNAirLiftR29.status(l,0):NervAirLiftR30.status(l));
+            if(stage==0)
+            {
+                if(timer==1)UNRecoveryR22.request(operator.createCommandSourceStack(),0,true);
+                if(timer<80||!(l.getEntity(unId) instanceof EvaPrototypeEntity e)||UNPlugDirector.capsule(e)==null)return;
+                plugId=UNPlugDirector.capsule(e).getUUID();check("original_un_at_home",e.position().distanceTo(UNRecoveryR22.home(0))<.1);
+                report.addProperty("un_deliver_reply",UNAirLiftR29.request(operator,0,false,6442,-5980));check("delivery_started",UNAirLiftR29.active(l,0));next(1);return;
+            }
+            if(stage<4)
+            {
+                if(!(l.getEntity(unId) instanceof EvaPrototypeEntity e))return;check("original_un_identity",e.getUUID().equals(unId));
+                var capsule=UNPlugDirector.capsule(e);check("original_un_capsule_identity",capsule!=null&&capsule.getUUID().equals(plugId));
+                if(stage==1&&!UNAirLiftR29.active(l,0))
+                {
+                    check("un_delivered",e.getZ()>-6050);check("un_control_released",!e.isNervLogisticsLocked()&&!e.hasActiveCarrierMotion());
+                    e.hurt(l.damageSources().fellOutOfWorld(),100000);check("un_wreck_ready",EvaShutdownR30.wreck(e));report.addProperty("un_recover_reply",UNAirLiftR29.request(operator,0,true,0,0));check("wreck_airlift_started",UNAirLiftR29.active(l,0));next(2);return;
+                }
+                if(stage==2&&!UNAirLiftR29.active(l,0))
+                {
+                    check("un_delivered_to_intake",e.position().distanceTo(UNAirLiftR29.apron(0))<.1);check("un_wreck_not_healed",e.getHealth()==0);check("un_waits_before_docking",e.isNervLogisticsLocked()&&e.position().distanceTo(UNRecoveryR22.home(0))>50);
+                    report.addProperty("dock_reply",UNAirLiftR29.requestDock(operator,0));check("ground_dock_started",UNAirLiftR29.active(l,0));next(3);return;
+                }
+                if(stage==3&&!UNAirLiftR29.active(l,0))
+                {check("un_original_home_reached",e.position().distanceTo(UNRecoveryR22.home(0))<.1);check("wreck_remains_for_repair",e.getHealth()==0&&EvaShutdownR30.wreck(e));next(4);return;}
+            }
+            if(stage==4)
+            {
+                EvaLogisticsDirector.loadControlTarget(l,1);if(!(l.getEntity(nervId) instanceof EvaUnit01Entity e))return;
+                var chunk=new ChunkPos(24,13);l.getChunkSource().addRegionTicket(TICKET,chunk,3,chunk);l.getChunk(24,13);
+                // Isolated review places the registered airframe in the authored city battlefield.
+                EvaLogisticsDirector.markDeployedForVisual(l,e);e.normalizeAfterTransportR30(false);e.teleportTo(392.5,81,217.5);e.setHealth(e.getMaxHealth());e.hurt(l.damageSources().fellOutOfWorld(),100000);
+                report.addProperty("nerv_recover_reply",NervAirLiftR30.request(operator,1,true,0,0));check("nerv_request_started",!NervAirLiftR30.phaseName(l).equals("IDLE"));next(5);return;
+            }
+            if(stage==5&&NervAirLiftR30.phaseName(l).equals("IDLE"))
+            {
+                var e=EvaLogisticsDirector.canonicalUnit(l,1);check("nerv_original_identity",e!=null&&e.getUUID().equals(nervId));check("nerv_waits_on_own_head",NervAirLiftR30.waitingAtHead(e));check("nerv_wreck_retained",EvaShutdownR30.wreck(e));
+                var result=EvaLogisticsDirector.requestRecovery(l,1);report.addProperty("nerv_ground_recovery",result.message());check("surface_recovery_accepted",result.accepted());next(6);return;
+            }
+            if(stage==6&&EvaLogisticsDirector.status(l,1).phase().equals("PARKED"))
+            {var e=EvaLogisticsDirector.canonicalUnit(l,1);check("nerv_wreck_recovered_to_cage",e!=null&&e.getUUID().equals(nervId)&&EvaShutdownR30.wreck(e));report.addProperty("passed",true);finish(l,path);}
+        }
+        catch(Exception error){report.addProperty("passed",false);report.addProperty("stage",stage);report.addProperty("error",error.toString());com.projectseele.ProjectSeele.LOGGER.error("R30 airlift regression failed",error);finish(l,path);}
+    }
+    private static void finish(ServerLevel l,Path path)
+    {
+        done=true;report.add("phases",new Gson().toJsonTree(phases));
+        try{Files.writeString(path.resolve("r30_airlift_review.json"),new GsonBuilder().setPrettyPrinting().create().toJson(report));}catch(Exception e){throw new IllegalStateException(e);}
+        l.getServer().halt(false);
+    }
+    private AirLiftR30Review(){}
+}

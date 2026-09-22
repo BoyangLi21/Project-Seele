@@ -9,6 +9,14 @@ public final class EvaImpactResponse
     private record Impulse(long tick,Vec3 direction,float strength,float height) {}
     private static final Map<LivingEntity,List<Impulse>> HITS=Collections.synchronizedMap(new WeakHashMap<>());
     public record Pose(float pitch,float roll,float head,float energy) {}
+    public static void displace(EvaUnit01Entity eva,Vec3 direction,float strength)
+    {
+        if(eva.isNervLogisticsLocked()||eva.isLaunchSequenceActive()||eva.isFirstBattleActive())return;
+        Vec3 outward=direction.multiply(1,0,1);if(outward.lengthSqr()<1e-8)return;outward=outward.normalize();
+        Vec3 velocity=eva.getDeltaMovement();double desired=Math.min(1.65,.5+strength),current=velocity.dot(outward);
+        if(current<desired)eva.setDeltaMovement(velocity.add(outward.scale(desired-current)));
+        eva.hasImpulse=true;eva.hurtMarked=true;
+    }
     public static void add(LivingEntity actor,long tick,Vec3 direction,float strength,float height)
     {
         if(!Double.isFinite(direction.lengthSqr())||!Float.isFinite(strength)||strength<=0)return;

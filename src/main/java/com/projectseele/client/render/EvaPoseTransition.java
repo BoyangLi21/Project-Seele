@@ -20,6 +20,7 @@ public final class EvaPoseTransition
     private static final Map<BakedGeoModel, Map<String, RawPose>> GECKO_POSES = new WeakHashMap<>();
 
     private EvaPoseTransition() {}
+    public static void resetEntityR30(EvaUnit01Entity entity){STATES.remove(entity);}
 
     public static void clear()
     {

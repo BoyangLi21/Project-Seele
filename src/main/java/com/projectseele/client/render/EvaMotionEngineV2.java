@@ -96,6 +96,7 @@ public final class EvaMotionEngineV2
     private static volatile MotionDatabase liveHeavyDatabase=MotionDatabase.empty();
 
     private EvaMotionEngineV2() {}
+    public static void resetEntityR30(EvaUnit01Entity entity){STATES.remove(entity.getId());GAMEPLAY.remove(entity);}
 
     public static void reload(ResourceManager resourceManager)
     {

@@ -14,6 +14,9 @@ public final class StaffConversationScreen extends Screen
 {
     private ClientboundStaffConversationPacket view;
     private EditBox input;
+    private EditBox transportX,transportZ;
+    private String mission="sachiel";
+    private boolean npcSortie,sortieRifle=true;
     private int x, y, panelWidth, panelHeight, tab, unit = 1, age, savedScale = -1, replyScroll, replyTop;
     private boolean restoring;
 
@@ -45,7 +48,7 @@ public final class StaffConversationScreen extends Screen
         {
             var replacement = new StaffConversationScreen(packet);
             if (mc.screen instanceof StaffConversationScreen old)
-            { replacement.unit = old.unit; replacement.tab = packet.canCommand() ? old.tab : 0; }
+            { replacement.unit = old.unit; replacement.tab = packet.canCommand() ? old.tab : 0;replacement.mission=old.mission;replacement.npcSortie=old.npcSortie;replacement.sortieRifle=old.sortieRifle; }
             mc.setScreen(replacement);
             mc.getSoundManager().play(net.minecraft.client.resources.sounds.SimpleSoundInstance.forUI(com.projectseele.registry.ModSounds.STAFF_RADIO_CONNECT.get(),1,.4F));
         }
@@ -61,11 +64,13 @@ public final class StaffConversationScreen extends Screen
         }
         panelWidth = Math.min(560, width - 16); panelHeight = Math.min(320, height - 16);
         x = (width - panelWidth) / 2; y = (height - panelHeight) / 2;
-        addButton("交谈", x + 12, y + 29, 68, () -> switchTab(0), true);
-        addButton("指挥", x + 84, y + 29, 68, () -> switchTab(1), view.canCommand());
-        addButton("作战记录", x + 156, y + 29, 88, () -> { switchTab(2); send("TOPIC:campaign"); }, true);
-        addButton("通讯录", x + 248, y + 29, 68, () -> switchTab(4), view.radio());
-        if(view.skin().equals("fuyutsuki"))addButton("城市",x+320,y+29,68,()->switchTab(5),permitted("city_rise"));
+        int tabWidth=(panelWidth-24)/6;
+        addButton("交谈",x+12,y+29,tabWidth-3,()->switchTab(0),true);
+        addButton("指挥",x+12+tabWidth,y+29,tabWidth-3,()->switchTab(1),view.canCommand());
+        addButton("作战记录",x+12+tabWidth*2,y+29,tabWidth-3,()->{switchTab(2);send("TOPIC:campaign");},true);
+        addButton("通讯录",x+12+tabWidth*3,y+29,tabWidth-3,()->switchTab(4),view.radio());
+        addButton("运输部门",x+12+tabWidth*4,y+29,tabWidth-3,()->{switchTab(6);send("TRANSPORT:status");},view.canCommand());
+        if(view.skin().equals("fuyutsuki"))addButton("城市",x+12+tabWidth*5,y+29,tabWidth-3,()->switchTab(5),permitted("city_rise"));
         addButton("关闭", x + panelWidth - 60, y + 8, 48, this::onClose, true);
         int controlsY = controlsTop();
         int column = (panelWidth - 32) / 3;
@@ -114,10 +119,31 @@ public final class StaffConversationScreen extends Screen
         }
         else if(tab==2)
         {
-            addButton("查看当前简报", x + 12, controlsY, panelWidth - 24, () -> send("TOPIC:campaign"), true);
             int half = (panelWidth - 28) / 2;
-            addButton("接受当前作战", x + 12, controlsY + 22, half, () -> send("CAMPAIGN:begin"), permitted("campaign"));
-            addButton("撤销当前作战", x + 16 + half, controlsY + 22, half, () -> send("CAMPAIGN:cancel"), permitted("campaign"));
+            addButton((mission.equals("sachiel")?"● ":"")+"萨基尔",x+12,controlsY,half,()->{mission="sachiel";send("CAMPAIGN:select:sachiel");rebuildWidgets();},permitted("campaign"));
+            addButton((mission.equals("shamshel")?"● ":"")+"夏姆榭尔",x+16+half,controlsY,half,()->{mission="shamshel";send("CAMPAIGN:select:shamshel");rebuildWidgets();},permitted("campaign"));
+            for(int i=0;i<3;i++){int selection=i;addButton((unit==i?"● ":"")+com.projectseele.world.NervStaffDialogue.unitName(i),x+12+i*(column+4),controlsY+22,column,()->{unit=selection;rebuildWidgets();},true);}
+            addButton((!npcSortie?"● ":"")+"亲自驾驶",x+12,controlsY+44,half,()->{npcSortie=false;rebuildWidgets();},true);
+            addButton((npcSortie?"● ":"")+com.projectseele.entity.TrainingPilotEntity.pilotName(unit)+"出战",x+16+half,controlsY+44,half,()->{npcSortie=true;rebuildWidgets();},true);
+            addButton("驾驶员装备："+(sortieRifle?"先前往武器井取枪":"近战出击"),x+12,controlsY+66,panelWidth-24,()->{sortieRifle=!sortieRifle;rebuildWidgets();},npcSortie);
+            addButton("下达迎击指令",x+12,controlsY+88,half,()->send("CAMPAIGN:sortie:"+mission+":"+unit+":"+(npcSortie?"npc":"human")+":"+(sortieRifle?"rifle":"melee")),permitted("campaign"));
+            addButton("撤销当前作战",x+16+half,controlsY+88,half,()->send("CAMPAIGN:cancel"),permitted("campaign"));
+            addButton("查看所选简报",x+12,controlsY+110,panelWidth-24,()->send("TOPIC:campaign"),true);
+        }
+        else if(tab==6)
+        {
+            for(int i=0;i<3;i++)
+            {
+                int selection=i;addButton((unit==i?"● ":"")+com.projectseele.world.NervStaffDialogue.unitName(i),x+12+i*(column+4),controlsY,column,()->{unit=selection;rebuildWidgets();},true);
+            }
+            int half=(panelWidth-28)/2;
+            transportX=new EditBox(font,x+12,controlsY+24,half,20,Component.literal("目的地 X"));transportZ=new EditBox(font,x+16+half,controlsY+24,half,20,Component.literal("目的地 Z"));
+            transportX.setMaxLength(10);transportZ.setMaxLength(10);transportX.setFilter(s->s.matches("-?\\d*"));transportZ.setFilter(s->s.matches("-?\\d*"));
+            transportX.setValue(Integer.toString(minecraft.player.getBlockX()));transportZ.setValue(Integer.toString(minecraft.player.getBlockZ()));addRenderableWidget(transportX);addRenderableWidget(transportZ);
+            addButton("投放至 X / Z",x+12,controlsY+48,column,()->send("TRANSPORT:deliver:"+unit+":"+transportX.getValue()+":"+transportZ.getValue()),true);
+            addButton("空运回原发射井",x+16+column,controlsY+48,column,()->send("TRANSPORT:recover:"+unit),true);
+            addButton("取消 / 安全返回",x+20+column*2,controlsY+48,column,()->send("TRANSPORT:cancel"),true);
+            addButton("运输状态",x+12,controlsY+72,panelWidth-24,()->send("TRANSPORT:status"),true);
         }
         else if (tab == 5)
         {
@@ -179,7 +205,7 @@ public final class StaffConversationScreen extends Screen
     private void switchTab(int next) { tab = next; rebuildWidgets(); }
     private boolean permitted(String action)
     { return view.canCommand() && com.projectseele.world.StaffAuthorityR25.allows("", view.skin(), action); }
-    private int controlsTop(){return y+panelHeight-(tab==3||tab==1?113:tab==2?70:91);}
+    private int controlsTop(){return y+panelHeight-(tab==2?157:tab==3||tab==1||tab==6?113:91);}
     private void submitText() { if (!input.getValue().isBlank()) { send(input.getValue()); input.setValue(""); } }
     private void send(String request)
     {

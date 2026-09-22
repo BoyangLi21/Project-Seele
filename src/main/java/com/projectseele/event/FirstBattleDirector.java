@@ -39,16 +39,32 @@ public final class FirstBattleDirector
             ProjectSeele.LOGGER.info("R10 START CHECK health={} ready={} pilot={} variant={} experimental={} locked={} launch={} crucified={} powered={} prone={} crouch={} weapon={} used={} ground={} position={}",angel.getHealth(),FirstBattleClip.ready(),eva.getPilotEntity(),eva.getUnitVariant(),eva.isExperimentalUnit(),eva.isNervLogisticsLocked(),eva.isLaunchSequenceActive(),eva.isCrucified(),eva.isPoweredOn(),eva.isPilotProne(),eva.isPilotCrouching(),eva.getWeapon(),angel.hasUsedFirstBattle(),eva.onGround(),eva.position());
         if(!(angel.level() instanceof ServerLevel level)||eva.level()!=level||!angel.isAlive()||!eva.isAlive()||!FirstBattleClip.ready())return false;
         if(level.getEntity(eva.getUUID())!=eva||level.getEntity(angel.getUUID())!=angel)return false;
-        if(!(eva.getPilotEntity() instanceof ServerPlayer pilot)||eva.getUnitVariant()!=EvaUnit01Entity.UNIT_01||eva.isExperimentalUnit()||eva.isNervLogisticsLocked()||eva.isLaunchSequenceActive()||eva.isCrucified()||!eva.isPoweredOn())return false;
+        var occupant=eva.getPilotEntity();ServerPlayer pilot=occupant instanceof ServerPlayer p?p:null;
+        if(occupant instanceof com.projectseele.entity.TrainingPilotEntity)
+        {
+            var campaign=com.projectseele.world.TvCampaignSavedData.get(level);
+            if(campaign.npcPilot&&campaign.active.equals("sachiel")&&campaign.assignedVariant==1&&campaign.owner!=null)pilot=level.getServer().getPlayerList().getPlayer(campaign.owner);
+        }
+        if(pilot==null||eva.getUnitVariant()!=EvaUnit01Entity.UNIT_01||eva.isExperimentalUnit()||eva.isNervLogisticsLocked()||eva.isLaunchSequenceActive()||eva.isCrucified()||!eva.isPoweredOn())return false;
         if(eva.isPilotProne()||eva.isPilotCrouching()||eva.getWeapon()==EvaUnit01Entity.WEAPON_N2||angel.hasUsedFirstBattle())return false;
         FirstBattleSavedData data=FirstBattleSavedData.get(level);if(data.active!=null)return false;
-        if(!review&&data.completedPilots.contains(pilot.getUUID())&&!angel.getTags().contains("seele_first_battle_replay"))return false;
+        boolean selectedReplay=pilot.getUUID().equals(data.missionOwner)&&com.projectseele.world.TvCampaignSavedData.get(level).active.equals("sachiel");
+        if(!review&&!selectedReplay&&data.completedPilots.contains(pilot.getUUID())&&!angel.getTags().contains("seele_first_battle_replay"))return false;
         Vec3 delta=angel.position().subtract(eva.position());double distance=delta.horizontalDistance();
-        if(!review&&(angel.getHealth()>angel.getMaxHealth()*.32F||!stableSupport(eva)||distance<14||distance>46||Math.abs(delta.y)>4))return false;
+        if(!review&&(angel.getHealth()>angel.getMaxHealth()*.32F||!stableSupport(eva)||distance<14||distance>46||Math.abs(delta.y)>4))
+        {
+            if("r30-npc-combat".equals(System.getProperty("projectseele.regionalBuild",""))&&angel.getHealth()<=angel.getMaxHealth()*.32F&&level.getGameTime()%40==0)
+                ProjectSeele.LOGGER.info("R30 FINALE WAIT health={} distance={} height={} stable={} eva={} angel={}",angel.getHealth(),distance,delta.y,stableSupport(eva),eva.position(),angel.position());
+            return false;
+        }
         float yaw=(float)Math.toDegrees(Math.atan2(-delta.x,delta.z));
         var spec=new FirstBattleSignals.Spec(eva.position(),yaw,eva.getYRot(),angel.getYRot(),(float)distance,(float)delta.y);
-        if(!review&&!spaceReady(level,eva,spec)){ProjectSeele.LOGGER.debug("First battle has insufficient scene clearance");return false;}
-        var record=new FirstBattleSavedData.Encounter();record.eva=eva.getUUID();record.angel=angel.getUUID();record.pilot=pilot.getUUID();record.spec=spec;record.originalField=angel.getAtField();record.originalHealth=angel.getHealth();data.active=record;data.setDirty();
+        if(!review&&!spaceReady(level,eva,spec))
+        {
+            if("r30-npc-combat".equals(System.getProperty("projectseele.regionalBuild",""))&&level.getGameTime()%40==0)ProjectSeele.LOGGER.info("R30 FINALE WAIT scene clearance eva={} angel={} yaw={}",eva.position(),angel.position(),yaw);
+            return false;
+        }
+        var record=new FirstBattleSavedData.Encounter();record.eva=eva.getUUID();record.angel=angel.getUUID();record.pilot=pilot.getUUID();record.npcPilot=occupant instanceof com.projectseele.entity.TrainingPilotEntity?occupant.getUUID():null;record.spec=spec;record.originalField=angel.getAtField();record.originalHealth=angel.getHealth();data.active=record;data.setDirty();
         eva.beginFirstBattle(spec,angel.getId());angel.beginFirstBattle(spec,eva.getId());
         tickets(level,record);pilot.displayClientMessage(Component.literal("制御不能 — 初号机进入自主行动"),true);
         com.projectseele.world.NervStaffDialogue.say(pilot,"赤木律子 · 指挥通信","初号机的动作已经脱离通常控制。保留全部记录，先确认驾驶员的连接！");
@@ -57,7 +73,8 @@ public final class FirstBattleDirector
     }
     public static boolean stableSupport(EvaUnit01Entity eva)
     {
-        if(Math.abs(eva.getDeltaMovement().y)>.2)return false;
+        double velocity=eva.getDeltaMovement().y,gravity=eva.getAttributeValue(net.minecraftforge.common.ForgeMod.ENTITY_GRAVITY.get());
+        if(velocity>.2||velocity<-(gravity+.07))return false;
         // Ridden actors are movement-authoritative on the pilot's client; a
         // stationary vehicle can have a stale server onGround bit. Require
         // actual nearby floor in three of five small sole-area probes.
@@ -68,6 +85,11 @@ public final class FirstBattleDirector
             if(eva.level().getBlockCollisions(eva,sole).iterator().hasNext())supported++;
         }
         return supported>=3;
+    }
+    private static boolean participantPresent(FirstBattleSavedData.Encounter record,EvaUnit01Entity eva,ServerPlayer commander)
+    {
+        if(record.npcPilot==null)return EvaPilotResolver.controlTarget(commander)==eva;
+        return eva.getPilotEntity() instanceof com.projectseele.entity.TrainingPilotEntity pilot&&pilot.getUUID().equals(record.npcPilot);
     }
     private static boolean spaceReady(ServerLevel level,EvaUnit01Entity eva,FirstBattleSignals.Spec spec)
     {
@@ -121,11 +143,11 @@ public final class FirstBattleDirector
                 // Player data can be saved after vanilla has detached the ride
                 // chain at shutdown. Rejoin only this recorded pilot and actor,
                 // only during startup reconciliation, without replacing either.
-                if(!record.observedActors&&h instanceof EvaUnit01Entity restored&&restored.isFirstBattleActive()
+                if(record.npcPilot==null&&!record.observedActors&&h instanceof EvaUnit01Entity restored&&restored.isFirstBattleActive()
                         &&pilot!=null&&pilot.level()==level&&!pilot.isPassenger()&&restored.getPilotEntity()==null
                         &&pilot.distanceToSqr(restored)<128*128)
                     restored.boardFromExternalPlug(pilot,100);
-                if(!(h instanceof EvaUnit01Entity eva)||!eva.isAlive()||pilot==null||EvaPilotResolver.controlTarget(pilot)!=eva||(!(a instanceof SachielEntity)&&!record.deathResolved))
+                if(!(h instanceof EvaUnit01Entity eva)||!eva.isAlive()||pilot==null||!participantPresent(record,eva,pilot)||(!(a instanceof SachielEntity)&&!record.deathResolved))
                 {
                     boolean actorLost=record.observedActors&&(!(h instanceof EvaUnit01Entity)||(!(a instanceof SachielEntity)&&!record.deathResolved));
                     if(actorLost||++record.missingTicks>(record.observedActors?40:200))abort(level,"participant unavailable");continue;
@@ -139,7 +161,7 @@ public final class FirstBattleDirector
                 // The director moves a nested EVA -> plug -> pilot assembly
                 // without ordinary player movement packets. Keep the pilot's
                 // chunk subscription centred on that authoritative motion.
-                if(record.age%20==0)level.getChunkSource().move(pilot);
+                if(record.npcPilot==null&&record.age%20==0)level.getChunkSource().move(pilot);
                 if(angel!=null)angel.setFirstBattleField(900*(1-FirstBattleClip.smooth((seconds-3)/2)));
                 Vec3 field=FirstBattleClip.world(record.spec,new Vec3(0,40,21));
                 if(record.age==19||record.age==122||record.age==410||record.age==428)
@@ -226,9 +248,10 @@ public final class FirstBattleDirector
     }
     @SubscribeEvent public static void protectPilot(LivingAttackEvent event)
     {
-        if(event.getEntity() instanceof ServerPlayer player&&!event.getSource().is(DamageTypeTags.BYPASSES_INVULNERABILITY))
+        if(event.getEntity().level() instanceof ServerLevel level&&!event.getSource().is(DamageTypeTags.BYPASSES_INVULNERABILITY))
         {
-            var active=FirstBattleSavedData.get(player.serverLevel()).active;if(active!=null&&active.pilot.equals(player.getUUID()))event.setCanceled(true);
+            var active=FirstBattleSavedData.get(level).active;
+            if(active!=null&&event.getEntity().getUUID().equals(active.npcPilot==null?active.pilot:active.npcPilot))event.setCanceled(true);
         }
     }
     @SubscribeEvent public static void unload(LevelEvent.Unload event){if(event.getLevel() instanceof ServerLevel level)release(level);}

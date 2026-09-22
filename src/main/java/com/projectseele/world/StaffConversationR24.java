@@ -160,6 +160,24 @@ public final class StaffConversationR24
             }
             send(player, npc, session, false); return;
         }
+        if(request.startsWith("TRANSPORT:"))
+        {
+            if(!NervStaffDialogue.authorized(player)||!StaffAuthorityR25.commandContact(npc))session.reply="本岗位无权调度运输机，请联络指挥或技术负责人。";
+            else try
+            {
+                String[] parts=request.split(":");
+                session.reply=switch(parts[1])
+                {
+                    case "status" -> NervAirLiftR30.status(player.serverLevel());
+                    case "cancel" -> NervAirLiftR30.cancel(player);
+                    case "recover" -> NervAirLiftR30.request(player,Integer.parseInt(parts[2]),true,0,0);
+                    case "deliver" -> NervAirLiftR30.request(player,Integer.parseInt(parts[2]),false,Integer.parseInt(parts[3]),Integer.parseInt(parts[4]));
+                    default -> "请选择运输操作。";
+                };
+            }
+            catch(IllegalArgumentException|IndexOutOfBoundsException error){session.reply="请填写有效的机体编号与整数 X、Z 坐标。";}
+            send(player,npc,session,false);return;
+        }
         if (request.startsWith("BOARD:") || request.startsWith("PILOT:") || request.startsWith("STANDBY:"))
         {
             try

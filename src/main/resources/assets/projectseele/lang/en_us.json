@@ -280,5 +280,11 @@
   "subtitles.projectseele.angel_nuclear_finale": "Angel core detonation and rolling pressure wave",
   "item.projectseele.un_satellite_phone": "United Nations Satellite Phone",
   "key.projectseele.un_flight": "UN-01 flight / automatic landing",
-  "entity.projectseele.un_transport": "UN Heavy Transport"
+  "entity.projectseele.un_transport": "UN Heavy Transport",
+  "block.projectseele.nerv_ceiling_light": "NERV Ceiling Luminaire",
+  "block.projectseele.nerv_alert_light": "NERV Recessed Alert Light",
+  "block.projectseele.nerv_sign_post": "NERV Sign Stanchion",
+  "subtitles.projectseele.pa_signal_r30": "Abnormal signal detected.",
+  "subtitles.projectseele.pa_blue_r30": "Pattern blue. Angel confirmed.",
+  "subtitles.projectseele.pa_alert_r30": "All personnel, combat stations."
 }

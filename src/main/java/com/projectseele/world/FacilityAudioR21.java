@@ -58,7 +58,7 @@ public final class FacilityAudioR21
             play(level,speaker,ModSounds.FACILITY.get("facility_siren").get(),.62F);
         if(time%10==0)
         {
-            boolean lit=(transfer||launch)&&time%20<10;
+            boolean lit=(transfer||launch||TvMissionAlertR30.active(level))&&time%20<10;
             for(BlockPos anchor:new BlockPos[]{cage.offset(-17,64,19),cage.offset(17,64,19),silo.offset(-17,55,-17),silo.offset(17,55,-17)})
             {
                 if(!level.hasChunkAt(anchor))continue;

@@ -1,0 +1,18 @@
+{
+  "variants": {
+    "hanging=true,lit=true": {
+      "model": "projectseele:block/nerv_alert_light_on"
+    },
+    "hanging=true,lit=false": {
+      "model": "projectseele:block/nerv_alert_light_off"
+    },
+    "hanging=false,lit=true": {
+      "model": "projectseele:block/nerv_alert_light_on",
+      "x": 180
+    },
+    "hanging=false,lit=false": {
+      "model": "projectseele:block/nerv_alert_light_off",
+      "x": 180
+    }
+  }
+}

@@ -147,7 +147,7 @@ public class ShamshelEntity extends Monster implements Angel, SiegeAnchorAware, 
                         if(contact.isEmpty()&&!victim.getBoundingBox().inflate(.7).contains(from))continue;
                         hitVictims.add(victim.getUUID());Vec3 motion=points.get(i).subtract(previous.get(i));
                         Vec3 direction=motion.lengthSqr()>1e-6?motion.normalize():end.subtract(from).normalize();
-                        if(com.projectseele.event.EvaHitFeedback.hurt(victim,damageSources().mobAttack(this),30F,contact.orElse(from),direction))
+                        if(com.projectseele.event.EvaHitFeedback.hurt(victim,damageSources().mobAttack(this),30F,contact.orElse(from),direction)&&!(victim instanceof EvaUnit01Entity))
                             victim.push(direction.x*.8,.22,direction.z*.8);
                     }
                     if(wall.getType()!=net.minecraft.world.phys.HitResult.Type.MISS)break;

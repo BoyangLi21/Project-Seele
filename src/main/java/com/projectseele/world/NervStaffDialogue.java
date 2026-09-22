@@ -88,6 +88,22 @@ public final class NervStaffDialogue
         {
             if(!StaffAuthorityR25.allows(npc,"campaign") || !authorized(player))
             {reply(player,npc,"请向作战指挥或技术负责人提交作战指令。");return 0;}
+            if(text.startsWith("CAMPAIGN:select:"))
+            {
+                int result=com.projectseele.event.TvCampaignDirector.select(player,text.substring("CAMPAIGN:select:".length()));
+                reply(player,npc,com.projectseele.event.TvCampaignDirector.briefing(player));return result;
+            }
+            if(text.startsWith("CAMPAIGN:sortie:"))
+            {
+                try
+                {
+                    String[] a=text.split(":");if(a.length!=6||!Set.of("human","npc").contains(a[4])||!Set.of("rifle","melee").contains(a[5]))return 0;
+                    if(com.projectseele.event.TvCampaignDirector.select(player,a[2])==0)return 0;
+                    int result=com.projectseele.event.TvCampaignDirector.beginAssigned(player,Integer.parseInt(a[3]),a[4].equals("npc"),a[5].equals("rifle"));
+                    reply(player,npc,com.projectseele.event.TvCampaignDirector.briefing(player));return result;
+                }
+                catch(NumberFormatException error){reply(player,npc,"机体编号无效。");return 0;}
+            }
             int result=switch(text)
             {
                 case "CAMPAIGN:begin" -> com.projectseele.event.TvCampaignDirector.begin(player);
@@ -181,10 +197,10 @@ public final class NervStaffDialogue
         if(op.startsWith("city_"))
         {
             npc.begin(player.getUUID(),op,variant,control,approach);
-            reply(player,npc,"收到。我去操作城市"+(op.equals("city_rise")?"升起":"降下")+"按键。执行前仍检查城市运行状态。");return 1;
+            reply(player,npc,"收到，碇。确认各区状态后，开始"+(op.equals("city_rise")?"城市展开。":"城市收纳。"));return 1;
         }
         EvaLogisticsDirector.loadControlTarget(player.serverLevel(),variant);
-        npc.begin(player.getUUID(),op,variant,control,approach);reply(player,npc,"收到。我去操作 EVA-"+String.format(Locale.ROOT,"%02d",variant)+" 的"+(op.equals("prepare")?"整备":op.equals("launch")?"发射":"回收")+"按键。联锁检查仍然有效。");return 1;
+        npc.begin(player.getUUID(),op,variant,control,approach);reply(player,npc,"收到，司令。"+unitName(variant)+(op.equals("prepare")?"开始出击准备。":op.equals("launch")?"转入发射程序，请驾驶员保持联络。":"开始回收，请各区人员让出通道。"));return 1;
     }
     private static BlockPos approach(NervStaffEntity npc,BlockPos button,boolean city)
     {
@@ -242,7 +258,7 @@ public final class NervStaffDialogue
         // Physical depression and the existing authoritative console dispatcher are
         // separate in the original player interaction hook. Invoke each exactly once.
         state.use(level,player,InteractionHand.MAIN_HAND,new BlockHitResult(Vec3.atCenterOf(control),net.minecraft.core.Direction.UP,control,false));
-        boolean handled=NervOperationsConsole.handleUse(player,control);
+        boolean handled=NervOperationsConsole.handleStaffUse(player,control);
         if(city)
         {
             var result=handled?NervOperationsConsole.lastOutcome(level,player,control):null;
@@ -254,7 +270,7 @@ public final class NervStaffDialogue
         var outcome=handled?NervOperationsConsole.lastOutcome(level,player,control):null;
         boolean accepted=outcome!=null&&outcome.accepted();
         if(StaffCommandBookR24.order(npc)==null||accepted&&!operation.equals("launch"))
-            reply(player,npc,accepted?"按键已操作，指令被接受。当前："+stage(status.phase())+"。":"控制台没有接受本次指令。"+readinessHint(level,variant,operation));
+            reply(player,npc,accepted?unitName(variant)+"，"+stage(status.phase())+"。我会继续确认后续进程。":"指令暂时不能执行。"+readinessHint(level,variant,operation));
         StaffCommandBookR24.pressed(npc,outcome);
         ProjectSeele.LOGGER.info("STAFF CONSOLE actor={} operation={} unit={} button={} requester={} phase={}",npc.memberId(),operation,variant,control,owner,status.phase());npc.finishTask();
     }

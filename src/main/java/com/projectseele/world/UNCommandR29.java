@@ -82,6 +82,7 @@ public final class UNCommandR29
             case "status" -> {}
             case "deliver" -> reply=UNAirLiftR29.request(p,serial,false,x,z);
             case "recover" -> reply=UNAirLiftR29.request(p,serial,true,x,z);
+            case "dock" -> reply=UNAirLiftR29.requestDock(p,serial);
             case "cancel" -> reply=UNAirLiftR29.cancel(p,serial);
             case "board" -> reply=board(p,serial);
             case "drain","door","fill" ->
@@ -103,7 +104,7 @@ public final class UNCommandR29
         {
             int serial=i;
             deliver.then(Commands.literal("0"+i).then(Commands.argument("x",IntegerArgumentType.integer(-29999000,29999000)).then(Commands.argument("z",IntegerArgumentType.integer(-29999000,29999000)).executes(c->{receive(c.getSource().getPlayerOrException(),"deliver",serial,IntegerArgumentType.getInteger(c,"x"),IntegerArgumentType.getInteger(c,"z"));return 1;}))));
-            for(String action:new String[]{"recover","cancel","board","drain","door","fill"})root.then(Commands.literal(action).then(Commands.literal("0"+i).executes(c->{receive(c.getSource().getPlayerOrException(),action,serial,0,0);return 1;})));
+            for(String action:new String[]{"recover","dock","cancel","board","drain","door","fill"})root.then(Commands.literal(action).then(Commands.literal("0"+i).executes(c->{receive(c.getSource().getPlayerOrException(),action,serial,0,0);return 1;})));
         }
         root.then(deliver);event.getDispatcher().register(root);
     }

@@ -402,6 +402,14 @@ public final class NervArmamentStationEntity extends Entity
                 EVA_PICKUP_RANGE, true);
         return station != null && station.issueRifle(player, eva);
     }
+    public boolean issueToAssignedPilotR30(TrainingPilotEntity pilot,EvaUnit01Entity eva)
+    {
+        if(this.level().isClientSide||eva.getPilotEntity()!=pilot||pilot.getAssignedVariant()!=eva.getUnitVariant()
+                ||!eva.isPoweredOn()||!this.isReadyAndStocked()
+                ||horizontalDistanceSqr(eva.position(),this.position())>EVA_PICKUP_RANGE*EVA_PICKUP_RANGE
+                ||!eva.installExternalArmament(EvaUnit01Entity.WEAPON_RIFLE))return false;
+        this.entityData.set(DATA_STOCKED,false);this.transition(EMPTY);return true;
+    }
 
     public static NervArmamentStationEntity nearest(Level level, Vec3 centre,
             double range, boolean readyOnly)

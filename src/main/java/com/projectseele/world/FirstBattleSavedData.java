@@ -16,7 +16,7 @@ public final class FirstBattleSavedData extends SavedData
 {
     public static final class Encounter
     {
-        public UUID eva,angel,pilot;
+        public UUID eva,angel,pilot,npcPilot;
         public FirstBattleSignals.Spec spec;
         public int age,missingTicks;
         public boolean deathResolved,skipped,observedActors;
@@ -45,7 +45,7 @@ public final class FirstBattleSavedData extends SavedData
         FirstBattleSavedData result=new FirstBattleSavedData();
         if(tag.contains("Active"))
         {
-            CompoundTag t=tag.getCompound("Active");Encounter e=new Encounter();e.eva=t.getUUID("Eva");e.angel=t.getUUID("Angel");e.pilot=t.getUUID("Pilot");e.spec=loadSpec(t.getCompound("Spec"));e.age=t.getInt("Age");e.deathResolved=t.getBoolean("DeathResolved");e.skipped=t.getBoolean("Skipped");e.originalField=t.getFloat("OriginalField");e.originalHealth=t.getFloat("OriginalHealth");result.active=e;
+            CompoundTag t=tag.getCompound("Active");Encounter e=new Encounter();e.eva=t.getUUID("Eva");e.angel=t.getUUID("Angel");e.pilot=t.getUUID("Pilot");e.npcPilot=t.hasUUID("NpcPilot")?t.getUUID("NpcPilot"):null;e.spec=loadSpec(t.getCompound("Spec"));e.age=t.getInt("Age");e.deathResolved=t.getBoolean("DeathResolved");e.skipped=t.getBoolean("Skipped");e.originalField=t.getFloat("OriginalField");e.originalHealth=t.getFloat("OriginalHealth");result.active=e;
         }
         if(tag.hasUUID("MissionOwner"))result.missionOwner=tag.getUUID("MissionOwner");if(tag.hasUUID("MissionAngel"))result.missionAngel=tag.getUUID("MissionAngel");
         if(tag.contains("MissionLastPos"))result.missionLastPos=net.minecraft.core.BlockPos.of(tag.getLong("MissionLastPos"));result.missionCancelRequested=tag.getBoolean("MissionCancelRequested");
@@ -55,7 +55,7 @@ public final class FirstBattleSavedData extends SavedData
     {
         if(active!=null)
         {
-            Encounter e=active;CompoundTag t=new CompoundTag();t.putUUID("Eva",e.eva);t.putUUID("Angel",e.angel);t.putUUID("Pilot",e.pilot);t.put("Spec",saveSpec(e.spec));t.putInt("Age",e.age);t.putBoolean("DeathResolved",e.deathResolved);t.putBoolean("Skipped",e.skipped);t.putFloat("OriginalField",e.originalField);t.putFloat("OriginalHealth",e.originalHealth);tag.put("Active",t);
+            Encounter e=active;CompoundTag t=new CompoundTag();t.putUUID("Eva",e.eva);t.putUUID("Angel",e.angel);t.putUUID("Pilot",e.pilot);if(e.npcPilot!=null)t.putUUID("NpcPilot",e.npcPilot);t.put("Spec",saveSpec(e.spec));t.putInt("Age",e.age);t.putBoolean("DeathResolved",e.deathResolved);t.putBoolean("Skipped",e.skipped);t.putFloat("OriginalField",e.originalField);t.putFloat("OriginalHealth",e.originalHealth);tag.put("Active",t);
         }
         if(missionOwner!=null)tag.putUUID("MissionOwner",missionOwner);if(missionAngel!=null)tag.putUUID("MissionAngel",missionAngel);
         if(missionLastPos!=null)tag.putLong("MissionLastPos",missionLastPos.asLong());tag.putBoolean("MissionCancelRequested",missionCancelRequested);

@@ -12,7 +12,7 @@ import net.minecraftforge.network.simple.SimpleChannel;
  */
 public final class SeeleNetwork
 {
-    private static final String PROTOCOL_VERSION = "33";
+    private static final String PROTOCOL_VERSION = "34";
 
     public static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(
             new ResourceLocation(ProjectSeele.MODID, "main"),
@@ -179,5 +179,8 @@ public final class SeeleNetwork
         CHANNEL.messageBuilder(ServerboundStaffConversationPacket.class, id++, NetworkDirection.PLAY_TO_SERVER)
                 .encoder(ServerboundStaffConversationPacket::encode).decoder(ServerboundStaffConversationPacket::new)
                 .consumerMainThread(ServerboundStaffConversationPacket::handle).add();
+        CHANNEL.messageBuilder(ServerboundEvaFrozenPoseR30.class,id++,NetworkDirection.PLAY_TO_SERVER)
+                .encoder(ServerboundEvaFrozenPoseR30::encode).decoder(ServerboundEvaFrozenPoseR30::new)
+                .consumerMainThread(ServerboundEvaFrozenPoseR30::handle).add();
     }
 }

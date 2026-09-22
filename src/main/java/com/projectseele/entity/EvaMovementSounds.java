@@ -52,7 +52,7 @@ public final class EvaMovementSounds
             Vec3 foot=eva.position().add(lateral.scale((side.equals("l")?1:-1)*eva.getBbWidth()*.24)).add(forward.scale(backwards?-2:3));
             var state=eva.level().getBlockState(BlockPos.containing(foot.x,foot.y-.2,foot.z));
             boolean soil=state.is(BlockTags.DIRT)||state.is(BlockTags.SAND)||state.is(BlockTags.LEAVES);
-            play(eva,foot,soil?ModSounds.EVA_FOOT_SOIL.get():ModSounds.EVA_FOOT_CONCRETE.get(),eva.isPilotCrouching()?.7F:1.45F+.35F*run,.94F+eva.getRandom().nextFloat()*.07F);
+            play(eva,foot,soil?ModSounds.EVA_FOOT_SOIL.get():ModSounds.EVA_FOOT_CONCRETE.get(),eva.isPilotCrouching()?1.25F:2.6F+.7F*run,.86F+eva.getRandom().nextFloat()*.06F);
             if(eva.getTags().contains("seele_motion_lab"))ProjectSeele.LOGGER.info("EVA FOOT CONTACT side={} phase={} position={} material={}",side,phase,foot,state);
         }
     }
@@ -62,6 +62,6 @@ public final class EvaMovementSounds
     }
     public static void play(EvaUnit01Entity eva,Vec3 point,SoundEvent sound,float volume,float pitch)
     {
-        if(!eva.level().isClientSide&&!eva.isSilent())eva.level().playSound(null,point.x,point.y,point.z,sound,SoundSource.PLAYERS,volume,pitch);
+        if(!eva.level().isClientSide&&!eva.isSilent())eva.level().playSound(null,point.x,point.y,point.z,SoundEvent.createFixedRangeEvent(sound.getLocation(),384F),SoundSource.PLAYERS,volume,pitch);
     }
 }

@@ -28,6 +28,27 @@ public final class NativeStationDepartures
         String text = String.valueOf(call(object, method)).split("\\|", 2)[0].trim();
         return text.length() > limit ? text.substring(0, limit) : text;
     }
+    private static String nextAirport(Object simulator,Object arrival,long platformId,String fallback) throws ReflectiveOperationException
+    {
+        long routeId=((Number)call(arrival,"getRouteId")).longValue();
+        for(Object route:(Iterable<?>)simulator.getClass().getField("routes").get(simulator))
+        {
+            if(((Number)call(route,"getId")).longValue()!=routeId)continue;
+            var stops=new ArrayList<Object>();for(Object stop:(Iterable<?>)call(route,"getRoutePlatforms"))stops.add(stop);
+            var destinations=new java.util.LinkedHashSet<String>();
+            for(int i=0;i+1<stops.size();i++)
+            {
+                Object current=call(stops.get(i),"getPlatform"),next=call(stops.get(i+1),"getPlatform");
+                if(current!=null&&next!=null&&((Number)call(current,"getId")).longValue()==platformId
+                        &&((Number)call(next,"getId")).longValue()!=platformId)destinations.add(shortName(next,"getStationName",15));
+            }
+            // Out-and-back airport routes end at their starting airport. The
+            // simulator's trip destination therefore names this same terminal;
+            // a departure display needs the next actual airport in that route.
+            return destinations.size()==1?destinations.iterator().next():fallback;
+        }
+        return fallback;
+    }
     public static Snapshot read(BlockPos centre) throws ReflectiveOperationException
     {return read(centre,-1);}
     public static Snapshot read(BlockPos centre,long preferredId) throws ReflectiveOperationException
@@ -52,24 +73,28 @@ public final class NativeStationDepartures
         }
         if (nearest == null) return new Snapshot(-1, 0, List.of(), List.of("本站台暂无运行信息"));
         long id = ((Number)call(nearest, "getId")).longValue();
+        boolean airport="AIRPLANE".equals(String.valueOf(call(nearest,"getTransportMode")));
         Class<?> longs = Class.forName("org.mtr.libraries.it.unimi.dsi.fastutil.longs.LongImmutableList");
         Object ids = longs.getConstructor(long[].class).newInstance((Object)new long[]{id});
         Class<?> requestClass = Class.forName("org.mtr.core.operation.ArrivalsRequest");
         Constructor<?> constructor = requestClass.getConstructor(longs, int.class, int.class);
-        Object request = constructor.newInstance(ids, 2, 2);
+        Object request = constructor.newInstance(ids, airport?16:2, airport?16:2);
         Object response = requestClass.getMethod("getArrivals", simulator.getClass()).invoke(request, simulator);
         long now = ((Number)call(response, "getCurrentTime")).longValue();
         List<String> rows = new ArrayList<>();List<Long> times = new ArrayList<>();
         for (Object arrival : (Iterable<?>)call(response, "getArrivals"))
         {
+            if(airport&&Boolean.TRUE.equals(call(arrival,"getIsTerminating")))continue;
             long departure = ((Number)call(arrival, "getDeparture")).longValue();
             String route = shortName(arrival, "getRouteNumber", 7);
             if (route.isBlank()) route = shortName(arrival, "getRouteName", 10);
             String destination = shortName(arrival, "getDestination", 15);
+            if(airport)destination=nextAirport(simulator,arrival,id,destination);
             long seconds = Math.max(0, (departure - now) / 1000);
-            String eta = seconds <= 30 ? "即将进站" : "约" + ((seconds + 59) / 60) + "分钟";
+            String eta = seconds <= 30 ? airport?"即将起飞":"即将进站" : "约" + ((seconds + 59) / 60) + "分钟";
             rows.add(CLOCK.format(Instant.ofEpochMilli(departure)) + "  " + route + "  " + destination + "  " + eta);
             times.add(departure);
+            if(rows.size()==2)break;
         }
         if (rows.isEmpty()) rows.add("当前暂无待发班次");
         Snapshot snapshot = new Snapshot(id, now, List.copyOf(times), List.copyOf(rows));

@@ -53,6 +53,9 @@ public class ModItems
     public static final RegistryObject<Item> NERV_FLOOR_PANEL=ITEMS.register("nerv_floor_panel",()->new BlockItem(ModBlocks.NERV_FLOOR_PANEL.get(),new Item.Properties()));
     public static final RegistryObject<Item> NERV_HAZARD_PAVING=ITEMS.register("nerv_hazard_paving",()->new BlockItem(ModBlocks.NERV_HAZARD_PAVING.get(),new Item.Properties()));
     public static final RegistryObject<Item> NERV_STRIP_LIGHT=ITEMS.register("nerv_strip_light",()->new BlockItem(ModBlocks.NERV_STRIP_LIGHT.get(),new Item.Properties()));
+    public static final RegistryObject<Item> NERV_SIGN_POST=ITEMS.register("nerv_sign_post",()->new BlockItem(ModBlocks.NERV_SIGN_POST.get(),new Item.Properties()));
+    public static final RegistryObject<Item> NERV_CEILING_LIGHT=ITEMS.register("nerv_ceiling_light",()->new BlockItem(ModBlocks.NERV_CEILING_LIGHT.get(),new Item.Properties()));
+    public static final RegistryObject<Item> NERV_ALERT_LIGHT=ITEMS.register("nerv_alert_light",()->new BlockItem(ModBlocks.NERV_ALERT_LIGHT.get(),new Item.Properties()));
     public static final RegistryObject<Item> STATION_TACTILE_PATH=ITEMS.register("station_tactile_path",()->new BlockItem(ModBlocks.STATION_TACTILE_PATH.get(),new Item.Properties()));
     public static final RegistryObject<Item> STATION_TACTILE_WARNING=ITEMS.register("station_tactile_warning",()->new BlockItem(ModBlocks.STATION_TACTILE_WARNING.get(),new Item.Properties()));
     public static final RegistryObject<Item> S2_ENGINE_FRAGMENT = ITEMS.register("s2_engine_fragment",

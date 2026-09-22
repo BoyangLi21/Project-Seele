@@ -1,0 +1,189 @@
+package com.projectseele.world;
+
+import com.projectseele.entity.*;
+import com.projectseele.registry.ModEntities;
+import net.minecraft.core.BlockPos;
+import net.minecraft.nbt.*;
+import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.*;
+import net.minecraft.util.Mth;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.chunk.ChunkStatus;
+import net.minecraft.world.level.saveddata.SavedData;
+import net.minecraft.world.level.storage.LevelResource;
+import net.minecraft.world.phys.Vec3;
+import net.minecraftforge.event.TickEvent;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod;
+import java.nio.file.Files;
+import java.util.*;
+
+/** NERV's airport-based VTOL recovers the registered airframe to its own surface head. */
+@Mod.EventBusSubscriber(modid="projectseele")
+public final class NervAirLiftR30
+{
+    private enum Phase { PREPARE, TAKEOFF, FERRY, APPROACH, CLAMP, ASCEND, CRUISE, DESCEND, RELEASE, RETREAT, RETURN, LAND, HOLD }
+    public static final Vec3 STAND=new Vec3(1200.5,84,20.5);
+    private static final double OFFSET=TransportClearanceR30.HOIST_OFFSET;
+    private static final TicketType<ChunkPos> TICKET=TicketType.create("nerv_airlift_r30",Comparator.comparingLong(ChunkPos::toLong),120);
+    private static final class Job
+    {
+        UUID unit,owner;int variant,age,duration;Phase phase=Phase.PREPARE;boolean returning,carrying,crew,rebase,paused;
+        Vec3 from=Vec3.ZERO,to=Vec3.ZERO,destination=Vec3.ZERO;String note="接收运输指令";
+    }
+    public static final class State extends SavedData
+    {
+        UUID aircraft;Vec3 aircraftAt=STAND;Job job;String last="NERV 重型运输机在机场待命";
+        final Map<Integer,BlockPos> locations=new HashMap<>();
+        static State load(CompoundTag t)
+        {
+            var s=new State();if(t.hasUUID("Aircraft"))s.aircraft=t.getUUID("Aircraft");if(t.contains("AircraftX"))s.aircraftAt=vec(t,"Aircraft");s.last=t.getString("Last");
+            for(int i=0;i<3;i++)if(t.contains("Location"+i))s.locations.put(i,BlockPos.of(t.getLong("Location"+i)));
+            if(t.contains("Job"))
+            {
+                var n=t.getCompound("Job");var j=new Job();j.unit=n.getUUID("Unit");j.owner=n.getUUID("Owner");j.variant=n.getInt("Variant");j.phase=Phase.valueOf(n.getString("Phase"));j.age=n.getInt("Age");j.duration=n.getInt("Duration");j.returning=n.getBoolean("Returning");j.carrying=n.getBoolean("Carrying");j.crew=n.getBoolean("Crew");j.from=vec(n,"From");j.to=vec(n,"To");j.destination=vec(n,"Destination");j.note=n.getString("Note");j.rebase=true;s.job=j;
+            }return s;
+        }
+        @Override public CompoundTag save(CompoundTag t)
+        {
+            if(aircraft!=null)t.putUUID("Aircraft",aircraft);put(t,"Aircraft",aircraftAt);t.putString("Last",last);locations.forEach((i,p)->t.putLong("Location"+i,p.asLong()));
+            if(job!=null)
+            {
+                var j=job;var n=new CompoundTag();n.putUUID("Unit",j.unit);n.putUUID("Owner",j.owner);n.putInt("Variant",j.variant);n.putString("Phase",j.phase.name());n.putInt("Age",j.age);n.putInt("Duration",j.duration);n.putBoolean("Returning",j.returning);n.putBoolean("Carrying",j.carrying);n.putBoolean("Crew",j.crew);put(n,"From",j.from);put(n,"To",j.to);put(n,"Destination",j.destination);n.putString("Note",j.note);t.put("Job",n);
+            }return t;
+        }
+    }
+    private static Vec3 vec(CompoundTag t,String k){return new Vec3(t.getDouble(k+"X"),t.getDouble(k+"Y"),t.getDouble(k+"Z"));}
+    private static void put(CompoundTag t,String k,Vec3 v){t.putDouble(k+"X",v.x);t.putDouble(k+"Y",v.y);t.putDouble(k+"Z",v.z);}
+    public static State state(ServerLevel l){return l.getDataStorage().computeIfAbsent(State::load,State::new,"projectseele_nerv_airlift_r30");}
+    public static Vec3 head(ServerLevel l,int unit){var p=EvaLogisticsDirector.surfaceTransportBedR30(l,unit);return new Vec3(p.getX()+.5,p.getY()+2,p.getZ()+.5);}
+    public static boolean waitingAtHead(EvaUnit01Entity e){return e.level() instanceof ServerLevel l&&!e.isExperimentalUnit()&&e.getPersistentData().getBoolean("R30AwaitingNervRecovery")&&e.position().distanceToSqr(head(l,e.getUnitVariant()))<.25;}
+    public static boolean ownsMotion(EvaUnit01Entity e)
+    {
+        if(!(e.level() instanceof ServerLevel l))return false;var j=state(l).job;
+        return j!=null&&j.unit.equals(e.getUUID())&&Set.of(Phase.APPROACH,Phase.CLAMP,Phase.ASCEND,Phase.CRUISE,Phase.DESCEND,Phase.RELEASE,Phase.HOLD).contains(j.phase);
+    }
+    public static String status(ServerLevel l){var s=state(l);return s.job==null?s.last:NervStaffDialogue.unitName(s.job.variant)+"："+s.job.note;}
+    public static String phaseName(ServerLevel l){var j=state(l).job;return j==null?"IDLE":j.phase.name();}
+    public static String request(ServerPlayer p,int variant,boolean returning,int x,int z)
+    {
+        if(variant<0||variant>2||!NervStaffDialogue.authorized(p)||!StaffConversationR24.radioAllowed(p))return "需要 NERV 指挥通信权限。";
+        var l=p.serverLevel();if(!l.dimension().equals(FacilitySchemaV2.DIMENSION))return "请先进入第三新东京市。";
+        if(!Files.isRegularFile(l.getServer().getWorldPath(LevelResource.ROOT).resolve("nerv_transport_r30.json")))return "机场重型运输区尚未交付。";
+        var s=state(l);if(s.job!=null)return "运输机已有任务："+s.job.note;
+        var receipt=EvaFleetSavedData.get(l.getServer()).entry(variant).orElse(null);
+        if(receipt==null)return "未找到原机体登记。";
+        if(receipt.phase()!=EvaFleetSavedData.Phase.DEPLOYED)return "地下机库与发射井禁止直接起吊。请先完成正常发射，让机体抵达地表。";
+        if(Math.abs((long)x)>29999000||Math.abs((long)z)>29999000||!l.getWorldBorder().isWithinBounds(new BlockPos(x,80,z)))return "指定位置超出世界边界。";
+        var e=EvaLogisticsDirector.canonicalUnit(l,variant);
+        if(e!=null&&e.getPilotEntity() instanceof ServerPlayer pilot&&pilot!=p)return "请由当前驾驶员本人呼叫空运，或先让驾驶员离开插入栓。";
+        var j=new Job();j.variant=variant;j.unit=receipt.canonicalId();j.owner=p.getUUID();j.returning=returning;j.crew=e!=null&&e.getPilotEntity()==p;j.destination=returning?head(l,variant):new Vec3(x+.5,0,z+.5);s.job=j;s.setDirty();return "运输部门收到。正在确认机体身份、地表净空与降落位置。";
+    }
+    public static String cancel(ServerPlayer p)
+    {
+        var s=state(p.serverLevel());var j=s.job;if(j==null)return "运输机待命中。";
+        if(!j.owner.equals(p.getUUID())&&!p.hasPermissions(2))return "请由下达运输指令的人取消。";
+        if(j.phase==Phase.PREPARE){s.job=null;s.last="运输指令已取消";s.setDirty();return s.last;}
+        if(j.phase==Phase.HOLD&&!j.carrying){if(p.serverLevel().getEntity(j.unit) instanceof EvaUnit01Entity e)e.normalizeAfterTransportR30(false);j.phase=Phase.RETREAT;j.from=s.aircraftAt;j.to=new Vec3(s.aircraftAt.x,cruise(p.serverLevel()),s.aircraftAt.z);j.age=0;j.duration=100;j.rebase=true;}
+        j.returning=true;j.destination=head(p.serverLevel(),j.variant);
+        if(j.carrying&&p.serverLevel().getEntity(j.unit) instanceof EvaUnit01Entity e)begin(p.serverLevel(),j,Phase.ASCEND,e.position(),new Vec3(e.getX(),cruise(p.serverLevel())-OFFSET,e.getZ()),100,e);
+        s.setDirty();return "运输机将安全返回原发射井顶部，机体接地后等待回收指令。";
+    }
+    private static boolean ready(ServerLevel l,Vec3 p,int radius)
+    {
+        var c=new ChunkPos(BlockPos.containing(p));l.getChunkSource().addRegionTicket(TICKET,c,radius+1,c);boolean loaded=true;
+        for(int x=c.x-radius;x<=c.x+radius;x++)for(int z=c.z-radius;z<=c.z+radius;z++)if(!l.getChunkSource().hasChunk(x,z)){l.getChunkSource().getChunkFuture(x,z,ChunkStatus.FULL,true);loaded=false;}
+        return loaded;
+    }
+    private static double cruise(ServerLevel l){return l.getMaxBuildHeight()+128;}
+    private static int duration(Vec3 a,Vec3 b){return Math.max(80,Mth.ceil(a.distanceTo(b)/20));}
+    private static boolean movingCargo(Phase p){return Set.of(Phase.ASCEND,Phase.CRUISE,Phase.DESCEND).contains(p);}
+    private static void note(ServerLevel l,Job j,String text)
+    {if(j.note.equals(text))return;j.note=text;var p=l.getServer().getPlayerList().getPlayer(j.owner);if(p!=null)p.sendSystemMessage(Component.literal("[NERV 运输管制] "+text));}
+    private static void lock(EvaUnit01Entity e){e.setNervLogisticsLocked(true);e.setNoGravity(true);e.setDeltaMovement(Vec3.ZERO);}
+    private static void begin(ServerLevel l,Job j,Phase phase,Vec3 a,Vec3 b,int ticks,EvaUnit01Entity e)
+    {
+        j.phase=phase;j.from=a;j.to=b;j.age=0;j.duration=Math.max(1,ticks);j.rebase=false;
+        if(movingCargo(phase)){lock(e);e.beginNervCarrierMotion(a,b,j.duration);}
+        note(l,j,switch(phase){case TAKEOFF->"重型运输机离开机场";case FERRY->"正在前往机体所在位置";case APPROACH->"下降接近，吊装架展开";case CLAMP->"机体夹具锁定";case ASCEND->"吊装完成，垂直爬升";case CRUISE->"前往交付位置";case DESCEND->"到达目标上空，开始下降";case RELEASE->"机体接地，解除运输夹具";case RETREAT,RETURN,LAND->"机体已交付，运输机返回机场";default->"等待运输条件满足";});
+    }
+    @SubscribeEvent public static void tick(TickEvent.ServerTickEvent event)
+    {
+        if(event.phase!=TickEvent.Phase.END)return;var l=event.getServer().getLevel(FacilitySchemaV2.DIMENSION);if(l==null)return;
+        if(!Files.isRegularFile(l.getServer().getWorldPath(LevelResource.ROOT).resolve("nerv_transport_r30.json")))return;
+        var s=state(l);
+        if(event.getServer().getTickCount()%20==0)for(int i=0;i<3;i++){var e=EvaLogisticsDirector.canonicalUnit(l,i);if(e!=null&&!e.blockPosition().equals(s.locations.get(i))){s.locations.put(i,e.blockPosition());s.setDirty();}}
+        if(s.aircraft==null)
+        {
+            if(!ready(l,STAND,5))return;var plane=ModEntities.UN_TRANSPORT.get().create(l);if(plane==null)return;plane.configure(0,false);plane.setNerv();plane.setPos(STAND);if(!l.addFreshEntity(plane))return;s.aircraft=plane.getUUID();s.aircraftAt=STAND;s.setDirty();
+        }
+        if(s.job==null)return;l.resetEmptyTime();
+        try{advance(l,s);}catch(Exception error){s.job.phase=Phase.HOLD;note(l,s.job,"运输暂停："+error.getMessage());s.setDirty();com.projectseele.ProjectSeele.LOGGER.error("NERV airlift held",error);}
+    }
+    private static void advance(ServerLevel l,State s)
+    {
+        var j=s.job;Vec3 location=s.locations.containsKey(j.variant)?Vec3.atCenterOf(s.locations.get(j.variant)):head(l,j.variant);ready(l,location,2);ready(l,s.aircraftAt,2);
+        if(!(l.getEntity(j.unit) instanceof EvaUnit01Entity e)){EvaLogisticsDirector.loadControlTarget(l,j.variant);note(l,j,"正在加载原机体；不会生成替代机");return;}
+        if(!(l.getEntity(s.aircraft) instanceof UNTransportEntity plane)){note(l,j,"正在加载原运输机");return;}
+        plane.setHoistDistance((float)OFFSET);
+        var owner=l.getServer().getPlayerList().getPlayer(j.owner);
+        if(j.crew&&owner==null&&j.phase!=Phase.RETURN&&j.phase!=Phase.LAND){e.endNervCarrierMotion();e.setDeltaMovement(Vec3.ZERO);j.paused=true;note(l,j,"驾驶员离线，保持位置等待通信恢复");return;}
+        if(j.paused){j.paused=false;j.rebase=true;}
+        if(e.getPilotEntity() instanceof ServerPlayer pilot&&pilot!=owner&&j.phase==Phase.PREPARE){s.last="原机体已有其他驾驶员，运输未开始";s.job=null;s.setDirty();return;}
+        if(j.phase==Phase.HOLD){if(j.carrying)lock(e);return;}
+        if(j.phase==Phase.PREPARE)
+        {
+            if(e.getY()<64){note(l,j,"机体仍在地下，请先正常发射至地表");return;}
+            String problem=TransportClearanceR30.pickupProblem(l,e);if(!problem.isEmpty()){note(l,j,problem);return;}
+            if(!ready(l,j.destination,7)){note(l,j,"检查目的地空域");return;}
+            if(!j.returning){Vec3 site=TransportClearanceR30.landing(l,j.destination,e);if(site==null){s.last="目标附近没有安全落点，请换一个开阔位置";s.job=null;s.setDirty();return;}j.destination=site;}
+            begin(l,j,Phase.TAKEOFF,plane.position(),new Vec3(STAND.x,cruise(l),STAND.z),100,e);s.setDirty();return;
+        }
+        if(j.rebase){begin(l,j,j.phase,movingCargo(j.phase)?e.position():plane.position(),j.to,Math.max(30,j.duration-j.age),e);}
+        if(j.phase==Phase.FERRY&&j.age==0){j.to=new Vec3(e.getX(),cruise(l),e.getZ());j.duration=duration(j.from,j.to);}
+        double t=Mth.clamp((double)(j.age+1)/j.duration,0,1);t=t*t*t*(t*(t*6-15)+10);Vec3 at=j.from.lerp(j.to,t);
+        if(!ready(l,at,2)){e.endNervCarrierMotion();j.rebase=true;return;}
+        if(movingCargo(j.phase))
+        {
+            lock(e);Vec3 delta=at.subtract(e.position());
+            if(Entity.collideBoundingBox(e,delta,e.getBoundingBox().deflate(.08),l,List.of()).subtract(delta).lengthSqr()>1e-6){e.endNervCarrierMotion();throw new IllegalStateException("机体运输路径受阻，保持当前位置");}
+            float yaw=e.getYRot();if(j.phase==Phase.CRUISE){Vec3 d=j.to.subtract(j.from);yaw=Mth.approachDegrees(yaw,(float)Math.toDegrees(Math.atan2(-d.x,d.z)),2.5F);}
+            if(j.phase==Phase.DESCEND&&j.returning)yaw=Mth.approachDegrees(yaw,EvaUnit01Entity.SILO_BAY_YAW,2.5F);
+            e.moveOnNervCarrier(at.x,at.y,at.z,yaw);plane.setPos(at.add(0,OFFSET,0));plane.setYRot(yaw);plane.cargo(e.getId(),true,1);
+        }
+        else if(j.phase==Phase.CLAMP){lock(e);plane.cargo(e.getId(),true,1);}
+        else if(j.phase==Phase.RELEASE){lock(e);plane.cargo(e.getId(),false,1);}
+        else
+        {
+            plane.setPos(at);Vec3 d=j.to.subtract(j.from);if(d.horizontalDistanceSqr()>1)plane.setYRot(Mth.approachDegrees(plane.getYRot(),(float)Math.toDegrees(Math.atan2(-d.x,d.z)),2.5F));plane.cargo(e.getId(),false,j.phase==Phase.APPROACH?(float)t:0);
+        }
+        s.aircraftAt=plane.position();s.locations.put(j.variant,e.blockPosition());j.age++;s.setDirty();if(j.age<j.duration)return;
+        switch(j.phase)
+        {
+            case TAKEOFF -> begin(l,j,Phase.FERRY,plane.position(),new Vec3(e.getX(),cruise(l),e.getZ()),duration(plane.position(),e.position()),e);
+            case FERRY ->
+            {
+                if(e.position().distanceTo(new Vec3(j.to.x,e.getY(),j.to.z))>12){begin(l,j,Phase.FERRY,plane.position(),new Vec3(e.getX(),cruise(l),e.getZ()),80,e);return;}
+                String problem=TransportClearanceR30.pickupProblem(l,e);if(!problem.isEmpty()){j.age--;note(l,j,problem);return;}
+                lock(e);begin(l,j,Phase.APPROACH,plane.position(),e.position().add(0,OFFSET,0),100,e);
+            }
+            case APPROACH -> {plane.setYRot(e.getYRot());begin(l,j,Phase.CLAMP,plane.position(),plane.position(),40,e);}
+            case CLAMP -> {j.carrying=true;e.getPersistentData().remove("R30AwaitingNervRecovery");begin(l,j,Phase.ASCEND,e.position(),new Vec3(e.getX(),cruise(l)-OFFSET,e.getZ()),100,e);}
+            case ASCEND -> {Vec3 dest=new Vec3(j.destination.x,cruise(l)-OFFSET,j.destination.z);begin(l,j,Phase.CRUISE,e.position(),dest,duration(e.position(),dest),e);}
+            case CRUISE -> begin(l,j,Phase.DESCEND,e.position(),j.destination,140,e);
+            case DESCEND -> {e.endNervCarrierMotion();begin(l,j,Phase.RELEASE,plane.position(),plane.position(),40,e);}
+            case RELEASE ->
+            {
+                j.carrying=false;j.crew=false;e.normalizeAfterTransportR30(false);e.setOnGround(true);
+                if(j.returning){e.setNervLogisticsLocked(true);e.setNoGravity(true);e.getPersistentData().putBoolean("R30AwaitingNervRecovery",true);}
+                begin(l,j,Phase.RETREAT,plane.position(),new Vec3(plane.getX(),cruise(l),plane.getZ()),100,e);
+            }
+            case RETREAT -> {Vec3 atStand=new Vec3(STAND.x,cruise(l),STAND.z);begin(l,j,Phase.RETURN,plane.position(),atStand,duration(plane.position(),atStand),e);}
+            case RETURN -> begin(l,j,Phase.LAND,plane.position(),STAND,100,e);
+            case LAND -> {plane.setPos(STAND);plane.setYRot(0);s.aircraftAt=STAND;s.last=j.returning?"机体已交付原发射井顶部，等待指挥室“回收”指令；运输机在 NERV 机场待命。":"机体投放完成，运输机在 NERV 机场待命。";note(l,j,s.last);s.job=null;s.setDirty();}
+            default -> {}
+        }
+    }
+    private NervAirLiftR30(){}
+}

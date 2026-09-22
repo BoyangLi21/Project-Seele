@@ -21,7 +21,7 @@ public final class CombatR29Client
         if(!started)
         {
             started=true;oldPause=mc.options.pauseOnLostFocus;oldGui=mc.options.hideGui;oldDistance=mc.options.renderDistance().get();mc.options.pauseOnLostFocus=false;mc.options.hideGui=true;mc.options.renderDistance().set(18);mc.options.broadcastOptions();mc.options.setCameraType(net.minecraft.client.CameraType.FIRST_PERSON);
-            folder=mc.gameDirectory.toPath().resolve("../artifacts/facility_r29/native_combat_"+System.currentTimeMillis()).normalize();try{Files.createDirectories(folder);}catch(Exception x){throw new IllegalStateException(x);}CombatR29Review.ready=true;
+            folder=mc.gameDirectory.toPath().resolve("../artifacts/"+(CombatR29Review.R30?"facility_r30":"facility_r29")+"/native_combat_"+System.currentTimeMillis()).normalize();try{Files.createDirectories(folder);}catch(Exception x){throw new IllegalStateException(x);}CombatR29Review.ready=true;
         }
         if(mc.level!=null&&mc.level.getEntity(CombatR29Review.evaId)!=null&&mc.levelRenderer.isChunkCompiled(new net.minecraft.core.BlockPos(32,80,217))&&++warmup>160)CombatR29Review.sceneReady=true;
         if(CombatR29Review.done&&++end>30){try{Files.writeString(folder.resolve("frames.json"),timestamps.toString());}catch(Exception x){throw new IllegalStateException(x);}mc.options.pauseOnLostFocus=oldPause;mc.options.hideGui=oldGui;mc.options.renderDistance().set(oldDistance);mc.options.broadcastOptions();mc.stop();}
@@ -37,7 +37,7 @@ public final class CombatR29Client
         if(!photo.isEmpty()&&!photo.equals(last))
         {try(var image=net.minecraft.client.Screenshot.takeScreenshot(mc.getMainRenderTarget())){image.writeToFile(folder.resolve(photo+".png"));last=photo;}catch(Exception x){throw new IllegalStateException(x);}}
         long now=System.nanoTime();
-        if(CombatR29Review.age>=90&&CombatR29Review.age<390&&now>=next)
+        if(CombatR29Review.age>=90&&CombatR29Review.age<(CombatR29Review.R30?470:390)&&now>=next)
         {
             next=now+100_000_000L;
             if(firstFrame==0)firstFrame=now;var t=new com.google.gson.JsonObject();t.addProperty("frame",frame);t.addProperty("seconds",(now-firstFrame)/1e9);t.addProperty("server_tick",CombatR29Review.age);timestamps.add(t);

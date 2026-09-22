@@ -74,8 +74,8 @@ public final class StaffCommandBookR24
         var order = new Order(npc, player, operation, unit); orders.put(npc.getUUID(), order);
         EvaLogisticsDirector.loadControlTarget(level, unit);
         NervStaffDialogue.reply(player, npc, operation.equals("deploy")
-                ? "收到。等驾驶员登机后，我会操作整备按键；机体到达发射台并通过检查后，再操作发射按键。"
-                : "收到。我先确认机库状态，再去操作对应按键。");
+                ? "收到，司令。驾驶员接入后开始整备，机体抵达发射台以后，我再确认发射时机。"
+                : "收到，司令。我先确认机库状态，随后向您报告。");
         return 1;
     }
 

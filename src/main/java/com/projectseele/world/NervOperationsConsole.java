@@ -39,6 +39,12 @@ import net.minecraft.world.phys.Vec3;
  */
 public final class NervOperationsConsole
 {
+    private static final ThreadLocal<Boolean> STAFF_REPORT=ThreadLocal.withInitial(()->false);
+    public static boolean handleStaffUse(ServerPlayer player,BlockPos position)
+    {
+        boolean previous=STAFF_REPORT.get();STAFF_REPORT.set(true);
+        try{return handleUse(player,position);}finally{STAFF_REPORT.set(previous);}
+    }
     public static final int CONTROL_COUNT = 7;
     public static final int S20_CONTROL_COUNT = 21;
 
@@ -740,7 +746,7 @@ public final class NervOperationsConsole
         LAST_OUTCOMES.put(level, new ControlOutcome(level.getGameTime(), player.getUUID(),
                 position.immutable(), result.accepted(), result.message()));
         record(level, id + ": " + result.message());
-        player.displayClientMessage(Component.literal(
+        if(!STAFF_REPORT.get())player.displayClientMessage(Component.literal(
                         "[NERV S20] " + result.message())
                 .withStyle(result.accepted()
                         ? ChatFormatting.GREEN : ChatFormatting.RED), false);

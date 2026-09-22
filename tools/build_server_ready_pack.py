@@ -40,8 +40,10 @@ def validate_private_eva_mesh_contracts() -> None:
             source,
         )
     }
+    r30_file=asset_root/'eva/un_models_r30.json'
+    r30=json.loads(r30_file.read_text(encoding='utf8'))['models'] if r30_file.exists() else {}
     for name in ("eva_unit00", "eva_unit01", "eva_unit02", "eva_prototype", "eva_un01"):
-        expected = contracts.get(name)
+        expected = (r30[name]['triangles'],r30[name]['parts']) if name in r30 else contracts.get(name)
         if expected is None:
             raise ValueError(f"Missing Java mesh contract for {name}")
         path = asset_root / "mesh" / f"{name}.mesh.json"
@@ -61,6 +63,12 @@ def validate_private_eva_mesh_contracts() -> None:
                 f"{name} would be invisible: Java contract={expected}, "
                 f"private mesh={actual}"
             )
+        if name in r30:
+            core={'mesh':f'mesh/{name}.mesh.json','geo':f'geo/{name}.geo.json','animation':f'animations/{name}.animation.json','texture':f'textures/entity/{name}.png'}
+            for key,relative in core.items():
+                if sha256(asset_root/relative)!=r30[name]['sha256'][key]:raise ValueError(f'R30 model manifest mismatch: {name}/{key}')
+            for relative,digest in r30[name]['pbr'].items():
+                if sha256(asset_root/relative)!=digest:raise ValueError(f'R30 material manifest mismatch: {relative}')
 
 
 def sha256(path: Path) -> str:

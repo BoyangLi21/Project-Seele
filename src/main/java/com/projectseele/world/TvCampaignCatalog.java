@@ -32,5 +32,6 @@ public final class TvCampaignCatalog
             new Chapter("instrumentality", "25–26", "TV 结局", "", 0, false, "保留 TV 内心叙事；不以剧场版战役替换。"));
 
     public static Chapter at(int index) { return CHAPTERS.get(Math.max(0, Math.min(index, CHAPTERS.size() - 1))); }
+    public static java.util.Optional<Chapter> find(String id){return CHAPTERS.stream().filter(c->c.id().equals(id)).findFirst();}
     private TvCampaignCatalog() {}
 }

@@ -11,15 +11,16 @@ public final class SachielStrikePose
     {
         if(!actor.isStrikeActive()||actor.isFirstBattleActive())return;
         var frame=SachielStrike.sample(actor,partial);float w=frame.weight();
-        float age=actor.strikeAge(partial),twist=CombatMotionR29.twist(age),drive=CombatMotionR29.drive(age)*(1-CombatMotionR29.release(age));
+        boolean left=actor.strikeMode()==3;
+        float age=actor.strikeAge(partial),twist=CombatMotionR29.twist(age)*(left?-1:1),drive=CombatMotionR29.drive(age)*(1-CombatMotionR29.release(age));
         model.getBone("torso_lower").ifPresent(b->{b.setRotY(b.getRotY()+twist*.32F);b.setRotX(b.getRotX()-.035F*drive);});
         model.getBone("torso_upper").ifPresent(b->{b.setRotY(b.getRotY()+twist*.68F);b.setRotX(b.getRotX()+.05F*w-.12F*drive);});
-        var upper=model.getBone("arm_r").orElse(null);var lower=model.getBone("forearm_r").orElse(null);var hand=model.getBone("hand_r").orElse(null);if(upper==null||lower==null||hand==null)return;
+        String side=left?"l":"r";var upper=model.getBone("arm_"+side).orElse(null);var lower=model.getBone("forearm_"+side).orElse(null);var hand=model.getBone("hand_"+side).orElse(null);if(upper==null||lower==null||hand==null)return;
         var bones=new software.bernie.geckolib.cache.object.GeoBone[]{upper,lower,hand};
         var before=new float[3][6];
         for(int i=0;i<3;i++){var b=bones[i];before[i]=new float[]{b.getRotX(),b.getRotY(),b.getRotZ(),b.getPosX(),b.getPosY(),b.getPosZ()};}
         var rotation=new Quaternionf().rotationTo(new Vector3f(0,0,-1),frame.direction().toVector3f());
-        double solvedError=EvaRigTransforms.solveGenericArm(upper,lower,hand,frame.hand().toVector3f(),rotation,new Vector3f(-1,-.5F,.2F),SachielStrike.root(actor,partial));
+        double solvedError=EvaRigTransforms.solveGenericArm(upper,lower,hand,frame.hand().toVector3f(),rotation,new Vector3f(left?1:-1,-.5F,.2F),SachielStrike.root(actor,partial));
         // Full IK only during contact. Blend back to the live walk pose, not a hard-coded idle.
         float blend=CombatMotionR29.weight(age);
         for(int i=0;i<3;i++)

@@ -46,32 +46,59 @@ public final class TvCampaignDirector
     }
     public static ServerLevel level(ServerPlayer player)
     { for (var level : player.server.getAllLevels()) if (site(level) != null) return level; return null; }
+    public static Vec3 approachPointR30(ServerLevel level){var configured=site(level);return configured==null?null:configured.hero;}
+    public static EvaUnit01Entity combatEvaR30(ServerPlayer player)
+    {
+        var level=level(player);if(level==null)return EvaPilotResolver.controlTarget(player);var data=TvCampaignSavedData.get(level);
+        if(data.npcPilot&&!data.active.isEmpty())
+        {
+            var eva=EvaLogisticsDirector.canonicalUnit(level,data.assignedVariant);
+            return eva!=null&&eva.getPilotEntity() instanceof TrainingPilotEntity pilot&&pilot.getAssignedVariant()==data.assignedVariant?eva:null;
+        }
+        var eva=EvaPilotResolver.controlTarget(player);
+        return eva!=null&&(data.active.isEmpty()||eva.getUnitVariant()==data.assignedVariant)?eva:null;
+    }
 
     public static String briefing(ServerPlayer player)
     {
         var level = level(player); if (level == null) return "本世界尚未配置 TV 作战区域。";
-        var data = TvCampaignSavedData.get(level); var chapter = TvCampaignCatalog.at(data.chapter);
+        var data = TvCampaignSavedData.get(level); var chapter = selected(player,data);
         String activity = data.active.isEmpty() ? "尚未下达本章指令" : switch (data.phase)
-        { case "approach" -> "作战已接受，等待初号机抵达"; case "combat" -> "目标正在交战"; case "cancel" -> "正在解除目标登记"; default -> "记录暂停，请查看提示"; };
+        { case "alert" -> "使徒信号确认中 · 总部进入战斗配置";case "approach" -> "作战已接受，等待出击机体抵达"; case "combat" -> "目标正在交战"; case "cancel" -> "正在解除目标登记"; default -> "记录暂停，请查看提示"; };
         return "TV 1995 · 第 " + chapter.episode() + " 话 / " + chapter.title() + "\n"
                 + (chapter.playable() ? "可执行作战" : "后续制作档案 · 尚不可开始") + " · 已归档 " + data.completed.size() + " 章\n"
                 + activity + "\n" + chapter.briefing().replace("东北迎击大道", CityBattlefieldR29.name(level)) + "\n" + CityBattlefieldR29.obstruction(level) + "\n" + data.notice;
     }
     public static int begin(ServerPlayer player)
+    {return beginAssigned(player,1,false,false);}
+    public static int beginAssigned(ServerPlayer player,int variant,boolean npc,boolean rifle)
     {
+        if(variant<0||variant>2)return message(player,"请选择零号机、初号机或二号机。",false);
         if (!NervStaffDialogue.authorized(player)) return message(player, "作战下达需要 NERV 通行权限。", false);
         var level = level(player); if (level == null) return message(player, "本世界尚未配置作战区域。", false);
-        var data = TvCampaignSavedData.get(level); var chapter = TvCampaignCatalog.at(data.chapter);
+        if(npc&&player.level()!=level)return message(player,"请进入第三新东京市后下达驾驶员出击指令。",false);
+        var data = TvCampaignSavedData.get(level); var chapter = selected(player,data);
         if (!data.active.isEmpty()) return message(player, "已有作战正在执行。" + briefing(player), false);
-        if (!chapter.playable()) return message(player, "这一章尚未制作完成，不会越过它启动后面的使徒战。", false);
+        if (!chapter.playable()) return message(player, "这一章尚未制作完成。您可以从作战列表选择已制作的萨基尔或夏姆榭尔迎击。", false);
         var replay = FirstBattleSavedData.get(level);
         if (replay.active != null || replay.missionOwner != null) return message(player, "已有独立迎击或重播占用作战区，请先结束该行动。", false);
-        if (chapter.id().equals("sachiel") && !FirstBattleMission.begin(player)) return 0;
-        data.owner = player.getUUID(); data.active = chapter.id(); data.phase = "approach"; data.notice = ""; data.angel = null; data.lastPosition = null; data.setDirty();
-        NervStaffDialogue.say(player, "葛城美里 · 作战通信", chapter.id().equals("sachiel")
-                ? "初号机编入迎击。先到机库登机，整备完成后我来协调发射。不要一个人把所有步骤都扛下来。"
-                : "这次的目标与上次不同。先观察它的攻击，再决定接近的方向。撤回路线也要记住。");
+        data.owner = player.getUUID(); data.active = chapter.id(); data.phase = "alert";data.assignedVariant=variant;data.npcPilot=npc;data.autoArmament=npc&&rifle;data.pilotDispatchRequested=false; data.alertStarted=level.getGameTime();data.alertLine=0;data.notice = "出击编成："+NervStaffDialogue.unitName(variant)+" · "+(npc?TrainingPilotEntity.pilotName(variant):"司令亲自驾驶"); data.angel = null; data.lastPosition = null; data.setDirty();
         return message(player, "作战已接受。" + chapter.briefing().replace("东北迎击大道", CityBattlefieldR29.name(level)) + "\n" + CityBattlefieldR29.obstruction(level), true);
+    }
+    private static TvCampaignCatalog.Chapter selected(ServerPlayer player,TvCampaignSavedData data)
+    {
+        String id=data.active.isEmpty()?player.getPersistentData().getString("SeeleMissionChoiceR30"):data.active;
+        return TvCampaignCatalog.find(id).orElse(TvCampaignCatalog.at(data.chapter));
+    }
+    public static int select(ServerPlayer player,String id)
+    {
+        if(!NervStaffDialogue.authorized(player))return message(player,"需要 NERV 指挥权限。",false);
+        var mission=TvCampaignCatalog.find(id).orElse(null);
+        if(mission==null||!mission.playable())return message(player,"这份作战尚未开放。",false);
+        var level=level(player);if(level==null)return message(player,"当前世界没有已交付的作战区。",false);
+        if(!TvCampaignSavedData.get(level).active.isEmpty())return message(player,"请先结束或取消正在执行的作战。",false);
+        player.getPersistentData().putString("SeeleMissionChoiceR30",id);
+        return message(player,"已选择："+mission.title()+" / "+mission.target()+"。\n"+briefing(player),true);
     }
     public static int cancel(ServerPlayer player)
     {
@@ -80,6 +107,7 @@ public final class TvCampaignDirector
         if (data.active.isEmpty()) return message(player, "当前没有 TV 作战。", false);
         if (!player.getUUID().equals(data.owner) && !player.hasPermissions(2)) return message(player, "只能撤销自己的作战指令。", false);
         if (data.active.equals("sachiel")) FirstBattleMission.cancel(player);
+        TvMissionAlertR30.clear(level);
         data.phase = "cancel"; data.setDirty();
         return message(player, "作战已撤销，不计通关。机体仍需按正常流程回收。", true);
     }
@@ -117,7 +145,7 @@ public final class TvCampaignDirector
     }
     private static void pilotContinuity(ServerLevel level,TvCampaignSavedData data)
     {
-        if(data.active.isEmpty()||data.owner==null)return;
+        if(data.active.isEmpty()||data.owner==null||data.npcPilot)return;
         var player=level.getServer().getPlayerList().getPlayer(data.owner);
         if(player==null)return; // Logout detach must not overwrite the saved riding intent.
         if(player.level()!=level){data.resumePending=false;data.wasRiding=false;data.setDirty();return;}
@@ -173,6 +201,13 @@ public final class TvCampaignDirector
             var bar = BARS.computeIfAbsent(level, key -> new ServerBossEvent(Component.literal("TV 作战"), BossEvent.BossBarColor.RED, BossEvent.BossBarOverlay.PROGRESS));
             bar.removeAllPlayers();
             if (data.active.isEmpty()) continue;
+            if(data.phase.equals("alert"))
+            {
+                var commander=event.getServer().getPlayerList().getPlayer(data.owner);
+                if(!TvMissionAlertR30.tick(level,data,commander)||commander==null)continue;
+                if(data.active.equals("sachiel")&&!FirstBattleMission.begin(commander)){data.clear("迎击区暂不可用，请确认其他行动已结束后重新下达指令。");continue;}
+                data.phase="approach";data.setDirty();
+            }
             if (data.phase.equals("cancel"))
             {
                 if (data.angel == null) { data.clear("行动已取消，本章可以重新接受。"); continue; }
@@ -199,12 +234,12 @@ public final class TvCampaignDirector
             bar.addPlayer(player);
             if (data.angel == null)
             {
-                var eva = EvaPilotResolver.controlTarget(player);
+                var eva = combatEvaR30(player);
                 double distance = (eva == null ? player.position() : eva.position()).distanceTo(site.hero);
                 bar.setName(Component.literal("第4使徒迎击 · 前往" + CityBattlefieldR29.name(level) + " / " + Math.round(distance) + " m")); bar.setProgress(1);
                 String blocked = CityBattlefieldR29.obstruction(level);
                 if (!blocked.isEmpty()) { bar.setName(Component.literal(blocked)); continue; }
-                if (eva == null || eva.getUnitVariant() != EvaUnit01Entity.UNIT_01 || eva.isExperimentalUnit()
+                if (eva == null || eva.getUnitVariant() != data.assignedVariant || eva.isExperimentalUnit()
                         || eva.isNervLogisticsLocked() || !eva.isPoweredOn() || distance > 90) continue;
                 load(level, BlockPos.containing(site.angel));
                 if(!level.isPositionEntityTicking(BlockPos.containing(site.angel)))continue;
@@ -224,7 +259,7 @@ public final class TvCampaignDirector
             {
                 MISSING.remove(level);
                 if (!angel.blockPosition().equals(data.lastPosition)) { data.lastPosition = angel.blockPosition(); data.setDirty(); }
-                var eva = EvaPilotResolver.controlTarget(player); if (eva != null) angel.setTarget(eva);
+                var eva = combatEvaR30(player); if (eva != null) angel.setTarget(eva);
                 float field = angel.getAtField();
                 bar.setName(Component.literal("第4使徒 夏姆榭尔 · " + (field > 0 ? "AT 力场 " + Math.round(field) : "核心 " + Math.round(100 * angel.getHealth() / angel.getMaxHealth()) + "%")));
                 bar.setProgress(Math.max(0, Math.min(1, field > 0 ? field / 700 : angel.getHealth() / angel.getMaxHealth())));
@@ -238,6 +273,7 @@ public final class TvCampaignDirector
         event.getDispatcher().register(Commands.literal("seele").then(Commands.literal("tv")
                 .then(Commands.literal("status").executes(c -> message(c.getSource().getPlayerOrException(), briefing(c.getSource().getPlayerOrException()), true)))
                 .then(Commands.literal("begin").executes(c -> begin(c.getSource().getPlayerOrException())))
+                .then(Commands.literal("select").then(Commands.literal("sachiel").executes(c->select(c.getSource().getPlayerOrException(),"sachiel"))).then(Commands.literal("shamshel").executes(c->select(c.getSource().getPlayerOrException(),"shamshel"))))
                 .then(Commands.literal("cancel").executes(c -> cancel(c.getSource().getPlayerOrException())))));
     }
     private TvCampaignDirector() {}

@@ -22,17 +22,19 @@ import java.nio.file.*;
 @Mod.EventBusSubscriber(modid=ProjectSeele.MODID)
 public final class EvaTerrainR11Review
 {
+    public static final boolean R30_FOCUS="r30-terrain-focus".equals(System.getProperty("projectseele.regionalBuild",""));
+    public static final boolean R30=R30_FOCUS||"r30-terrain".equals(System.getProperty("projectseele.regionalBuild",""));
     public static final boolean TURN_ONLY="r11-terrain-turn".equals(System.getProperty("projectseele.regionalBuild",""));
     public static final boolean RIFLE="r25-rifle".equals(System.getProperty("projectseele.regionalBuild",""));
     public static final boolean R25=RIFLE||"r25-terrain".equals(System.getProperty("projectseele.regionalBuild",""));
     public static final boolean R21=java.util.Set.of("r21-un00-terrain","r21-un01-terrain").contains(System.getProperty("projectseele.regionalBuild",""));
-    public static final boolean R19=R25||R21||"r19-un-terrain".equals(System.getProperty("projectseele.regionalBuild",""));
+    public static final boolean R19=R30||R25||R21||"r19-un-terrain".equals(System.getProperty("projectseele.regionalBuild",""));
     public static final boolean ENABLED=R19||TURN_ONLY||"r11-terrain".equals(System.getProperty("projectseele.regionalBuild",""));
     public static volatile boolean tracked,mounted,finished,jump,runningCase,crouchInput;
-    public static volatile int actor,forward,caseIndex=R25?4:TURN_ONLY?5:0,caseTick;
+    public static volatile int actor,forward,caseIndex=R30_FOCUS?6:R25?4:TURN_ONLY?5:0,caseTick,warmedFrames;
     public static volatile float heading;
-    private static int age,phase,ticks,stalled,wallOverlaps;private static boolean built;
-    private static EvaUnit01Entity eva;private static ServerPlayer pilot;private static Vec3 previous;private static double maxVertical;
+    private static int age,phase,ticks,stalled,wallOverlaps,baseJump,airTicks;private static boolean built;
+    private static EvaUnit01Entity eva;private static ServerPlayer pilot;private static Vec3 previous;private static double maxVertical,peakY;
     private static final String[] NAMES={"street_props","one_block_ascent","two_block_descent_run","slab_run","crouched_steps","prone_passage","moving_jump","diagonal_curbs","prone_incline","rapid_stance_steps"};
     private static final JsonArray results=new JsonArray(),trace=new JsonArray();
     private static void box(ServerLevel l,int x,int y,int z,int xx,int yy,int zz,net.minecraft.world.level.block.state.BlockState state)
@@ -42,6 +44,7 @@ public final class EvaTerrainR11Review
         l.getGameRules().getRule(GameRules.RULE_DOMOBSPAWNING).set(false,l.getServer());l.getGameRules().getRule(GameRules.RULE_DAYLIGHT).set(false,l.getServer());l.setDayTime(6000);
         for(int c=0;c<NAMES.length;c++)
         {
+            if(R30_FOCUS&&c!=6&&c!=9)continue;
             if(TURN_ONLY&&c!=5)continue;
             if(R25&&c!=4&&c!=5&&c!=8&&c!=9)continue;
             int x=c*96;
@@ -63,24 +66,25 @@ public final class EvaTerrainR11Review
     }
     private static void place(ServerLevel l)
     {
-        runningCase=false;caseTick=0;forward=0;jump=false;crouchInput=caseIndex==4;wallOverlaps=0;pilot.stopRiding();eva.prepareForMotionLab();eva.setNoGravity(false);eva.moveTo(caseIndex*96+.5,caseIndex==2?-50:-60,-36.5,0,0);eva.yBodyRot=eva.yHeadRot=0;eva.setOnGround(true);eva.setDeltaMovement(Vec3.ZERO);eva.fallDistance=0;
+        runningCase=false;warmedFrames=0;caseTick=0;forward=0;jump=false;crouchInput=caseIndex==4;wallOverlaps=0;airTicks=0;pilot.stopRiding();eva.prepareForMotionLab();eva.setNoGravity(false);eva.moveTo(caseIndex*96+.5,caseIndex==2?-50:-60,-36.5,0,0);eva.yBodyRot=eva.yHeadRot=0;eva.setOnGround(true);eva.setDeltaMovement(Vec3.ZERO);eva.fallDistance=0;peakY=eva.getY();
         var chunk=new ChunkPos(eva.blockPosition());l.getChunkSource().addRegionTicket(net.minecraft.server.level.TicketType.PORTAL,chunk,2,BlockPos.containing(eva.position()));
-        if(RIFLE)eva.selectMotionLabWeapon(EvaUnit01Entity.WEAPON_RIFLE);
+        if(RIFLE||R30)eva.selectMotionLabWeapon(EvaUnit01Entity.WEAPON_RIFLE);
         for(var p:l.players())p.connection.send(new ClientboundTeleportEntityPacket(eva));pilot.teleportTo(l,eva.getX(),eva.getY()+1,-49,0,0);pilot.getFoodData().setFoodLevel(20);actor=eva.getId();tracked=mounted=false;phase=1;ticks=0;stalled=0;maxVertical=0;previous=eva.position();
     }
     @SubscribeEvent public static void tick(TickEvent.ServerTickEvent event)
     {
         if(!ENABLED||finished||event.phase!=TickEvent.Phase.END)return;var server=event.getServer();if(server.getPlayerList().getPlayers().isEmpty()||++age<80)return;
-        Path world=server.getWorldPath(LevelResource.ROOT).normalize();if(!world.getFileName().toString().equals(R25?"SEELE_TERRAIN_R25_REVIEW":R21?"SEELE_UN_TERRAIN_R21_REVIEW":R19?"SEELE_UN_TERRAIN_R19_REVIEW":"SEELE_TERRAIN_REVIEW_R11"))throw new IllegalStateException("Terrain test is laboratory-only");ServerLevel l=server.overworld();
+        Path world=server.getWorldPath(LevelResource.ROOT).normalize();if(!world.getFileName().toString().equals(R30?"SEELE_TERRAIN_R30_REVIEW":R25?"SEELE_TERRAIN_R25_REVIEW":R21?"SEELE_UN_TERRAIN_R21_REVIEW":R19?"SEELE_UN_TERRAIN_R19_REVIEW":"SEELE_TERRAIN_REVIEW_R11"))throw new IllegalStateException("Terrain test is laboratory-only");ServerLevel l=server.overworld();
         try
         {
             if(!built)
             {
-                built=true;pilot=server.getPlayerList().getPlayers().get(0);pilot.stopRiding();pilot.setGameMode(GameType.SURVIVAL);pilot.setHealth(pilot.getMaxHealth());pilot.getCapability(EvaPilotCapability.DATA).ifPresent(c->c.setSynchronization(100));server.setFlightAllowed(true);
+                built=true;pilot=server.getPlayerList().getPlayers().get(0);if(!pilot.isAlive())pilot=server.getPlayerList().respawn(pilot,false);pilot.stopRiding();pilot.setGameMode(GameType.SURVIVAL);pilot.setHealth(pilot.getMaxHealth());pilot.getCapability(EvaPilotCapability.DATA).ifPresent(c->c.setSynchronization(100));server.setFlightAllowed(true);
                 var old=new java.util.ArrayList<net.minecraft.world.entity.Entity>();for(var e:l.getAllEntities())if(e instanceof EvaUnit01Entity)old.add(e);for(var e:old)e.discard();terrain(l);eva=R19&&!R25?ModEntities.EVA_PROTOTYPE.get().create(l):R25&&Integer.getInteger("projectseele.reviewUnit",1)==0?ModEntities.EVA_UNIT00.get().create(l):R25&&Integer.getInteger("projectseele.reviewUnit",1)==2?ModEntities.EVA_UNIT02.get().create(l):ModEntities.EVA_UNIT01.get().create(l);if("r21-un01-terrain".equals(System.getProperty("projectseele.regionalBuild","")))((com.projectseele.entity.EvaPrototypeEntity)eva).setUNSerial(1);eva.moveTo(caseIndex*96+.5,-60,-36.5,0,0);l.getChunk(eva.blockPosition());if(!l.addFreshEntity(eva))throw new IllegalStateException("Terrain actor spawn refused");place(l);return;
             }
             if(eva.isRemoved()&&eva.getRemovalReason()==net.minecraft.world.entity.Entity.RemovalReason.UNLOADED_TO_CHUNK&&l.getEntity(eva.getUUID()) instanceof EvaUnit01Entity restored)
             {eva=restored;actor=eva.getId();tracked=false;ProjectSeele.LOGGER.info("Terrain fixture rebound the same UUID after chunk streaming: {}",eva.getUUID());}
+            if(R30){var stale=new java.util.ArrayList<net.minecraft.world.entity.Entity>();for(var e:l.getAllEntities())if(e instanceof EvaUnit01Entity&&!e.getUUID().equals(eva.getUUID()))stale.add(e);stale.forEach(net.minecraft.world.entity.Entity::discard);}
             ticks++;caseTick=ticks;
             if(phase<3&&ticks%20==0){var c=new ChunkPos(eva.blockPosition());l.getChunkSource().addRegionTicket(net.minecraft.server.level.TicketType.PORTAL,c,2,BlockPos.containing(eva.position()));}
             if(phase==1){if(ticks>25&&tracked){if(!eva.boardFromExternalPlug(pilot,100))throw new IllegalStateException("Terrain test boarding failed");phase=2;ticks=0;}else if(ticks>(R19?900:240))throw new IllegalStateException("Terrain client tracking deadline; serverAlive="+eva.isAlive()+" actor="+eva.getId()+" position="+eva.position()+" pilot="+pilot.position());return;}
@@ -88,7 +92,8 @@ public final class EvaTerrainR11Review
             {
                 if(ticks==25)
                 {
-                    if(R25)
+                    if(R30||RIFLE)eva.selectMotionLabWeapon(EvaUnit01Entity.WEAPON_RIFLE);
+                    if(R25||R30)
                     {
                         boolean desiredProne=caseIndex==5||caseIndex==8;
                         if(eva.isPilotProne()!=desiredProne)eva.toggleProne(pilot);
@@ -97,27 +102,31 @@ public final class EvaTerrainR11Review
                     else {if(caseIndex==4)eva.setPilotCrouching(pilot,true);if(caseIndex==5||caseIndex==8)eva.toggleProne(pilot);}
                     if(caseIndex==2||caseIndex==3)eva.setPilotSprinting(pilot,true);
                 }
-                if(ticks>70&&mounted){phase=3;ticks=caseTick=0;previous=eva.position();runningCase=true;}
+                if(ticks>70&&mounted&&(!R30||warmedFrames>=45)){phase=3;ticks=caseTick=0;previous=eva.position();baseJump=eva.getJumpSequence();runningCase=true;}
                 else if(ticks>500)throw new IllegalStateException("Terrain pilot mount was not acknowledged by client");return;
             }
             if(caseIndex==9){crouchInput=ticks>=45&&ticks<100||ticks>=220&&ticks<260;if(ticks==100||ticks==160)eva.toggleProne(pilot);}
             forward=1;heading=caseIndex==7?(float)(Math.sin(ticks/90D)*16):caseIndex==5&&ticks>=200&&ticks<260?35:0;jump=caseIndex==6&&ticks>=48&&ticks<53;
-            if(R25&&caseIndex==5)
+            if((R25||R30)&&caseIndex==5)
             {
                 jump=ticks>=48&&ticks<60;
                 if(ticks==48)eva.pilotJump(pilot,253);
                 if(ticks>=48&&ticks<=90&&(!eva.isPilotProne()||eva.getJumpSequence()!=0))
                     throw new IllegalStateException("Prone jump request changed stance or authorized an impulse");
             }
-            if(R25&&caseIndex==8&&!eva.isPilotProne())throw new IllegalStateException("Incline fixture is not prone");
+            if((R25||R30)&&caseIndex==8&&!eva.isPilotProne())throw new IllegalStateException("Incline fixture is not prone");
             if(caseIndex==5&&eva.rifleStanceLevel(1)>2.9F&&l.getBlockCollisions(eva,eva.getBoundingBox().deflate(.02)).iterator().hasNext())wallOverlaps++;
             double dx=eva.position().subtract(previous).horizontalDistance(),dy=eva.getY()-previous.y;maxVertical=Math.max(maxVertical,Math.abs(dy));if(ticks>35&&dx<.015)stalled++;else stalled=0;previous=eva.position();
             if(ticks%2==0){JsonObject r=new JsonObject();r.addProperty("case",NAMES[caseIndex]);r.addProperty("tick",ticks);r.addProperty("x",eva.getX());r.addProperty("y",eva.getY());r.addProperty("z",eva.getZ());r.addProperty("distance",dx);r.addProperty("ground",eva.onGround());r.addProperty("stance",eva.rifleStanceLevel(1));r.addProperty("jump",eva.getJumpSequence());r.addProperty("yaw",eva.getYRot());r.addProperty("terrain_plane",com.projectseele.entity.EvaTerrainSupport.sample(eva).toString());trace.add(r);}
-            boolean passed=eva.getZ()>153;
-            if(passed||stalled>65||ticks>1300)
+            peakY=Math.max(peakY,eva.getY());if(!eva.onGround())airTicks++;
+            boolean reached=eva.getZ()>153;
+            boolean jumpProof=!R30||caseIndex!=6||eva.getJumpSequence()==baseJump+1&&peakY>-50&&airTicks>8&&eva.onGround();
+            boolean passed=reached&&jumpProof;
+            if(reached||stalled>65||ticks>1300)
             {
                 JsonObject result=new JsonObject();result.addProperty("name",NAMES[caseIndex]);result.addProperty("passed",passed&&wallOverlaps==0);result.addProperty("prone_wall_overlaps",wallOverlaps);result.addProperty("ticks",ticks);result.addProperty("end_z",eva.getZ());result.addProperty("max_vertical_tick",maxVertical);result.addProperty("health",eva.getHealth());results.add(result);ProjectSeele.LOGGER.info("R11 TERRAIN RESULT {}",result);forward=0;jump=false;
-                runningCase=false;caseIndex++;if(R25&&caseIndex==6)caseIndex=8;
+                result.addProperty("peak_y",peakY);result.addProperty("air_ticks",airTicks);result.addProperty("jump_sequence_delta",eva.getJumpSequence()-baseJump);
+                runningCase=false;caseIndex++;if(R25&&caseIndex==6)caseIndex=8;if(R30_FOCUS&&caseIndex==7)caseIndex=9;
                 if(caseIndex<NAMES.length&&!TURN_ONLY){place(l);return;}
                 finish(world,"");
             }
@@ -126,6 +135,8 @@ public final class EvaTerrainR11Review
     }
     private static void finish(Path world,String error)
     {
-        forward=0;jump=false;finished=true;try{JsonObject d=new JsonObject();d.add("cases",results);d.add("trace",trace);d.addProperty("error",error);Files.writeString(world.resolve("r11_terrain_review.json"),d.toString());}catch(Exception ignored){}
+        if(R30&&pilot!=null){pilot.stopRiding();pilot.setGameMode(GameType.CREATIVE);pilot.teleportTo(pilot.serverLevel(),.5,-60,-45.5,0,0);}
+        if(R30&&eva!=null)eva.discard();
+        forward=0;jump=false;finished=true;try{JsonObject d=new JsonObject();d.add("cases",results);d.add("trace",trace);d.addProperty("error",error);Files.writeString(world.resolve(R30?"r30_terrain_review.json":"r11_terrain_review.json"),d.toString());}catch(Exception ignored){}
     }
 }

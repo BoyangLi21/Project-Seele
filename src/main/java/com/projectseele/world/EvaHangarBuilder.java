@@ -951,6 +951,13 @@ public final class EvaHangarBuilder
                                int variant, boolean open)
     {
         BlockPos bed = hangarBed(origin, variant);
+        // A recalled or administratively recovered hull can have a stale wet
+        // bay even when its logical sortie gauge is zero. The pressure gate
+        // must obey the actual liquid volume before exposing the ramp.
+        if (open)
+        {
+            drainLclEnvelope(level, origin, variant);
+        }
         int gateTop = FacilityLayoutR29.active(level.getServer()) ? -370-bed.getY() : 66;
         // The moving gate is narrower than the wet vessel. Fixed returns
         // must remain sealed even while the central transport opening moves.
@@ -1026,7 +1033,7 @@ public final class EvaHangarBuilder
                     else if (level.getFluidState(position).getFluidType()
                             == ModFluids.LCL_TYPE.get())
                     {
-                        clear(level, position);
+                        clearLcl(level, position);
                     }
                 }
             }
@@ -1062,7 +1069,7 @@ public final class EvaHangarBuilder
                 else if (level.getFluidState(position).getFluidType()
                         == ModFluids.LCL_TYPE.get())
                 {
-                    clear(level, position);
+                    clearLcl(level, position);
                 }
             }
         }
@@ -1096,8 +1103,8 @@ public final class EvaHangarBuilder
                                        int variant)
     {
         BlockPos bed = hangarBed(origin, variant);
-        int maximumZ = HALF_DEPTH + 4;
-        for (int y = 1; y <= LCL_SHOULDER_LAYERS; y++)
+        int maximumZ = HALF_DEPTH + 8;
+        for (int y = -4; y <= LCL_SHOULDER_LAYERS; y++)
         {
             for (int x = -(HALF_WIDTH - 1); x <= HALF_WIDTH - 1; x++)
             {
@@ -1107,7 +1114,7 @@ public final class EvaHangarBuilder
                     if (level.getFluidState(position).getFluidType()
                             == ModFluids.LCL_TYPE.get())
                     {
-                        clear(level, position);
+                        clearLcl(level, position);
                     }
                 }
             }
@@ -1121,8 +1128,8 @@ public final class EvaHangarBuilder
     {
         BlockPos bed = hangarBed(origin, variant);
         int count = 0;
-        int maximumZ = HALF_DEPTH + 4;
-        for (int y = 1; y <= LCL_SHOULDER_LAYERS; y++)
+        int maximumZ = HALF_DEPTH + 8;
+        for (int y = -4; y <= LCL_SHOULDER_LAYERS; y++)
         {
             for (int x = -(HALF_WIDTH - 1); x <= HALF_WIDTH - 1; x++)
             {
@@ -1137,6 +1144,17 @@ public final class EvaHangarBuilder
             }
         }
         return count;
+    }
+
+    private static void clearLcl(ServerLevel level, BlockPos position)
+    {
+        // Notify the fluid descendants as well as the renderer. UPDATE_CLIENTS
+        // alone leaves orphaned flowing LCL below the door apron indefinitely.
+        if (level.getFluidState(position).getFluidType() == ModFluids.LCL_TYPE.get())
+        {
+            level.setBlock(position, Blocks.AIR.defaultBlockState(), net.minecraft.world.level.block.Block.UPDATE_ALL);
+            PerformanceCounters.recordWorldBlockWrites(1);
+        }
     }
 
     /** Moves/restores the visible 29x29 maintenance carrier one block at a time. */

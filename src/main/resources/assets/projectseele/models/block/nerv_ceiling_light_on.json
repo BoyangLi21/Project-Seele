@@ -1,0 +1,42 @@
+{
+  "ambientocclusion": false,
+  "textures": {
+    "face": "projectseele:block/nerv_strip_light",
+    "frame": "projectseele:block/nerv_wall_panel",
+    "particle": "#frame"
+  },
+  "elements": [
+    {
+      "from": [
+        1,
+        14,
+        1
+      ],
+      "to": [
+        15,
+        16,
+        15
+      ],
+      "faces": {
+        "up": {
+          "texture": "#frame"
+        },
+        "down": {
+          "texture": "#face"
+        },
+        "north": {
+          "texture": "#frame"
+        },
+        "south": {
+          "texture": "#frame"
+        },
+        "east": {
+          "texture": "#frame"
+        },
+        "west": {
+          "texture": "#frame"
+        }
+      }
+    }
+  ]
+}

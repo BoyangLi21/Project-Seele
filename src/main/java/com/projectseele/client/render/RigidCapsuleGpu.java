@@ -25,6 +25,9 @@ public final class RigidCapsuleGpu
     private static java.lang.reflect.Method shaderPackActive;
     private static long shaderQueryTick=Long.MIN_VALUE;
     private static final Map<Object,VertexBuffer> PARTS=new IdentityHashMap<>();
+    private record ExternalMesh(VertexBuffer buffer,int light,int overlay){}
+    private static final Map<Object,Map<ResourceLocation,ExternalMesh>> EXTERNAL_PARTS=new IdentityHashMap<>();
+    private static boolean externalReadyLogged;
     public static long drawCalls;
     @SubscribeEvent public static void register(RegisterShadersEvent event)throws IOException
     {
@@ -33,10 +36,8 @@ public final class RigidCapsuleGpu
     public static boolean draw(Object key,float[] vertices,int stride,float px,float py,float pz,
                                ResourceLocation texture,PoseStack poses,int light,int overlay)
     {
-        // Oculus supplies an extended entity vertex pipeline. Our private
-        // shader bypasses it and loses rigid armour while weighted seams stay
-        // visible. Let its normal VertexConsumer handle the complete mesh.
-        if(shader==null||Boolean.getBoolean("projectseele.disableRigidCapsuleGpu")||externalShaderActive())return false;
+        if(shader==null||Boolean.getBoolean("projectseele.disableRigidCapsuleGpu"))return false;
+        if(externalShaderActive())return drawExternal(key,vertices,stride,px,py,pz,texture,poses,light,overlay);
         VertexBuffer mesh=PARTS.get(key);
         if(mesh==null)
         {
@@ -60,9 +61,30 @@ public final class RigidCapsuleGpu
     {
         b.vertex(-(a[i]+px)/16,(a[i+1]+py)/16,(a[i+2]+pz)/16,1,1,1,1,a[i+3],a[i+4],0,0,-a[i+5],a[i+6],a[i+7]);
     }
+    private static boolean drawExternal(Object key,float[] vertices,int stride,float px,float py,float pz,ResourceLocation texture,PoseStack poses,int light,int overlay)
+    {
+        var type=RenderType.entityCutoutNoCull(texture);type.setupRenderState();var active=RenderSystem.getShader();
+        if(active==null||!active.getClass().getName().contains("ExtendedShader")){type.clearRenderState();return false;}
+        var layers=EXTERNAL_PARTS.computeIfAbsent(key,k->new java.util.HashMap<>());var cached=layers.get(texture);
+        if(cached==null||cached.light()!=light||cached.overlay()!=overlay)
+        {
+            if(cached!=null)cached.buffer().close();int count=vertices.length/stride/3*4;
+            // Iris extends this builder with its own entity/tangent attributes.
+            // Reuse the active shader and framebuffer instead of bypassing it
+            // with our vanilla-only shader. ExtendedShader derives its normal
+            // matrix from the supplied model-view matrix on every apply().
+            BufferBuilder builder=new BufferBuilder(Math.max(1024,count*96+64));builder.begin(VertexFormat.Mode.QUADS,DefaultVertexFormat.NEW_ENTITY);
+            for(int i=0;i+stride*3<=vertices.length;i+=stride*3)for(int corner:new int[]{0,1,2,2})
+            {int at=i+corner*stride;builder.vertex(-(vertices[at]+px)/16,(vertices[at+1]+py)/16,(vertices[at+2]+pz)/16,1,1,1,1,vertices[at+3],vertices[at+4],overlay,light,-vertices[at+5],vertices[at+6],vertices[at+7]);}
+            VertexBuffer buffer=new VertexBuffer(VertexBuffer.Usage.STATIC);buffer.bind();buffer.upload(builder.end());VertexBuffer.unbind();cached=new ExternalMesh(buffer,light,overlay);layers.put(texture,cached);
+        }
+        var combined=new Matrix4f(RenderSystem.getModelViewMatrix()).mul(poses.last().pose());cached.buffer().bind();cached.buffer().drawWithShader(combined,RenderSystem.getProjectionMatrix(),active);VertexBuffer.unbind();type.clearRenderState();drawCalls++;
+        if(!externalReadyLogged){externalReadyLogged=true;ProjectSeele.LOGGER.info("R30 rigid GPU buffers active inside the Oculus entity pipeline");}
+        return true;
+    }
     public static void clear()
     {
-        Runnable release=()->{PARTS.values().forEach(VertexBuffer::close);PARTS.clear();};
+        Runnable release=()->{PARTS.values().forEach(VertexBuffer::close);PARTS.clear();EXTERNAL_PARTS.values().forEach(v->v.values().forEach(p->p.buffer().close()));EXTERNAL_PARTS.clear();};
         if(RenderSystem.isOnRenderThread())release.run();else RenderSystem.recordRenderCall(release::run);
     }
     private static boolean externalShaderActive()

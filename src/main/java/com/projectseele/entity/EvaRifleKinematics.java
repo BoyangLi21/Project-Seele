@@ -56,7 +56,7 @@ public final class EvaRifleKinematics
         float ready=entity.rifleReadyBlend(partial),recoil=entity.rifleRecoilBlend(partial);
         boolean supported=EvaBodyPose.hasSupportedStances();
         double lateralOffset=supported?-2.3:switch(entity.getUnitVariant()){case 0->2.8;case 2->1.9;default->1.4;};
-        double forwardOffset=supported?5:2;
+        double forwardOffset=EvaBodyPose.hasOwnUnRig(entity)?3.8:supported?5:2;
         double pocketY=supported?-3.1:Mth.lerp(entity.rifleProneBlend(partial),-1.5D,.2D);
         Vec3 pocket=shoulder.add(bodyRight.scale(lateralOffset)).add(bodyForward.scale(forwardOffset)).add(0,pocketY,0);
         Vector3f headPoint=new Matrix4f(world).mul(body.matrix("head")).transformPosition(new Vector3f(body.rig.get("head").pivot()));

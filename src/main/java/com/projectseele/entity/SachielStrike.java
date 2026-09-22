@@ -18,11 +18,17 @@ public final class SachielStrike
     {return sample(actor,actor.strikeAge(partial),partial);}
     public static Frame sample(SachielEntity actor,float age,float partial)
     {
-        Matrix4f root=root(actor,partial);Vec3 shoulder=world(root,40.344577F,172.915088F,0),rest=world(root,45.523135F,122.333827F,-42.753209F),chamber=world(root,48,162,2);
+        Matrix4f root=root(actor,partial);boolean hook=actor.strikeMode()==3;float side=hook?-1:1;
+        Vec3 shoulder=world(root,side*40.344577F,172.915088F,0),rest=world(root,side*45.523135F,122.333827F,-42.753209F),chamber=world(root,side*(hook?58:48),hook?155:162,2);
         Vec3 direction=actor.strikeAim().subtract(shoulder).normalize();double reach=actor.strikeAim().distanceTo(shoulder);
         Vec3 contact=shoulder.add(direction.scale(Math.min(27,Math.max(8,reach-(actor.strikeMode()==2?8:1)))));
         float prepare=CombatMotionR29.chamber(age),drive=CombatMotionR29.drive(age),returning=CombatMotionR29.release(age);
         Vec3 hand=rest.lerp(chamber,prepare).lerp(contact,drive).lerp(rest,returning);
+        if(hook)
+        {
+            Vec3 lateral=world(root,-16,0,0).subtract(world(root,0,0,0)).normalize();
+            hand=hand.add(lateral.scale(Math.sin(Math.PI*drive)*6*prepare*(1-returning)));
+        }
         float extension=actor.strikeMode()==2?EvaDorsalMechanism.smooth((age-18)/5)*(1-EvaDorsalMechanism.smooth((age-26)/8)):0;
         Vec3 tip=hand.add(direction.scale(extension*Math.min(38,Math.max(2,reach-shoulder.distanceTo(contact)+2))));
         return new Frame(hand,tip,direction,prepare*(1-returning),extension);
