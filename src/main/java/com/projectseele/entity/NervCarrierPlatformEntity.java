@@ -28,6 +28,9 @@ import com.projectseele.world.S20PhysicalElevatorDirector;
  */
 public final class NervCarrierPlatformEntity extends Entity
 {
+    private static final EntityDataAccessor<Float> DATA_REPAIR_R33=SynchedEntityData.defineId(NervCarrierPlatformEntity.class,EntityDataSerializers.FLOAT);
+    public void setRepairProgressR33(float progress){entityData.set(DATA_REPAIR_R33,progress);}
+    public float repairProgressR33(){return entityData.get(DATA_REPAIR_R33);}
     private static final EntityDataAccessor<Integer> DATA_VARIANT =
             SynchedEntityData.defineId(NervCarrierPlatformEntity.class,
                     EntityDataSerializers.INT);
@@ -140,6 +143,7 @@ public final class NervCarrierPlatformEntity extends Entity
     protected void defineSynchedData()
     {
         this.entityData.define(DATA_VARIANT, EvaUnit01Entity.UNIT_01);
+        this.entityData.define(DATA_REPAIR_R33,-1F);
         this.entityData.define(DATA_PERSONNEL_LIFT, false);
         this.entityData.define(DATA_LIFT_ACCENT, 0);
         this.entityData.define(DATA_LIFT_DOOR_OPEN, false);

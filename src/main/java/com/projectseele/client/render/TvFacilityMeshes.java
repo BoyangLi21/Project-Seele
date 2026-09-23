@@ -23,7 +23,7 @@ public final class TvFacilityMeshes
     private static boolean attempted;
     public static void clearCache()
     {
-        Runnable release=()->{PARTS.values().forEach(VertexBuffer::close);PARTS.clear();attempted=false;};
+        Runnable release=()->{PARTS.values().forEach(VertexBuffer::close);PARTS.clear();attempted=false;EvaBayMachineryR33.clearCache();};
         if(RenderSystem.isOnRenderThread())release.run();else RenderSystem.recordRenderCall(release::run);
     }
     private static void load()
@@ -54,6 +54,7 @@ public final class TvFacilityMeshes
         var type=RenderType.debugQuads();type.setupRenderState();
         float illumination=.40F+.60F*Math.max((light>>4)&15,(light>>20)&15)/15F;
         if(opacity<.999F){RenderSystem.enableBlend();RenderSystem.defaultBlendFunc();RenderSystem.depthMask(false);}
+        else {RenderSystem.disableBlend();RenderSystem.depthMask(true);RenderSystem.enableDepthTest();}
         RenderSystem.setShaderColor(illumination,illumination,illumination,opacity);
         mesh.bind();mesh.drawWithShader(poses.last().pose(),RenderSystem.getProjectionMatrix(),GameRenderer.getPositionColorShader());VertexBuffer.unbind();
         RenderSystem.setShaderColor(1,1,1,1);if(opacity<.999F)RenderSystem.depthMask(true);type.clearRenderState();
@@ -83,16 +84,7 @@ public final class TvFacilityMeshes
     }
     public static void carrier(PoseStack poses,int light,EvaUnit01Entity unit,float partial)
     {
-        float opacity=1;var mc=Minecraft.getInstance();
-        if(mc.player!=null&&!mc.options.getCameraType().isFirstPerson()
-                &&com.projectseele.world.EvaPilotResolver.controlTarget(mc.player)==unit)
-        {
-            // A wall can push the chase camera into the opaque back pallet.
-            // Fade only this pilot's close occluder; other observers retain
-            // the complete machinery and its normal depth rendering.
-            double distance=mc.gameRenderer.getMainCamera().getPosition().distanceTo(unit.carrierRenderPosition(partial).add(0,30,0));
-            opacity=(float)net.minecraft.util.Mth.clamp((distance-17)/23,.10,1);
-        }
+        float opacity=1;
         draw("carrier_deck",poses,light);
         poses.pushPose();
         poses.translate(0,-64*(1-unit.carrierRiseProgress(partial)),0);

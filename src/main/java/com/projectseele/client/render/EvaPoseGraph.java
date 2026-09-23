@@ -170,6 +170,19 @@ public final class EvaPoseGraph
         }
         EvaCervicalPivotR25.apply(entity,model,partialTick);
         EvaPoseTransition.rememberGecko(model);
+        if(com.projectseele.entity.EvaCombatSupportR33.ready(entity)
+                &&com.projectseele.entity.EvaGameplayMotionR32.owns(entity,partialTick)
+                &&entity.getWeapon()==EvaUnit01Entity.WEAPON_FISTS)
+        {
+            // This owner produces the complete body. Do not evaluate the old
+            // locomotion/impact/transition/foot-placement stack and overwrite it
+            // afterwards: that also leaves those controllers' histories stale.
+            com.projectseele.client.visual.CombatR31Client.normalWitness(entity,model,"before");
+            var body=EvaCombatPoseR31.apply(entity,model,partialTick,modelToWorld);
+            var hands=EvaHandPoseR28.apply(entity,model,partialTick);
+            com.projectseele.client.visual.CombatR31Client.normalWitness(entity,model,"after");
+            return finish(entity,model,partialTick,modelToWorld,body,EvaMotionEngineV2.BoneWrites.empty(),hands);
+        }
         if(entity.isNervLogisticsLocked())
         {
             // The dormant clip only keys the upper body. Explicitly release
@@ -246,6 +259,22 @@ public final class EvaPoseGraph
         if(!shutdown.rotationBones().isEmpty())motionWrites=shutdown;
         var airTransport=EvaAirTransportPoseR31.apply(entity,model,partialTick);
         if(!airTransport.rotationBones().isEmpty())motionWrites=airTransport;
+        if(com.projectseele.entity.EvaBayRepairR33.active(entity)
+                &&com.projectseele.entity.EvaDorsalMechanism.bow(entity)<=.001F
+                &&com.projectseele.entity.EvaDorsalMechanism.open(entity)<=.001F)
+        {
+            float phase=com.projectseele.entity.EvaBayRepairR33.progress(entity,partialTick);
+            float held=com.projectseele.entity.EvaDorsalMechanism.smooth(Math.min(phase/.05F,(1-phase)/.05F));
+            model.getBone("head").ifPresent(b->{b.setRotX(b.getRotX()*(1-held));b.setRotY(b.getRotY()*(1-held));b.setRotZ(b.getRotZ()*(1-held));});
+            Set<String> heldBones=new LinkedHashSet<>(motionWrites.rotationBones());heldBones.add("head");
+            motionWrites=new EvaMotionEngineV2.BoneWrites(Set.copyOf(heldBones),motionWrites.positionBones(),"MOTION_ENGINE_LIVE_ACTION");
+        }
+        return finish(entity,model,partialTick,modelToWorld,motionWrites,transitions,firearm);
+    }
+
+    private static Snapshot finish(EvaUnit01Entity entity,BakedGeoModel model,float partialTick,org.joml.Matrix4f modelToWorld,
+                                   EvaMotionEngineV2.BoneWrites motionWrites,EvaMotionEngineV2.BoneWrites transitions,EvaMotionEngineV2.BoneWrites firearm)
+    {
         com.projectseele.client.visual.MechanicsR31Client.captureBones(entity,model,partialTick,modelToWorld);
         EvaPowerAttachmentR25.capture(entity,model,modelToWorld);
         EvaPoseTransition.recordFinal(entity,model);

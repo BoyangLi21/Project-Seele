@@ -29,13 +29,16 @@ public final class CombatR31Client
         var eva=mc.level.getEntity(CombatR31Review.evaId);var angel=mc.level.getEntity(CombatR31Review.angelId);if(eva==null||angel==null)return null;
         Vec3 p=eva.getPosition(partial),q=angel.getPosition(partial),centre=p.lerp(q,.5).add(0,30,0);
         double spread=Math.min(80,p.distanceTo(q)*.35);
-        return new View(centre.add(95+spread,45,-75-spread*.3),centre);
+        return new View(centre.add(62+spread*.25,24,-52-spread*.10),centre);
     }
     @SubscribeEvent public static void reviewFog(net.minecraftforge.client.event.ViewportEvent.RenderFog event)
     {
         if(CombatR31Review.ENABLED&&Boolean.getBoolean("projectseele.combatSideView"))
         {event.setNearPlaneDistance(256);event.setFarPlaneDistance(768);event.setCanceled(true);}
     }
+    private static final JsonArray supportContacts=new JsonArray();
+    public static void toeSupport(com.projectseele.entity.EvaUnit01Entity e,String side,Vec3 actual,Vec3 target)
+    {if(e.getId()!=CombatR31Review.evaId||supportContacts.size()>12000)return;var r=new JsonObject();r.addProperty("stage",CombatR31Review.stageName);r.addProperty("tick",CombatR31Review.stageTicks);r.addProperty("phase",e.getOrdinaryAttackStage()>=0?e.getOrdinaryAttackProgress(1):e.heavyMotionProgress(1));r.addProperty("side",side);r.addProperty("error_blocks",actual.distanceTo(target));supportContacts.add(r);}
     private static boolean started,oldPause,oldGui;private static int oldDistance,epoch,end;
     private static CameraType oldCamera;private static Path folder;private static String lastPhoto="";
     private static long nextFrame,lastWitness;private static int frame;
@@ -76,7 +79,7 @@ public final class CombatR31Client
             var server=mc.getSingleplayerServer();
             if(server==null||!server.getWorldPath(LevelResource.ROOT).normalize().getFileName().toString().equals(CombatR31Review.WORLD))throw new IllegalStateException("R31 client fixture only supports the isolated integrated review world");
             started=true;oldPause=mc.options.pauseOnLostFocus;oldGui=mc.options.hideGui;oldDistance=mc.options.renderDistance().get();oldCamera=mc.options.getCameraType();
-            mc.options.pauseOnLostFocus=false;mc.options.hideGui=false;mc.options.renderDistance().set(8);mc.options.broadcastOptions();mc.options.setCameraType(CameraType.THIRD_PERSON_BACK);mc.setCameraEntity(mc.player);
+            mc.options.pauseOnLostFocus=false;mc.options.hideGui=Boolean.getBoolean("projectseele.combatSideView");mc.options.renderDistance().set(8);mc.options.broadcastOptions();mc.options.setCameraType(CameraType.THIRD_PERSON_BACK);mc.setCameraEntity(mc.player);
             folder=mc.gameDirectory.toPath().resolve("../artifacts/facility_r31/native_combat_"+System.currentTimeMillis()).normalize();
             try{Files.createDirectories(folder);}catch(Exception e){throw new IllegalStateException(e);}
             CombatR31Review.mediaFolder=folder.toString();CombatR31Review.ready=true;
@@ -101,7 +104,7 @@ public final class CombatR31Client
             try
             {
                 var output=new JsonObject();output.add("frames",frames);output.add("hand_contacts",hands);output.add("production_key_inputs",keys);output.add("angel_draw_support",angelSoles);output.addProperty("server_failure",CombatR31Review.failure);
-                output.add("normal_bones",normalBones);output.add("render_performance",performance());Files.writeString(folder.resolve("render_performance.json"),new GsonBuilder().setPrettyPrinting().create().toJson(performance()));
+                output.add("normal_bones",normalBones);output.add("support_contacts_r33",supportContacts);output.add("render_performance",performance());Files.writeString(folder.resolve("render_performance.json"),new GsonBuilder().setPrettyPrinting().create().toJson(performance()));
                 Files.writeString(folder.resolve("client_evidence.json"),new GsonBuilder().setPrettyPrinting().create().toJson(output));
             }
             catch(Exception e){throw new IllegalStateException("R31 client evidence",e);}

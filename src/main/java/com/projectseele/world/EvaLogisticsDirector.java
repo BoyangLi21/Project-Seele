@@ -429,6 +429,7 @@ public final class EvaLogisticsDirector
         {
             return new ActionResult(false, label(variant) + " is not loaded; use force reset.");
         }
+        if (com.projectseele.entity.EvaBayRepairR33.active(unit))return new ActionResult(false,"机体正在检修，机械臂撤回后即可出动。");
         if (entry.phase() != Phase.PARKED)
         {
             return new ActionResult(false, label(variant) + " is " + entry.phase() + ".");
@@ -1745,6 +1746,10 @@ public final class EvaLogisticsDirector
         }
         return true;
     }
+
+    public static BlockPos assignedHangarBedR33(ServerLevel level,int variant){return hangarBed(level,variant);}
+    public static boolean inAssignedHangarR33(ServerLevel level,EvaUnit01Entity unit)
+    {var bed=hangarBed(level,unit.getUnitVariant());return unit.position().distanceToSqr(new net.minecraft.world.phys.Vec3(bed.getX()+.5,bed.getY()+1,bed.getZ()+.5))<16;}
 
     private static BlockPos hangarBed(ServerLevel level, int variant)
     {

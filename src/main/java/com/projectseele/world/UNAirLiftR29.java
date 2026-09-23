@@ -101,7 +101,7 @@ public final class UNAirLiftR29
         if(x< -29999000||x>29999000||z< -29999000||z>29999000||!l.getWorldBorder().isWithinBounds(new BlockPos(x,80,z)))return "目标超出世界边界。";
         var j=new Job();j.serial=serial;j.owner=player.getUUID();j.unit=unit;j.homebound=homebound;j.destination=homebound?apron(serial):new Vec3(x+.5,0,z+.5);
         if(s.jobs.values().stream().anyMatch(other->other.destination.distanceToSqr(j.destination)<70*70))return "另一架运输机正在使用附近空域，请选择稍远的投放点。";
-        var eva=l.getEntity(unit);j.crew=eva instanceof EvaPrototypeEntity e&&e.getPilotEntity()==player;
+        var eva=l.getEntity(unit);if(eva instanceof EvaUnit01Entity repairing&&EvaBayRepairR33.active(repairing))return "机体正在检修，暂时不能起运。";j.crew=eva instanceof EvaPrototypeEntity e&&e.getPilotEntity()==player;
         if(eva instanceof EvaPrototypeEntity e&&e.getPilotEntity()!=null&&e.getPilotEntity()!=player)return "该机体由另一名驾驶员控制，请由驾驶员本人呼叫运输。";
         s.jobs.put(serial,j);s.setDirty();return "运输指令已接受。正在加载原机体与目的地，随后检查落点和机库联锁。";
     }

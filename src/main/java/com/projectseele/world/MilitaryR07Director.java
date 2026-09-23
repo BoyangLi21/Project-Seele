@@ -1,5 +1,8 @@
 package com.projectseele.world;
 
+import com.projectseele.entity.EvaUnit01Entity;
+import com.projectseele.entity.EvaBayRepairR33;
+
 import com.google.gson.*;
 import com.projectseele.ProjectSeele;
 import com.projectseele.entity.EvaPrototypeEntity;
@@ -100,6 +103,8 @@ public final class MilitaryR07Director
     {
         State data=state(level);if(!data.commissioned)return "设施尚未完成调试";
         if(operator!=null&&!card(operator))return "需要 NERV 身份卡";
+        var repairId=UNRecoveryR22.identity(level,0);
+        if(repairId!=null&&level.getEntity(repairId) instanceof EvaUnit01Entity repairing&&EvaBayRepairR33.active(repairing))return "机体正在检修，请等待机械臂撤回。";
         switch(action)
         {
             case "drain" -> {
@@ -259,7 +264,7 @@ public final class MilitaryR07Director
         Entity unit=entity(level,data,"prototype");
         if(unit instanceof EvaPrototypeEntity prototype&&!UNAirLiftR29.ownsMotion(level,0))
         {
-            if(data.phase==Phase.OPEN){prototype.setNervLogisticsLocked(false);prototype.setNoGravity(false);}
+            if(data.phase==Phase.OPEN&&!EvaBayRepairR33.active(prototype)){prototype.setNervLogisticsLocked(false);prototype.setNoGravity(false);}
             else if(prototype.position().distanceTo(HOME)<4&&!prototype.isVehicle())
             {
                 prototype.setNervLogisticsLocked(true);prototype.setNoGravity(true);

@@ -98,7 +98,7 @@ import software.bernie.geckolib.util.GeckoLibUtil;
  */
 public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBattleSignals.Actor
 {
-    private static final boolean DORSAL_SIGNALS_READY=EvaDorsalMechanism.bootstrap() && EvaTerrainSupport.bootstrap() && EvaShutdownR30.bootstrap() && EvaAirTransportR31.bootstrap() && EvaCombatR31.bootstrap() && EvaGameplayMotionR32.bootstrap();
+    private static final boolean DORSAL_SIGNALS_READY=EvaDorsalMechanism.bootstrap() && EvaTerrainSupport.bootstrap() && EvaShutdownR30.bootstrap() && EvaAirTransportR31.bootstrap() && EvaCombatR31.bootstrap() && EvaGameplayMotionR32.bootstrap() && EvaCombatSupportR33.bootstrap() && EvaBayRepairR33.bootstrap();
     private static final EntityDataAccessor<Integer> MECHANICAL_REVISION_R30=SynchedEntityData.defineId(EvaUnit01Entity.class,EntityDataSerializers.INT);
     private static final FirstBattleSignals.SignalSet FIRST_BATTLE=new FirstBattleSignals.SignalSet(EvaUnit01Entity.class);
     @Override public FirstBattleSignals.SignalSet firstBattleSignals(){return FIRST_BATTLE;}
@@ -689,6 +689,8 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
         EvaShutdownR30.define(this.entityData);
         EvaAirTransportR31.define(this.entityData);
         EvaGameplayMotionR32.define(this.entityData);
+        EvaCombatSupportR33.define(this.entityData);
+        EvaBayRepairR33.define(this.entityData);
         EvaCombatR31.define(this.entityData);
         this.entityData.define(MECHANICAL_REVISION_R30,0);
         this.entityData.define(DATA_WEAPON, WEAPON_KNIFE);
@@ -1046,7 +1048,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
      */
     public boolean isPoweredOn()
     {
-        if(EvaShutdownR30.disabled(this))return false;
+        if(EvaShutdownR30.disabled(this)||EvaBayRepairR33.active(this))return false;
         return this.isBerserk() || this.entityData.get(DATA_MOTION_LAB_ACTIVE)
                 || (this.isEntryPlugInserted()
                     && this.getPilotEntity() != null
@@ -1230,7 +1232,8 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
             if(moving)
             {
                 double stride=this.isPilotProne()?12D:this.isPilotCrouching()?15D:Mth.lerp(run,25.8334D,31.3944D);
-                double sign=dx*this.getForward().x+dz*this.getForward().z<0?-1:1;
+                stride=EvaCombatSupportR33.stride(this,dx,dz,(float)stride);
+                double sign=EvaCombatSupportR33.ready(this)&&EvaGameplayMotionR32.guardWeight(this)>.5F&&!this.isPilotSprinting()?1:dx*this.getForward().x+dz*this.getForward().z<0?-1:1;
                 float phase=this.entityData.get(DATA_RIFLE_GAIT)+(float)(sign*distance/stride);phase-=Mth.floor(phase);this.entityData.set(DATA_RIFLE_GAIT,phase);
             }
             EvaMovementSounds.tick(this,moving);
@@ -1546,7 +1549,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
     public boolean bindEntryPlug(EntryPlugCarrierEntity plug,
                                  int completedPercent)
     {
-        if(EvaShutdownR30.wreck(this))return false;
+        if(EvaShutdownR30.wreck(this)||EvaBayRepairR33.active(this))return false;
         if (this.level().isClientSide || plug.getVehicle() != this
                 || !plug.isLockedToEva()
                 || !(plug.getFirstPassenger() instanceof Player
@@ -2365,6 +2368,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
 
     private float ordinaryAttackDurationTicks(int stage)
     {
+        if(EvaCombatSupportR33.ready(this))return (stage==1?27F:stage==2?29F:24F)/Math.min(1.08F,EvaPilotCapability.attackSpeedMultiplier(this.getPilotSynchronization()));
         if(EvaGameplayMotionR32.ready(this))return (stage==1?18F:stage==2?17F:16F)/EvaPilotCapability.attackSpeedMultiplier(this.getPilotSynchronization());
         int logicalStage = stage == 3 ? 0 : stage;
         int safeStage = Mth.clamp(logicalStage, 0,
@@ -2799,7 +2803,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
         if (this.getWeapon() == WEAPON_FISTS && !this.isPilotProne() && !this.isPilotCrouching())
         {
             if(EvaGameplayMotionR32.ready(this))EvaMovementSounds.swing(this,1.1F);
-            this.heavyDuration = this.synchronizedCooldown(24);
+            this.heavyDuration = this.synchronizedCooldown(EvaCombatSupportR33.ready(this)?34:24);
             this.heavyTicks = this.heavyDuration;
             this.heavyElapsed = 0;
             this.heavyContact = false;
@@ -4113,7 +4117,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
 
     protected boolean isPilotControlLocked()
     {
-        if(EvaShutdownR30.disabled(this))return true;
+        if(EvaShutdownR30.disabled(this)||EvaBayRepairR33.active(this))return true;
         return EvaDorsalMechanism.bow(this) > .001F || EvaDorsalMechanism.open(this) > .001F || this.isFirstBattleActive() || this.isNervLogisticsLocked() || this.getActivationTicks() > 20
                 || this.isLaunchSequenceActive()
                 || this.isPowerDepleted() || this.isBerserk()
@@ -4216,7 +4220,9 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
     @Override
     public void aiStep()
     {
+        EvaBayRepairR33.tick(this);
         EvaShutdownR30.tick(this);
+        EvaCombatSupportR33.tick(this);
         EvaGameplayMotionR32.tick(this);
         if(!this.level().isClientSide&&this.getPilotEntity() instanceof ServerPlayer player
                 &&(player.zza<-.15F||Math.abs(player.xxa)>.15F||this.getWeapon()==WEAPON_FISTS&&this.needsClosingStepR32(player))
@@ -6022,7 +6028,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
     public boolean boardFromExternalPlug(Entity passenger,
                                          int completedPercent)
     {
-        if (EvaShutdownR30.wreck(this) || this.level().isClientSide || this.isVehicle()
+        if (EvaBayRepairR33.active(this) || EvaShutdownR30.wreck(this) || this.level().isClientSide || this.isVehicle()
                 || passenger.isPassenger() || this.isLaunchSequenceActive()
                 || !(passenger instanceof Player
                     || passenger instanceof TrainingPilotEntity))

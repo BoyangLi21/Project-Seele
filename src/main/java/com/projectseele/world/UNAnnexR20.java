@@ -1,5 +1,8 @@
 package com.projectseele.world;
 
+import com.projectseele.entity.EvaUnit01Entity;
+import com.projectseele.entity.EvaBayRepairR33;
+
 import com.projectseele.ProjectSeele;
 import com.projectseele.entity.NervHangarDoorEntity;
 import com.projectseele.entity.NervCarrierPlatformEntity;
@@ -63,6 +66,8 @@ public final class UNAnnexR20
     public static String request(ServerLevel l,String action,Player p)
     {
         if(!installed(l))return "此存档未安装 UN-01 试验舱";if(!card(p))return "需要工作人员身份卡";State s=state(l);
+        var repairId=UNRecoveryR22.identity(l,1);
+        if(repairId!=null&&l.getEntity(repairId) instanceof EvaUnit01Entity repairing&&EvaBayRepairR33.active(repairing))return "机体正在检修，请等待机械臂撤回。";
         switch(action)
         {
             case "drain" -> {if(s.phase!=MilitaryR07Director.Phase.WET&&s.phase!=MilitaryR07Director.Phase.FILLING)return "当前无需排液";s.phase=MilitaryR07Director.Phase.DRAINING;s.cursor=0;}
@@ -124,7 +129,7 @@ public final class UNAnnexR20
         if(unit!=null&&!UNAirLiftR29.ownsMotion(l,1))
         {
             UUID old=HOISTS.remove(l);if(old!=null&&l.getEntity(old) instanceof NervCarrierPlatformEntity crane)crane.discard();
-            if(s.phase==MilitaryR07Director.Phase.OPEN){unit.setNervLogisticsLocked(false);unit.setNoGravity(false);}
+            if(s.phase==MilitaryR07Director.Phase.OPEN&&!EvaBayRepairR33.active(unit)){unit.setNervLogisticsLocked(false);unit.setNoGravity(false);}
             else if(unit.position().distanceTo(HOME)<4&&!unit.isVehicle())
             {
                 unit.setNervLogisticsLocked(true);unit.setNoGravity(true);

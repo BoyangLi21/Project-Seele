@@ -97,7 +97,7 @@ public final class UNRecoveryR22
                     if(person instanceof ServerPlayer p)p.teleportTo(l,home.x+4,127,home.z-12,90,0);
                     else {person.teleportTo(home.x+4,127,home.z-12);if(person instanceof TrainingPilotEntity dummy)dummy.setTrainingStage(TrainingPilotEntity.STAGE_STANDBY);}
                 }
-                if(job.reset())eva.setHealth(eva.getMaxHealth());
+                if(job.reset()){EvaBayRepairR33.resetForMaintenance(eva);eva.setHealth(eva.getMaxHealth());}
                 plug.resetIndependentAtDock(eva);eva.enterHangarStandby();EvaDorsalMechanism.set(eva,0,0);
             }
             remember(eva);remember(plug);job.source().sendSuccess(()->Component.literal("EVA-UN-0"+job.serial()+" 已回到机库。"+(extracting?"插入栓正在退出。":destroyed?"已补充备用插入栓。":"机体和插入栓已复位。")),false);

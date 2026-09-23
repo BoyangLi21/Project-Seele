@@ -34,7 +34,7 @@ public final class EvaGameplayMotionR32
         if(age(e,TAKEOFF,0)<0){beginAction(e);e.getEntityData().set(TAKEOFF,e.level().getGameTime());return false;}
         return age(e,TAKEOFF,0)>=3;
     }
-    public static void beginAction(EvaUnit01Entity e){if(ready(e)&&!e.level().isClientSide)e.getEntityData().set(ACTION_FROM,EvaShutdownR30.encode(EvaBodyPose.sample(e,0)));}
+    public static void beginAction(EvaUnit01Entity e){if(ready(e)&&!e.level().isClientSide){var pose=EvaBodyPose.sample(e,0);EvaCombatSupportR33.capture(e,pose);e.getEntityData().set(ACTION_FROM,EvaShutdownR30.encode(pose));}}
     public static synchronized JsonObject profile(int variant)
     {
         return PROFILES.computeIfAbsent(variant,key->{
@@ -44,6 +44,7 @@ public final class EvaGameplayMotionR32
         }).orElse(null);
     }
     public static int variant(EvaUnit01Entity e){return e instanceof EvaPrototypeEntity un?3+un.getUNSerial():e.getUnitVariant();}
+    public static float guardWeight(EvaUnit01Entity e){return e.getEntityData().get(GUARD);}
     public static boolean ready(EvaUnit01Entity e){return profile(variant(e))!=null;}
     private static JsonObject clip(EvaUnit01Entity e,String name){return profile(variant(e)).getAsJsonObject("clips").getAsJsonObject("r32_"+name);}
     public static float contactPhase(EvaUnit01Entity e,String name){return clip(e,name).get("contact_phase").getAsFloat();}
@@ -51,6 +52,7 @@ public final class EvaGameplayMotionR32
     public static String ordinary(int stage){return switch(stage){case 1->"cross";case 2->"hook";default->"jab";};}
     public static float phase(EvaUnit01Entity e,String name,float progress)
     {
+        if(EvaCombatSupportR33.ready(e)&&java.util.Set.of("jab","cross","hook","heavy").contains(name))return progress;
         float contact=contactPhase(e,name),at=name.equals("heavy")?.50F:.45F;
         return progress<at?Mth.lerp(progress/at,0,contact):Mth.lerp((progress-at)/(1-at),contact,1);
     }
@@ -100,12 +102,14 @@ public final class EvaGameplayMotionR32
                     &&!e.level().getEntitiesOfClass(net.minecraft.world.entity.LivingEntity.class,e.getBoundingBox().inflate(64,40,64),a->a instanceof Angel&&a.isAlive()).isEmpty();
             state.guard=nearby;
         }
-        e.getEntityData().set(GUARD,Mth.approach(e.getEntityData().get(GUARD),state.guard?1:0,.14F));
+        e.getEntityData().set(GUARD,Mth.approach(e.getEntityData().get(GUARD),state.guard?1:0,EvaCombatSupportR33.ready(e)?.045F:.14F));
     }
     public static boolean owns(EvaUnit01Entity e,float partial)
     {
         if(!ready(e)||e.isNervLogisticsLocked()||e.isFirstBattleActive()||EvaShutdownR30.disabled(e)||EvaCombatR31.action(e)>=EvaCombatR31.REACH&&EvaCombatR31.action(e)<=EvaCombatR31.THROW)return false;
         if(e instanceof EvaPrototypeEntity un&&un.isUNFlying())return false;
+        if(EvaDorsalMechanism.bow(e)>.001F||EvaDorsalMechanism.open(e)>.001F)return false;
+        if(EvaCombatSupportR33.ready(e)&&e.getWeapon()==EvaUnit01Entity.WEAPON_FISTS&&!e.hasLiveActionForRender(partial)&&!e.isPilotProne()&&!e.isPilotCrouching())return true;
         return age(e,TAKEOFF,partial)>=0||airAge(e,partial)>=0||landAge(e,partial)>=0&&landAge(e,partial)<18||e.getOrdinaryAttackStage()>=0||e.isHeavyMotionActive()
                 ||e.getWeapon()==EvaUnit01Entity.WEAPON_FISTS&&!e.hasLiveActionForRender(partial)&&!e.isPilotProne()&&!e.isPilotCrouching()&&e.getEntityData().get(GUARD)>.01F;
     }
@@ -153,6 +157,7 @@ public final class EvaGameplayMotionR32
         if(e.getOrdinaryAttackStage()>=0){String name=ordinary(e.getOrdinaryAttackStage());return actionPose(e,name,e.getOrdinaryAttackProgress(partial),base,partial);}
         if(e.isHeavyMotionActive())return actionPose(e,"heavy",e.heavyMotionProgress(partial),base,partial);
         var guard=EvaBodyPose.gameplayClip(e,"guard",(e.level().getGameTime()%120+partial)/120F);
+        if(EvaCombatSupportR33.ready(e)&&e.rifleRunBlend(partial)<.5F)return EvaBodyPose.blend(base,EvaCombatSupportR33.locomotion(e,guard,partial),e.getEntityData().get(GUARD));
         // Retain the measured locomotion in the legs while keeping the guard up.
         if(e.rifleMoveBlend(partial)>.1F)for(String n:base.rig.keySet())if(n.equals("root")||n.startsWith("leg_")||n.startsWith("shin_")||n.startsWith("ankle_")||n.startsWith("foot_"))
         {guard.rotations.put(n,base.rotations.get(n));guard.positions.put(n,base.positions.get(n));}

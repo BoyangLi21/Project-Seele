@@ -239,6 +239,7 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
                     nervFloodlit ? LightTexture.FULL_BRIGHT : packedLight,
                     entity,partialTick);
         }
+        EvaBayMachineryR33.render(poseStack,entity,partialTick);
         boolean recording = EvaPoseRuntimeRecorder.wants(entity);
         if (recording)
         {

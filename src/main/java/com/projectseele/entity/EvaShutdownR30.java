@@ -35,7 +35,7 @@ public final class EvaShutdownR30
     public static void stored(EvaUnit01Entity e)
     {
         MEMORY.remove(e);
-        if(e.getHealth()>0)clear(e);
+        if(e.getHealth()>0&&!EvaBayRepairR33.active(e))clear(e);
     }
     public static void clear(EvaUnit01Entity e)
     {
@@ -68,7 +68,7 @@ public final class EvaShutdownR30
         waitingR31(e,e.getPersistentData().getBoolean("R30AwaitingIntake")||e.getPersistentData().getBoolean("R30AwaitingNervRecovery"));
         if(e.tickCount>5&&(mode(e)==WRECK||mode(e)==EMPTY)&&e.getPersistentData().getInt("R31ShutdownPoseVersion")<31)
         {e.getEntityData().set(POSE,encode(EvaBodyPose.inactivePoseR30(e,mode(e)==WRECK)));e.getPersistentData().putInt("R31ShutdownPoseVersion",31);}
-        if(mode(e)==WRECK&&e.getHealth()>0)clear(e);
+        if(mode(e)==WRECK&&e.getHealth()>0&&!EvaBayRepairR33.active(e))clear(e);
         if(mode(e)==POWER_LOCK&&!e.isPowerDepleted())clear(e);
         if(mode(e)==ACTIVE&&!e.isFirstBattleActive()&&!e.isBerserk())
         {

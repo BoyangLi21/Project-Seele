@@ -323,12 +323,16 @@ public final class EvaBodyPose
         }
         body=EvaGameplayMotionR32.apply(entity,body,partial);
         preserveJointCentres(body);
-        EvaTerrainSupport.apply(entity,body);EvaImpactResponse.applyBody(body,entity,partial);body.dirty();
+        EvaTerrainSupport.apply(entity,body);body.dirty();
         var beat=CombatFeelR31.beat(entity);
         if(beat!=null&&beat.kind()==CombatFeelR31.STAGGER&&!entity.isPilotProne()&&!entity.isPilotCrouching()&&entity.onGround())
         {
             float age=CombatFeelR31.age(entity,partial);
             float weight=(float)(CombatMotionR29.ease(age/2)*(1-CombatMotionR29.ease((age-7)/9)));
+            if(EvaCombatSupportR33.ready(entity)&&entity.getWeapon()==EvaUnit01Entity.WEAPON_FISTS)
+                body=mix(body,EvaCombatSupportR33.reactionStep(entity,beat,partial),weight);
+            else
+            {
             double forward=beat.direction().dot(entity.getForward());
             float stride=(float)(.85*beat.strength()*6*(1-Math.exp(-Math.max(0,age-beat.stopTicks())/6))/25.8334);
             var stepping=clip(d,variant,"walk",forward<0?1-stride:stride);
@@ -337,8 +341,10 @@ public final class EvaBodyPose
                 String name=prefix+side;if(!body.rig.containsKey(name))continue;
                 body.rotations.get(name).slerp(stepping.rotations.get(name),weight);
             }
+            }
             preserveJointCentres(body);body.dirty();
         }
+        EvaImpactResponse.applyBody(body,entity,partial);body.dirty();
         if(beat!=null&&(beat.kind()==CombatFeelR31.DOWN||beat.kind()==CombatFeelR31.THROWN))
         {
             float age=CombatFeelR31.age(entity,partial);
@@ -349,7 +355,7 @@ public final class EvaBodyPose
                 body=mix(body,inactivePoseR30(entity,true),w);
             }
         }
-        groundGameplay(entity,body,partial);return body;
+        groundGameplay(entity,body,partial);EvaCombatSupportR33.apply(entity,body,partial);return body;
     }
 
     public static Sample inactivePoseR30(EvaUnit01Entity entity,boolean prone)
@@ -398,6 +404,16 @@ public final class EvaBodyPose
             pose.positions.put(name,new Vector3f(delta).sub(pose.rotations.get(name).transform(new Vector3f(delta))));
         }
         pose.dirty();
+    }
+    /** Actual rigid sole clearance relative to the authored forefoot marker. */
+    public static float soleBelowToeR33(EvaUnit01Entity e,String side,Quaternionf orientation,Vector3f toeOffset)
+    {
+        if(data==null)reload();String name="foot_"+side;int variant=rigKey(e);
+        var points=data.rigSupport().getOrDefault(variant,data.support()).get(name);if(points==null)return 0;
+        var marker=new Vector3f(data.rigs().get(variant).get(name).pivot()).add(toeOffset);
+        var m=new org.joml.Matrix3f().rotation(orientation);float lowest=Float.POSITIVE_INFINITY;
+        for(var v:points)lowest=Math.min(lowest,m.m01()*(v.x-marker.x)+m.m11()*(v.y-marker.y)+m.m21()*(v.z-marker.z));
+        return Float.isFinite(lowest)?-lowest:0;
     }
     private static void groundGameplay(EvaUnit01Entity e,Sample pose,float partial)
     {

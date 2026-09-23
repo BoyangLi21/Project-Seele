@@ -76,6 +76,7 @@ public final class NervCarrierVisuals
         gantry.configureRestraintGantry();
         gantry.assignVariant(unit.getUnitVariant());
         gantry.setRestraintProgress(restraintProgress);
+        gantry.setRepairProgressR33(com.projectseele.entity.EvaBayRepairR33.active(unit)?com.projectseele.entity.EvaBayRepairR33.progress(unit,0):-1);
         gantry.holdStatic(x, y + 0.04D, z);
         if (level.getGameTime() % 5L == 0L)
         {
