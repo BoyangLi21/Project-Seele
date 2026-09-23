@@ -65,7 +65,7 @@ public final class UNAirLiftR29
         var s=state(l);UUID unit=UNRecoveryR22.identity(l,serial);
         if(unit!=null&&l.getEntity(unit) instanceof EvaPrototypeEntity held){held.getPersistentData().remove("R31GroundHold");held.getPersistentData().remove("R31GroundHoldAt");}
         var job=s.jobs.remove(serial);if(job==null)return;
-        if(job.plane!=null&&l.getEntity(job.plane) instanceof UNTransportEntity plane)plane.discard();
+        var aircraft=ServiceAircraftR32.find(l,job.plane);if(aircraft!=null)aircraft.discard();
         if(l.getEntity(job.unit) instanceof EvaPrototypeEntity eva){eva.endNervCarrierMotion();EvaAirTransportR31.clear(eva);eva.getPersistentData().putBoolean("UNTransportAutoload",false);}
         s.last.put(serial,"运输已由管理员维护复位接管");s.setDirty();
     }
@@ -74,7 +74,7 @@ public final class UNAirLiftR29
     {
         if(!"r29-un".equals(System.getProperty("projectseele.regionalBuild","")))throw new IllegalStateException("Review only");
         var j=state(level).jobs.get(serial);if(j==null||j.phase!=Phase.HOLD||j.carrying||!j.owner.equals(owner.getUUID()))return;
-        if(level.getEntity(j.unit) instanceof EvaPrototypeEntity eva&&eva.position().distanceTo(UNRecoveryR22.home(serial))<8)
+        if(ServiceAircraftR32.payload(level,j.unit) instanceof EvaPrototypeEntity eva&&eva.position().distanceTo(UNRecoveryR22.home(serial))<8)
         {begin(level,j,Phase.ROLL_OUT,eva.position(),apron(serial),240,eva);state(level).setDirty();}
     }
     public static boolean ownsMotion(ServerLevel l,int serial)
@@ -126,23 +126,25 @@ public final class UNAirLiftR29
         var j=new Job();j.serial=serial;j.owner=player.getUUID();j.unit=id;j.groundOnly=true;j.homebound=true;j.crew=eva.getPilotEntity()==player;
         s.jobs.put(serial,j);s.setDirty();return "库外接应已确认。等待机库排液、开门后，由地面载台送回库位。";
     }
-    private static double cruise(ServerLevel l){return l.getMaxBuildHeight()+128;}
+    private static double cruise(ServerLevel l){return l.getMaxBuildHeight()+224;}
     private static void retain(ServerLevel l,BlockPos p,int radius)
-    {var c=new ChunkPos(p);l.getChunkSource().addRegionTicket(TICKET,c,radius,c);l.getChunkSource().getChunkFuture(c.x,c.z,ChunkStatus.FULL,true);}
+    {var c=new ChunkPos(p);l.getChunkSource().addRegionTicket(TICKET,c,radius,c);}
     private static boolean readyAt(ServerLevel l,Vec3 point)
     {
         var c=new ChunkPos(BlockPos.containing(point));retain(l,BlockPos.containing(point),3);boolean ready=true;
         for(int x=c.x-1;x<=c.x+1;x++)for(int z=c.z-1;z<=c.z+1;z++)
-            if(!l.getChunkSource().hasChunk(x,z)){l.getChunkSource().getChunkFuture(x,z,ChunkStatus.FULL,true);ready=false;}
-        return ready;
+            if(!l.getChunkSource().hasChunk(x,z)){ready=false;}
+        return ready&&l.isPositionEntityTicking(BlockPos.containing(point));
     }
     private static boolean loadLanding(ServerLevel l,Job j)
     {
         var centre=new ChunkPos(BlockPos.containing(j.destination));retain(l,BlockPos.containing(j.destination),7);
-        if(j.loading!=null&&!j.loading.isDone())return false;
-        if(j.loading!=null&&j.loading.isCompletedExceptionally())throw new IllegalStateException("目标区块加载失败");
         if(j.loadCursor>=169)return true;
-        int x=centre.x+j.loadCursor%13-6,z=centre.z+j.loadCursor/13-6;j.loading=l.getChunkSource().getChunkFuture(x,z,ChunkStatus.FULL,true);j.loadCursor++;return false;
+        int x=centre.x+j.loadCursor%13-6,z=centre.z+j.loadCursor/13-6;
+        // The region ticket schedules loading. getChunkFuture blocks when called
+        // on the server thread, so readiness is polled across ticks instead.
+        if(l.getChunkSource().hasChunk(x,z))j.loadCursor++;
+        return false;
     }
     private static Vec3 landing(ServerLevel l,Vec3 requested,EvaPrototypeEntity eva)
     {
@@ -201,15 +203,16 @@ public final class UNAirLiftR29
     private static void advance(ServerLevel l,State s,Job j)
     {
         BlockPos last=UNRecoveryR22.lastKnownPosition(l,j.unit);retain(l,last==null?BlockPos.containing(UNRecoveryR22.home(j.serial)):last,3);retain(l,BlockPos.containing(UNRecoveryR22.home(j.serial)),6);
-        if(!(l.getEntity(j.unit) instanceof EvaPrototypeEntity eva))
+        if(!(ServiceAircraftR32.payload(l,j.unit) instanceof EvaPrototypeEntity eva))
         {if(++j.missing>600){j.phase=Phase.HOLD;note(l,j,"原机体未能加载，请由管理员检查登记或执行维护复位");s.setDirty();}return;}
         // Keep the persisted clamp/deployment state. CLAMP is attached before
         // Job.carrying becomes true, and ids are different after a reload.
-        if(j.plane!=null&&l.getEntity(j.plane) instanceof UNTransportEntity bound)
+        var bound=ServiceAircraftR32.find(l,j.plane);
+        if(bound!=null)
         {bound.rebindCargo(eva.getId());bound.setHoistDistance((float)OFFSET);}
         if(j.plug==null&&eva.getPersistentData().hasUUID("UNPlug"))j.plug=eva.getPersistentData().getUUID("UNPlug");
         var plugPos=j.plug==null?null:UNRecoveryR22.lastKnownPosition(l,j.plug);if(plugPos!=null)retain(l,plugPos,3);
-        EntryPlugCarrierEntity plug=j.plug!=null&&l.getEntity(j.plug) instanceof EntryPlugCarrierEntity p?p:null;
+        EntryPlugCarrierEntity plug=ServiceAircraftR32.capsule(l,j.plug);
         j.missing=0;
         if(j.groundOnly){advanceGround(l,s,j,eva,plug);return;}
         var owner=l.getServer().getPlayerList().getPlayer(j.owner);
@@ -265,7 +268,7 @@ public final class UNAirLiftR29
             else begin(l,j,Phase.FERRY,j.planePosition,new Vec3(eva.getX(),cruise(l),eva.getZ()),duration(j.planePosition,new Vec3(eva.getX(),cruise(l),eva.getZ())),eva);
             s.setDirty();return;
         }
-        retain(l,BlockPos.containing(j.planePosition),3);var plane=l.getEntity(j.plane) instanceof UNTransportEntity e?e:null;
+        retain(l,BlockPos.containing(j.planePosition),3);var plane=ServiceAircraftR32.find(l,j.plane);
         if(plane==null)
         {
             if(++j.planeMissing>600){j.phase=Phase.HOLD;eva.endNervCarrierMotion();lock(eva);note(l,j,"运输机信号丢失，保持机体位置；请管理员检查或维护复位");s.setDirty();}
@@ -284,7 +287,9 @@ public final class UNAirLiftR29
         if(j.rebase)
         {
             if(j.waitAt!=null&&!readyAt(l,j.waitAt))return;j.waitAt=null;
-            Vec3 from=movesEva(j.phase)?eva.position():plane.position();begin(l,j,j.phase,from,j.to,Math.max(30,j.duration-j.age),eva);
+            Vec3 from=movesEva(j.phase)?eva.position():plane.position();int remaining=Math.max(30,j.duration-j.age);
+            if(j.phase==Phase.CRUISE||j.phase==Phase.FERRY||j.phase==Phase.RETURN_FLIGHT)remaining=Math.max(remaining,duration(from,j.to));
+            begin(l,j,j.phase,from,j.to,remaining,eva);
         }
         if(j.cancel&&(j.phase==Phase.CRUISE||j.phase==Phase.ASCEND||j.phase==Phase.DESCEND))
         {j.homebound=true;j.cancel=false;j.destination=apron(j.serial);begin(l,j,Phase.ASCEND,eva.position(),new Vec3(eva.getX(),cruise(l)-OFFSET,eva.getZ()),120,eva);}
@@ -302,9 +307,9 @@ public final class UNAirLiftR29
         }
         j.age++;double t=smooth(Mth.clamp((double)j.age/Math.max(1,j.duration),0,1));Vec3 point=j.from.lerp(j.to,t);
         if(j.phase==Phase.CRUISE||j.phase==Phase.FERRY||j.phase==Phase.RETURN_FLIGHT)
-            readyAt(l,j.from.lerp(j.to,smooth(Mth.clamp((j.age+30D)/Math.max(1,j.duration),0,1))));
+            readyAt(l,j.from.lerp(j.to,smooth(Mth.clamp((j.age+8D)/Math.max(1,j.duration),0,1))));
         if(!readyAt(l,point))
-        {j.age--;j.waitAt=point;j.rebase=true;eva.endNervCarrierMotion();EvaAirTransportR31.hold(eva);note(l,j,"前方区块正在加载，保持位置");s.setDirty();return;}
+        {j.age--;if(movesEva(j.phase)){j.waitAt=point;j.rebase=true;eva.endNervCarrierMotion();EvaAirTransportR31.hold(eva);}note(l,j,"前方区块正在加载，保持位置");s.setDirty();return;}
         if(movesEva(j.phase))
         {
             lock(eva);

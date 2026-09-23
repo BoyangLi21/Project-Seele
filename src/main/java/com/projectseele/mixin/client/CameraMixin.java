@@ -40,6 +40,12 @@ public abstract class CameraMixin
             Entity subject, boolean detached, boolean mirrored,
             float partialTick, CallbackInfo callback)
     {
+        var combatReview=com.projectseele.client.visual.CombatR31Client.cameraView(partialTick);
+        if(combatReview!=null)
+        {
+            Vec3 p=combatReview.position(),d=combatReview.target().subtract(p);this.setPosition(p.x,p.y,p.z);
+            this.setRotation((float)Math.toDegrees(Math.atan2(-d.x,d.z)),(float)-Math.toDegrees(Math.atan2(d.y,d.horizontalDistance())));return;
+        }
         var factory=com.projectseele.client.visual.FactoryR20Client.cameraView();
         if(factory!=null)
         {

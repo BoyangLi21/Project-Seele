@@ -49,5 +49,11 @@ public final class CityBattlefieldR29
         var tv = TvCampaignSavedData.get(level);
         return first.active != null || first.missionAngel != null || tv.phase.equals("combat");
     }
+    public static boolean loweringRequested(ServerLevel level)
+    {
+        var origin=IntegratedNervMapBuilder.tokyo3Origin(level);
+        return Tokyo3RetractionSavedData.get(level).get(origin)
+                .map(d->d.targetDepth()==ThirdTokyoSurfaceBuilder.maximumRetractionDepth(origin)).orElse(false);
+    }
     private CityBattlefieldR29() {}
 }

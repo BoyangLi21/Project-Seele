@@ -111,6 +111,8 @@ public final class RiggedAngelLayer<T extends GeoAnimatable> extends GeoRenderLa
         Vector3f point=new Vector3f(),normal=new Vector3f(),work=new Vector3f();
         boolean grounded=entity instanceof net.minecraft.world.entity.LivingEntity living&&AngelCombatPoseR31.needsGroundSupport(living);
         Matrix4f rootModel=grounded?EvaRigTransforms.model(root):null;float floor=Float.POSITIVE_INFINITY;
+        Matrix4f contactAudit=com.projectseele.visual.CombatR31Review.ENABLED&&entity instanceof net.minecraft.world.entity.Entity actor&&getRenderer() instanceof HybridAddonRenderer.MeshBackedRenderer<?> renderer?renderer.renderedMeshTransform(stack.last().pose(),actor,partial):null;
+        float worldFloor=Float.POSITIVE_INFINITY;
         for(int vertex=0;vertex<model.vertices.length/8;vertex++)
         {
             int i=vertex*8,j=vertex*4;float[] v=model.vertices;
@@ -147,6 +149,7 @@ public final class RiggedAngelLayer<T extends GeoAnimatable> extends GeoRenderLa
             }
             else
             {
+                if(contactAudit!=null)worldFloor=Math.min(worldFloor,contactAudit.m01()*point.x+contactAudit.m11()*point.y+contactAudit.m21()*point.z+contactAudit.m31());
                 emit(target,stack,point,normal,v[i+3],v[i+4],light,overlay);
                 if(vertex%3==2)emit(target,stack,point,normal,v[i+3],v[i+4],light,overlay);
             }
@@ -162,10 +165,12 @@ public final class RiggedAngelLayer<T extends GeoAnimatable> extends GeoRenderLa
             {
                 int at=vertex*6,i=vertex*8;float[] output=model.groundedVertices;
                 point.set(output[at],output[at+1],output[at+2]).add(lift);normal.set(output[at+3],output[at+4],output[at+5]);
+                if(contactAudit!=null)worldFloor=Math.min(worldFloor,contactAudit.m01()*point.x+contactAudit.m11()*point.y+contactAudit.m21()*point.z+contactAudit.m31());
                 emit(target,stack,point,normal,model.vertices[i+3],model.vertices[i+4],light,overlay);
                 if(vertex%3==2)emit(target,stack,point,normal,model.vertices[i+3],model.vertices[i+4],light,overlay);
             }
         }
+        if(contactAudit!=null&&entity instanceof net.minecraft.world.entity.LivingEntity living)com.projectseele.client.visual.CombatR31Client.angelSupport(living,worldFloor);
     }
     private static void emit(VertexConsumer target,PoseStack stack,Vector3f p,Vector3f n,float u,float v,int light,int overlay)
     {

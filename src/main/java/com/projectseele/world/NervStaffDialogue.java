@@ -90,7 +90,10 @@ public final class NervStaffDialogue
                 try
                 {
                     String[] a=text.split(":");if(a.length!=6||!Set.of("human","npc").contains(a[4])||!Set.of("rifle","melee").contains(a[5]))return 0;
-                    if(com.projectseele.event.TvCampaignDirector.select(player,a[2])==0)return 0;
+                    var missionLevel=com.projectseele.event.TvCampaignDirector.level(player);
+                    var ongoing=missionLevel==null?null:TvCampaignSavedData.get(missionLevel);
+                    if(ongoing==null||ongoing.active.isEmpty()){if(com.projectseele.event.TvCampaignDirector.select(player,a[2])==0)return 0;}
+                    else if(!ongoing.active.equals(a[2])){reply(player,npc,"当前作战尚未结束。请选择当前目标，再追加支援机体。");return 0;}
                     int result=com.projectseele.event.TvCampaignDirector.beginAssigned(player,Integer.parseInt(a[3]),a[4].equals("npc"),a[5].equals("rifle"));
                     reply(player,npc,com.projectseele.event.TvCampaignDirector.briefing(player));return result;
                 }

@@ -20,6 +20,7 @@ public final class StaffPilotOrdersR25
     {
         if (unit<0 || unit>2 || !NervStaffDialogue.authorized(player) || !StaffAuthorityR25.allows(npc,"board"))
             return "本岗位无权调遣驾驶员，请联络美里、律子或冬月。";
+        AutoSortieR32.assignCommander(EvaLogisticsDirector.canonicalUnit(player.serverLevel(),unit),player);
         var jobs=ORDERS.computeIfAbsent(player.serverLevel(),l->new HashMap<>());
         var command=StaffCommandBookR24.unitOrder(player.serverLevel(),unit);
         if(command!=null&&!command.owner.equals(player.getUUID()))return "这台机体已有其他指挥员的待执行指令，请先联系下令人。";
@@ -66,6 +67,7 @@ public final class StaffPilotOrdersR25
                     else {TrainingPilotDirector.stop(level,job.unit());NervStaffDialogue.reply(player,npc,TrainingPilotEntity.pilotName(job.unit())+"：收到，离开插入栓，返回待命位置。");}
                     continue;
                 }
+                AutoSortieR32.assignCommander(EvaLogisticsDirector.canonicalUnit(level,job.unit()),player);
                 var result=TrainingPilotDirector.start(level,job.unit());
                 NervStaffDialogue.reply(player,npc,TrainingPilotEntity.pilotName(job.unit())+"："
                         +(result.accepted()?"收到，前往插入栓登机。":result.message()));

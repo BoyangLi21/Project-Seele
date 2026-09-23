@@ -6,6 +6,8 @@
   "refmap": "projectseele.refmap.json",
   "minVersion": "0.8",
   "mixins": [
+    "ServiceAircraftWorldR32Accessor",
+    "ServiceAircraftSectionsR32Accessor",
     "CollisionChunkRevisionR24Mixin",
     "SbwRestCollisionR24Mixin",
     "BiomeManagerMixin",

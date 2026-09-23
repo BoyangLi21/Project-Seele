@@ -21,16 +21,17 @@ import java.util.*;
 @Mod.EventBusSubscriber(modid="projectseele")
 public final class AirLiftR30Review
 {
-    private static final boolean ENABLED="r30-airlift".equals(System.getProperty("projectseele.regionalBuild",""));
+    private static final boolean R32="r32-airlift".equals(System.getProperty("projectseele.regionalBuild",""));
+    private static final boolean ENABLED=R32||"r30-airlift".equals(System.getProperty("projectseele.regionalBuild",""));
     private static final TicketType<ChunkPos> TICKET=TicketType.create("r30_airlift_review",Comparator.comparingLong(ChunkPos::toLong),100);
-    private static boolean done;private static int age,stage,timer;private static FakePlayer operator;private static UUID unId,plugId,nervId;
+    private static boolean done;private static int age,stage=R32&&Boolean.getBoolean("projectseele.airReviewNervOnly")?4:0,timer;private static FakePlayer operator;private static UUID unId,plugId,nervId;
     private static final JsonObject report=new JsonObject();private static final Set<String> phases=new TreeSet<>();
     private static void check(String label,boolean value){report.addProperty(label,value);if(!value)throw new IllegalStateException(label);}
     private static void next(int s){stage=s;timer=0;com.projectseele.ProjectSeele.LOGGER.info("R30 AIRLIFT REVIEW stage={}",stage);}
     @SubscribeEvent public static void tick(TickEvent.ServerTickEvent event)
     {
         if(!ENABLED||done||event.phase!=TickEvent.Phase.END)return;var server=event.getServer();var path=server.getWorldPath(LevelResource.ROOT).normalize();
-        if(!path.getFileName().toString().equals("SEELE_FIELD_R30_REVIEW"))throw new IllegalStateException("Wrong airlift review world");
+        if(!path.getFileName().toString().equals(R32?"SEELE_R32_AIR_REVIEW":"SEELE_FIELD_R30_REVIEW"))throw new IllegalStateException("Wrong airlift review world");
         var l=server.getLevel(FacilitySchemaV2.DIMENSION);if(l==null)return;l.resetEmptyTime();
         try
         {
@@ -42,6 +43,23 @@ public final class AirLiftR30Review
                 unId=UNRecoveryR22.identity(l,0);nervId=EvaFleetSavedData.get(server).canonicalId(1).orElseThrow();check("registered_original_un",unId!=null);
             }
             String up=UNAirLiftR29.phaseName(l,0),np=NervAirLiftR30.phaseName(l);phases.add(stage+":"+up+":"+np);
+            if(R32)for(UUID id:new UUID[]{unId,nervId})if(id!=null&&l.getEntity(id) instanceof EvaUnit01Entity carried&&EvaAirTransportR31.active(carried))
+            {
+                check("no_power_during_pickup",!carried.isUmbilicalConnected());
+                if(EvaAirTransportR31.restraint(carried,1)>.99F&&!up.equals("RELEASE")&&!np.equals("RELEASE"))
+                {
+                    var origin=EvaAirTransportR31.origin(carried);var pose=EvaBodyPose.sample(carried,1);double error=0;
+                    for(String bone:origin.rig.keySet())if(!bone.equals("root"))
+                    {error=Math.max(error,1-Math.abs(origin.rotations.get(bone).dot(pose.rotations.get(bone))));error=Math.max(error,origin.positions.get(bone).distance(pose.positions.get(bone)));}
+                    check("pickup_joints_unchanged_stage_"+stage,error<.0001);
+                    if(EvaShutdownR30.wreck(carried))
+                    {
+                        var before=origin.matrix("torso_lower").transformDirection(new org.joml.Vector3f(0,1,0)).normalize();
+                        var now=pose.matrix("torso_lower").transformDirection(new org.joml.Vector3f(0,1,0)).normalize();
+                        if(Math.abs(before.y)<.2F)check("fallen_body_stays_horizontal_stage_"+stage,Math.abs(now.y)<.22F);
+                    }
+                }
+            }
             if(stage>0){check("no_un_transport_hold",!up.equals("HOLD"));check("no_nerv_transport_hold",!np.equals("HOLD"));}
             if(timer%100==0)com.projectseele.ProjectSeele.LOGGER.info("R30 AIRLIFT REVIEW stage={} ticks={} un={} nerv={} status={}",stage,timer,up,np,stage<4?UNAirLiftR29.status(l,0):NervAirLiftR30.status(l));
             if(stage==0)
@@ -71,9 +89,11 @@ public final class AirLiftR30Review
             if(stage==4)
             {
                 EvaLogisticsDirector.loadControlTarget(l,1);if(!(l.getEntity(nervId) instanceof EvaUnit01Entity e))return;
-                var chunk=new ChunkPos(24,13);l.getChunkSource().addRegionTicket(TICKET,chunk,3,chunk);l.getChunk(24,13);
-                // Isolated review places the registered airframe in the authored city battlefield.
-                EvaLogisticsDirector.markDeployedForVisual(l,e);e.normalizeAfterTransportR30(false);e.teleportTo(392.5,81,217.5);e.setHealth(e.getMaxHealth());e.hurt(l.damageSources().fellOutOfWorld(),100000);
+                if(!np.equals("IDLE"))
+                {check("resumed_original_wreck",EvaShutdownR30.wreck(e)&&e.getHealth()==0);report.addProperty("resumed_nerv_phase",np);next(5);return;}
+                var chunk=R32?new ChunkPos(400,-364):new ChunkPos(24,13);l.getChunkSource().addRegionTicket(TICKET,chunk,3,chunk);l.getChunk(chunk.x,chunk.z);
+                // R32 uses a scanned open apron; the older city point has a station canopy across the fallen body.
+                EvaLogisticsDirector.markDeployedForVisual(l,e);e.normalizeAfterTransportR30(false);e.teleportTo(R32?6400.5:392.5,R32?64:81,R32?-5819.5:217.5);e.setHealth(e.getMaxHealth());EvaShutdownR30.clear(e);e.hurt(l.damageSources().fellOutOfWorld(),100000);check("nerv_wreck_ready",EvaShutdownR30.wreck(e)&&e.getHealth()==0);
                 report.addProperty("nerv_recover_reply",NervAirLiftR30.request(operator,1,true,0,0));check("nerv_request_started",!NervAirLiftR30.phaseName(l).equals("IDLE"));next(5);return;
             }
             if(stage==5&&NervAirLiftR30.phaseName(l).equals("IDLE"))
@@ -89,7 +109,7 @@ public final class AirLiftR30Review
     private static void finish(ServerLevel l,Path path)
     {
         done=true;report.add("phases",new Gson().toJsonTree(phases));
-        try{Files.writeString(path.resolve("r30_airlift_review.json"),new GsonBuilder().setPrettyPrinting().create().toJson(report));}catch(Exception e){throw new IllegalStateException(e);}
+        try{Files.writeString(path.resolve(R32?"r32_airlift_review.json":"r30_airlift_review.json"),new GsonBuilder().setPrettyPrinting().create().toJson(report));}catch(Exception e){throw new IllegalStateException(e);}
         l.getServer().halt(false);
     }
     private AirLiftR30Review(){}

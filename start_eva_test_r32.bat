@@ -1,6 +1,6 @@
 @echo off
 setlocal
-title Project SEELE - R31 combat and horizontal transport
+title Project SEELE - R32 cooperative sorties and adaptive recovery
 pushd "%~dp0"
 if errorlevel 1 exit /b 1
 set "SEELE_CHECK="
@@ -26,9 +26,9 @@ if not exist "run\resourcepacks\eva_real_model\pack.mcmeta" (
     echo ERROR: The private EVA model pack is missing.
     goto failed
 )
-for %%F in (eva_combat_capture_r31.json eva_combat_capture_r31_un00.json eva_combat_capture_r31_un01.json angel_grip_r31.json eva_recovery_r31.json) do (
+for %%F in (eva_combat_capture_r31.json eva_combat_capture_r31_un00.json eva_combat_capture_r31_un01.json angel_grip_r31.json eva_recovery_r31.json eva_gameplay_r32_0.json eva_gameplay_r32_1.json eva_gameplay_r32_2.json eva_gameplay_r32_3.json eva_gameplay_r32_4.json sachiel_gameplay_r32.json) do (
     if not exist "run\projectseele-local-maps\%%F" (
-        echo ERROR: Missing R31 runtime profile: %%F
+        echo ERROR: Missing R32 runtime profile: %%F
         goto failed
     )
 )
@@ -42,14 +42,14 @@ if not defined SEELE_PYTHON (
 set "PYTHONUTF8=1"
 set "OPENBLAS_NUM_THREADS=1"
 echo R32 runtime - protocol 36. Use the matching R32 client and server.
-echo Guide: %CD%\docs\MANUAL_ACCEPTANCE_R31.md
+echo Guide: %CD%\docs\COMBAT_SORTIE_R32.md
 echo World: SEELE_R31_WORLD
 "%SEELE_PYTHON%" tools\launch_rendered_client_r17.py --world SEELE_R31_WORLD --heap 6G %SEELE_SHADERS% %SEELE_CHECK%
 set "SEELE_EXIT_CODE=%ERRORLEVEL%"
 if not "%SEELE_EXIT_CODE%"=="0" goto failed
 goto done
 :usage
-echo Usage: start_eva_test_r31.bat [--check] [--city-shaders] [--no-shaders]
+echo Usage: start_eva_test_r32.bat [--check] [--city-shaders] [--no-shaders]
 set "SEELE_EXIT_CODE=2"
 goto done
 :failed

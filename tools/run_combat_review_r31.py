@@ -1,11 +1,28 @@
 """Launch only the isolated R31 combat review using already compiled launch metadata."""
 from pathlib import Path
-import argparse,json,subprocess
+import argparse,json,subprocess,shutil
 from contextlib import contextmanager
 from launch_rendered_client_r17 import run_prepared,java_environment
 
 ROOT=Path(__file__).resolve().parents[1]
 WORLD='SEELE_FIELD_R31_REVIEW'
+
+@contextmanager
+def temporary_motion(source):
+    if source is None:yield;return
+    base=(ROOT/'run/projectseele-local-maps').resolve();saved={}
+    try:
+        for name in [*(f'eva_gameplay_r32_{i}.json' for i in range(5)),'sachiel_gameplay_r32.json']:
+            target=base/name;candidate=source/name
+            if not candidate.is_file():raise FileNotFoundError(candidate)
+            saved[target]=target.read_bytes() if target.exists() else None
+            shutil.copyfile(candidate,target)
+        yield
+    finally:
+        for target,original in saved.items():
+            if target.parent!=base:raise RuntimeError('Motion restore escaped runtime asset directory')
+            if original is None:target.unlink(missing_ok=True)
+            else:target.write_bytes(original)
 
 @contextmanager
 def temporary_options(path,separator,changes):
@@ -22,15 +39,19 @@ def temporary_options(path,separator,changes):
         path.write_text('\n'.join(current)+'\n',encoding='utf8')
 
 def main():
-    ap=argparse.ArgumentParser();ap.add_argument('--prepared-file',type=Path,default=ROOT/'.Codex/client-launch-r17.json');ap.add_argument('--prepare-only',action='store_true');ap.add_argument('--video',action='store_true');ap.add_argument('--normal-attacks',action='store_true');ap.add_argument('--variant',type=int,choices=range(5),default=1);a=ap.parse_args()
+    ap=argparse.ArgumentParser();ap.add_argument('--prepared-file',type=Path,default=ROOT/'.Codex/client-launch-r17.json');ap.add_argument('--prepare-only',action='store_true');ap.add_argument('--video',action='store_true');ap.add_argument('--normal-attacks',action='store_true');ap.add_argument('--duel',action='store_true');ap.add_argument('--variant',type=int,choices=range(5),default=1)
+    ap.add_argument('--gameplay-motion-directory',type=Path);ap.add_argument('--side-view',action='store_true');ap.add_argument('--early-air',action='store_true');a=ap.parse_args()
     world=ROOT/'run/saves'/WORLD
     if not (world/'level.dat').is_file():raise FileNotFoundError('Create the disposable '+WORLD+' copy before this fixture; it never edits a formal world.')
     source=json.loads(a.prepared_file.read_text(encoding='utf8'));command=source['command']
     if Path(source['workingDirectory']).resolve()!=(ROOT/'run').resolve():raise ValueError('Unexpected Minecraft working directory')
-    command=[c for c in command if not c.startswith(('-Dprojectseele.regionalBuild=','-Dprojectseele.bodyPoseReview=','-Dprojectseele.dorsalPoseReview=','-Dprojectseele.combatVideo=','-Dprojectseele.combatNormals=','-Dprojectseele.combatVariant='))]
+    command=[c for c in command if not c.startswith(('-Dprojectseele.regionalBuild=','-Dprojectseele.bodyPoseReview=','-Dprojectseele.dorsalPoseReview=','-Dprojectseele.combatVideo=','-Dprojectseele.combatNormals=','-Dprojectseele.combatVariant=','-Dprojectseele.combatDuel=','-Dprojectseele.combatSideView=','-Dprojectseele.combatEarlyAir='))]
     command.insert(1,'-Dprojectseele.regionalBuild=r31-combat')
     command.insert(1,'-Dprojectseele.combatVariant='+str(a.variant))
-    if a.normal_attacks:command.insert(1,'-Dprojectseele.combatNormals=true')
+    if a.early_air:command.insert(1,'-Dprojectseele.combatEarlyAir=true')
+    if a.side_view:command.insert(1,'-Dprojectseele.combatSideView=true')
+    if a.duel:command.insert(1,'-Dprojectseele.combatDuel=true')
+    if a.normal_attacks or a.duel:command.insert(1,'-Dprojectseele.combatNormals=true')
     if a.video:command.insert(1,'-Dprojectseele.combatVideo=true')
     if '--quickPlaySingleplayer' in command:command[command.index('--quickPlaySingleplayer')+1]=WORLD
     else:command.extend(['--quickPlaySingleplayer',WORLD])
@@ -47,7 +68,7 @@ def main():
     if a.video:review_options['lang']='zh_cn'
     with temporary_options(options,':',review_options):
         with temporary_options(ROOT/'run/config/oculus.properties','=',{'enableShaders':'false'}):
-            code=run_prepared(launch,java_environment()[1])
+            with temporary_motion(a.gameplay_motion_directory):code=run_prepared(launch,java_environment()[1])
     print('Combat review evidence: '+str(world/'Review'))
     return code
 

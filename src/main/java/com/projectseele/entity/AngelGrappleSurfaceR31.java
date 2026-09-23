@@ -76,14 +76,17 @@ public final class AngelGrappleSurfaceR31
     }
     private static Matrix4f matrix(LivingEntity victim,Profile p,String name,PoseState pose,Map<String,Matrix4f> cache)
     {
-        Matrix4f old=cache.get(name);if(old!=null)return old;Bone bone=p.bones.get(name);Vector3f r=rotation(victim,name,new Vector3f(bone.idle),pose);Vector3f q=bone.pivot;
-        Matrix4f m=new Matrix4f().translation(q).rotateZYX(r.z,r.y,r.x).translate(-q.x,-q.y,-q.z);
+        Matrix4f old=cache.get(name);if(old!=null)return old;Bone bone=p.bones.get(name);Vector3f start=new Vector3f(bone.idle),offset=new Vector3f();
+        if(victim instanceof SachielEntity s&&s.isStrikeActive()&&SachielGameplayMotionR32.ready())
+        {var shared=SachielGameplayMotionR32.pose(s,s.strikeAge(pose.partial));if(shared.rotations.containsKey(name)){shared.rotations.get(name).getEulerAnglesZYX(start);offset.set(shared.positions.get(name));}}
+        Vector3f r=rotation(victim,name,start,pose),q=bone.pivot;
+        Matrix4f m=new Matrix4f().translation(offset).translate(q).rotateZYX(r.z,r.y,r.x).translate(-q.x,-q.y,-q.z);
         if(bone.parent!=null)m=new Matrix4f(matrix(victim,p,bone.parent,pose,cache)).mul(m);cache.put(name,m);return m;
     }
     private static Vector3f rotation(LivingEntity v,String name,Vector3f r,PoseState pose)
     {
         float partial=pose.partial;
-        if(v instanceof SachielEntity sachiel&&sachiel.isStrikeActive())
+        if(v instanceof SachielEntity sachiel&&sachiel.isStrikeActive()&&!SachielGameplayMotionR32.ready())
         {
             float age=sachiel.strikeAge(partial),weight=SachielStrike.weight(sachiel.strikeMode(),age);
             if(name.equals("torso_lower")||name.equals("torso_upper"))r.lerp(SachielStrike.torsoRotation(sachiel.strikeMode(),age,name.equals("torso_upper")),weight);

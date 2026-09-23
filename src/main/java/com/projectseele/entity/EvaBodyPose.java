@@ -125,9 +125,11 @@ public final class EvaBodyPose
             {
                 var capture=Path.of("projectseele-local-maps/eva_combat_capture_r31"+(variant>=3?(variant==3?"_un00":"_un01"):"")+".json");
                 if(Files.isRegularFile(capture))combatClips.put(variant,readCombatClipsR31(JsonParser.parseString(Files.readString(capture)).getAsJsonObject(),names));
+                var gameplay=EvaGameplayMotionR32.profile(variant);
+                if(gameplay!=null){var merged=new HashMap<>(combatClips.getOrDefault(variant,Map.of()));merged.putAll(readCombatClipsR31(gameplay,names));combatClips.put(variant,Map.copyOf(merged));}
             }
             data=new Data(names,index,Map.copyOf(clips),Map.copyOf(rigs),Map.copyOf(support),object(all,"prone"),object(all,"grip"),object(all,"rifle_mocap"),Map.copyOf(eyes),Map.copyOf(rigSupport),Map.copyOf(carrierHulls),Map.copyOf(combatClips));
-            ProjectSeele.LOGGER.info("EVA shared body/socket pose loaded: private={} clips={} bones={}",Files.isRegularFile(path),clips.size(),names.length);
+            ProjectSeele.LOGGER.info("EVA shared body/socket pose loaded: private={} clips={} bones={} gameplayProfiles={}",Files.isRegularFile(path),clips.size(),names.length,combatClips.values().stream().filter(c->c.containsKey("r32_jab")).count());
         }
         catch(Exception failure){throw new IllegalStateException("Shared EVA body pose could not load",failure);}
     }
@@ -158,6 +160,33 @@ public final class EvaBodyPose
     {if(data==null)reload();return data.combatClips().getOrDefault(rigKey(e),Map.of()).containsKey(clip);}
     public static List<net.minecraft.world.phys.AABB> carrierHulls(EvaUnit01Entity eva)
     {if(data==null)reload();return data.carrierHulls().getOrDefault(rigKey(eva),List.of());}
+    public static Sample neutralForTransportR32(EvaUnit01Entity eva)
+    {if(data==null)reload();return new Sample(data.rigs().get(rigKey(eva)));}
+    /** Individual posed parts, in model-local metres; never a standing bounding box for a fallen body. */
+    public static List<net.minecraft.world.phys.AABB> posedCarrierHulls(EvaUnit01Entity eva, Sample pose)
+    {
+        if(data==null)reload();var result=new ArrayList<net.minecraft.world.phys.AABB>();
+        for(var entry:data.rigSupport().getOrDefault(rigKey(eva),data.support()).entrySet())
+        {
+            if(!pose.rig.containsKey(entry.getKey()))continue;
+            var matrix=pose.matrix(entry.getKey());net.minecraft.world.phys.AABB box=null;
+            for(var vertex:entry.getValue())
+            {
+                var p=matrix.transformPosition(new Vector3f(vertex)).mul(EvaScale.RENDER_SCALE);
+                var point=new net.minecraft.world.phys.Vec3(p.x,p.y,p.z);
+                var q=new net.minecraft.world.phys.AABB(point,point);box=box==null?q:box.minmax(q);
+            }
+            if(box!=null)result.add(box.inflate(.08));
+        }
+        for(String side:List.of("l","r"))for(String[] chain:new String[][]{{"arm_","forearm_"},{"forearm_","wrist_"},{"wrist_","finger_middle_"}})
+        {
+            String a=chain[0]+side,b=chain[1]+side;if(!pose.rig.containsKey(a)||!pose.rig.containsKey(b))continue;
+            var first=pose.matrix(a).transformPosition(new Vector3f(pose.rig.get(a).pivot())).mul(EvaScale.RENDER_SCALE);
+            var last=pose.matrix(b).transformPosition(new Vector3f(pose.rig.get(b).pivot())).mul(EvaScale.RENDER_SCALE);
+            result.add(new net.minecraft.world.phys.AABB(new net.minecraft.world.phys.Vec3(first),new net.minecraft.world.phys.Vec3(last)).inflate(3));
+        }
+        return result.isEmpty()?carrierHulls(eva):result;
+    }
     private static Vector3f vector(JsonElement e){var a=e.getAsJsonArray();return new Vector3f(a.get(0).getAsFloat(),a.get(1).getAsFloat(),a.get(2).getAsFloat());}
     private static Vector3f first(JsonElement e)
     {
@@ -175,6 +204,10 @@ public final class EvaBodyPose
     {
         for(String n:a.rig.keySet()){a.rotations.get(n).slerp(b.rotations.get(n),amount);a.positions.get(n).lerp(b.positions.get(n),amount);}a.dirty();return a;
     }
+    public static Sample gameplayClip(EvaUnit01Entity e,String clip,float phase)
+    {if(data==null)reload();return clip(data,rigKey(e),"r32_"+clip,phase);}
+    public static Sample blend(Sample a,Sample b,float amount)
+    {var result=mix(a,b,Mth.clamp(amount,0,1));preserveJointCentres(result);result.dirty();return result;}
     private static Quaternionf mocap(Data d,String name,float phase)
     {
         if(!d.mocap().has("clips"))return new Quaternionf().rotationXYZ(-.20F,-.25F,0);
@@ -280,7 +313,7 @@ public final class EvaBodyPose
         }
         int combat=EvaCombatR31.action(entity);float combatAge=EvaCombatR31.age(entity,partial);
         String capture=switch(combat){case EvaCombatR31.REACH,EvaCombatR31.HOLD->"r31_grapple_start";case EvaCombatR31.THROW->"r31_shoulder_throw";case EvaCombatR31.AIR_STRIKE,EvaCombatR31.AIR_SLAM,EvaCombatR31.LAND->"r31_air_downstrike";default->"";};
-        if(!capture.isEmpty()&&combatCaptureReadyR31(entity,capture))
+        if(!capture.isEmpty()&&combatCaptureReadyR31(entity,capture)&&!(EvaGameplayMotionR32.ready(entity)&&(combat==EvaCombatR31.AIR_STRIKE||combat==EvaCombatR31.AIR_SLAM||combat==EvaCombatR31.LAND)))
         {
             float capturePhase=switch(combat){case EvaCombatR31.HOLD->.47F;case EvaCombatR31.REACH->.47F*combatAge/18;case EvaCombatR31.THROW->combatAge/26;case EvaCombatR31.LAND->.7F+combatAge/40;default->combatAge/28;};
             float w=(float)CombatMotionR29.ease(combatAge/5);if(combat==EvaCombatR31.HOLD)w=1;
@@ -288,8 +321,24 @@ public final class EvaBodyPose
             body=mix(body,clip(d,variant,capture,capturePhase),w);
             preserveJointCentres(body);
         }
+        body=EvaGameplayMotionR32.apply(entity,body,partial);
+        preserveJointCentres(body);
         EvaTerrainSupport.apply(entity,body);EvaImpactResponse.applyBody(body,entity,partial);body.dirty();
         var beat=CombatFeelR31.beat(entity);
+        if(beat!=null&&beat.kind()==CombatFeelR31.STAGGER&&!entity.isPilotProne()&&!entity.isPilotCrouching()&&entity.onGround())
+        {
+            float age=CombatFeelR31.age(entity,partial);
+            float weight=(float)(CombatMotionR29.ease(age/2)*(1-CombatMotionR29.ease((age-7)/9)));
+            double forward=beat.direction().dot(entity.getForward());
+            float stride=(float)(.85*beat.strength()*6*(1-Math.exp(-Math.max(0,age-beat.stopTicks())/6))/25.8334);
+            var stepping=clip(d,variant,"walk",forward<0?1-stride:stride);
+            for(String side:List.of("l","r"))for(String prefix:List.of("leg_","shin_","ankle_","foot_"))
+            {
+                String name=prefix+side;if(!body.rig.containsKey(name))continue;
+                body.rotations.get(name).slerp(stepping.rotations.get(name),weight);
+            }
+            preserveJointCentres(body);body.dirty();
+        }
         if(beat!=null&&(beat.kind()==CombatFeelR31.DOWN||beat.kind()==CombatFeelR31.THROWN))
         {
             float age=CombatFeelR31.age(entity,partial);
@@ -300,7 +349,7 @@ public final class EvaBodyPose
                 body=mix(body,inactivePoseR30(entity,true),w);
             }
         }
-        return body;
+        groundGameplay(entity,body,partial);return body;
     }
 
     public static Sample inactivePoseR30(EvaUnit01Entity entity,boolean prone)
@@ -349,5 +398,19 @@ public final class EvaBodyPose
             pose.positions.put(name,new Vector3f(delta).sub(pose.rotations.get(name).transform(new Vector3f(delta))));
         }
         pose.dirty();
+    }
+    private static void groundGameplay(EvaUnit01Entity e,Sample pose,float partial)
+    {
+        if(!EvaGameplayMotionR32.owns(e,partial)||e.isVisuallyAirborneForRender()&&!e.onGround())return;
+        var reaction=CombatFeelR31.beat(e);if(reaction!=null&&(reaction.kind()==CombatFeelR31.DOWN||reaction.kind()==CombatFeelR31.THROWN))return;
+        var mesh=data.rigSupport().getOrDefault(rigKey(e),data.support());float lowest=Float.POSITIVE_INFINITY;
+        for(String name:List.of("foot_l","foot_r"))
+        {
+            var points=mesh.get(name);if(points==null||!pose.rig.containsKey(name))continue;var m=pose.matrix(name);
+            for(Vector3f p:points)lowest=Math.min(lowest,m.m01()*p.x+m.m11()*p.y+m.m21()*p.z+m.m31());
+        }
+        // Quaternion crossfades preserve joints, but do not preserve sole height.
+        // Support the rigid assembly after blending instead of stretching its legs.
+        if(Float.isFinite(lowest)){pose.positions.get("root").y+=.006F-lowest;pose.dirty();}
     }
 }

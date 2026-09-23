@@ -37,7 +37,7 @@ public final class NpcCombatR30Client
             else if(ui==1){if(!NpcCombatR30Review.ASUKA||click(screen,"夏姆榭尔"))ui=2;}
             else if(ui==2){if(!NpcCombatR30Review.ASUKA||click(screen,"二号机"))ui=3;}
             else if(ui==3&&click(screen,NpcCombatR30Review.ASUKA?"明日香·兰格雷出战":"碇真嗣出战")){ui=4;NpcCombatR30Review.photo="mission_selection";}
-            else if(ui==4&&NpcCombatR30Review.photos.contains("mission_selection")&&click(screen,"下达迎击指令"))ui=5;
+            else if(ui==4&&NpcCombatR30Review.photos.contains("mission_selection")&&click(screen,"出击 / 加入增援"))ui=5;
         }
     }
     @SubscribeEvent public static void render(TickEvent.RenderTickEvent event)

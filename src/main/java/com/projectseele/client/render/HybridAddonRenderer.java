@@ -134,6 +134,8 @@ public class HybridAddonRenderer<T extends LivingEntity & GeoEntity> extends Ent
     static final class MeshBackedRenderer<T extends LivingEntity & GeoEntity>
             extends GeoEntityRenderer<T>
     {
+        @Override public int getPackedOverlay(T entity,float partial){return entity instanceof com.projectseele.entity.Angel?net.minecraft.client.renderer.texture.OverlayTexture.NO_OVERLAY:super.getPackedOverlay(entity,partial);}
+        @Override public int getPackedOverlay(T entity,float white,float partial){return entity instanceof com.projectseele.entity.Angel?net.minecraft.client.renderer.texture.OverlayTexture.NO_OVERLAY:super.getPackedOverlay(entity,white,partial);}
         private final ResourceLocation mesh;
 
         MeshBackedRenderer(EntityRendererProvider.Context context, LocalAddonGeoModel<T> model,

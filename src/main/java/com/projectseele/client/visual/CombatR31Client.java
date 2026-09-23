@@ -21,10 +21,32 @@ import java.util.*;
 @Mod.EventBusSubscriber(modid="projectseele",value=Dist.CLIENT)
 public final class CombatR31Client
 {
+    public record View(Vec3 position,Vec3 target) {}
+    public static View cameraView(float partial)
+    {
+        if(!CombatR31Review.ENABLED||!Boolean.getBoolean("projectseele.combatSideView"))return null;
+        var mc=Minecraft.getInstance();if(mc.level==null)return null;
+        var eva=mc.level.getEntity(CombatR31Review.evaId);var angel=mc.level.getEntity(CombatR31Review.angelId);if(eva==null||angel==null)return null;
+        Vec3 p=eva.getPosition(partial),q=angel.getPosition(partial),centre=p.lerp(q,.5).add(0,30,0);
+        double spread=Math.min(80,p.distanceTo(q)*.35);
+        return new View(centre.add(95+spread,45,-75-spread*.3),centre);
+    }
+    @SubscribeEvent public static void reviewFog(net.minecraftforge.client.event.ViewportEvent.RenderFog event)
+    {
+        if(CombatR31Review.ENABLED&&Boolean.getBoolean("projectseele.combatSideView"))
+        {event.setNearPlaneDistance(256);event.setFarPlaneDistance(768);event.setCanceled(true);}
+    }
     private static boolean started,oldPause,oldGui;private static int oldDistance,epoch,end;
     private static CameraType oldCamera;private static Path folder;private static String lastPhoto="";
     private static long nextFrame,lastWitness;private static int frame;
-    private static final JsonArray frames=new JsonArray(),hands=new JsonArray(),keys=new JsonArray(),normalBones=new JsonArray();
+    private static final JsonArray frames=new JsonArray(),hands=new JsonArray(),keys=new JsonArray(),normalBones=new JsonArray(),angelSoles=new JsonArray();
+    private static long lastAngelSole;
+    public static void angelSupport(net.minecraft.world.entity.LivingEntity actor,double lowest)
+    {
+        if(!CombatR31Review.ENABLED||actor.getId()!=CombatR31Review.angelId||CombatR31Review.done)return;
+        long now=System.nanoTime();if(now-lastAngelSole<80_000_000)return;lastAngelSole=now;
+        var row=new JsonObject();var beat=com.projectseele.entity.CombatFeelR31.beat(actor);row.addProperty("stage",CombatR31Review.stageName);row.addProperty("tick",CombatR31Review.stageTicks);row.addProperty("world_min_y",lowest);row.addProperty("root_y",actor.getY());row.addProperty("ground",actor.onGround());row.addProperty("reaction",beat==null?0:beat.kind());angelSoles.add(row);
+    }
     private static long boneAt;
     private static final Map<String,FrameStats> performance=new LinkedHashMap<>();
     private static long firstRender,lastRender,renderCount;
@@ -78,7 +100,7 @@ public final class CombatR31Client
         {
             try
             {
-                var output=new JsonObject();output.add("frames",frames);output.add("hand_contacts",hands);output.add("production_key_inputs",keys);output.addProperty("server_failure",CombatR31Review.failure);
+                var output=new JsonObject();output.add("frames",frames);output.add("hand_contacts",hands);output.add("production_key_inputs",keys);output.add("angel_draw_support",angelSoles);output.addProperty("server_failure",CombatR31Review.failure);
                 output.add("normal_bones",normalBones);output.add("render_performance",performance());Files.writeString(folder.resolve("render_performance.json"),new GsonBuilder().setPrettyPrinting().create().toJson(performance()));
                 Files.writeString(folder.resolve("client_evidence.json"),new GsonBuilder().setPrettyPrinting().create().toJson(output));
             }
@@ -106,9 +128,9 @@ public final class CombatR31Client
     private static JsonArray vector(Vec3 p){var a=new JsonArray();a.add(p.x);a.add(p.y);a.add(p.z);return a;}
     public static void normalWitness(EvaUnit01Entity eva,software.bernie.geckolib.cache.object.BakedGeoModel model,String point)
     {
-        if(!CombatR31Review.ENABLED||!CombatR31Review.NORMALS||eva.getId()!=CombatR31Review.evaId||CombatR31Review.done||normalBones.size()>3500)return;
+        if(!CombatR31Review.ENABLED||eva.getId()!=CombatR31Review.evaId||CombatR31Review.done||normalBones.size()>3500)return;
         long now=System.nanoTime();if(point.equals("before")&&now-boneAt<35_000_000)return;if(point.equals("before"))boneAt=now;else if(now-boneAt>25_000_000)return;
-        var row=new JsonObject();row.addProperty("stage",CombatR31Review.stageName);row.addProperty("tick",CombatR31Review.stageTicks);row.addProperty("point",point);row.addProperty("action",com.projectseele.entity.EvaCombatR31.action(eva));row.addProperty("ordinary",eva.getOrdinaryAttackStage());row.addProperty("live_phase",eva.combatPhaseR31());row.addProperty("ground",eva.onGround());row.addProperty("airborne",eva.isVisuallyAirborneForRender());row.addProperty("y",eva.getY());
+        var row=new JsonObject();row.addProperty("stage",CombatR31Review.stageName);row.addProperty("tick",CombatR31Review.stageTicks);row.addProperty("point",point);row.addProperty("action",com.projectseele.entity.EvaCombatR31.action(eva));row.addProperty("ordinary",eva.getOrdinaryAttackStage());row.addProperty("live_phase",eva.combatPhaseR31());row.addProperty("gameplay",com.projectseele.entity.EvaGameplayMotionR32.ready(eva));row.addProperty("gameplay_air_age",com.projectseele.entity.EvaGameplayMotionR32.airAge(eva,0));row.addProperty("ground",eva.onGround());row.addProperty("airborne",eva.isVisuallyAirborneForRender());row.addProperty("y",eva.getY());
         var beat=com.projectseele.entity.CombatFeelR31.beat(eva);row.addProperty("reaction",beat==null?0:beat.kind());
         var bones=new JsonObject();for(String n:List.of("root","torso_lower","torso_upper","head","arm_l","arm_r","forearm_l","forearm_r","wrist_l","wrist_r","hand_l","hand_r","leg_l","leg_r","shin_l","shin_r","ankle_l","ankle_r","foot_l","foot_r"))model.getBone(n).ifPresent(b->{var values=new JsonArray();for(float value:new float[]{b.getRotX(),b.getRotY(),b.getRotZ(),b.getPosX(),b.getPosY(),b.getPosZ(),b.getScaleX(),b.getScaleY(),b.getScaleZ()})values.add(value);bones.add(n,values);});row.add("bones",bones);normalBones.add(row);
     }
@@ -125,7 +147,7 @@ public final class CombatR31Client
             {try(var capture=net.minecraft.client.Screenshot.takeScreenshot(mc.getMainRenderTarget())){capture.writeToFile(folder.resolve(photo+".png"));}lastPhoto=photo;}
             long now=System.nanoTime();String stage=CombatR31Review.stageName;
             boolean video=Boolean.getBoolean("projectseele.combatVideo");
-            if(now>=nextFrame&&(stage.startsWith("normal_")||Set.of("air_strike","air_slam","reach","hold","throw","reaction").contains(stage))&&frames.size()<(video?1800:180))
+            if(now>=nextFrame&&(stage.startsWith("normal_")||Set.of("air_strike","air_slam","reach","hold","throw","reaction","duel").contains(stage))&&frames.size()<(video?1800:180))
             {
                 nextFrame=now+(video?41_666_667L:400_000_000L);String file=String.format(Locale.ROOT,"contact_%04d.jpg",frame++);
                 try(var capture=net.minecraft.client.Screenshot.takeScreenshot(mc.getMainRenderTarget())){NativeReviewFrames.writeJpeg(capture,folder.resolve(file));}

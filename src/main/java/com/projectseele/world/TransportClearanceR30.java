@@ -18,14 +18,22 @@ public final class TransportClearanceR30
     private static final TicketType<ChunkPos> AIRSPACE=TicketType.create("airlift_clearance_r30",java.util.Comparator.comparingLong(ChunkPos::toLong),120);
     public static String pickupProblem(ServerLevel level,EvaUnit01Entity eva)
     {
+        if(eva.hasLiveActionForRender(1)||com.projectseele.entity.EvaCombatR31.active(eva)||eva.isFirstBattleActive())
+            return "等待当前攻击动作结束后接载";
         var centre=new ChunkPos(eva.blockPosition());boolean loaded=true;
         level.getChunkSource().addRegionTicket(AIRSPACE,centre,8,centre);
         for(int x=centre.x-5;x<=centre.x+5;x++)for(int z=centre.z-4;z<=centre.z+4;z++)
-            if(!level.getChunkSource().hasChunk(x,z)){level.getChunkSource().getChunkFuture(x,z,ChunkStatus.FULL,true);loaded=false;}
+            if(!level.getChunkSource().hasChunk(x,z)){loaded=false;}
         if(!loaded)return "正在检查并加载起吊点上方空域";
         double top=level.getMaxBuildHeight(),x=eva.getX(),y=eva.getY(),z=eva.getZ(),radius=Math.max(11,eva.getBbWidth()/2D+2);
-        if(y<top&&level.getBlockCollisions(eva,new AABB(x-radius,y+.1,z-radius,x+radius,top,z+radius)).iterator().hasNext())
-            return "机体上方有遮挡，等待垂直起吊通道清空";
+        var pose=com.projectseele.entity.EvaBodyPose.sample(eva,1);
+        for(var part:com.projectseele.entity.EvaBodyPose.posedCarrierHulls(eva,pose))
+        {
+            AABB box=worldHull(eva,part);
+            double bottom=Math.max(y+.12,box.minY+.12);
+            if(bottom<top&&level.getBlockCollisions(eva,new AABB(box.minX,bottom,box.minZ,box.maxX,top,box.maxZ)).iterator().hasNext())
+                return "机体或四肢上方有遮挡，等待起吊通道清空";
+        }
         if(y+HOIST_OFFSET-15<top&&level.getBlockCollisions(eva,new AABB(x-72,y+HOIST_OFFSET-15,z-60,x+72,top,z+60)).iterator().hasNext())
             return "运输机机翼或吊架上方有遮挡，等待空域清空";
         return "";
@@ -52,4 +60,11 @@ public final class TransportClearanceR30
         return null;
     }
     private TransportClearanceR30() {}
+    private static AABB worldHull(EvaUnit01Entity eva,AABB local)
+    {
+        AABB result=null;float yaw=(180-eva.getYRot())*Mth.DEG_TO_RAD;
+        for(double x:new double[]{local.minX,local.maxX})for(double y:new double[]{local.minY,local.maxY})for(double z:new double[]{local.minZ,local.maxZ})
+        {var p=new org.joml.Vector3f((float)x,(float)y,(float)z).rotateY(yaw);Vec3 point=eva.position().add(p.x,p.y,p.z);var b=new AABB(point,point);result=result==null?b:result.minmax(b);}
+        return result;
+    }
 }

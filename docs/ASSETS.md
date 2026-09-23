@@ -307,3 +307,11 @@ Lux3D 原始网格、本地涂装与蒙皮处理、Pro 原始交付和 Blender �
 `data/projectseele/nerv_dialogue/profiles.json` 的 253 句为重新编写的项目原创中文对白，人物写法参考 TV 系列官方剧情介绍；具体来源和取舍见 [R31 对白记录](DIALOGUE_AUDIO_R31.md)。没有复制原剧完整台词。人物发言只显示文字。
 
 18 段设施广播由 `tools/build_facility_audio_r31.py` 使用标准 Microsoft Xiaoxiao 神经语音生成，原有事件名保持兼容，新增 `pa_combat_r31.ogg`。没有模仿具体演员、使用克隆音色或截取原剧录音。文本、参数、时长和 SHA-256 记录在本机 `artifacts/dialogue_audio_r31/sources.json`，样音为 `facility_pa_sample.mp3`。角色对白、设施广播和公共交通提示使用独立触发途径；R30 的角色报告语音已停止调用。
+
+
+## R32 gameplay motion (2026-09-23)
+
+- Haley Tuffles: https://haleytuffles.com/motioncapture — author permits any use; credit retained. Selected source actions: StanceBoxer, ArmsJabBoxer, ArmsSinglePunch, ArmsSimpleLariat, ArmsCloseRangePunch, ArmsGrappleKnockdown, LegsStomp, AerialSlapDownwards, LegsDivekickFightingGameInspired and SlapDownwards.
+- Quaternius Universal Animation Library, Standard free release: https://quaternius.com/packs/universalanimationlibrary.html — CC0. Uses Jump_Start, Jump_Loop, Jump_Land; the UAL2 free rig reference is decoded for calibration. No paid Source kit was acquired.
+- `tools/author_gameplay_motion_r32.py` retargets to five measured local EVA rigs and Sachiel. Generated private runtime profiles retain each selected source path and SHA-256. Source assets and the owner's model pack are not committed with this code update.
+- Runtime uses the actual pose for hit sweeps and maintains joint centres through blending. These are adapted motion performances, not animation assets taken from God of War, GTA V or official Evangelion footage.

@@ -50,13 +50,10 @@ public final class TvCampaignDirector
     public static EvaUnit01Entity combatEvaR30(ServerPlayer player)
     {
         var level=level(player);if(level==null)return EvaPilotResolver.controlTarget(player);var data=TvCampaignSavedData.get(level);
-        if(data.npcPilot&&!data.active.isEmpty())
-        {
-            var eva=EvaLogisticsDirector.canonicalUnit(level,data.assignedVariant);
-            return eva!=null&&eva.getPilotEntity() instanceof TrainingPilotEntity pilot&&pilot.getAssignedVariant()==data.assignedVariant?eva:null;
-        }
-        var eva=EvaPilotResolver.controlTarget(player);
-        return eva!=null&&(data.active.isEmpty()||eva.getUnitVariant()==data.assignedVariant)?eva:null;
+        if(data.active.isEmpty())return EvaPilotResolver.controlTarget(player);
+        Vec3 point=approachPointR30(level);
+        return data.sorties.values().stream().map(entry->TvSortiesR32.unit(level,entry.unit))
+                .filter(TvSortiesR32::ready).min(Comparator.comparingDouble(e->point==null?0:e.distanceToSqr(point))).orElse(null);
     }
 
     public static String briefing(ServerPlayer player)
@@ -67,22 +64,23 @@ public final class TvCampaignDirector
         { case "alert" -> "使徒信号确认中 · 总部进入战斗配置";case "approach" -> "作战已接受，等待出击机体抵达"; case "combat" -> "目标正在交战"; case "cancel" -> "正在解除目标登记"; default -> "记录暂停，请查看提示"; };
         return "TV 1995 · 第 " + chapter.episode() + " 话 / " + chapter.title() + "\n"
                 + (chapter.playable() ? "可执行作战" : "后续制作档案 · 尚不可开始") + " · 已归档 " + data.completed.size() + " 章\n"
-                + activity + "\n" + chapter.briefing().replace("东北迎击大道", CityBattlefieldR29.name(level)) + "\n" + CityBattlefieldR29.obstruction(level) + "\n" + data.notice;
+                + activity + "\n" + TvSortiesR32.roster(data) + "\n" + chapter.briefing().replace("东北迎击大道", CityBattlefieldR29.name(level)) + "\n" + CityBattlefieldR29.obstruction(level) + "\n" + data.notice;
     }
     public static int begin(ServerPlayer player)
     {return beginAssigned(player,1,false,false);}
     public static int beginAssigned(ServerPlayer player,int variant,boolean npc,boolean rifle)
     {
-        if(variant<0||variant>2)return message(player,"请选择零号机、初号机或二号机。",false);
+        if(variant<0||variant>4||npc&&variant>2)return message(player,"NPC 驾驶员对应零号机、初号机、二号机；UN 机体可由玩家加入。",false);
         if (!NervStaffDialogue.authorized(player)) return message(player, "作战下达需要 NERV 通行权限。", false);
         var level = level(player); if (level == null) return message(player, "本世界尚未配置作战区域。", false);
         if(npc&&player.level()!=level)return message(player,"请进入第三新东京市后下达驾驶员出击指令。",false);
         var data = TvCampaignSavedData.get(level); var chapter = selected(player,data);
-        if (!data.active.isEmpty()) return message(player, "已有作战正在执行。" + briefing(player), false);
+        if (!data.active.isEmpty()) return TvSortiesR32.reinforce(player,variant,npc,rifle);
         if (!chapter.playable()) return message(player, "这一章尚未制作完成。您可以从作战列表选择已制作的萨基尔或夏姆榭尔迎击。", false);
         var replay = FirstBattleSavedData.get(level);
         if (replay.active != null || replay.missionOwner != null) return message(player, "已有独立迎击或重播占用作战区，请先结束该行动。", false);
-        data.owner = player.getUUID(); data.active = chapter.id(); data.phase = "alert";data.assignedVariant=variant;data.npcPilot=npc;data.autoArmament=npc&&rifle;data.pilotDispatchRequested=false; data.alertStarted=level.getGameTime();data.alertLine=0;data.notice = "出击编成："+NervStaffDialogue.unitName(variant)+" · "+(npc?TrainingPilotEntity.pilotName(variant):"司令亲自驾驶"); data.angel = null; data.lastPosition = null; data.setDirty();
+        data.owner = player.getUUID(); data.active = chapter.id(); data.phase = "alert";data.assignedVariant=variant;data.npcPilot=npc;data.autoArmament=npc&&rifle;data.pilotDispatchRequested=false; data.alertStarted=level.getGameTime();data.alertLine=0;data.notice = "出击编成："+TvSortiesR32.name(variant)+" · "+(npc?TrainingPilotEntity.pilotName(variant):"司令亲自驾驶"); data.angel = null; data.lastPosition = null; data.setDirty();
+        data.assign(variant,player.getUUID(),npc,npc&&rifle);
         return message(player, "作战已接受。" + chapter.briefing().replace("东北迎击大道", CityBattlefieldR29.name(level)) + "\n" + CityBattlefieldR29.obstruction(level), true);
     }
     private static TvCampaignCatalog.Chapter selected(ServerPlayer player,TvCampaignSavedData data)
@@ -145,49 +143,13 @@ public final class TvCampaignDirector
     }
     private static void pilotContinuity(ServerLevel level,TvCampaignSavedData data)
     {
-        if(data.active.isEmpty()||data.owner==null||data.npcPilot)return;
-        var player=level.getServer().getPlayerList().getPlayer(data.owner);
-        if(player==null)return; // Logout detach must not overwrite the saved riding intent.
-        if(player.level()!=level){data.resumePending=false;data.wasRiding=false;data.setDirty();return;}
-        if(data.resumePending)
-        {
-            if(++data.resumeTicks>200)
-            {data.resumePending=false;data.wasRiding=false;data.notice="驾驶连接未恢复，请检查原机体与插入栓后重新登机。";data.setDirty();return;}
-            if(data.lastPosition!=null&&data.resumeTicks%10==1)load(level,data.lastPosition);
-            var actor=level.getEntity(data.pilotEva);var capsule=level.getEntity(data.pilotPlug);
-            if(!(actor instanceof EvaUnit01Entity eva)||!(capsule instanceof EntryPlugCarrierEntity plug))return;
-            if(player.isPassenger())
-            {data.resumePending=false;data.wasRiding=EvaPilotResolver.controlTarget(player)==eva;data.setDirty();return;}
-            if(EvaLogisticsDirector.canonicalUnit(level,1)!=eva||EntryPlugDirector.canonical(level,1)!=plug
-                    ||plug.getLinkedEva()!=eva||plug.getVehicle()!=eva||!plug.isLockedToEva()||!plug.isHatchFullySealed()
-                    ||eva.getPilotEntity()!=null||plug.isVehicle()||player.distanceToSqr(eva)>128*128||!NervStaffDialogue.authorized(player))
-            {data.resumePending=false;data.wasRiding=false;data.setDirty();return;}
-            if(player.startRiding(plug,true))
-            {
-                player.fallDistance=0;plug.syncPilotPositionNow();level.getChunkSource().move(player);
-                var packet=new net.minecraft.network.protocol.game.ClientboundSetPassengersPacket(plug);
-                level.getChunkSource().broadcastAndSend(plug,packet);player.connection.send(packet);
-                data.resumePending=false;data.wasRiding=true;data.setDirty();
-                ProjectSeele.LOGGER.info("TV CAMPAIGN restored original riding chain pilot={} eva={} plug={}",data.owner,data.pilotEva,data.pilotPlug);
-            }
-            return;
-        }
-        var eva=EvaPilotResolver.controlTarget(player);
-        boolean riding=eva!=null&&eva.getUnitVariant()==EvaUnit01Entity.UNIT_01&&!eva.isExperimentalUnit()
-                &&player.getVehicle() instanceof EntryPlugCarrierEntity plug&&plug.getLinkedEva()==eva;
-        if(riding)
-        {
-            var plug=(EntryPlugCarrierEntity)player.getVehicle();
-            if(!eva.getUUID().equals(data.pilotEva)||!plug.getUUID().equals(data.pilotPlug))
-            {data.pilotEva=eva.getUUID();data.pilotPlug=plug.getUUID();data.setDirty();}
-        }
-        if(data.wasRiding!=riding){data.wasRiding=riding;data.setDirty();}
+        TvSortiesR32.continuity(level,data);
     }
     @SubscribeEvent public static void protectReconnectingPilot(net.minecraftforge.event.entity.living.LivingAttackEvent event)
     {
         if(!(event.getEntity() instanceof ServerPlayer player)||!event.getSource().is(net.minecraft.tags.DamageTypeTags.IS_FALL))return;
         var data=TvCampaignSavedData.get(player.serverLevel());
-        if(data.resumePending&&data.wasRiding&&player.getUUID().equals(data.owner)&&data.resumeTicks<=200)event.setCanceled(true);
+        if(data.sorties.values().stream().anyMatch(s->s.resumePending&&s.wasRiding&&player.getUUID().equals(s.commander)&&s.resumeTicks<=200))event.setCanceled(true);
     }
     @SubscribeEvent public static void tick(TickEvent.ServerTickEvent event)
     {
@@ -201,6 +163,7 @@ public final class TvCampaignDirector
             var bar = BARS.computeIfAbsent(level, key -> new ServerBossEvent(Component.literal("TV 作战"), BossEvent.BossBarColor.RED, BossEvent.BossBarOverlay.PROGRESS));
             bar.removeAllPlayers();
             if (data.active.isEmpty()) continue;
+            TvSortiesR32.updateTarget(level,data);
             if(data.phase.equals("alert"))
             {
                 var commander=event.getServer().getPlayerList().getPlayer(data.owner);
@@ -232,6 +195,7 @@ public final class TvCampaignDirector
             var player = event.getServer().getPlayerList().getPlayer(data.owner);
             if (player == null || player.level() != level) continue;
             bar.addPlayer(player);
+            for(var participant:data.sorties.values()){var p=event.getServer().getPlayerList().getPlayer(participant.commander);if(p!=null&&p.level()==level)bar.addPlayer(p);}
             if (data.angel == null)
             {
                 var eva = combatEvaR30(player);
@@ -239,8 +203,7 @@ public final class TvCampaignDirector
                 bar.setName(Component.literal("第4使徒迎击 · 前往" + CityBattlefieldR29.name(level) + " / " + Math.round(distance) + " m")); bar.setProgress(1);
                 String blocked = CityBattlefieldR29.obstruction(level);
                 if (!blocked.isEmpty()) { bar.setName(Component.literal(blocked)); continue; }
-                if (eva == null || eva.getUnitVariant() != data.assignedVariant || eva.isExperimentalUnit()
-                        || eva.isNervLogisticsLocked() || !eva.isPoweredOn() || distance > 90) continue;
+                if (!TvSortiesR32.ready(eva) || distance > 90) continue;
                 load(level, BlockPos.containing(site.angel));
                 if(!level.isPositionEntityTicking(BlockPos.containing(site.angel)))continue;
                 if(!level.getEntitiesOfClass(ShamshelEntity.class,new net.minecraft.world.phys.AABB(site.angel,site.angel).inflate(180),
@@ -259,7 +222,7 @@ public final class TvCampaignDirector
             {
                 MISSING.remove(level);
                 if (!angel.blockPosition().equals(data.lastPosition)) { data.lastPosition = angel.blockPosition(); data.setDirty(); }
-                var eva = combatEvaR30(player); if (eva != null) angel.setTarget(eva);
+                TvSortiesR32.updateTarget(level,data);
                 float field = angel.getAtField();
                 bar.setName(Component.literal("第4使徒 夏姆榭尔 · " + (field > 0 ? "AT 力场 " + Math.round(field) : "核心 " + Math.round(100 * angel.getHealth() / angel.getMaxHealth()) + "%")));
                 bar.setProgress(Math.max(0, Math.min(1, field > 0 ? field / 700 : angel.getHealth() / angel.getMaxHealth())));

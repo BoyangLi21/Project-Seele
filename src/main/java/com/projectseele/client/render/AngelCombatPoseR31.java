@@ -16,11 +16,15 @@ public final class AngelCombatPoseR31
         void write(GeoBone b){b.setRotX(x);b.setRotY(y);b.setRotZ(z);b.setPosX(px);b.setPosY(py);b.setPosZ(pz);b.setScaleX(sx);b.setScaleY(sy);b.setScaleZ(sz);}
     }
     private static final Map<BakedGeoModel,Map<String,Pose>> BASE=new WeakHashMap<>();
-    private static final Map<LivingEntity,Frame> FRAMES=new WeakHashMap<>();
+    private static final com.projectseele.util.WeakIdentityMap<LivingEntity,Frame> FRAMES=new com.projectseele.util.WeakIdentityMap<>();
     private static final class Frame {Map<String,Pose> last=Map.of(),held=Map.of();long beat=-1;}
     private static boolean handles(LivingEntity actor){return actor instanceof SachielEntity||actor instanceof ShamshelEntity;}
     static boolean needsGroundSupport(LivingEntity actor)
-    {var beat=CombatFeelR31.beat(actor);return handles(actor)&&actor.onGround()&&beat!=null&&beat.kind()==CombatFeelR31.DOWN;}
+    {
+        var beat=CombatFeelR31.beat(actor);if(!handles(actor)||beat==null||beat.kind()!=CombatFeelR31.DOWN)return false;
+        if(actor.onGround())return true;
+        var b=actor.getBoundingBox();return actor.level().getBlockCollisions(actor,new net.minecraft.world.phys.AABB(b.minX+.1,b.minY-.15,b.minZ+.1,b.maxX-.1,b.minY+.01,b.maxZ-.1)).iterator().hasNext();
+    }
     private static void visit(GeoBone bone,java.util.function.Consumer<GeoBone> action){action.accept(bone);bone.getChildBones().forEach(b->visit(b,action));}
     private static Map<String,Pose> capture(BakedGeoModel model){Map<String,Pose> result=new HashMap<>();model.topLevelBones().forEach(b->visit(b,v->result.put(v.getName(),Pose.read(v))));return result;}
     private static void write(BakedGeoModel model,Map<String,Pose> poses){poses.forEach((name,p)->model.getBone(name).ifPresent(p::write));}

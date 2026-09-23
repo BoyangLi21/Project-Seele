@@ -24,6 +24,7 @@ public final class EvaCombatR31
     public static final int NONE=0,AIR_STRIKE=1,AIR_SLAM=2,REACH=3,HOLD=4,THROW=5,LAND=6;
     private static final EntityDataAccessor<Integer> ACTION=SynchedEntityData.defineId(EvaUnit01Entity.class,EntityDataSerializers.INT);
     private static final EntityDataAccessor<Long> SINCE=SynchedEntityData.defineId(EvaUnit01Entity.class,EntityDataSerializers.LONG);
+    private static final EntityDataAccessor<Long> STROKE=SynchedEntityData.defineId(EvaUnit01Entity.class,EntityDataSerializers.LONG);
     private static final EntityDataAccessor<Integer> TARGET=SynchedEntityData.defineId(EvaUnit01Entity.class,EntityDataSerializers.INT);
     private static final EntityDataAccessor<org.joml.Vector3f> APPROACH_FROM=SynchedEntityData.defineId(EvaUnit01Entity.class,EntityDataSerializers.VECTOR3);
     private static final EntityDataAccessor<org.joml.Vector3f> APPROACH_TO=SynchedEntityData.defineId(EvaUnit01Entity.class,EntityDataSerializers.VECTOR3);
@@ -31,7 +32,8 @@ public final class EvaCombatR31
     private static final WeakIdentityMap<EvaUnit01Entity,Runtime> STATES=new WeakIdentityMap<>();
     private static final class Runtime {boolean contact,airborne;Vec3 previousContact;int cooldown;}
     public static boolean bootstrap(){return true;}
-    public static void define(SynchedEntityData d){d.define(ACTION,NONE);d.define(SINCE,0L);d.define(TARGET,-1);d.define(APPROACH_FROM,new org.joml.Vector3f());d.define(APPROACH_TO,new org.joml.Vector3f());d.define(FACING,0F);}
+    public static void define(SynchedEntityData d){d.define(ACTION,NONE);d.define(SINCE,0L);d.define(STROKE,-1L);d.define(TARGET,-1);d.define(APPROACH_FROM,new org.joml.Vector3f());d.define(APPROACH_TO,new org.joml.Vector3f());d.define(FACING,0F);}
+    public static float strokeAge(EvaUnit01Entity e,float partial){long t=e.getEntityData().get(STROKE);return t<0?-1:e.level().getGameTime()-t+partial;}
     public static int action(EvaUnit01Entity e){return e.getEntityData().get(ACTION);}
     public static float age(EvaUnit01Entity e,float partial){return (float)((e.level().getGameTime()-e.getEntityData().get(SINCE))+(double)partial);}
     public static boolean active(EvaUnit01Entity e){return action(e)!=NONE;}
@@ -54,7 +56,7 @@ public final class EvaCombatR31
     public static LivingEntity target(EvaUnit01Entity e){return e.level().getEntity(e.getEntityData().get(TARGET)) instanceof LivingEntity t?t:null;}
     private static Vec3 forward(EvaUnit01Entity e){Vec3 v=e.getForward().multiply(1,0,1);return v.lengthSqr()<1e-8?new Vec3(0,0,1):v.normalize();}
     private static void start(EvaUnit01Entity e,int action,LivingEntity target)
-    {e.getEntityData().set(ACTION,action);e.getEntityData().set(SINCE,e.level().getGameTime());e.getEntityData().set(TARGET,target==null?-1:target.getId());var s=STATES.computeIfAbsent(e,k->new Runtime());s.contact=false;s.previousContact=null;}
+    {e.getEntityData().set(ACTION,action);e.getEntityData().set(SINCE,e.level().getGameTime());e.getEntityData().set(STROKE,-1L);e.getEntityData().set(TARGET,target==null?-1:target.getId());var s=STATES.computeIfAbsent(e,k->new Runtime());s.contact=false;s.previousContact=null;}
     public static void clear(EvaUnit01Entity e)
     {if(!e.level().isClientSide){e.getEntityData().set(ACTION,NONE);e.getEntityData().set(TARGET,-1);}STATES.remove(e);}
     private static boolean available(EvaUnit01Entity e)
@@ -119,6 +121,7 @@ public final class EvaCombatR31
     }
     public static Vec3 aerialHand(EvaUnit01Entity e,float partial)
     {
+        if(EvaGameplayMotionR32.ready(e))return EvaGameplayMotionR32.airContact(e,partial);
         double p=Mth.clamp(age(e,partial)/20,0,1);Vec3 f=forward(e),r=f.cross(new Vec3(0,1,0));
         double drive=CombatMotionR29.ease((p-.22)/.36);
         var desired=e.getPosition(partial).add(0,e.getBbHeight()*(.84-.22*drive),0).add(f.scale(5+17*drive)).add(r.scale(4*(1-drive)));
@@ -134,7 +137,14 @@ public final class EvaCombatR31
         if(a==AIR_STRIKE||a==AIR_SLAM)
         {
             if(!e.onGround())s.airborne=true;
-            if(a==AIR_STRIKE&&age>=6&&age<=18&&!s.contact)
+            boolean motion=EvaGameplayMotionR32.ready(e);
+            boolean falling=EvaGameplayMotionR32.descending(e);
+            boolean strikeHeight=victim==null?EvaGameplayMotionR32.clearance(e,0)<=38:e.getY()<=victim.getBoundingBox().maxY-e.getBbHeight()*.40;
+            if(motion&&strokeAge(e,0)<0&&age>=4&&(a==AIR_STRIKE?falling&&strikeHeight:falling||age>=16))
+            {e.getEntityData().set(STROKE,e.level().getGameTime());e.playSound(ModSounds.EVA_SWING.get(),2.6F,a==AIR_SLAM?.58F:.75F);}
+            float stroke=strokeAge(e,0);
+            boolean window=motion?stroke>=0&&(a==AIR_SLAM||stroke<=9):a==AIR_STRIKE&&age>=6&&age<=18;
+            if(window&&!s.contact)
             {
                 Vec3 hand=aerialHand(e,1),previous=s.previousContact==null?hand:s.previousContact;
                 com.projectseele.visual.CombatR31Review.aerialContact(e,previous,hand);
@@ -146,13 +156,13 @@ public final class EvaCombatR31
                     var box=t.getBoundingBox().inflate(2);var clipped=box.clip(previous,hand);if(clipped.isEmpty()&&!box.contains(previous))continue;
                     Vec3 hit=clipped.orElse(previous);
                     if(e.distanceTo(t)<45&&visible(e,previous,hit))
-                    {s.contact=EvaHitFeedback.hurt(t,e.damageSources().mobAttack(e),35,hit,forward(e));if(s.contact)break;}
+                    {Vec3 impulse=hand.subtract(previous).normalize().scale(.35).add(forward(e).scale(.65)).normalize();s.contact=EvaHitFeedback.hurt(t,e.damageSources().mobAttack(e),35,hit,impulse);if(s.contact)break;}
                 }
                 s.previousContact=hand;
             }
-            if(e.onGround()&&s.airborne&&age>3)
+            if(e.onGround()&&s.airborne&&age>0)
             {
-                if(a==AIR_SLAM)slam(e);start(e,LAND,null);return;
+                if(a==AIR_SLAM){if(motion)landingDust(e);else slam(e);}start(e,LAND,null);return;
             }
             if(age>150)clear(e);return;
         }
@@ -203,6 +213,13 @@ public final class EvaCombatR31
         l.sendParticles(ParticleTypes.POOF,centre.x,centre.y+1,centre.z,30,7,.5,7,.2);
         l.playSound(null,e.blockPosition(),ModSounds.EVA_IMPACT.get(),SoundSource.PLAYERS,7,.58F);
         CombatFeelR31.send(e,CombatFeelR31.CONTACT,forward(e),1.25F,9,2);
+    }
+    private static void landingDust(EvaUnit01Entity e)
+    {
+        var l=(ServerLevel)e.level();var p=e.position();var floor=l.getBlockState(e.blockPosition().below());
+        l.sendParticles(new BlockParticleOption(ParticleTypes.BLOCK,floor),p.x,p.y+.3,p.z,50,5,.25,5,.12);
+        l.playSound(null,e.blockPosition(),ModSounds.EVA_IMPACT.get(),SoundSource.PLAYERS,5,.62F);
+        CombatFeelR31.send(e,CombatFeelR31.CONTACT,forward(e),.9F,6,1);
     }
     private EvaCombatR31() {}
 }

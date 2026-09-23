@@ -8,23 +8,22 @@ import java.util.*;
 /** Sweeps both ends of every angular substep, including the aircraft's turn. */
 final class AirCradleClearanceR31
 {
-    private static Vec3 point(Vec3 root,Vec3 local,float pitch,float yaw)
+    private static Vec3 point(EvaUnit01Entity eva,Vec3 root,Vec3 local,float pitch,float yaw)
     {
-        double a=-pitch*Mth.DEG_TO_RAD,c=Math.cos(a),s=Math.sin(a);
-        double y=local.y-EvaAirTransportR31.HIP_HEIGHT;
-        double py=y*c-local.z*s+EvaAirTransportR31.HIP_HEIGHT+EvaAirTransportR31.lift(pitch);
-        double pz=y*s+local.z*c;double heading=(180-yaw)*Mth.DEG_TO_RAD;
-        return root.add(local.x*Math.cos(heading)+pz*Math.sin(heading),py,-local.x*Math.sin(heading)+pz*Math.cos(heading));
+        var p=EvaAirTransportR31.transformLocal(eva,local,pitch);
+        double heading=(180-yaw)*Mth.DEG_TO_RAD;
+        return root.add(p.x*Math.cos(heading)+p.z*Math.sin(heading),p.y,-p.x*Math.sin(heading)+p.z*Math.cos(heading));
     }
-    private static AABB transformed(AABB box,Vec3 root,float pitch,float yaw)
+    private static AABB transformed(EvaUnit01Entity eva,AABB box,Vec3 root,float pitch,float yaw)
     {
         double x0=Double.POSITIVE_INFINITY,y0=x0,z0=x0,x1=Double.NEGATIVE_INFINITY,y1=x1,z1=x1;
         for(double x:new double[]{box.minX,box.maxX})for(double y:new double[]{box.minY,box.maxY})for(double z:new double[]{box.minZ,box.maxZ})
-        {var p=point(root,new Vec3(x,y,z),pitch,yaw);x0=Math.min(x0,p.x);y0=Math.min(y0,p.y);z0=Math.min(z0,p.z);x1=Math.max(x1,p.x);y1=Math.max(y1,p.y);z1=Math.max(z1,p.z);}
+        {var p=point(eva,root,new Vec3(x,y,z),pitch,yaw);x0=Math.min(x0,p.x);y0=Math.min(y0,p.y);z0=Math.min(z0,p.z);x1=Math.max(x1,p.x);y1=Math.max(y1,p.y);z1=Math.max(z1,p.z);}
         return new AABB(x0,y0,z0,x1,y1,z1);
     }
     private static List<AABB> sections(EvaUnit01Entity eva)
     {
+        if(EvaAirTransportR31.adaptive(eva))return EvaBodyPose.posedCarrierHulls(eva,EvaAirTransportR31.origin(eva));
         List<AABB> measured=EvaBodyPose.carrierHulls(eva),result=new ArrayList<>();
         double fallback=Math.max(11,eva.getBbWidth()/2D+1.5);
         for(int i=0;i<4;i++)
@@ -44,9 +43,9 @@ final class AirCradleClearanceR31
     {
         if(Math.abs(pitch)>.5F)return List.of();
         var contacts=new ArrayList<AABB>();var heights=new ArrayList<Double>();
-        for(var hull:EvaBodyPose.carrierHulls(eva))if(hull.minY<.2&&hull.maxY<2.1)
+        for(var hull:sections(eva))if(hull.minY<.25)
         {
-            var sole=transformed(new AABB(hull.minX,Math.max(0,hull.minY),hull.minZ,hull.maxX,Math.max(0,hull.minY)+.01,hull.maxZ),root,pitch,yaw);
+            var sole=transformed(eva,new AABB(hull.minX,Math.max(0,hull.minY),hull.minZ,hull.maxX,Math.max(0,hull.minY)+.01,hull.maxZ),root,pitch,yaw);
             contacts.add(new AABB(sole.minX,sole.minY-.16,sole.minZ,sole.maxX,sole.minY+.16,sole.maxZ));
         }
         if(contacts.isEmpty())
@@ -72,12 +71,13 @@ final class AirCradleClearanceR31
         float startPitch=EvaAirTransportR31.active(eva)?EvaAirTransportR31.acceptedPitch(eva):0;
         float endPitch=EvaAirTransportR31.active(eva)?EvaAirTransportR31.pitch(eva,0):0;
         float startYaw=eva.getYRot(),turn=Mth.wrapDegrees(targetYaw-startYaw);
-        int pitchSteps=Math.max(1,Mth.ceil(Math.abs(endPitch-startPitch)/.5F));
+        float rotationRatio=EvaAirTransportR31.adaptive(eva)?2:1;
+        int pitchSteps=Math.max(1,Mth.ceil(Math.abs(endPitch-startPitch)*rotationRatio/.5F));
         int yawSteps=Math.max(1,Mth.ceil(Math.abs(turn)/.5F));
         var root=eva.position();var contacts=initialSupports(eva,root,startPitch,startYaw);var shapes=sections(eva);
         // Pitch, heading and translation have different easing clocks. Cover
         // their product interval instead of assuming they share one parameter.
-        double arc=(Math.abs(endPitch-startPitch)/pitchSteps+Math.abs(turn)/yawSteps)*Mth.DEG_TO_RAD;
+        double arc=(Math.abs(endPitch-startPitch)*rotationRatio/pitchSteps+Math.abs(turn)/yawSteps)*Mth.DEG_TO_RAD;
         double pad=.012+140*arc*arc/8;
         for(int ip=0;ip<pitchSteps;ip++)for(int iy=0;iy<yawSteps;iy++)
         {
@@ -85,14 +85,31 @@ final class AirCradleClearanceR31
             float ya=startYaw+turn*iy/yawSteps,yb=startYaw+turn*(iy+1)/yawSteps;
             for(var local:shapes)
             {
-                AABB sweep=transformed(local,root,pa,ya).minmax(transformed(local,root,pa,yb))
-                        .minmax(transformed(local,root,pb,ya)).minmax(transformed(local,root,pb,yb))
+                AABB sweep=transformed(eva,local,root,pa,ya).minmax(transformed(eva,local,root,pa,yb))
+                        .minmax(transformed(eva,local,root,pb,ya)).minmax(transformed(eva,local,root,pb,yb))
                         .expandTowards(delta).inflate(pad);
+                if(sweep.minY>=eva.level().getMaxBuildHeight()||sweep.maxY<eva.level().getMinBuildHeight())continue;
                 for(var collision:eva.level().getBlockCollisions(eva,sweep))for(var box:collision.toAabbs())
                     if(box.intersects(sweep)&&!existingSupport(box,contacts)){EvaAirTransportR31.holdAtPitch(eva,startPitch);return false;}
             }
         }
         EvaAirTransportR31.acceptPitch(eva,endPitch);return true;
+    }
+    static float landingYaw(EvaUnit01Entity eva,Vec3 destination,float preferred)
+    {
+        for(float yaw:new float[]{preferred,preferred+90,preferred-90,preferred+180})
+        {
+            boolean clear=true;
+            for(var local:sections(eva))
+            {
+                var hull=transformed(eva,local,destination,0,yaw).inflate(.03);
+                for(var shape:eva.level().getBlockCollisions(eva,hull))for(var box:shape.toAabbs())
+                    if(box.maxY>destination.y+.18&&box.intersects(hull)){clear=false;break;}
+                if(!clear)break;
+            }
+            if(clear)return yaw;
+        }
+        return Float.NaN;
     }
     private AirCradleClearanceR31() {}
 }

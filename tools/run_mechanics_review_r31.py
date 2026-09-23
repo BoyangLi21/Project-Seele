@@ -9,7 +9,7 @@ WORLD='SEELE_FIELD_R31_REVIEW'
 
 def main():
     ap=argparse.ArgumentParser();ap.add_argument('--prepared-file',type=Path,default=ROOT/'.Codex/client-launch-r17.json');ap.add_argument('--prepare-only',action='store_true');ap.add_argument('--transport',action='store_true',help='Also run one original UN00 horizontal delivery; no long recovery loop.');ap.add_argument('--transport-only',action='store_true',help='Verify original UN00 identity and reset, then run only its normal horizontal delivery.')
-    a=ap.parse_args();world=ROOT/'run/saves'/WORLD
+    ap.add_argument('--wreck-pickup',action='store_true');a=ap.parse_args();world=ROOT/'run/saves'/WORLD
     if not (world/'level.dat').is_file():raise FileNotFoundError(WORLD+' must already exist as an isolated copy')
     pack=ROOT/'run/resourcepacks/eva_un_r31_review'
     required=[pack/'pack.mcmeta',ROOT/'run/projectseele-local-maps/eva_body_r31_review.json',ROOT/'run/projectseele-local-maps/eva_dorsal_r31_review.json']
@@ -17,7 +17,7 @@ def main():
         if not file.is_file():raise FileNotFoundError(file)
     source=json.loads(a.prepared_file.read_text(encoding='utf8'));command=source['command']
     if Path(source['workingDirectory']).resolve()!=(ROOT/'run').resolve():raise ValueError('Unexpected game working directory')
-    properties={'regionalBuild':'r31-mechanics','mechanicsTransport':str(a.transport or a.transport_only).lower(),'mechanicsTransportOnly':str(a.transport_only).lower(),'bodyPoseReview':'projectseele-local-maps/eva_body_r31_review.json','dorsalPoseReview':'projectseele-local-maps/eva_dorsal_r31_review.json'}
+    properties={'regionalBuild':'r31-mechanics','mechanicsWreckPickup':str(a.wreck_pickup).lower(),'mechanicsTransport':str(a.transport or a.transport_only).lower(),'mechanicsTransportOnly':str(a.transport_only).lower(),'bodyPoseReview':'projectseele-local-maps/eva_body_r31_review.json','dorsalPoseReview':'projectseele-local-maps/eva_dorsal_r31_review.json'}
     command=[arg for arg in command if not any(arg.startswith('-Dprojectseele.'+key+'=') for key in properties)]
     for key,value in properties.items():command.insert(1,'-Dprojectseele.'+key+'='+value)
     if '--quickPlaySingleplayer' in command:command[command.index('--quickPlaySingleplayer')+1]=WORLD

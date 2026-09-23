@@ -5,6 +5,7 @@ import net.minecraft.network.syncher.*;
 import net.minecraft.util.Mth;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Quaternionf;
+import org.joml.Matrix3f;
 import org.joml.Vector3f;
 
 /** The airframe and its original capsule share this persisted rotating cradle frame. */
@@ -23,16 +24,37 @@ public final class EvaAirTransportR31
     public static void begin(EvaUnit01Entity eva)
     {
         if (eva.level().isClientSide || active(eva)) return;
-        CompoundTag origin = EvaShutdownR30.disabled(eva) && !EvaShutdownR30.pose(eva).isEmpty()
-                ? EvaShutdownR30.pose(eva).copy() : EvaShutdownR30.encode(EvaBodyPose.sample(eva, 1));
+        // Sample the displayed collapse, including its intermediate pose, before taking the lock.
+        var pose=EvaBodyPose.sample(eva,1);
+        CompoundTag origin = EvaShutdownR30.encode(pose);
         CompoundTag tag = new CompoundTag();
         tag.putBoolean("Active", true);
         tag.put("Origin", origin);
         tag.putLong("Since", eva.level().getGameTime());
         tag.putInt("Duration", 1);
+        tag.putBoolean("Adaptive",true);
+        tag.putBoolean("Prone",eva.isPilotProne());tag.putBoolean("Crouch",eva.isPilotCrouching());
+        seedFrame(tag,pose);
         eva.getEntityData().set(FRAME, tag);
         eva.getPersistentData().putFloat("R31AirAcceptedPitch",0);
-        eva.stowHandsForShutdownR30();
+        eva.disconnectForAirliftR32();
+    }
+
+    private static void seedFrame(CompoundTag tag,EvaBodyPose.Sample pose)
+    {
+        var chest=pose.matrix("torso_lower");var centre=chest.transformPosition(new Vector3f(pose.rig.get("torso_lower").pivot())).mul(EvaScale.RENDER_SCALE);
+        tag.putFloat("HipX",centre.x);tag.putFloat("HipY",centre.y);tag.putFloat("HipZ",centre.z);
+        var current=chest.getUnnormalizedRotation(new Quaternionf()).normalize();
+        var longAxis=current.transform(new Vector3f(0,1,0));
+        var up=new Vector3f(longAxis.x,0,longAxis.z);
+        if(up.lengthSquared()<.5F)up.set(0,0,-1);else up.normalize();
+        var back=new Vector3f(0,1,0);
+        var right=new Vector3f(up).cross(back).normalize();
+        // A fallen load rolls about its length to face down; it must not pass
+        // through an upright pose just to match the aircraft's preferred heading.
+        var goal=new Quaternionf().setFromNormalized(new Matrix3f().setColumn(0,right).setColumn(1,up).setColumn(2,back));
+        var delta=goal.mul(new Quaternionf(current).invert()).normalize();
+        tag.putFloat("TurnX",delta.x);tag.putFloat("TurnY",delta.y);tag.putFloat("TurnZ",delta.z);tag.putFloat("TurnW",delta.w);
     }
 
     public static void transition(EvaUnit01Entity eva, float pitch, float restraint, int duration)
@@ -41,7 +63,7 @@ public final class EvaAirTransportR31
         begin(eva);
         CompoundTag tag = eva.getEntityData().get(FRAME).copy();
         boolean releasing=tag.getBoolean("Release");
-        if(releasing)tag.put("Origin",EvaShutdownR30.encode(EvaBodyPose.sample(eva,0)));
+        if(releasing){var current=EvaBodyPose.sample(eva,0);tag.put("Origin",EvaShutdownR30.encode(current));seedFrame(tag,current);}
         tag.remove("Release");tag.remove("ReleaseFrom");tag.remove("ReleaseTo");tag.remove("ReleaseHeld");
         tag.putFloat("FromPitch", releasing?0:pitch(eva, 0));
         tag.putFloat("FromRestraint", releasing?0:restraint(eva, 0));
@@ -131,26 +153,17 @@ public final class EvaAirTransportR31
         {
             EvaShutdownR30.decode(tag.getCompound("ReleaseFrom"),result);var target=new EvaBodyPose.Sample(result.rig);EvaShutdownR30.decode(tag.getCompound("ReleaseTo"),target);
             float t=EvaDorsalMechanism.smooth((float)((eva.level().getGameTime()-tag.getLong("Since")+(double)partial)/Math.max(1,tag.getInt("Duration"))));
-            for(String name:result.rig.keySet()){result.rotations.get(name).slerp(target.rotations.get(name),t);result.positions.get(name).lerp(target.positions.get(name),t);}result.dirty();return result;
+            for(String name:result.rig.keySet()){result.rotations.get(name).slerp(target.rotations.get(name),t);result.positions.get(name).lerp(target.positions.get(name),t);}EvaBodyPose.preserveJointCentres(result);result.dirty();return result;
         }
         EvaShutdownR30.decode(tag.getCompound("Origin"), result);
-        float weight = restraint(eva, partial);
-        for (var bone : result.rig.values())
-        {
-            Quaternionf rest = bone.name().contains("_axis_") ? new Quaternionf(bone.bindRotation()) : new Quaternionf();
-            if (bone.name().equals("head")) rest.rotateX(.07F);
-            if (bone.name().equals("forearm_l") || bone.name().equals("forearm_r")) rest.rotateX(.08F);
-            result.rotations.get(bone.name()).slerp(rest, weight);
-            result.positions.get(bone.name()).lerp(new Vector3f(), weight);
-        }
         float angle = pitch(eva, partial);
-        Quaternionf turn = new Quaternionf().rotationX(-angle * Mth.DEG_TO_RAD);
-        Vector3f hinge = new Vector3f(0, HIP_HEIGHT / EvaScale.RENDER_SCALE, 0);
+        Quaternionf turn = rotation(eva,angle);
+        Vector3f hinge = hinge(eva).div(EvaScale.RENDER_SCALE);
         Vector3f rootPivot = result.rig.get("root").pivot();
         Vector3f rootPos = result.positions.get("root");
         rootPos.add(rootPivot).sub(hinge);
         turn.transform(rootPos);
-        rootPos.add(hinge).sub(rootPivot).add(0, lift(angle) / EvaScale.RENDER_SCALE, 0);
+        rootPos.add(hinge).sub(rootPivot).add(translation(eva,angle).div(EvaScale.RENDER_SCALE));
         result.rotations.put("root", turn.mul(result.rotations.get("root")));
         result.dirty();
         return result;
@@ -159,13 +172,31 @@ public final class EvaAirTransportR31
     /** Cradle-local metres to the actual moving assembly's world coordinates. */
     public static Vec3 point(EvaUnit01Entity eva, Vec3 local, float partial)
     {
-        float angle = pitch(eva, partial);
-        Vector3f p = new Vector3f((float)local.x, (float)local.y-HIP_HEIGHT, (float)local.z);
-        new Quaternionf().rotationX(-angle*Mth.DEG_TO_RAD).transform(p);
-        p.add(0, HIP_HEIGHT+lift(angle), 0);
+        Vector3f p = transformLocal(eva,local,pitch(eva,partial));
         p.rotateY((180-frameYaw(eva,partial))*Mth.DEG_TO_RAD);
         Vec3 root = framePosition(eva,partial);
         return root.add(p.x,p.y,p.z);
     }
+    public static boolean adaptive(EvaUnit01Entity eva){return eva.getEntityData().get(FRAME).getBoolean("Adaptive");}
+    public static EvaBodyPose.Sample origin(EvaUnit01Entity eva)
+    {var sample=EvaBodyPose.neutralForTransportR32(eva);EvaShutdownR30.decode(eva.getEntityData().get(FRAME).getCompound("Origin"),sample);return sample;}
+    private static Vector3f hinge(EvaUnit01Entity eva)
+    {var t=eva.getEntityData().get(FRAME);return adaptive(eva)?new Vector3f(t.getFloat("HipX"),t.getFloat("HipY"),t.getFloat("HipZ")):new Vector3f(0,HIP_HEIGHT,0);}
+    public static Quaternionf rotation(EvaUnit01Entity eva,float angle)
+    {
+        var t=eva.getEntityData().get(FRAME);if(!adaptive(eva))return new Quaternionf().rotationX(-angle*Mth.DEG_TO_RAD);
+        return new Quaternionf().slerp(new Quaternionf(t.getFloat("TurnX"),t.getFloat("TurnY"),t.getFloat("TurnZ"),t.getFloat("TurnW")),Mth.clamp(angle/90F,0,1));
+    }
+    private static Vector3f translation(EvaUnit01Entity eva,float angle)
+    {return adaptive(eva)?new Vector3f(0,HIP_HEIGHT+STOW_LIFT,0).sub(hinge(eva)).mul(angle/90F):new Vector3f(0,lift(angle),0);}
+    public static Vector3f transformLocal(EvaUnit01Entity eva,Vec3 local,float angle)
+    {var h=hinge(eva);return rotation(eva,angle).transform(new Vector3f((float)local.x,(float)local.y,(float)local.z).sub(h)).add(h).add(translation(eva,angle));}
+    public static Vec3 contact(EvaUnit01Entity eva,String bone,float partial)
+    {
+        var pose=origin(eva);var p=pose.matrix(bone).transformPosition(new Vector3f(pose.rig.get(bone).pivot())).mul(EvaScale.RENDER_SCALE);
+        return point(eva,new Vec3(p.x,p.y,p.z),partial);
+    }
+    public static boolean pickupProne(EvaUnit01Entity eva){return eva.getEntityData().get(FRAME).getBoolean("Prone");}
+    public static boolean pickupCrouch(EvaUnit01Entity eva){return eva.getEntityData().get(FRAME).getBoolean("Crouch");}
     private EvaAirTransportR31() {}
 }

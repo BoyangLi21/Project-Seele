@@ -45,7 +45,8 @@ public final class FirstBattleDirector
         if(occupant instanceof com.projectseele.entity.TrainingPilotEntity)
         {
             var campaign=com.projectseele.world.TvCampaignSavedData.get(level);
-            if(campaign.npcPilot&&campaign.active.equals("sachiel")&&campaign.assignedVariant==1&&campaign.owner!=null)pilot=level.getServer().getPlayerList().getPlayer(campaign.owner);
+            var sortie=campaign.sorties.get(1);
+            if(sortie!=null&&sortie.npc&&campaign.active.equals("sachiel"))pilot=level.getServer().getPlayerList().getPlayer(sortie.commander);
         }
         if(pilot==null||eva.getUnitVariant()!=EvaUnit01Entity.UNIT_01||eva.isExperimentalUnit()||eva.isNervLogisticsLocked()||eva.isLaunchSequenceActive()||eva.isCrucified()||!eva.isPoweredOn())return false;
         if(eva.isPilotProne()||eva.isPilotCrouching()||eva.getWeapon()==EvaUnit01Entity.WEAPON_N2||angel.hasUsedFirstBattle())return false;
@@ -184,7 +185,7 @@ public final class FirstBattleDirector
                 if(record.age>=FirstBattleClip.DEATH_TICK&&!record.deathResolved)finishAngel(level,data,eva,angel,pilot);
                 if(record.age>=FirstBattleClip.DURATION_TICKS)
                 {
-                    TvCampaignDirector.firstBattleComplete(level,record.pilot,record.angel);
+                    TvCampaignDirector.firstBattleComplete(level,data.missionOwner==null?record.pilot:data.missionOwner,record.angel);
                     eva.completeFirstBattle();if(angel!=null)angel.endFirstBattle();
                     publishControlReturn(level,eva,pilot);if(angel!=null)publishState(level,angel,pilot);
                     data.completedPilots.add(pilot.getUUID());data.active=null;data.missionOwner=null;data.missionAngel=null;release(level);

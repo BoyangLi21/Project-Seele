@@ -25,7 +25,7 @@ public final class UNPlugDirector
     {
         CompoundTag data=eva.getPersistentData();
         if(!(eva.level() instanceof ServerLevel level)||!data.hasUUID("UNPlug"))return null;
-        Entity e=level.getEntity(data.getUUID("UNPlug"));return e instanceof EntryPlugCarrierEntity p?p:null;
+        return ServiceAircraftR32.capsule(level,data.getUUID("UNPlug"));
     }
     /** A new spare is issued only for an explicitly destroyed, empty field capsule. */
     public static EntryPlugCarrierEntity replaceDestroyedAtDockR31(EvaPrototypeEntity eva)

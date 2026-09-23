@@ -14,9 +14,9 @@ import java.util.*;
 public final class EvaCombatPoseR31
 {
     private record BonePose(Quaternionf rotation,Vector3f position) {}
-    private static final Map<EvaUnit01Entity,Map<String,BonePose>> FROZEN=new WeakHashMap<>();
-    private static final Map<EvaUnit01Entity,Long> STAMP=new WeakHashMap<>();
-    private static final Map<EvaUnit01Entity,Vec3[]> RELEASE=new WeakHashMap<>();
+    private static final com.projectseele.util.WeakIdentityMap<EvaUnit01Entity,Map<String,BonePose>> FROZEN=new com.projectseele.util.WeakIdentityMap<>();
+    private static final com.projectseele.util.WeakIdentityMap<EvaUnit01Entity,Long> STAMP=new com.projectseele.util.WeakIdentityMap<>();
+    private static final com.projectseele.util.WeakIdentityMap<EvaUnit01Entity,Vec3[]> RELEASE=new com.projectseele.util.WeakIdentityMap<>();
     public static void resetEntityR31(EvaUnit01Entity e){FROZEN.remove(e);STAMP.remove(e);RELEASE.remove(e);}
     private static void rotate(BakedGeoModel m,String name,float x,float y,float z,float w,Set<String> changed)
     {m.getBone(name).ifPresent(b->{b.setRotX(b.getRotX()+x*w);b.setRotY(b.getRotY()+y*w);b.setRotZ(b.getRotZ()+z*w);changed.add(name);});}
@@ -24,6 +24,18 @@ public final class EvaCombatPoseR31
     {
         if(e.isNervLogisticsLocked()||e.isFirstBattleActive()||EvaShutdownR30.disabled(e))return EvaMotionEngineV2.BoneWrites.empty();
         Set<String> changed=new HashSet<>(),position=new HashSet<>();int action=EvaCombatR31.action(e);float age=EvaCombatR31.age(e,partial);
+        if(EvaGameplayMotionR32.owns(e,partial))
+        {
+            var body=EvaBodyPose.sample(e,partial);
+            for(String name:body.rig.keySet())if(!name.startsWith("finger_"))m.getBone(name).ifPresent(b->{EvaRigTransforms.rotate(b,body.rotations.get(name));var p=body.positions.get(name);b.setPosX(-p.x*16);b.setPosY(p.y*16);b.setPosZ(p.z*16);changed.add(name);position.add(name);});
+            if(e.getWeapon()!=EvaUnit01Entity.WEAPON_RIFLE&&!(e instanceof EvaPrototypeEntity un&&un.isEyeLaserActive()))
+                m.getBone("head").ifPresent(b->EvaRigTransforms.rotate(b,new Quaternionf(body.rotations.get("head")).rotateY(-e.pilotHeadYawForRender(partial)*Mth.DEG_TO_RAD).rotateX(-e.pilotHeadPitchForRender(partial)*Mth.DEG_TO_RAD)));
+            // Weapon and eye optics solve against the final airborne skeleton.
+            // A full-body attack layer must not leave the gun on the prior arm pose.
+            var rifle=EvaRifleContactRig.apply(e,m,partial,root);changed.addAll(rifle.rotationBones());position.addAll(rifle.positionBones());
+            var optics=EvaUNLaserPose.apply(e,m,root);changed.addAll(optics.rotationBones());
+            return new EvaMotionEngineV2.BoneWrites(Set.copyOf(changed),Set.copyOf(position),"MOTION_ENGINE_LIVE_ACTION");
+        }
         String capture=switch(action){case EvaCombatR31.REACH,EvaCombatR31.HOLD->"r31_grapple_start";case EvaCombatR31.THROW->"r31_shoulder_throw";case EvaCombatR31.AIR_STRIKE,EvaCombatR31.AIR_SLAM,EvaCombatR31.LAND->"r31_air_downstrike";default->"";};
         boolean captured=!capture.isEmpty()&&EvaBodyPose.combatCaptureReadyR31(e,capture);
         if(captured)
@@ -84,6 +96,14 @@ public final class EvaCombatPoseR31
             }
         }
         var beat=CombatFeelR31.beat(e);
+        if(beat!=null&&beat.kind()==CombatFeelR31.STAGGER&&!e.isPilotProne()&&!e.isPilotCrouching()&&e.onGround())
+        {
+            var body=EvaBodyPose.sample(e,partial);
+            for(String side:List.of("l","r"))for(String prefix:List.of("leg_","shin_","ankle_","foot_"))
+            {
+                String name=prefix+side;m.getBone(name).ifPresent(b->{EvaRigTransforms.rotate(b,body.rotations.get(name));var p=body.positions.get(name);b.setPosX(-p.x*16);b.setPosY(p.y*16);b.setPosZ(p.z*16);changed.add(name);position.add(name);});
+            }
+        }
         if(beat!=null&&(beat.kind()==CombatFeelR31.DOWN||beat.kind()==CombatFeelR31.THROWN))
         {
             float weight=1;

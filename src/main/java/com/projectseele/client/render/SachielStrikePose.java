@@ -11,6 +11,15 @@ public final class SachielStrikePose
     {
         if(!actor.isStrikeActive()||actor.isFirstBattleActive())return;
         int mode=actor.strikeMode();float age=actor.strikeAge(partial),w=SachielStrike.weight(mode,age);
+        if(SachielGameplayMotionR32.ready())
+        {
+            var pose=SachielGameplayMotionR32.pose(actor,age);
+            float blend=Math.min(1,age/4)*(1-net.minecraft.util.Mth.clamp((age-SachielStrike.duration(mode)+6)/6,0,1));
+            for(String name:pose.rig.keySet())model.getBone(name).ifPresent(b->{
+                var rotation=new Quaternionf().rotationZYX(b.getRotZ(),b.getRotY(),b.getRotX()).slerp(pose.rotations.get(name),blend);EvaRigTransforms.rotate(b,rotation);
+                var p=pose.positions.get(name);b.setPosX(net.minecraft.util.Mth.lerp(blend,b.getPosX(),-p.x*16));b.setPosY(net.minecraft.util.Mth.lerp(blend,b.getPosY(),p.y*16));b.setPosZ(net.minecraft.util.Mth.lerp(blend,b.getPosZ(),p.z*16));
+            });return;
+        }
         float chamber=SachielStrike.prepare(mode,age),drive=SachielStrike.drive(mode,age)*(1-SachielStrike.release(mode,age));
         boolean left=mode==SachielStrike.HOOK,both=SachielStrike.bothHands(mode);
         for(boolean upper:new boolean[]{false,true})

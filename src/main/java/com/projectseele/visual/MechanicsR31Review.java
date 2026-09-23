@@ -23,6 +23,9 @@ import java.util.concurrent.atomic.AtomicIntegerArray;
 public final class MechanicsR31Review
 {
     public static final boolean ENABLED="r31-mechanics".equals(System.getProperty("projectseele.regionalBuild",""));
+    public static final boolean WRECK_PICKUP=Boolean.getBoolean("projectseele.mechanicsWreckPickup");
+    public static volatile boolean wreckLeg;
+    public static String flightPrefix(){return wreckLeg?"horizontal_wreck_":"horizontal_";}
     public static final boolean TRANSPORT_ONLY=Boolean.getBoolean("projectseele.mechanicsTransportOnly");
     public static final boolean TRANSPORT=TRANSPORT_ONLY||Boolean.getBoolean("projectseele.mechanicsTransport");
     public static final double SOCKET_ERROR_LIMIT=.25;
@@ -164,12 +167,17 @@ public final class MechanicsR31Review
     private static void transportCase(EntryPlugCarrierEntity plug)
     {
         if(eva==null)return;
-        if(!requested){UNCommandR29.receive(player,"deliver",0,6400,-5820);requested=true;}
+        if(!requested){UNCommandR29.receive(player,wreckLeg?"recover":"deliver",0,6400,-5820);requested=true;}
         String phase=UNAirLiftR29.phaseName(level,0);transportPhase=phase;observed.add(phase);check("horizontal_transport_not_faulted",!phase.equals("HOLD"));
         if(ticks%2==0&&!player.isPassenger()){Vec3 at=eva.position().add(105,85,80);player.teleportTo(level,at.x,at.y,at.z,130,5);observerTarget=eva.position().add(0,65,0);}
-        if(phase.equals("CLAMP"))photo="horizontal_00_clamp";
-        float pitch=EvaAirTransportR31.pitch(eva,1);if(pitch>38&&pitch<52){observed.add("45_DEGREES");photo="horizontal_01_45deg";}if(pitch>89){observed.add("90_DEGREES");photo="horizontal_02_90deg";}
-        if(phase.equals("RELEASE"))photo="horizontal_03_unload";
+        if(phase.equals("CLAMP"))photo=flightPrefix()+"00_clamp";
+        float pitch=EvaAirTransportR31.pitch(eva,1);if(pitch>38&&pitch<52){observed.add("45_DEGREES");photo=flightPrefix()+"01_45deg";}if(pitch>89){observed.add("90_DEGREES");photo=flightPrefix()+"02_90deg";}
+        if(wreckLeg&&EvaAirTransportR31.active(eva)&&!phase.equals("RELEASE"))
+        {
+            var axis=EvaBodyPose.sample(eva,1).matrix("torso_lower").transformDirection(new org.joml.Vector3f(0,1,0)).normalize();
+            check("wreck_not_stood_up_in_transit",Math.abs(axis.y)<.22F);
+        }
+        if(phase.equals("RELEASE"))photo=flightPrefix()+"03_unload";
         if(plug!=null&&plug.isLockedToEva()&&ticks%4==0)
         {var r=new JsonObject();r.addProperty("phase",phase);r.addProperty("pitch",pitch);r.addProperty("canonical_socket_error",plug.getCanonicalTransform().translation().distanceTo(EntryPlugKinematics.lockedTransform(eva).translation()));sockets.add(r);}
         if(!UNAirLiftR29.active(level,0)&&ticks>200)
@@ -182,8 +190,15 @@ public final class MechanicsR31Review
             check("actual_support_geometry_submitted",cradleSamples.get(0)>=30);
             check("horizontal_face_down_sample_count",headFacingSamples.get(0)>=3);
             check("horizontal_face_points_to_ground",maximumHeadForwardY<-.9);
-            for(String shot:List.of("horizontal_00_clamp","horizontal_01_45deg","horizontal_02_90deg","horizontal_03_unload"))check("actual_render_photo_"+shot,capturedPhotos.contains(shot));
-            check("transport_original_capsule",plug!=null&&plug.getUUID().equals(plugIds[0]));reset();next(Stage.TRANSPORT_RESET);
+            for(String shot:List.of("horizontal_00_clamp","horizontal_01_45deg","horizontal_02_90deg","horizontal_03_unload"))check("actual_render_photo_"+shot,capturedPhotos.contains(wreckLeg?shot.replace("horizontal_","horizontal_wreck_"):shot));
+            check("transport_original_capsule",plug!=null&&plug.getUUID().equals(plugIds[0]));
+            if(WRECK_PICKUP&&!wreckLeg)
+            {
+                eva.hurt(level.damageSources().fellOutOfWorld(),100000);check("wreck_pickup_disabled",EvaShutdownR30.wreck(eva));
+                wreckLeg=true;requested=false;ticks=0;observed.clear();maximumHeadForwardY=-1;headFacingSamples.set(0,0);return;
+            }
+            if(wreckLeg)check("wreck_delivery_keeps_damage",EvaShutdownR30.wreck(eva)&&eva.getHealth()==0);
+            reset();next(Stage.TRANSPORT_RESET);
         }
     }
     private static void finish(String error)

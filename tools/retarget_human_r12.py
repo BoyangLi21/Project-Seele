@@ -58,8 +58,8 @@ class Human:
   return points,qs
 
 class Retarget:
- def __init__(self,human,angel=False):
-  self.human=human;self.angel=angel;self.rig=battle.ANGEL if angel else eva;self.P=self.rig.P;self.parent=self.rig.parents if angel else eva.parents
+ def __init__(self,human,angel=False,calibrated_trunk=False):
+  self.human=human;self.angel=angel;self.calibrated_trunk=calibrated_trunk;self.rig=battle.ANGEL if angel else eva;self.P=self.rig.P;self.parent=self.rig.parents if angel else eva.parents
   self.ref,self.refq=human.sample(human.reference_frame)
   self.foot_reference={}
   for side in ['l','r']:
@@ -91,6 +91,11 @@ class Retarget:
   # freeze the chest upright, destroying the recorded torso action.
   if np.linalg.norm(chest_up)<1e-5:chest_up=src['head']-src['chest']
   upper=R.from_matrix(axes(chest_up,src['shoulder_r']-src['shoulder_l']))
+  if self.calibrated_trunk:
+   lower=qsrc['hip']*self.refq['hip'].inv()
+   ref_up=self.ref['neck']-self.ref['chest']
+   if np.linalg.norm(ref_up)<1e-5:ref_up=self.ref['head']-self.ref['chest']
+   upper=upper*R.from_matrix(axes(ref_up,self.ref['shoulder_r']-self.ref['shoulder_l'])).inv()
   # The leg pivots are children of root on this rig. Pelvis rotation must
   # move those attachment points as well as the visible lower torso.
   p.setq('root',lower);p.setq('torso_lower',R.identity());p.setq('torso_upper',lower.inv()*upper)

@@ -43,7 +43,8 @@ public final class EvaHitFeedback
         CombatFeelR31.acceptedHit(target,event.getSource().getEntity() instanceof LivingEntity actor?actor:null,event.getAmount(),direction,false);
         if(target instanceof EvaUnit01Entity eva)EvaImpactResponse.displace(eva,direction,strength);
         SeeleNetwork.CHANNEL.send(PacketDistributor.TRACKING_ENTITY_AND_SELF.with(()->target),new ClientboundImpactResponsePacket(target.getId(),tick,direction,strength,height));
-        level.sendParticles(target instanceof EvaUnit01Entity?ParticleTypes.ELECTRIC_SPARK:ParticleTypes.DAMAGE_INDICATOR,point.x,point.y,point.z,24,1.6,1.6,1.6,.15);
+        if(target instanceof EvaUnit01Entity)level.sendParticles(ParticleTypes.ELECTRIC_SPARK,point.x,point.y,point.z,40,2.3,2.3,2.3,.35);
+        else level.sendParticles(new net.minecraft.core.particles.DustParticleOptions(new org.joml.Vector3f(.36F,.015F,.025F),3.8F),point.x,point.y,point.z,36,2.4,2.4,2.4,.22);
         level.sendParticles(ParticleTypes.POOF,point.x,point.y,point.z,12,1.2,1.2,1.2,.08);
     }
     private EvaHitFeedback() {}

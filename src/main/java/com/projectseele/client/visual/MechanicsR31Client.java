@@ -156,7 +156,7 @@ public final class MechanicsR31Client
     {
         if(!MechanicsR31Review.ENABLED||MechanicsR31Review.done||plane.groundCart()||plane.serial()!=0||plane.cargoEntityId()!=MechanicsR31Review.actorId)return;
         lastCradleDrawPoint=new Vec3(actualDrawWorld.transformPosition(new Vector3f(0,EvaAirTransportR31.HIP_HEIGHT,0)));lastCradleTriangles=triangles;lastCradleRods=rods;
-        boolean submitted=triangles>0&&rods==8,visible=transportCameraReady&&inCamera(lastCradleDrawPoint);
+        boolean submitted=triangles>0&&rods>=8,visible=transportCameraReady&&inCamera(lastCradleDrawPoint);
         if(submitted){MechanicsR31Review.cradleSamples.incrementAndGet(0);if(visible)cradleDrawSerial=renderSerial;}
         if(cradleFrames.size()<1800)
         {
@@ -248,9 +248,9 @@ public final class MechanicsR31Client
             if(transportCameraReady&&evaDrawSerial==renderSerial&&aircraftDrawSerial==renderSerial&&cradleDrawSerial==renderSerial&&mc.level.getEntity(MechanicsR31Review.actorId) instanceof EvaPrototypeEntity eva)
             {
                 float pitch=EvaAirTransportR31.pitch(eva,event.renderTickTime);
-                if(MechanicsR31Review.transportPhase.equals("CLAMP")&&pitch<15)photo="horizontal_00_clamp";
-                if(pitch>38&&pitch<52)photo="horizontal_01_45deg";if(pitch>89&&headDrawSerial==renderSerial&&lastHeadForward.y<-.9)photo="horizontal_02_90deg";
-                if(MechanicsR31Review.transportPhase.equals("RELEASE")&&pitch<1)photo="horizontal_03_unload";
+                if(MechanicsR31Review.transportPhase.equals("CLAMP")&&pitch<15)photo=MechanicsR31Review.flightPrefix()+"00_clamp";
+                if(pitch>38&&pitch<52)photo=MechanicsR31Review.flightPrefix()+"01_45deg";if(pitch>89&&headDrawSerial==renderSerial&&lastHeadForward.y<-.9)photo=MechanicsR31Review.flightPrefix()+"02_90deg";
+                if(MechanicsR31Review.transportPhase.equals("RELEASE")&&pitch<1)photo=MechanicsR31Review.flightPrefix()+"03_unload";
             }
         }
         if(!photo.isEmpty()&&PHOTOS.add(photo))try(var capture=net.minecraft.client.Screenshot.takeScreenshot(mc.getMainRenderTarget()))

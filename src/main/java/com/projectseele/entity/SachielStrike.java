@@ -7,17 +7,18 @@ import org.joml.Vector3f;
 /** Shared hand and bone-lance trajectory. The client skin and server contact use the same curve. */
 public final class SachielStrike
 {
-    public static final int JAB=1,PILE=2,HOOK=3,OVERHEAD=4,SHOVE=5;
+    public static final int JAB=1,PILE=2,HOOK=3,OVERHEAD=4,SHOVE=5,STOMP=6;
     public record Frame(Vec3 hand,Vec3 tip,Vec3 direction,float weight,float extend) {}
-    public static int windup(int mode){return mode==OVERHEAD?18:mode==PILE?16:mode==SHOVE?10:12;}
+    public static int windup(int mode){if(SachielGameplayMotionR32.ready())return switch(mode){case JAB->8;case HOOK->13;case OVERHEAD->20;case SHOVE->9;default->18;};return mode==OVERHEAD?18:mode==PILE?16:mode==SHOVE?10:12;}
     public static int contactStart(int mode){return windup(mode)+4;}
-    public static int contactEnd(int mode){return mode==OVERHEAD?29:mode==PILE?29:mode==SHOVE?21:25;}
-    public static int duration(int mode){return mode==OVERHEAD?52:mode==PILE?48:mode==SHOVE?38:42;}
+    public static int contactEnd(int mode){if(SachielGameplayMotionR32.ready())return contactStart(mode)+(mode==PILE?8:5);return mode==OVERHEAD?29:mode==PILE?29:mode==SHOVE?21:25;}
+    public static int duration(int mode){if(SachielGameplayMotionR32.ready())return switch(mode){case JAB->27;case HOOK->36;case OVERHEAD->48;case SHOVE->32;case STOMP->43;default->47;};return mode==OVERHEAD?52:mode==PILE?48:mode==SHOVE?38:42;}
     public static float prepare(int mode,float age){return (float)CombatMotionR29.ease(age/windup(mode));}
     public static float drive(int mode,float age){return (float)CombatMotionR29.ease((age-windup(mode))/(mode==OVERHEAD?8:7));}
     public static float release(int mode,float age){int at=contactEnd(mode)+2;return (float)CombatMotionR29.ease((age-at)/(duration(mode)-at));}
     public static float weight(int mode,float age){return prepare(mode,age)*(1-release(mode,age));}
-    public static boolean bothHands(int mode){return mode==OVERHEAD||mode==SHOVE;}
+    public static boolean bothHands(int mode){return mode==SHOVE||mode==OVERHEAD&&!SachielGameplayMotionR32.ready();}
+    public static boolean strikingLeft(int mode){return SachielGameplayMotionR32.ready()?SachielGameplayMotionR32.left(mode):mode==HOOK;}
     public static Vector3f torsoRotation(int mode,float age,boolean upper)
     {
         float c=prepare(mode,age),d=drive(mode,age)*(1-release(mode,age));
@@ -45,10 +46,11 @@ public final class SachielStrike
     {return sample(actor,actor.strikeAge(partial),partial);}
     public static Frame sample(SachielEntity actor,float age,float partial)
     {
-        return sample(actor,age,partial,actor.strikeMode()==HOOK);
+        return sample(actor,age,partial,strikingLeft(actor.strikeMode()));
     }
     public static Frame sample(SachielEntity actor,float age,float partial,boolean left)
     {
+        if(SachielGameplayMotionR32.ready())return SachielGameplayMotionR32.contact(actor,age,partial,left);
         int mode=actor.strikeMode();Matrix4f root=trunk(actor,age,partial);boolean hook=mode==HOOK;float side=left?-1:1;
         Vec3 shoulder=world(root,side*40.344577F,172.915088F,0),rest=world(root,side*45.523135F,122.333827F,-42.753209F);
         Vec3 chamber=world(root,side*(mode==OVERHEAD?27:mode==SHOVE?35:hook?61:48),mode==OVERHEAD?230:mode==SHOVE?169:hook?155:162,mode==SHOVE?-14:8);

@@ -23,6 +23,7 @@ public final class StaffCommandBookR24
         public final String requested;
         public final long deadline;
         public Step step = Step.SIGNAL;
+        public boolean automatic;
         public String operation, message = "正在接收机库状态";
         public final String actorName;
         private BlockPos lastPosition;
@@ -92,6 +93,8 @@ public final class StaffCommandBookR24
             NervStaffDialogue.reply(player, npc, "当前待执行指令属于另一台机体，没有取消它。"); return 0;
         }
         if (job != null) ORDERS.get(player.serverLevel()).remove(npc.getUUID());
+        if(NervStaffDialogue.authorized(player)&&StaffAuthorityR25.commandContact(npc))
+            AutoSortieR32.cancel(player,job==null?unit:job.unit);
         npc.finishTask();
         NervStaffDialogue.reply(player, npc, "后续按键操作已取消。已经开始的机械运输会按原流程运行到安全位置。");
         return 1;
@@ -113,6 +116,16 @@ public final class StaffCommandBookR24
         if (outcome == null || !outcome.accepted())
         {
             failed(npc, "联锁没有接受这次操作。" + NervStaffDialogue.readinessHint(level, job.unit, job.operation));
+            return;
+        }
+        if(job.automatic)
+        {
+            var airframe=EvaLogisticsDirector.canonicalUnit(level,job.unit);
+            if(airframe!=null)airframe.getPersistentData().putString("R32AutoStep",job.operation+"_accepted");
+            ORDERS.get(level).remove(npc.getUUID());
+            if(owner!=null)NervStaffDialogue.reply(owner,npc,job.operation.equals("prepare")
+                ?NervStaffDialogue.unitName(job.unit)+"驾驶员就位。开始整备，美里，等机体到发射台后交给你。"
+                :NervStaffDialogue.unitName(job.unit)+"，发射！到地面后保持通信。");
             return;
         }
         switch (job.operation)

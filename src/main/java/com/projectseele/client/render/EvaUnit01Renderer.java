@@ -40,6 +40,8 @@ import software.bernie.geckolib.renderer.GeoEntityRenderer;
  */
 public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
 {
+    @Override public int getPackedOverlay(EvaUnit01Entity entity,float partial){return net.minecraft.client.renderer.texture.OverlayTexture.NO_OVERLAY;}
+    @Override public int getPackedOverlay(EvaUnit01Entity entity,float white,float partial){return net.minecraft.client.renderer.texture.OverlayTexture.NO_OVERLAY;}
     private static final Map<Integer, MuzzleSample> RIFLE_MUZZLES =
             new HashMap<>();
     private static final long MUZZLE_STALE_NANOS = 100_000_000L;

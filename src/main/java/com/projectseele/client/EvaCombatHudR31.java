@@ -114,7 +114,7 @@ public final class EvaCombatHudR31
             case EvaCombatR31.HOLD -> key+" / "+mc.options.keyAttack.getTranslatedKeyMessage().getString()+" 投掷";
             case EvaCombatR31.THROW -> "投掷";
             case EvaCombatR31.AIR_STRIKE -> "跳击";
-            case EvaCombatR31.AIR_SLAM -> "下砸";
+            case EvaCombatR31.AIR_SLAM -> com.projectseele.entity.EvaGameplayMotionR32.ready(eva)?"下踢":"下砸";
             case EvaCombatR31.LAND -> "落地制动";
             default -> eva.isPilotProne()||eva.isPilotCrouching()?"站立后可抓取":eva.getWeapon()!=EvaUnit01Entity.WEAPON_FISTS?key+" 抓取需空手":key+" 双手抓取";
         };
