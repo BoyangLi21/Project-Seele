@@ -22,13 +22,15 @@ def temporary_options(path,separator,changes):
         path.write_text('\n'.join(current)+'\n',encoding='utf8')
 
 def main():
-    ap=argparse.ArgumentParser();ap.add_argument('--prepared-file',type=Path,default=ROOT/'.Codex/client-launch-r17.json');ap.add_argument('--prepare-only',action='store_true');ap.add_argument('--video',action='store_true');a=ap.parse_args()
+    ap=argparse.ArgumentParser();ap.add_argument('--prepared-file',type=Path,default=ROOT/'.Codex/client-launch-r17.json');ap.add_argument('--prepare-only',action='store_true');ap.add_argument('--video',action='store_true');ap.add_argument('--normal-attacks',action='store_true');ap.add_argument('--variant',type=int,choices=range(5),default=1);a=ap.parse_args()
     world=ROOT/'run/saves'/WORLD
     if not (world/'level.dat').is_file():raise FileNotFoundError('Create the disposable '+WORLD+' copy before this fixture; it never edits a formal world.')
     source=json.loads(a.prepared_file.read_text(encoding='utf8'));command=source['command']
     if Path(source['workingDirectory']).resolve()!=(ROOT/'run').resolve():raise ValueError('Unexpected Minecraft working directory')
-    command=[c for c in command if not c.startswith(('-Dprojectseele.regionalBuild=','-Dprojectseele.bodyPoseReview=','-Dprojectseele.dorsalPoseReview=','-Dprojectseele.combatVideo='))]
+    command=[c for c in command if not c.startswith(('-Dprojectseele.regionalBuild=','-Dprojectseele.bodyPoseReview=','-Dprojectseele.dorsalPoseReview=','-Dprojectseele.combatVideo=','-Dprojectseele.combatNormals=','-Dprojectseele.combatVariant='))]
     command.insert(1,'-Dprojectseele.regionalBuild=r31-combat')
+    command.insert(1,'-Dprojectseele.combatVariant='+str(a.variant))
+    if a.normal_attacks:command.insert(1,'-Dprojectseele.combatNormals=true')
     if a.video:command.insert(1,'-Dprojectseele.combatVideo=true')
     if '--quickPlaySingleplayer' in command:command[command.index('--quickPlaySingleplayer')+1]=WORLD
     else:command.extend(['--quickPlaySingleplayer',WORLD])

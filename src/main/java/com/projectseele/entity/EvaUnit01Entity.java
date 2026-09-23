@@ -3073,7 +3073,16 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
         if (Double.isFinite(movement.x) && Double.isFinite(movement.z)
                 && movement.horizontalDistanceSqr() <= 36.0D)
         {
+            boolean supported=this.onGround();
             this.move(MoverType.SELF, movement);
+            // A horizontal animation displacement is not a takeoff. Retain
+            // floor contact only when the moved hull still has real support.
+            if(supported)
+            {
+                AABB b=this.getBoundingBox();
+                AABB sole=new AABB(b.minX+.1,b.minY-.10,b.minZ+.1,b.maxX-.1,b.minY+.01,b.maxZ-.1);
+                if(this.level().getBlockCollisions(this,sole).iterator().hasNext())this.setOnGround(true);
+            }
         }
     }
 

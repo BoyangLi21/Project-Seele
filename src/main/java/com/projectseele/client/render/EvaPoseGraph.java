@@ -238,7 +238,9 @@ public final class EvaPoseGraph
             Set<String> p=new LinkedHashSet<>(motionWrites.positionBones());p.addAll(firearm.positionBones());
             motionWrites=new EvaMotionEngineV2.BoneWrites(Set.copyOf(r),Set.copyOf(p),"MOTION_ENGINE_LIVE_ACTION");
         }
+        com.projectseele.client.visual.CombatR31Client.normalWitness(entity,model,"before");
         var combat=EvaCombatPoseR31.apply(entity,model,partialTick,modelToWorld);
+        com.projectseele.client.visual.CombatR31Client.normalWitness(entity,model,"after");
         if(!combat.rotationBones().isEmpty())motionWrites=combat;
         var shutdown=EvaShutdownPoseR30.apply(entity,model,partialTick);
         if(!shutdown.rotationBones().isEmpty())motionWrites=shutdown;

@@ -93,6 +93,14 @@ public final class EvaCombatPoseR31
                 var p=body.positions.get(n);b.setPosX(Mth.lerp(weight,b.getPosX(),-p.x*16));b.setPosY(Mth.lerp(weight,b.getPosY(),p.y*16));b.setPosZ(Mth.lerp(weight,b.getPosZ(),p.z*16));changed.add(n);position.add(n);
             });
         }
+        if(action!=EvaCombatR31.NONE)
+        {
+            for(String side:List.of("l","r"))
+            {
+                m.getBone("shin_"+side).ifPresent(b->{EvaRigTransforms.hinge(b,EvaRigTransforms.knee(b));position.add(b.getName());});
+                m.getBone("forearm_"+side).ifPresent(b->{EvaRigTransforms.hinge(b,EvaRigTransforms.elbow(b,side));position.add(b.getName());});
+            }
+        }
         if(beat!=null&&CombatFeelR31.hitPaused(e))
         {
             var all=new ArrayList<GeoBone>();m.getBone("root").ifPresent(b->collect(b,all));

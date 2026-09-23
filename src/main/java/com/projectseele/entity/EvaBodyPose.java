@@ -286,6 +286,7 @@ public final class EvaBodyPose
             float w=(float)CombatMotionR29.ease(combatAge/5);if(combat==EvaCombatR31.HOLD)w=1;
             if(combat==EvaCombatR31.THROW)w*=1-(float)CombatMotionR29.ease((combatAge-21)/5);
             body=mix(body,clip(d,variant,capture,capturePhase),w);
+            preserveJointCentres(body);
         }
         EvaTerrainSupport.apply(entity,body);EvaImpactResponse.applyBody(body,entity,partial);body.dirty();
         var beat=CombatFeelR31.beat(entity);
@@ -323,6 +324,7 @@ public final class EvaBodyPose
             }
         }
         else result.rotations.get("head").rotateX(.25F);
+        preserveJointCentres(result);
         result.dirty();
         if(prone||hasOwnUnRig(entity))
         {
@@ -331,5 +333,21 @@ public final class EvaBodyPose
             if(Float.isFinite(floor))result.positions.get("root").y-=floor;
         }
         result.dirty();return result;
+    }
+
+    /** Recompute the offset from the composed rotation, never blend the two independently. */
+    public static void preserveJointCentres(Sample pose)
+    {
+        for(String side:List.of("l","r"))for(String family:List.of("shin_","forearm_"))
+        {
+            String name=family+side;if(!pose.rig.containsKey(name))continue;
+            String marker=(family.equals("shin_")?"r30_knee_socket_":"r30_elbow_socket_")+side;
+            Vector3f centre=pose.rig.containsKey(marker)?new Vector3f(pose.rig.get(marker).pivot())
+                    :family.equals("shin_")?new Vector3f(pose.rig.get(name).pivot()).add(0,11.4F/16,0)
+                    :new Vector3f(side.equals("l")?-23.489652F:23.489652F,123.435069F,7.737214F).div(16);
+            Vector3f delta=centre.sub(pose.rig.get(name).pivot());
+            pose.positions.put(name,new Vector3f(delta).sub(pose.rotations.get(name).transform(new Vector3f(delta))));
+        }
+        pose.dirty();
     }
 }

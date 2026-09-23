@@ -63,7 +63,9 @@ public final class EvaCombatR31
     {
         if(action(e)==HOLD){requestThrow(e);return true;}
         if(active(e))return true;
-        if(e.onGround()||e.isPilotProne()||!e.isMeleeWeapon())return false;
+        // Horizontal authored root motion can clear vanilla's onGround bit.
+        // An aerial action needs the same confirmed jump/fall state as the body.
+        if(e.onGround()||!e.isVisuallyAirborneForRender()||e.isPilotProne()||!e.isMeleeWeapon())return false;
         if(!available(e))return true;
         if(heavy&&e instanceof EvaPrototypeEntity un&&un.isUNFlying())un.stopUNFlight();
         e.interruptCombatR31();start(e,heavy?AIR_SLAM:AIR_STRIKE,nearest(e,52));STATES.get(e).airborne=true;

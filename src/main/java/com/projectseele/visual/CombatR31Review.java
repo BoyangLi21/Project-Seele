@@ -25,6 +25,7 @@ import java.util.*;
 public final class CombatR31Review
 {
     public static final boolean ENABLED="r31-combat".equals(System.getProperty("projectseele.regionalBuild",""));
+    public static final boolean NORMALS=Boolean.getBoolean("projectseele.combatNormals");
     public static final String WORLD="SEELE_FIELD_R31_REVIEW";
     public static final int X=12000,Z=12000,FLOOR=280;
     public static volatile boolean ready,tracked,mounted,done,jump;
@@ -33,7 +34,7 @@ public final class CombatR31Review
     public static volatile String stageName="arena",photo="",failure="",mediaFolder="";
     public static volatile double maximumHandError;
     public static volatile int handSamples;
-    private enum Stage {ARENA,TRACK,MOUNT,WARM,WALK_FORWARD,WALK_BACKWARD,AIR_STRIKE,AIR_SLAM,REACH,HOLD,THROW,REACTION,FINISH}
+    private enum Stage {ARENA,TRACK,MOUNT,WARM,WALK_FORWARD,WALK_BACKWARD,NORMAL_EMPTY,NORMAL_CONTACT,NORMAL_HEAVY,NORMAL_MOVING,AIR_STRIKE,AIR_SLAM,REACH,HOLD,THROW,REACTION,FINISH}
     private static Stage stage=Stage.ARENA;
     private static ServerPlayer pilot;private static EvaUnit01Entity eva;private static SachielEntity angel;
     private static Path world;private static ServerLevel level;
@@ -41,6 +42,7 @@ public final class CombatR31Review
     private static float healthBefore,initialEvaHealth;private static double peak,maximumVictimLift,maximumVictimDistance,maximumEvaReactionMove;
     private static double previousObservedY,olderObservedY,observedVerticalPerTick;
     private static Vec3 stageOrigin,angelOrigin;private static boolean sawAction,sawThrown,sawDown;
+    private static int falseAerial,normalFrames;
     private static final JsonArray cases=new JsonArray(),trace=new JsonArray(),events=new JsonArray();
     private static final Map<Integer,UUID> fleetIds=new HashMap<>();
 
@@ -83,7 +85,8 @@ public final class CombatR31Review
                 case MOUNT->{if(mounted&&eva.getActivationTicks()==0&&stageTicks>20){if(eva.isAtFieldOn())input(4);next(Stage.WARM);}}
                 case WARM->{if(warmFrames>=35&&stageTicks>25){photo="01_ready";next(Stage.WALK_FORWARD);}}
                 case WALK_FORWARD->{forward=1;if(eva.getZ()-stageOrigin.z>=10){record("real_forward",true,"distance",eva.getZ()-stageOrigin.z);forward=0;photo="02_forward";next(Stage.WALK_BACKWARD);}}
-                case WALK_BACKWARD->{forward=-1;if(stageOrigin.z-eva.getZ()>=7){record("real_backward",true,"distance",stageOrigin.z-eva.getZ());forward=0;arrange(23);next(Stage.AIR_STRIKE);}}
+                case WALK_BACKWARD->{forward=-1;if(stageOrigin.z-eva.getZ()>=7){record("real_backward",true,"distance",stageOrigin.z-eva.getZ());forward=0;arrange(NORMALS?100:23);next(NORMALS?Stage.NORMAL_EMPTY:Stage.AIR_STRIKE);}}
+                case NORMAL_EMPTY,NORMAL_CONTACT,NORMAL_HEAVY,NORMAL_MOVING->normalAttack();
                 case AIR_STRIKE->airborne(false);
                 case AIR_SLAM->airborne(true);
                 case REACH->
@@ -132,7 +135,9 @@ public final class CombatR31Review
         if(floorCursor<total)return;
         // Only actors authored by this exact fixture are eligible for stale cleanup.
         var stale=new ArrayList<net.minecraft.world.entity.Entity>();for(var e:level.getAllEntities())if(e.getTags().contains("seele_r31_combat_fixture"))stale.add(e);stale.forEach(net.minecraft.world.entity.Entity::discard);
-        eva=ModEntities.EVA_UNIT01.get().create(level);angel=ModEntities.SACHIEL.get().create(level);
+        int variant=Integer.getInteger("projectseele.combatVariant",1);
+        eva=(variant==0?ModEntities.EVA_UNIT00.get():variant==2?ModEntities.EVA_UNIT02.get():variant>=3?ModEntities.EVA_PROTOTYPE.get():ModEntities.EVA_UNIT01.get()).create(level);angel=ModEntities.SACHIEL.get().create(level);
+        if(eva instanceof EvaPrototypeEntity un)un.setUNSerial(variant-3);
         if(eva==null||angel==null)throw new IllegalStateException("Combat test actor factory");
         eva.addTag("seele_r31_combat_fixture");eva.addTag("seele_motion_lab");eva.prepareForMotionLab();eva.setNoGravity(false);eva.setNoAi(false);eva.setPersistenceRequired();
         CompoundTag tag=new CompoundTag();angel.saveWithoutId(tag);tag.putBoolean("FirstBattleUsed",true);tag.putInt("SachielSelfDestruct",-1);angel.load(tag);angel.setFirstBattleField(0);angel.setNoAi(true);angel.addTag("seele_r31_combat_fixture");angel.setPersistenceRequired();
@@ -164,6 +169,26 @@ public final class CombatR31Review
             record(heavy?"real_jump_slam":"real_jump_strike",pass,"damage",damage);
             var last=cases.get(cases.size()-1).getAsJsonObject();last.addProperty("jump_delta",eva.getJumpSequence()-baseJump);last.addProperty("peak_y",peak);last.addProperty("air_ticks",airTicks);last.addProperty("landed",eva.onGround());
             arrange(heavy?20:23);next(heavy?Stage.REACH:Stage.AIR_SLAM);
+        }
+    }
+    private static void normalAttack()
+    {
+        jump=false;forward=stage==Stage.NORMAL_MOVING&&stageTicks<110?1:0;
+        if(stageTicks>=15&&stageTicks<125&&(stage==Stage.NORMAL_HEAVY?(stageTicks==15||stageTicks==85):stageTicks%6==3))input(stage==Stage.NORMAL_HEAVY?2:1);
+        if(eva.getOrdinaryAttackStage()>=0||eva.isHeavyMotionActive())normalFrames++;
+        if(EvaCombatR31.active(eva))falseAerial++;
+        if(stageTicks>=150)
+        {
+            record(stage.name().toLowerCase(Locale.ROOT),falseAerial==0&&normalFrames>0,"unexpected_air_ticks",falseAerial);
+            var row=cases.get(cases.size()-1).getAsJsonObject();row.addProperty("normal_action_ticks",normalFrames);row.addProperty("actual_damage",healthBefore-angel.getHealth());
+            falseAerial=normalFrames=0;
+            switch(stage)
+            {
+                case NORMAL_EMPTY->{arrange(23);next(Stage.NORMAL_CONTACT);}
+                case NORMAL_CONTACT->{arrange(100);next(Stage.NORMAL_HEAVY);}
+                case NORMAL_HEAVY->{arrange(100);next(Stage.NORMAL_MOVING);}
+                default->next(Stage.FINISH);
+            }
         }
     }
     private static void reaction()
@@ -206,7 +231,7 @@ public final class CombatR31Review
     }
     private static void sample()
     {
-        var r=new JsonObject();r.addProperty("phase",stage.name());r.addProperty("tick",stageTicks);r.addProperty("action",EvaCombatR31.action(eva));r.addProperty("observed_vertical_per_tick",observedVerticalPerTick);r.addProperty("server_velocity_y",eva.getDeltaMovement().y);r.add("eva",vector(eva.position()));r.add("angel",vector(angel.position()));r.addProperty("eva_health",eva.getHealth());r.addProperty("angel_health",angel.getHealth());r.addProperty("eva_ground",eva.onGround());r.addProperty("angel_ground",angel.onGround());var eb=CombatFeelR31.beat(eva);var ab=CombatFeelR31.beat(angel);r.addProperty("eva_reaction",eb==null?0:eb.kind());r.addProperty("angel_reaction",ab==null?0:ab.kind());trace.add(r);
+        var r=new JsonObject();r.addProperty("phase",stage.name());r.addProperty("tick",stageTicks);r.addProperty("action",EvaCombatR31.action(eva));r.addProperty("ordinary",eva.getOrdinaryAttackStage());r.addProperty("live_phase",eva.combatPhaseR31());r.addProperty("confirmed_airborne",eva.isVisuallyAirborneForRender());r.addProperty("observed_vertical_per_tick",observedVerticalPerTick);r.addProperty("server_velocity_y",eva.getDeltaMovement().y);r.add("eva",vector(eva.position()));r.add("angel",vector(angel.position()));r.addProperty("eva_health",eva.getHealth());r.addProperty("angel_health",angel.getHealth());r.addProperty("eva_ground",eva.onGround());r.addProperty("angel_ground",angel.onGround());var eb=CombatFeelR31.beat(eva);var ab=CombatFeelR31.beat(angel);r.addProperty("eva_reaction",eb==null?0:eb.kind());r.addProperty("angel_reaction",ab==null?0:ab.kind());trace.add(r);
     }
     private static void finish(String error)
     {
@@ -215,9 +240,9 @@ public final class CombatR31Review
         {
             boolean ids=true;for(var entry:fleetIds.entrySet())ids&=EvaFleetSavedData.get(level.getServer()).canonicalId(entry.getKey()).filter(entry.getValue()::equals).isPresent();
             var r=new JsonObject();r.addProperty("error",error);r.addProperty("fleet_ids_unchanged",ids);r.addProperty("hand_samples",handSamples);r.addProperty("maximum_hand_error_metres",Double.isFinite(maximumHandError)?maximumHandError:-1);r.addProperty("media",mediaFolder);
-            boolean all=error.isEmpty()&&ids&&cases.size()>=7&&handSamples>5&&maximumHandError<.8;
+            boolean all=error.isEmpty()&&ids&&(NORMALS?cases.size()>=6:cases.size()>=7&&handSamples>5&&maximumHandError<.8);
             for(var c:cases)all&=c.getAsJsonObject().get("passed").getAsBoolean();r.addProperty("passed",all);r.add("cases",cases);r.add("contacts",events);r.add("trace",trace);
-            Path out=world.resolve("Review");Files.createDirectories(out);Files.writeString(out.resolve("r31_combat_"+(all?"pass":"failure")+".json"),new GsonBuilder().setPrettyPrinting().create().toJson(r));
+            Path out=world.resolve("Review");Files.createDirectories(out);Files.writeString(out.resolve((NORMALS?"r32_normal_":"r31_combat_")+(all?"pass":"failure")+".json"),new GsonBuilder().setPrettyPrinting().create().toJson(r));
         }
         catch(Exception report){ProjectSeele.LOGGER.error("R31 combat report",report);}
         finally
