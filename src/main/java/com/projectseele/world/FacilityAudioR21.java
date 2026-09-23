@@ -25,14 +25,15 @@ public final class FacilityAudioR21
         if(previous!=null&&previous!=phase)
         {
             String name=switch(phase){case DRAINING->"pa_drain";case FILLING->"pa_fill";case OPENING->"pa_door_open";case CLOSING->"pa_door_close";default->null;};
-            if(name!=null)play(level,speaker,ModSounds.FACILITY.get(name).get(),1.15F);
+            if(name!=null)FacilityPaR31.announce(level,speaker,name);
         }
         long time=level.getGameTime();
         if((phase==MilitaryR07Director.Phase.DRAINING||phase==MilitaryR07Director.Phase.FILLING)&&time%40==0)play(level,door.add(0,15,0),ModSounds.FACILITY.get("facility_hydraulic").get(),1.1F);
-        if(moving&&time%80==0)play(level,speaker,ModSounds.FACILITY.get("facility_siren").get(),.55F);
+        if(moving&&time%80==0)FacilityPaR31.warning(level,speaker);
         if(time%10==0)for(int side:new int[]{-1,1})
         {
-            BlockPos p=BlockPos.containing(door.add(side*19,67,0));var state=level.getBlockState(p);boolean lit=moving&&time%20<10;
+            boolean wide=UNHangarDimensionsR31.active(level);
+            BlockPos p=BlockPos.containing(door.add(side*(wide?26:19),67,wide?3:0));var state=level.getBlockState(p);boolean lit=moving&&time%20<10;
             if(state.is(com.projectseele.registry.ModBlocks.NERV_WARNING_BEACON.get())&&state.getValue(BlockStateProperties.LIT)!=lit)level.setBlock(p,state.setValue(BlockStateProperties.LIT,lit),2);
         }
     }
@@ -44,7 +45,7 @@ public final class FacilityAudioR21
         if(previous!=null&&phase!=previous)
         {
             String voice=switch(phase){case BRIDGE_RETRACTING->"pa_prepare";case PLUG_INSERTING->"pa_insert";case PLUG_LOCKING->"pa_lock";case DRAINING->"pa_drain";case TO_SILO->"pa_transfer";case SILO_READY->"pa_ready";case DESCENDING->"pa_recover";case TO_HANGAR->"pa_return";case FILLING->"pa_fill";case PARKED->"pa_standby";case PLUG_FAULT,PLUG_ABORT_RETURNING->"pa_fault";default->null;};
-            if(voice!=null)play(level,speaker,ModSounds.FACILITY.get(voice).get(),1.25F);
+            if(voice!=null)FacilityPaR31.announce(level,speaker,voice);
             if(phase==EvaFleetSavedData.Phase.PLUG_LOCKING||phase==EvaFleetSavedData.Phase.SILO_READY||phase==EvaFleetSavedData.Phase.PARKED)
                 play(level,machine,ModSounds.FACILITY.get("facility_lock").get(),1.4F);
         }
@@ -54,8 +55,7 @@ public final class FacilityAudioR21
         long time=level.getGameTime();
         if((transfer||hydraulic)&&time%40==variant*7)
             play(level,machine,ModSounds.FACILITY.get(transfer?"facility_rail_motion":"facility_hydraulic").get(),1.15F);
-        if((transfer||launch)&&time%80==variant*7)
-            play(level,speaker,ModSounds.FACILITY.get("facility_siren").get(),.62F);
+        if((transfer||launch)&&time%80==variant*7)FacilityPaR31.warning(level,speaker);
         if(time%10==0)
         {
             boolean lit=(transfer||launch||TvMissionAlertR30.active(level))&&time%20<10;
@@ -73,13 +73,13 @@ public final class FacilityAudioR21
             if(number>=1&&number<=3)
             {
                 long key=number;Long last=COUNTDOWN.put(unit,key);
-                if(last==null||last!=key)play(level,speaker,ModSounds.FACILITY.get("pa_"+number).get(),1.25F);
+                if(last==null||last!=key)FacilityPaR31.announce(level,speaker,"pa_"+number);
             }
         }
         else if(unit.getLaunchPhase()==EvaUnit01Entity.LAUNCH_ASCENT)
         {
             Long last=COUNTDOWN.put(unit,0L);
-            if(last==null||last!=0){play(level,speaker,ModSounds.FACILITY.get("pa_launch").get(),1.25F);play(level,machine,ModSounds.FACILITY.get("facility_catapult").get(),1.65F);}
+            if(last==null||last!=0){FacilityPaR31.announce(level,speaker,"pa_launch");play(level,machine,ModSounds.FACILITY.get("facility_catapult").get(),1.65F);}
         }
         else COUNTDOWN.remove(unit);
     }

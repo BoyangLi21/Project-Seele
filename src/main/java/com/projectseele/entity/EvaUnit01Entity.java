@@ -98,7 +98,7 @@ import software.bernie.geckolib.util.GeckoLibUtil;
  */
 public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBattleSignals.Actor
 {
-    private static final boolean DORSAL_SIGNALS_READY=EvaDorsalMechanism.bootstrap() && EvaTerrainSupport.bootstrap() && EvaShutdownR30.bootstrap();
+    private static final boolean DORSAL_SIGNALS_READY=EvaDorsalMechanism.bootstrap() && EvaTerrainSupport.bootstrap() && EvaShutdownR30.bootstrap() && EvaAirTransportR31.bootstrap() && EvaCombatR31.bootstrap();
     private static final EntityDataAccessor<Integer> MECHANICAL_REVISION_R30=SynchedEntityData.defineId(EvaUnit01Entity.class,EntityDataSerializers.INT);
     private static final FirstBattleSignals.SignalSet FIRST_BATTLE=new FirstBattleSignals.SignalSet(EvaUnit01Entity.class);
     @Override public FirstBattleSignals.SignalSet firstBattleSignals(){return FIRST_BATTLE;}
@@ -686,6 +686,8 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
         EvaDorsalMechanism.define(this.entityData);
         EvaTerrainSupport.define(this.entityData);
         EvaShutdownR30.define(this.entityData);
+        EvaAirTransportR31.define(this.entityData);
+        EvaCombatR31.define(this.entityData);
         this.entityData.define(MECHANICAL_REVISION_R30,0);
         this.entityData.define(DATA_WEAPON, WEAPON_KNIFE);
         this.entityData.define(DATA_ARMAMENT_MASK, this.intrinsicArmamentMask());
@@ -765,6 +767,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
         super.addAdditionalSaveData(tag);
         FIRST_BATTLE.save(this,tag);
         EvaShutdownR30.save(this,tag);
+        EvaAirTransportR31.save(this,tag);
         EvaDorsalMechanism.save(this,tag);
         tag.putInt("SeeleWeapon", this.getWeapon());
         tag.putInt("SeeleArmamentMask", this.getArmamentMask());
@@ -921,6 +924,8 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
         }
         FIRST_BATTLE.restore(this,tag);
         EvaShutdownR30.load(this,tag);
+        EvaAirTransportR31.load(this,tag);
+        EvaCombatR31.clear(this);
     }
 
     // ----- state accessors -----
@@ -1129,7 +1134,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
     /** Unit-00's kneeling shield posture, used to cover the firing Unit. */
     public boolean isShieldBraced()
     {
-        return this.getUnitVariant() == UNIT_00 && this.isPilotCrouching() && this.isAtFieldOn();
+        return false;
     }
 
     public int getCannonCharge()
@@ -1646,30 +1651,20 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
     /** Measured rear armour depth differs between the three NERV and two UN bodies. */
     public double powerMountRearOffset()
     {
-        return this.isExperimentalUnit()?(this.experimentalAssetName().equals("eva_un01")?3.87D:4.13D):this.getUnitVariant()==UNIT_01?4.11D:4.06D;
+        return this.isExperimentalUnit()?(this.experimentalAssetName().equals("eva_un01")?3.87D:4.13D):switch(this.getUnitVariant()){case UNIT_00->4.22587D;case UNIT_02->4.22709D;default->5.72651D;};
     }
     public double powerSocketRearOffset(){return this.powerMountRearOffset()+2.2D;}
 
     /** World-space tail of the upper-back power plug, shared by cable and sever FX. */
     public Vec3 getUmbilicalSocketPosition()
     {
-        if(this.rifleProneBlend(1)>.01F||this.rifleCrouchBlend(1)>.01F)
-            return this.posedPowerMarker(EvaScale.UMBILICAL_SOCKET_HEIGHT,this.powerSocketRearOffset());
-        Vec3 rear = this.getRearDirection();
-        return this.position()
-                .add(rear.scale(this.powerSocketRearOffset()))
-                .add(0.0D, EvaScale.UMBILICAL_SOCKET_HEIGHT, 0.0D);
+        return this.posedPowerMarker(EvaScale.UMBILICAL_SOCKET_HEIGHT,this.powerSocketRearOffset());
     }
 
     /** Armour-side receptacle for the rigid upper-back umbilical plug. */
     public Vec3 getUmbilicalMountPosition()
     {
-        if(this.rifleProneBlend(1)>.01F||this.rifleCrouchBlend(1)>.01F)
-            return this.posedPowerMarker(EvaScale.UMBILICAL_MOUNT_HEIGHT,this.powerMountRearOffset());
-        Vec3 rear = this.getRearDirection();
-        return this.position()
-                .add(rear.scale(this.powerMountRearOffset()))
-                .add(0.0D, EvaScale.UMBILICAL_MOUNT_HEIGHT, 0.0D);
+        return this.posedPowerMarker(EvaScale.UMBILICAL_MOUNT_HEIGHT,this.powerMountRearOffset());
     }
 
     private Vec3 posedPowerMarker(double height,double rear)
@@ -2014,6 +2009,8 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
     public void normalizeAfterTransportR30(boolean stored)
     {
         if(level().isClientSide)return;
+        EvaAirTransportR31.clear(this);EvaCombatR31.clear(this);CombatFeelR31.clear(this);
+        this.entityData.set(DATA_CARRIER_RISE_R26,0F);this.oldCarrierRiseR26=0;
         endNervCarrierMotion();cancelLiveActionsForStanceChange();cancelHeavyMotion();clearJumpRequestState();
         if(isLaunchSequenceActive())resetLaunchSequence();
         if(stored)clearSortieDestination();
@@ -2024,8 +2021,11 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
         this.chargingHeld=false;this.rifleStanceInitialized=true;this.setTarget(null);this.getNavigation().stop();
         this.getPersistentData().putBoolean("UNTransportAutoload",false);
         this.getPersistentData().remove("R30AwaitingIntake");this.getPersistentData().remove("R30AwaitingNervRecovery");
+        this.getPersistentData().remove("R31GroundHold");this.getPersistentData().remove("R31GroundHoldAt");
+        EvaShutdownR30.waitingR31(this,false);
         EvaDorsalMechanism.set(this,0,0);setDeltaMovement(Vec3.ZERO);setNervLogisticsLocked(stored);setNoGravity(stored);updatePoseDimensions();
         this.entityData.set(MECHANICAL_REVISION_R30,mechanicalRevisionR30()+1);
+        if(!stored)EvaShutdownR30.ensureUnpilotedR31(this);
     }
 
     /** Local action clocks are not part of SynchedEntityData and need their own invalidation. */
@@ -2034,9 +2034,14 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
         if(!level().isClientSide)return;
         clearJumpRequestState();clientRootFamily=-1;clientRootSequence=-1;clientRootPrevious=Vec3.ZERO;
         clientMeleeStartTick=clientSmashStartTick=clientKickStartTick=-1000;
-        clientActionPhasePrevious=clientActionPhase=0;clientActionPhaseTick=tickCount;
-        for(int i=0;i<rifleSignalCurrent.length;i++){rifleSignalCurrent[i]=rifleSignalPrevious[i]=0;rifleSignalTicks[i]=tickCount;poseSignalClocks[i].snap(0);}
-        actionSignalClock.snap(0);EvaDorsalMechanism.clearViewR30(this);refreshDimensions();
+        clientActionPhasePrevious=clientActionPhase=this.entityData.get(DATA_LIVE_ACTION_PHASE);clientActionPhaseTick=tickCount;
+        var keys=java.util.List.of(DATA_RIFLE_CROUCH,DATA_RIFLE_PRONE,DATA_RIFLE_READY,DATA_RIFLE_RECOIL,DATA_RIFLE_GAIT,DATA_RIFLE_MOVE,DATA_RIFLE_RUN,DATA_RIFLE_STANCE);
+        // A newly tracked actor may already have a nonzero mechanical epoch
+        // and a valid stationary prone/rifle pose. Seed from this complete
+        // metadata packet; forcing zero can outlive it indefinitely because
+        // unchanged server values do not generate another data update.
+        for(int i=0;i<rifleSignalCurrent.length;i++){float value=this.entityData.get(keys.get(i));rifleSignalCurrent[i]=rifleSignalPrevious[i]=value;rifleSignalTicks[i]=tickCount;poseSignalClocks[i].snap(value);}
+        actionSignalClock.snap(clientActionPhase);EvaDorsalMechanism.clearViewR30(this);refreshDimensions();
     }
 
     public void stowHandsForShutdownR30()
@@ -2346,6 +2351,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
     /** Never let a client clock outrun the authoritative contact/root timeline. */
     private float liveActionProgress(float partialTick)
     {
+        if(CombatFeelR31.hitPaused(this))return CombatFeelR31.frozenPhase(this);
         if (!this.level().isClientSide) return this.entityData.get(DATA_LIVE_ACTION_PHASE);
         return actionSignalClock.sample(FirstBattleSignals.clientFrameTime());
     }
@@ -2528,6 +2534,8 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
 
     private void meleeAttack(LivingEntity pilot)
     {
+        if(CombatFeelR31.restrained(this))return;
+        if(EvaCombatR31.attack(this,false))return;
         if (this.isPilotControlLocked() || !this.isMeleeWeapon())
         {
             return;
@@ -2737,6 +2745,8 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
 
     private void smashAttack(LivingEntity pilot)
     {
+        if(CombatFeelR31.restrained(this))return;
+        if(EvaCombatR31.attack(this,true))return;
         if (this.getWeapon() == WEAPON_FISTS && !this.isPilotProne() && !this.isPilotCrouching()
                 && !this.isPilotControlLocked() && this.smashCooldown == 0
                 && (this.ordinaryAttackVisualTicks > 0 || this.kickVisualTicks > 0))
@@ -2833,6 +2843,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
 
     private void stompAttack(LivingEntity pilot)
     {
+        if(CombatFeelR31.restrained(this)||EvaCombatR31.active(this))return;
         if (this.isHeavyMotionActive())
         {
             this.queuedKickAfterHeavy = true;
@@ -2991,6 +3002,10 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
         this.meleeInputBufferTicks = 0;
         this.kickAfterOrdinaryBufferTicks = 0;
     }
+
+    public void interruptCombatR31()
+    {cancelLiveActionsForStanceChange();cancelHeavyMotion();chargingHeld=false;}
+    public float combatPhaseR31(){return this.entityData.get(DATA_LIVE_ACTION_PHASE);}
 
     private void applyKnifeRootMotion()
     {
@@ -3257,6 +3272,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
 
     public void pilotJump(ServerPlayer pilot)
     {
+        if(CombatFeelR31.restrained(this)||EvaCombatR31.active(this))return;
         if (this.getControllingPassenger() != pilot || this.isPilotProne())
         {
             this.jumpBufferTicks = 0;
@@ -3269,6 +3285,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
 
     public void pilotJump(ServerPlayer pilot, int requestId)
     {
+        if(CombatFeelR31.restrained(this)||EvaCombatR31.active(this))return;
         if (requestId == this.lastJumpRequestId)
         {
             // A request that arrived during a transient false ground reading
@@ -3432,6 +3449,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
 
     private void fireRifle(LivingEntity pilot)
     {
+        if(CombatFeelR31.restrained(this)||EvaCombatR31.active(this))return;
         if (this.isPilotControlLocked() || this.getWeapon() != WEAPON_RIFLE
                 || this.rifleCooldown > 0 || this.getControllingPassenger() != pilot
                 || this.rifleReadyBlend(1)<.9F
@@ -4097,6 +4115,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
     public void aiStep()
     {
         EvaShutdownR30.tick(this);
+        EvaCombatR31.tick(this);
         this.oldCarrierRiseR26=this.entityData.get(DATA_CARRIER_RISE_R26);
         FIRST_BATTLE.clientPhysics(this);
         if(this.isFirstBattleActive())
@@ -4173,6 +4192,8 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
         {
             sealedPilot.setInvisible(true);
         }
+        if(!CombatFeelR31.hitPaused(this))
+        {
         if (this.ordinaryAttackComboGraceTicks > 0)
         {
             this.ordinaryAttackComboGraceTicks--;
@@ -4337,6 +4358,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
         if (this.rifleCooldown > 0)
         {
             this.rifleCooldown--;
+        }
         }
         if (this.jumpCooldown > 0)
         {
@@ -6004,6 +6026,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
         // Preserve the previous tick for render interpolation. Assigning both
         // values to the camera yaw made the sixty-block chassis teleport under
         // the pilot whenever the mouse moved.
+        if(EvaCombatR31.locksFacing(this))bodyYaw=Mth.approachDegrees(previousBodyYaw,EvaCombatR31.facing(this),6);
         this.setRot(bodyYaw, 0.0F);
         if(longHull)this.setBoundingBox(stanceBounds(bodyYaw));
         this.yRotO = previousBodyYaw;
@@ -6134,6 +6157,8 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
     @Override
     public void travel(Vec3 input)
     {
+        if(CombatFeelR31.travel(this))return;
+        if(EvaCombatR31.locksInput(this))input=Vec3.ZERO;
         if(!this.level().isClientSide&&this.getPilotEntity() instanceof TrainingPilotEntity
                 &&com.projectseele.world.NervPilotCombatR30.controls(this)&&this.autonomousInputAtR30!=Long.MIN_VALUE&&this.level().getGameTime()-this.autonomousInputAtR30<=2)
         {
@@ -6160,6 +6185,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
             return;
         }
         super.travel(input);
+        EvaCombatR31.approach(this);
         if (this.level().isClientSide)
         {
             if (this.isControlledByLocalInstance())
@@ -6197,6 +6223,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
     @Override
     protected Vec3 getRiddenInput(Player player, Vec3 input)
     {
+        if(CombatFeelR31.restrained(this)||EvaCombatR31.locksInput(this))return Vec3.ZERO;
         if(EvaShutdownR30.disabled(this)){this.pilotMovementRequested=false;return Vec3.ZERO;}
         if (this.getActivationTicks() > 20 || this.isLaunchSequenceActive())
         {
@@ -6436,6 +6463,9 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
 
     public Vec3 getPilotCameraSeatPosition(Entity passenger,float partial)
     {
+        var reaction=CombatFeelR31.beat(this);
+        if(EvaAirTransportR31.active(this)||EvaShutdownR30.displayed(this)||reaction!=null&&(reaction.kind()==CombatFeelR31.DOWN||reaction.kind()==CombatFeelR31.THROWN))
+            return EvaBodyPose.opticalEye(this,partial).subtract(0,passenger.getEyeHeight(),0);
         if(this.isFirstBattleActive()&&FirstBattleClip.ready())
             return FirstBattleClip.point(FIRST_BATTLE.spec(this),true,"eye_blocks",FIRST_BATTLE.time(this,partial)).subtract(0,passenger.getEyeHeight(),0);
         if(this.isNervLogisticsLocked()||this.hasActiveCarrierMotion())

@@ -105,8 +105,14 @@ public final class NervAirLiftR30
     private static void begin(ServerLevel l,Job j,Phase phase,Vec3 a,Vec3 b,int ticks,EvaUnit01Entity e)
     {
         j.phase=phase;j.from=a;j.to=b;j.age=0;j.duration=Math.max(1,ticks);j.rebase=false;
+        if(phase==Phase.APPROACH)EvaAirTransportR31.begin(e);
+        if(phase==Phase.CLAMP)EvaAirTransportR31.transition(e,0,1,j.duration);
+        if(phase==Phase.ASCEND)EvaAirTransportR31.transition(e,90,1,j.duration);
+        if(phase==Phase.CRUISE)EvaAirTransportR31.transition(e,90,1,1);
+        if(phase==Phase.DESCEND)EvaAirTransportR31.transition(e,0,1,Math.max(40,j.duration*2/3));
+        if(phase==Phase.RELEASE)EvaAirTransportR31.release(e,j.duration);
         if(movingCargo(phase)){lock(e);e.beginNervCarrierMotion(a,b,j.duration);}
-        note(l,j,switch(phase){case TAKEOFF->"重型运输机离开机场";case FERRY->"正在前往机体所在位置";case APPROACH->"下降接近，吊装架展开";case CLAMP->"机体夹具锁定";case ASCEND->"吊装完成，垂直爬升";case CRUISE->"前往交付位置";case DESCEND->"到达目标上空，开始下降";case RELEASE->"机体接地，解除运输夹具";case RETREAT,RETURN,LAND->"机体已交付，运输机返回机场";default->"等待运输条件满足";});
+        note(l,j,switch(phase){case TAKEOFF->"重型运输机离开机场";case FERRY->"正在前往机体所在位置";case APPROACH->"下降接近，吊装架展开";case CLAMP->"夹具接触，固定肩部、腰部和双腿";case ASCEND->"机体离地，运输鞍座收平";case CRUISE->"机体已横置固定，前往交付位置";case DESCEND->"抵达目标，鞍座翻转后垂直下放";case RELEASE->"机体接地，解除运输夹具";case RETREAT,RETURN,LAND->"机体已交付，运输机返回机场";default->"等待运输条件满足";});
     }
     @SubscribeEvent public static void tick(TickEvent.ServerTickEvent event)
     {
@@ -119,16 +125,16 @@ public final class NervAirLiftR30
             if(!ready(l,STAND,5))return;var plane=ModEntities.UN_TRANSPORT.get().create(l);if(plane==null)return;plane.configure(0,false);plane.setNerv();plane.setPos(STAND);if(!l.addFreshEntity(plane))return;s.aircraft=plane.getUUID();s.aircraftAt=STAND;s.setDirty();
         }
         if(s.job==null)return;l.resetEmptyTime();
-        try{advance(l,s);}catch(Exception error){s.job.phase=Phase.HOLD;note(l,s.job,"运输暂停："+error.getMessage());s.setDirty();com.projectseele.ProjectSeele.LOGGER.error("NERV airlift held",error);}
+        try{advance(l,s);}catch(Exception error){s.job.phase=Phase.HOLD;if(l.getEntity(s.job.unit) instanceof EvaUnit01Entity held){held.endNervCarrierMotion();EvaAirTransportR31.hold(held);}note(l,s.job,"运输暂停："+error.getMessage());s.setDirty();com.projectseele.ProjectSeele.LOGGER.error("NERV airlift held",error);}
     }
     private static void advance(ServerLevel l,State s)
     {
         var j=s.job;Vec3 location=s.locations.containsKey(j.variant)?Vec3.atCenterOf(s.locations.get(j.variant)):head(l,j.variant);ready(l,location,2);ready(l,s.aircraftAt,2);
         if(!(l.getEntity(j.unit) instanceof EvaUnit01Entity e)){EvaLogisticsDirector.loadControlTarget(l,j.variant);note(l,j,"正在加载原机体；不会生成替代机");return;}
         if(!(l.getEntity(s.aircraft) instanceof UNTransportEntity plane)){note(l,j,"正在加载原运输机");return;}
-        plane.setHoistDistance((float)OFFSET);
+        plane.rebindCargo(e.getId());plane.setHoistDistance((float)OFFSET);
         var owner=l.getServer().getPlayerList().getPlayer(j.owner);
-        if(j.crew&&owner==null&&j.phase!=Phase.RETURN&&j.phase!=Phase.LAND){e.endNervCarrierMotion();e.setDeltaMovement(Vec3.ZERO);j.paused=true;note(l,j,"驾驶员离线，保持位置等待通信恢复");return;}
+        if(j.crew&&owner==null&&j.phase!=Phase.RETURN&&j.phase!=Phase.LAND){e.endNervCarrierMotion();e.setDeltaMovement(Vec3.ZERO);if(!j.paused)EvaAirTransportR31.hold(e);j.paused=true;note(l,j,"驾驶员离线，保持位置等待通信恢复");return;}
         if(j.paused){j.paused=false;j.rebase=true;}
         if(e.getPilotEntity() instanceof ServerPlayer pilot&&pilot!=owner&&j.phase==Phase.PREPARE){s.last="原机体已有其他驾驶员，运输未开始";s.job=null;s.setDirty();return;}
         if(j.phase==Phase.HOLD){if(j.carrying)lock(e);return;}
@@ -143,20 +149,20 @@ public final class NervAirLiftR30
         if(j.rebase){begin(l,j,j.phase,movingCargo(j.phase)?e.position():plane.position(),j.to,Math.max(30,j.duration-j.age),e);}
         if(j.phase==Phase.FERRY&&j.age==0){j.to=new Vec3(e.getX(),cruise(l),e.getZ());j.duration=duration(j.from,j.to);}
         double t=Mth.clamp((double)(j.age+1)/j.duration,0,1);t=t*t*t*(t*(t*6-15)+10);Vec3 at=j.from.lerp(j.to,t);
-        if(!ready(l,at,2)){e.endNervCarrierMotion();j.rebase=true;return;}
+        if(!ready(l,at,2)){e.endNervCarrierMotion();EvaAirTransportR31.hold(e);j.rebase=true;return;}
         if(movingCargo(j.phase))
         {
             lock(e);Vec3 delta=at.subtract(e.position());
-            if(Entity.collideBoundingBox(e,delta,e.getBoundingBox().deflate(.08),l,List.of()).subtract(delta).lengthSqr()>1e-6){e.endNervCarrierMotion();throw new IllegalStateException("机体运输路径受阻，保持当前位置");}
             float yaw=e.getYRot();if(j.phase==Phase.CRUISE){Vec3 d=j.to.subtract(j.from);yaw=Mth.approachDegrees(yaw,(float)Math.toDegrees(Math.atan2(-d.x,d.z)),2.5F);}
             if(j.phase==Phase.DESCEND&&j.returning)yaw=Mth.approachDegrees(yaw,EvaUnit01Entity.SILO_BAY_YAW,2.5F);
+            if(!AirCradleClearanceR31.clear(e,delta,yaw)){e.endNervCarrierMotion();throw new IllegalStateException("机体运输路径受阻，保持当前位置");}
             e.moveOnNervCarrier(at.x,at.y,at.z,yaw);plane.setPos(at.add(0,OFFSET,0));plane.setYRot(yaw);plane.cargo(e.getId(),true,1);
         }
         else if(j.phase==Phase.CLAMP){lock(e);plane.cargo(e.getId(),true,1);}
-        else if(j.phase==Phase.RELEASE){lock(e);plane.cargo(e.getId(),false,1);}
+        else if(j.phase==Phase.RELEASE){lock(e);EvaAirTransportR31.refreshRelease(e,Math.max(1,j.duration-j.age));plane.cargo(e.getId(),false,1);}
         else
         {
-            plane.setPos(at);Vec3 d=j.to.subtract(j.from);if(d.horizontalDistanceSqr()>1)plane.setYRot(Mth.approachDegrees(plane.getYRot(),(float)Math.toDegrees(Math.atan2(-d.x,d.z)),2.5F));plane.cargo(e.getId(),false,j.phase==Phase.APPROACH?(float)t:0);
+            plane.setPos(at);Vec3 d=j.to.subtract(j.from);if(d.horizontalDistanceSqr()>1)plane.setYRot(Mth.approachDegrees(plane.getYRot(),(float)Math.toDegrees(Math.atan2(-d.x,d.z)),2.5F));plane.cargo(e.getId(),false,j.phase==Phase.APPROACH?(float)t:0);if(j.phase==Phase.APPROACH)plane.setYRot(Mth.approachDegrees(plane.getYRot(),e.getYRot(),3.5F));
         }
         s.aircraftAt=plane.position();s.locations.put(j.variant,e.blockPosition());j.age++;s.setDirty();if(j.age<j.duration)return;
         switch(j.phase)
@@ -166,17 +172,17 @@ public final class NervAirLiftR30
             {
                 if(e.position().distanceTo(new Vec3(j.to.x,e.getY(),j.to.z))>12){begin(l,j,Phase.FERRY,plane.position(),new Vec3(e.getX(),cruise(l),e.getZ()),80,e);return;}
                 String problem=TransportClearanceR30.pickupProblem(l,e);if(!problem.isEmpty()){j.age--;note(l,j,problem);return;}
-                lock(e);begin(l,j,Phase.APPROACH,plane.position(),e.position().add(0,OFFSET,0),100,e);
+                EvaAirTransportR31.begin(e);lock(e);begin(l,j,Phase.APPROACH,plane.position(),e.position().add(0,OFFSET,0),100,e);
             }
-            case APPROACH -> {plane.setYRot(e.getYRot());begin(l,j,Phase.CLAMP,plane.position(),plane.position(),40,e);}
-            case CLAMP -> {j.carrying=true;e.getPersistentData().remove("R30AwaitingNervRecovery");begin(l,j,Phase.ASCEND,e.position(),new Vec3(e.getX(),cruise(l)-OFFSET,e.getZ()),100,e);}
+            case APPROACH -> {plane.setYRot(e.getYRot());begin(l,j,Phase.CLAMP,plane.position(),plane.position(),100,e);}
+            case CLAMP -> {j.carrying=true;e.getPersistentData().remove("R30AwaitingNervRecovery");EvaShutdownR30.waitingR31(e,false);begin(l,j,Phase.ASCEND,e.position(),new Vec3(e.getX(),cruise(l)-OFFSET,e.getZ()),100,e);}
             case ASCEND -> {Vec3 dest=new Vec3(j.destination.x,cruise(l)-OFFSET,j.destination.z);begin(l,j,Phase.CRUISE,e.position(),dest,duration(e.position(),dest),e);}
             case CRUISE -> begin(l,j,Phase.DESCEND,e.position(),j.destination,140,e);
-            case DESCEND -> {e.endNervCarrierMotion();begin(l,j,Phase.RELEASE,plane.position(),plane.position(),40,e);}
+            case DESCEND -> {e.endNervCarrierMotion();begin(l,j,Phase.RELEASE,plane.position(),plane.position(),70,e);}
             case RELEASE ->
             {
                 j.carrying=false;j.crew=false;e.normalizeAfterTransportR30(false);e.setOnGround(true);
-                if(j.returning){e.setNervLogisticsLocked(true);e.setNoGravity(true);e.getPersistentData().putBoolean("R30AwaitingNervRecovery",true);}
+                if(j.returning){e.setNervLogisticsLocked(true);e.setNoGravity(true);e.getPersistentData().putBoolean("R30AwaitingNervRecovery",true);EvaShutdownR30.waitingR31(e,true);}
                 begin(l,j,Phase.RETREAT,plane.position(),new Vec3(plane.getX(),cruise(l),plane.getZ()),100,e);
             }
             case RETREAT -> {Vec3 atStand=new Vec3(STAND.x,cruise(l),STAND.z);begin(l,j,Phase.RETURN,plane.position(),atStand,duration(plane.position(),atStand),e);}

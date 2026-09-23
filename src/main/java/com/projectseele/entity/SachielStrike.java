@@ -7,7 +7,34 @@ import org.joml.Vector3f;
 /** Shared hand and bone-lance trajectory. The client skin and server contact use the same curve. */
 public final class SachielStrike
 {
+    public static final int JAB=1,PILE=2,HOOK=3,OVERHEAD=4,SHOVE=5;
     public record Frame(Vec3 hand,Vec3 tip,Vec3 direction,float weight,float extend) {}
+    public static int windup(int mode){return mode==OVERHEAD?18:mode==PILE?16:mode==SHOVE?10:12;}
+    public static int contactStart(int mode){return windup(mode)+4;}
+    public static int contactEnd(int mode){return mode==OVERHEAD?29:mode==PILE?29:mode==SHOVE?21:25;}
+    public static int duration(int mode){return mode==OVERHEAD?52:mode==PILE?48:mode==SHOVE?38:42;}
+    public static float prepare(int mode,float age){return (float)CombatMotionR29.ease(age/windup(mode));}
+    public static float drive(int mode,float age){return (float)CombatMotionR29.ease((age-windup(mode))/(mode==OVERHEAD?8:7));}
+    public static float release(int mode,float age){int at=contactEnd(mode)+2;return (float)CombatMotionR29.ease((age-at)/(duration(mode)-at));}
+    public static float weight(int mode,float age){return prepare(mode,age)*(1-release(mode,age));}
+    public static boolean bothHands(int mode){return mode==OVERHEAD||mode==SHOVE;}
+    public static Vector3f torsoRotation(int mode,float age,boolean upper)
+    {
+        float c=prepare(mode,age),d=drive(mode,age)*(1-release(mode,age));
+        float twist=bothHands(mode)?0:(.20F*c-.48F*d)*(mode==HOOK?-1:1)*(1-release(mode,age));
+        float lean=(mode==OVERHEAD?-.16F*c+.41F*d:mode==SHOVE?.20F*d:.12F*d)*(1-release(mode,age));
+        return new Vector3f(lean*(upper?.7F:.3F),twist*(upper?.65F:.35F),0);
+    }
+    private static Matrix4f trunk(SachielEntity actor,float age,float partial)
+    {
+        Matrix4f result=root(actor,partial);
+        for(boolean upper:new boolean[]{false,true})
+        {
+            float y=(upper?134.979142F:90.41946F)/16;var r=torsoRotation(actor.strikeMode(),age,upper);
+            result.translate(0,y,0).rotateZ(r.z).rotateY(r.y).rotateX(r.x).translate(0,-y,0);
+        }
+        return result;
+    }
     public static Matrix4f root(SachielEntity actor,float partial)
     {
         Vec3 p=actor.level().isClientSide?actor.getPosition(partial):actor.position();float yaw=actor.level().isClientSide?net.minecraft.util.Mth.rotLerp(partial,actor.yBodyRotO,actor.yBodyRot):actor.yBodyRot;
@@ -18,18 +45,25 @@ public final class SachielStrike
     {return sample(actor,actor.strikeAge(partial),partial);}
     public static Frame sample(SachielEntity actor,float age,float partial)
     {
-        Matrix4f root=root(actor,partial);boolean hook=actor.strikeMode()==3;float side=hook?-1:1;
-        Vec3 shoulder=world(root,side*40.344577F,172.915088F,0),rest=world(root,side*45.523135F,122.333827F,-42.753209F),chamber=world(root,side*(hook?58:48),hook?155:162,2);
-        Vec3 direction=actor.strikeAim().subtract(shoulder).normalize();double reach=actor.strikeAim().distanceTo(shoulder);
-        Vec3 contact=shoulder.add(direction.scale(Math.min(27,Math.max(8,reach-(actor.strikeMode()==2?8:1)))));
-        float prepare=CombatMotionR29.chamber(age),drive=CombatMotionR29.drive(age),returning=CombatMotionR29.release(age);
+        return sample(actor,age,partial,actor.strikeMode()==HOOK);
+    }
+    public static Frame sample(SachielEntity actor,float age,float partial,boolean left)
+    {
+        int mode=actor.strikeMode();Matrix4f root=trunk(actor,age,partial);boolean hook=mode==HOOK;float side=left?-1:1;
+        Vec3 shoulder=world(root,side*40.344577F,172.915088F,0),rest=world(root,side*45.523135F,122.333827F,-42.753209F);
+        Vec3 chamber=world(root,side*(mode==OVERHEAD?27:mode==SHOVE?35:hook?61:48),mode==OVERHEAD?230:mode==SHOVE?169:hook?155:162,mode==SHOVE?-14:8);
+        Vec3 lateral=world(root,side*16,0,0).subtract(world(root,0,0,0)).normalize();
+        Vec3 goal=actor.strikeAim().add(bothHands(mode)?lateral.scale(mode==OVERHEAD?2.4:5):Vec3.ZERO);
+        Vec3 direction=goal.subtract(shoulder).normalize();double reach=goal.distanceTo(shoulder);
+        Vec3 contact=shoulder.add(direction.scale(Math.min(26.5,Math.max(8,reach-(mode==PILE?8:1)))));
+        float prepare=prepare(mode,age),drive=drive(mode,age),returning=release(mode,age);
         Vec3 hand=rest.lerp(chamber,prepare).lerp(contact,drive).lerp(rest,returning);
         if(hook)
         {
-            Vec3 lateral=world(root,-16,0,0).subtract(world(root,0,0,0)).normalize();
             hand=hand.add(lateral.scale(Math.sin(Math.PI*drive)*6*prepare*(1-returning)));
         }
-        float extension=actor.strikeMode()==2?EvaDorsalMechanism.smooth((age-18)/5)*(1-EvaDorsalMechanism.smooth((age-26)/8)):0;
+        if(mode==OVERHEAD)direction=contact.subtract(chamber).normalize();
+        float extension=mode==PILE?EvaDorsalMechanism.smooth((age-20)/5)*(1-EvaDorsalMechanism.smooth((age-29)/8)):0;
         Vec3 tip=hand.add(direction.scale(extension*Math.min(38,Math.max(2,reach-shoulder.distanceTo(contact)+2))));
         return new Frame(hand,tip,direction,prepare*(1-returning),extension);
     }

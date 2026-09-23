@@ -16,17 +16,9 @@ import java.util.*;
 /** Deterministic dialogue and finite, server-authoritative console requests. */
 public final class NervStaffDialogue
 {
-    private static final Map<String,List<String>> LINES=Map.of(
-            "commander",List.of("这里是作战指挥。先确认驾驶员同步和发射通道，再下达出击指令。","全员按岗位待命。我会在这里确认发射与回收。"),
-            "scientist",List.of("同步率、供电和插入栓锁定都必须逐项核对。","回收后先固定机体，再恢复 LCL。不要跳过安全联锁。"),
-            "operator",List.of("MAGI 监视中。机库、供电和各发射轨道的状态会持续回传。","指挥链路在线。等待作战指令。"),
-            "medic",List.of("这里是医疗值班点。驾驶员回收后请先接受检查。"),
-            "guard",List.of("请出示通行证。保持门口和运输通道畅通。"),
-            "un_guard",List.of("UN 安保值勤。试验区未经许可不得进入。"),
-            "un_crew",List.of("车辆、航空器和试验机库按值班表检查。控制设备请交给当班人员。"),
-            "technician",List.of("本区设备运行中。我正在记录压力、供电和检修情况。"));
     public static void say(ServerPlayer player,String name,String line)
     {
+        // Named characters use chat only. Facility PA is a separate sound circuit.
         player.sendSystemMessage(Component.literal("「"+name+"」 ").withStyle(ChatFormatting.AQUA).append(Component.literal(line).withStyle(ChatFormatting.WHITE)));
         if("r15-staff".equals(System.getProperty("projectseele.regionalBuild","")))ProjectSeele.LOGGER.info("STAFF REVIEW DIALOGUE {} {}",name,line);
     }
@@ -87,7 +79,7 @@ public final class NervStaffDialogue
         if(text.startsWith("CAMPAIGN:"))
         {
             if(!StaffAuthorityR25.allows(npc,"campaign") || !authorized(player))
-            {reply(player,npc,"请向作战指挥或技术负责人提交作战指令。");return 0;}
+            {reply(player,npc,"作战安排请联络葛城部长或赤木博士。");return 0;}
             if(text.startsWith("CAMPAIGN:select:"))
             {
                 int result=com.projectseele.event.TvCampaignDirector.select(player,text.substring("CAMPAIGN:select:".length()));
@@ -121,8 +113,8 @@ public final class NervStaffDialogue
                 if(intent.subject().startsWith("city_"))
                 {
                     if(!authorized(player)||!StaffAuthorityR25.allows(npc,intent.subject()))
-                    {reply(player,npc,"城市升降由总指挥席的冬月负责，请联络冬月。");return 0;}
-                    if(npc.busy()||StaffCommandBookR24.order(npc)!=null){reply(player,npc,"正在操作控制台，请稍候。");return 0;}
+                    {reply(player,npc,"城市升降请联络冬月副司令。他在最上面的指挥席。");return 0;}
+                    if(npc.busy()||StaffCommandBookR24.order(npc)!=null){reply(player,npc,"手上的操作还没结束，稍等一下。");return 0;}
                     return beginNativeAction(player,npc,intent.subject(),-1);
                 }
                 if(intent.subject().equals("board"))
@@ -154,11 +146,11 @@ public final class NervStaffDialogue
                 {
                     var origin=IntegratedNervMapBuilder.tokyo3Origin(player.serverLevel());
                     int depth=Tokyo3RetractionDirector.depth(player.serverLevel(),origin);
-                    reply(player,npc,"第三新东京市当前下沉深度："+depth+" 米。城市升降由最高指挥席的冬月操作；电话中联络冬月后选择「城市」。");
+                    reply(player,npc,"城市目前下沉了 "+depth+" 米。需要升降的话，用电话联络冬月副司令，选择「城市」。");
                 }
                 else if(intent.subject().equals("directions"))
                     reply(player,npc,npc.staffRole().startsWith("un_")
-                        ?"请沿基地的人员标线前往车辆区、航空区或试验机库，避开滑行道和舱门作业范围。总部步行引导仅在地下总部公共通道内可用。"
+                        ?"去车辆区、航空区或试验机库，请沿人员标线走。滑行道上不要停留。地下总部的路线，要到总部以后才能引导。"
                         :NervWayfindingR24.describe(player));
                 else reply(player,npc,StaffDialogueCatalogR24.next(player,npc.skin(),npc.staffRole(),intent.subject()));
                 return 1;
@@ -177,30 +169,30 @@ public final class NervStaffDialogue
     public static String readinessHint(ServerLevel level,int variant,String operation)
     {
         var status=EvaLogisticsDirector.status(level,variant);
-        if(!status.loaded())return "等待远端机库信号。";
+        if(!status.loaded())return "还没收到机库的信号，请稍等。";
         return switch(status.phase())
         {
-            case "PARKED" -> boarded(level,variant)?"驾驶员已登机，可以提交整备；接入和轨道仍需通过联锁检查。":"请先进入对应机库悬挂的插入栓。驾驶员登机后才能整备。";
-            case "SILO_READY" -> "机体已到发射台；发射前仍会复核插入栓与轨道锁定。";
-            case "DEPLOYED" -> "机体正在出动。回收前请回到本机的地表回收平台并停稳。";
-            case "PLUG_FAULT" -> "插入栓接入出现故障，请在机库检查并中止故障接入流程。";
-            default -> "当前正在"+stage(status.phase())+"，请等待这一阶段完成。";
+            case "PARKED" -> boarded(level,variant)?"驾驶员已登机，可以开始整备。":"驾驶员还没登机。先进入机库里悬挂的插入栓，再开始整备。";
+            case "SILO_READY" -> "机体已到发射台，等待发射命令。";
+            case "DEPLOYED" -> "机体已经出动。回收时，请回到本机的地表平台停稳。";
+            case "PLUG_FAULT" -> "插入栓接入出了故障。先中止接入，再到机库检查。";
+            default -> "正在"+stage(status.phase())+"，请稍等。";
         };
     }
     public static int beginNativeAction(ServerPlayer player,NervStaffEntity npc,String op,int variant)
     {
         if(!StaffAuthorityR25.allows(npc,op)||!authorized(player)||npc.busy())return 0;
         BlockPos control=NervOperationsConsole.staffControl(player.serverLevel(),op,variant);
-        if(control==null||!(player.serverLevel().getBlockState(control).getBlock() instanceof ButtonBlock)){reply(player,npc,"对应实体按键不可用，操作中止。");return 0;}
+        if(control==null||!(player.serverLevel().getBlockState(control).getBlock() instanceof ButtonBlock)){reply(player,npc,"控制台的按钮出了问题，暂时不能操作。");return 0;}
         BlockPos approach=approach(npc,control,op.startsWith("city_"));
-        if(approach==null){reply(player,npc,"通往按键的路径受阻，请先清理控制台旁的通道。");return 0;}
+        if(approach==null){reply(player,npc,"控制台前面被挡住了。我暂时过不去。");return 0;}
         if(op.startsWith("city_"))
         {
             npc.begin(player.getUUID(),op,variant,control,approach);
-            reply(player,npc,"收到，碇。确认各区状态后，开始"+(op.equals("city_rise")?"城市展开。":"城市收纳。"));return 1;
+            reply(player,npc,"知道了，碇。准备"+(op.equals("city_rise")?"展开城市。":"收纳城市。"));return 1;
         }
         EvaLogisticsDirector.loadControlTarget(player.serverLevel(),variant);
-        npc.begin(player.getUUID(),op,variant,control,approach);reply(player,npc,"收到，司令。"+unitName(variant)+(op.equals("prepare")?"开始出击准备。":op.equals("launch")?"转入发射程序，请驾驶员保持联络。":"开始回收，请各区人员让出通道。"));return 1;
+        npc.begin(player.getUUID(),op,variant,control,approach);reply(player,npc,"收到，司令。"+unitName(variant)+(op.equals("prepare")?"准备出击。":op.equals("launch")?"进入发射程序。":"开始回收。请让出运输通道。"));return 1;
     }
     private static BlockPos approach(NervStaffEntity npc,BlockPos button,boolean city)
     {
@@ -233,8 +225,9 @@ public final class NervStaffDialogue
         if(ticks%40==0&&"r15-staff-controls".equals(System.getProperty("projectseele.regionalBuild","")))ProjectSeele.LOGGER.info("STAFF CONTROL TRACE actor={} pos={} target={} navDone={} onGround={} loaded={}",npc.memberId(),npc.position(),approach,npc.getNavigation().isDone(),npc.onGround(),EvaLogisticsDirector.status(level,variant).loaded());
         if(player==null||player.level()!=level||(StaffCommandBookR24.order(npc)==null&&player.distanceToSqr(npc)>48*48&&!(city&&StaffConversationR24.radioAllowed(player)))||!authorized(player)||!StaffAuthorityR25.allows(npc,operation)||ticks>300)
         {
-            if(city&&player!=null)reply(player,npc,"城市按键操作已中止：通讯中断、权限改变或路径超时。");
-            else StaffCommandBookR24.failed(npc,"按键操作已中止：通讯中断、权限改变或路径超时。");
+            String reason=player==null||player.level()!=level?"通信断了，操作已经停下。":!authorized(player)||!StaffAuthorityR25.allows(npc,operation)?"通行权限已变更，操作停止。":ticks>300?"没能及时到达控制台，这次操作已取消。":"通信距离太远，操作已取消。";
+            if(city&&player!=null)reply(player,npc,reason);
+            else StaffCommandBookR24.failed(npc,reason);
             npc.finishTask();return;
         }
         if(!city&&ticks%20==0&&!EvaLogisticsDirector.status(level,variant).loaded())EvaLogisticsDirector.loadControlTarget(level,variant);
@@ -262,7 +255,7 @@ public final class NervStaffDialogue
         if(city)
         {
             var result=handled?NervOperationsConsole.lastOutcome(level,player,control):null;
-            reply(player,npc,result!=null&&result.accepted()?"城市"+(operation.equals("city_rise")?"升起":"降下")+"指令已接受。":"城市控制未接受指令："+(result==null?"控制台无响应。":result.message()));
+            reply(player,npc,result!=null&&result.accepted()?"碇，控制台已收到"+(operation.equals("city_rise")?"展开":"收纳")+"指令。":"城市还不能升降。"+(result==null?"控制台没有响应。":result.message()));
             ProjectSeele.LOGGER.info("STAFF CITY actor={} operation={} button={} accepted={}",npc.memberId(),operation,control,result!=null&&result.accepted());
             npc.finishTask();return;
         }
@@ -270,7 +263,7 @@ public final class NervStaffDialogue
         var outcome=handled?NervOperationsConsole.lastOutcome(level,player,control):null;
         boolean accepted=outcome!=null&&outcome.accepted();
         if(StaffCommandBookR24.order(npc)==null||accepted&&!operation.equals("launch"))
-            reply(player,npc,accepted?unitName(variant)+"，"+stage(status.phase())+"。我会继续确认后续进程。":"指令暂时不能执行。"+readinessHint(level,variant,operation));
+            reply(player,npc,accepted?unitName(variant)+"，"+stage(status.phase())+"。":"现在还不能操作。"+readinessHint(level,variant,operation));
         StaffCommandBookR24.pressed(npc,outcome);
         ProjectSeele.LOGGER.info("STAFF CONSOLE actor={} operation={} unit={} button={} requester={} phase={}",npc.memberId(),operation,variant,control,owner,status.phase());npc.finishTask();
     }

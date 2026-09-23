@@ -8,10 +8,10 @@ final class ShamshelWhipPose
     static void apply(ShamshelEntity actor,BakedGeoModel model,float partial)
     {
         float age=actor.isSweeping()?actor.sweepAge(partial):-1;
-        model.getBone("body").ifPresent(b->{b.setRotX(ShamshelWhipMotion.bodyPitch(age));b.setRotY(ShamshelWhipMotion.bodyYaw(actor.sweepSide(),age));});
+        model.getBone("body").ifPresent(b->{b.setRotX(ShamshelWhipMotion.bodyPitch(actor.sweepMode(),age));b.setRotY(ShamshelWhipMotion.bodyYaw(actor.sweepSide(),actor.sweepMode(),age));});
         for(int side:new int[]{-1,1})for(int segment=0;segment<4;segment++)
         {
-            var r=ShamshelWhipMotion.rotation(side,segment,actor.sweepSide(),age,actor.tickCount+partial);
+            var r=ShamshelWhipMotion.rotation(side,segment,actor.sweepSide(),actor.sweepMode(),age,actor.tickCount+partial);
             model.getBone("whip_"+(side>0?"l":"r")+"_"+segment).ifPresent(b->{b.setRotX(r.x);b.setRotY(r.y);b.setRotZ(r.z);});
         }
         for(int i=0;i<4;i++)

@@ -109,6 +109,15 @@ public final class LocalTriangleMeshLayer<T extends GeoAnimatable> extends GeoRe
 
         Matrix4f pose = poseStack.last().pose();
         Matrix3f normal = poseStack.last().normal();
+        if(com.projectseele.visual.MechanicsR31Review.ENABLED&&!this.fullBright)
+        {
+            if(animatable instanceof EvaUnit01Entity eva&&"torso_upper".equals(bone.getName())&&this.getRenderer() instanceof EvaUnit01Renderer renderer)
+                com.projectseele.client.visual.MechanicsR31Client.captureSocket(eva,renderer.renderedMeshTransform(pose,eva,partialTick),partialTick);
+            if(animatable instanceof EvaUnit01Entity eva&&"head".equals(bone.getName())&&this.getRenderer() instanceof EvaUnit01Renderer renderer)
+                com.projectseele.client.visual.MechanicsR31Client.captureHeadFacing(eva,renderer.renderedMeshTransform(pose,eva,partialTick),partialTick);
+            if(animatable instanceof com.projectseele.entity.EntryPlugCarrierEntity plug&&"entry_plug".equals(bone.getName())&&this.getRenderer() instanceof EntryPlugCarrierRenderer renderer)
+                com.projectseele.client.visual.MechanicsR31Client.capturePlug(plug,renderer.renderedMeshTransform(pose,plug,partialTick),partialTick);
+        }
         if((com.projectseele.client.visual.EvaDorsalR13Audit.ENABLED||EvaHeadArmorR25Audit.ENABLED)&&!this.fullBright&&animatable instanceof EvaUnit01Entity eva
                 &&this.getRenderer() instanceof EvaUnit01Renderer renderer)
         {

@@ -78,6 +78,18 @@ public final class EntryPlugCarrierRenderer
     }
 
     @Override
+    public net.minecraft.world.phys.Vec3 getRenderOffset(EntryPlugCarrierEntity entity,float partial)
+    {
+        var base=super.getRenderOffset(entity,partial);
+        if(!entity.hasCanonicalPose())return base;
+        var dispatcher=new net.minecraft.world.phys.Vec3(
+                net.minecraft.util.Mth.lerp((double)partial,entity.xOld,entity.getX()),
+                net.minecraft.util.Mth.lerp((double)partial,entity.yOld,entity.getY()),
+                net.minecraft.util.Mth.lerp((double)partial,entity.zOld,entity.getZ()));
+        return base.add(entity.getInterpolatedCanonicalTransform(partial).translation().subtract(dispatcher));
+    }
+
+    @Override
     protected void applyRotations(EntryPlugCarrierEntity animatable,
                                   PoseStack poseStack, float ageInTicks,
                                   float rotationYaw, float partialTick)
@@ -89,6 +101,13 @@ public final class EntryPlugCarrierRenderer
             return;
         }
         poseStack.mulPose(animatable.getCanonicalRotation(partialTick));
+    }
+
+    public org.joml.Matrix4f renderedMeshTransform(org.joml.Matrix4f pose,EntryPlugCarrierEntity plug,float partial)
+    {
+        var world=software.bernie.geckolib.util.RenderUtils.invertAndMultiplyMatrices(pose,this.entityRenderTranslations);
+        var origin=new net.minecraft.world.phys.Vec3(net.minecraft.util.Mth.lerp((double)partial,plug.xOld,plug.getX()),net.minecraft.util.Mth.lerp((double)partial,plug.yOld,plug.getY()),net.minecraft.util.Mth.lerp((double)partial,plug.zOld,plug.getZ())).add(getRenderOffset(plug,partial));
+        world.m30(world.m30()+(float)origin.x).m31(world.m31()+(float)origin.y).m32(world.m32()+(float)origin.z);return world;
     }
 
     @Override

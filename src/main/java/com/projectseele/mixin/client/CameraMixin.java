@@ -87,11 +87,12 @@ public abstract class CameraMixin
             // wall contracts its zoom. Never inherit the low rider seat or
             // ease back toward the old 30-metre waist pivot.
             projectseele$carrierPivotHeight=48;
-            Vec3 pivot=base.add(0,projectseele$carrierPivotHeight,0);
+            Vec3 pivot=com.projectseele.entity.EvaAirTransportR31.active(controlled)
+                    ?com.projectseele.entity.EvaAirTransportR31.point(controlled,new Vec3(0,40,0),partialTick):base.add(0,projectseele$carrierPivotHeight,0);
             this.setPosition(pivot.x,pivot.y,pivot.z);
             double available=Math.max(.25,this.getMaxZoom(4)-2.0);
             double anticipated=available;
-            if(controlled.hasActiveCarrierMotion())
+            if(controlled.hasActiveCarrierMotion()&&!com.projectseele.entity.EvaAirTransportR31.active(controlled))
             {
                 // Read the already synchronized mechanical path ahead. A
                 // descending camera contracts before reaching the surface
@@ -117,6 +118,20 @@ public abstract class CameraMixin
             return;
         }
         projectseele$carrierCameraId=-1;projectseele$loosePlugCamera=false;
+        if(!detached&&controlled!=null&&com.projectseele.entity.EvaAirTransportR31.active(controlled))
+        {
+            Vec3 optical=controlled.getPilotCameraSeatPosition(subject,partialTick).add(0,subject.getEyeHeight(),0);
+            optical=com.projectseele.client.PilotOpticsContinuity.apply(controlled,partialTick,optical);
+            Camera camera=(Camera)(Object)this;
+            float localYaw=camera.getYRot()-com.projectseele.entity.EvaAirTransportR31.frameYaw(controlled,partialTick)+180;
+            Vec3 local=Vec3.directionFromRotation(camera.getXRot(),localYaw);
+            var body=com.projectseele.entity.EvaBodyPose.sample(controlled,partialTick);
+            var frame=com.projectseele.entity.EvaRifleKinematics.world(controlled,partialTick).mul(body.matrix("head"));
+            Vec3 direction=new Vec3(frame.transformDirection(local.toVector3f()).normalize());
+            float yaw=direction.horizontalDistanceSqr()<1e-6?camera.getYRot():(float)Math.toDegrees(Math.atan2(-direction.x,direction.z));
+            this.setPosition(optical.x,optical.y,optical.z);
+            this.setRotation(yaw,(float)-Math.toDegrees(Math.atan2(direction.y,direction.horizontalDistance())));return;
+        }
         if(!detached&&controlled!=null&&controlled.isPoweredOn()&&!controlled.isActivationCinematicActive())
         {
             Vec3 optical=controlled.getPilotCameraSeatPosition(subject,partialTick).add(0,subject.getEyeHeight(),0);

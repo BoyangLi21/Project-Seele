@@ -18,6 +18,7 @@ final class EvaRifleProneBody
     private record Pose(Quaternionf rotation,Vector3f position) {}
     private static final Map<Integer,JsonObject> PROFILES=new HashMap<>();
     private static final Map<EvaUnit01Entity,Map<String,Pose>> STANDING=new WeakHashMap<>();
+    static void resetEntityR31(EvaUnit01Entity eva){STANDING.remove(eva);}
 
     static void reload(ResourceManager manager)
     {

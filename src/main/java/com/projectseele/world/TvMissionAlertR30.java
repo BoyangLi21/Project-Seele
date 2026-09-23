@@ -2,10 +2,8 @@ package com.projectseele.world;
 
 import com.google.gson.JsonParser;
 import com.projectseele.registry.ModBlocks;
-import com.projectseele.registry.ModSounds;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.*;
-import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.storage.LevelResource;
 import java.nio.file.Files;
@@ -33,15 +31,18 @@ public final class TvMissionAlertR30
         if(age<180&&age%60==0)
         {
             for(BlockPos p:List.of(new BlockPos(30,-412,289),new BlockPos(30,-391,-240)))
-                level.playSound(null,p,ModSounds.FACILITY.get("facility_siren").get(),SoundSource.BLOCKS,.6F,1);
+                FacilityPaR31.warning(level,net.minecraft.world.phys.Vec3.atCenterOf(p));
         }
         Long lastLine=LAST_LINE.get(level);
         if(commander!=null&&data.alertLine<5&&age>=data.alertLine*35L
                 &&(data.alertLine==0||lastLine==null||level.getGameTime()<lastLine||level.getGameTime()-lastLine>=35))
         {
-            String[][] lines={{"伊吹摩耶","监视网捕捉到异常反应。正在比对波形。"},{"伊吹摩耶","波形确认为蓝色。目标是使徒。"},{"葛城美里","司令，迎击命令已收到。各部门进入第一种战斗配置。"},{"赤木律子","机体检查开始。确认驾驶员连接以后，再解除发射联锁。"},{"葛城美里","前线交给我协调。请确认中央城区已完成收纳，保持撤回通道畅通。"}};
+            String[][] lines={{"伊吹摩耶","监视网发现异常反应！"},{"伊吹摩耶","波形蓝色，确认为使徒。"},{"葛城美里","司令，迎击准备开始。"},{"赤木律子","摩耶，调出机体数据。驾驶员的情况随时报告。"},{"葛城美里","各机按指令出动。我来负责地面接应。"}};
             int index=data.alertLine++;var line=lines[index];NervStaffDialogue.say(commander,line[0]+" · 指挥通信",line[1]);
-            if(index<3)commander.playNotifySound(ModSounds.FACILITY.get(new String[]{"pa_signal_r30","pa_blue_r30","pa_alert_r30"}[index]).get(),SoundSource.VOICE,.9F,1);
+            // Character dialogue remains text. This is a separate building-wide
+            // announcement, without a named character or an actor-like voice.
+            if(index==2)for(BlockPos speaker:List.of(new BlockPos(30,-412,289),new BlockPos(30,-391,-240)))
+                FacilityPaR31.announce(level,net.minecraft.world.phys.Vec3.atCenterOf(speaker),"pa_combat_r31");
             LAST_LINE.put(level,level.getGameTime());data.setDirty();
         }
         return age>=180&&data.alertLine>=5;

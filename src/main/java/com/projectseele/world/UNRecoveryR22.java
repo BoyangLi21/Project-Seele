@@ -71,25 +71,36 @@ public final class UNRecoveryR22
             {
                 BlockPos parked=locations(l).positions.get(data.getUUID("UNPlug"));if(parked!=null)load(l,parked);
             }
-            var plug=UNPlugDirector.capsule(eva);if(plug==null)continue;
-            var pilot=eva.getPilotEntity();var passengers=new ArrayList<net.minecraft.world.entity.Entity>();passengers.addAll(plug.getPassengers());passengers.addAll(eva.getPassengers());
+            var plug=UNPlugDirector.capsule(eva);
+            boolean destroyed=plug==null&&EntryPlugDisposalR31.replacementAuthorized(eva);
+            if(plug==null&&!destroyed)continue;
+            var pilot=eva.getPilotEntity();var passengers=new ArrayList<net.minecraft.world.entity.Entity>();if(plug!=null)passengers.addAll(plug.getPassengers());passengers.addAll(eva.getPassengers());
             eva.normalizeAfterTransportR30(true);UNPlugDirector.resetCraneR30(eva);
             eva.teleportTo(home.x,home.y,home.z);eva.moveOnNervCarrier(home.x,home.y,home.z,0);eva.resetFallDistance();
+            eva.xo=eva.xOld=home.x;eva.yo=eva.yOld=home.y;eva.zo=eva.zOld=home.z;
+            eva.setYRot(0);eva.yRotO=0;eva.setXRot(0);eva.xRotO=0;eva.setYBodyRot(0);eva.yBodyRotO=0;eva.setYHeadRot(0);eva.yHeadRotO=0;
             eva.setNervLogisticsLocked(false);eva.setNervLogisticsLocked(true);
             data.putDouble("UNHomeX",home.x);data.putDouble("UNHomeY",home.y);data.putDouble("UNHomeZ",home.z);data.putFloat("UNHomeYaw",0);
+            if(destroyed){plug=UNPlugDirector.replaceDestroyedAtDockR31(eva);if(plug==null)continue;}
             boolean extracting=!job.reset()&&pilot!=null&&plug.getInsertionStage()==EntryPlugCarrierEntity.STAGE_LOCKED;
             if(extracting)
             {
-                plug.setCanonicalTransform(EntryPlugKinematics.lockedTransform(eva));
+                plug.snapCanonicalTransformR31(EntryPlugKinematics.lockedTransform(eva));
                 if(!EntryPlugDirector.ejectPilotToPlug(l,-1,eva,pilot))throw new IllegalStateException("UN extraction failed after identity-safe recall");
             }
             else
             {
-                for(var person:passengers)if(person instanceof ServerPlayer p){p.stopRiding();p.teleportTo(l,home.x+4,127,home.z-12,90,0);p.setDeltaMovement(Vec3.ZERO);p.resetFallDistance();}
-                plug.resetIndependentAtDock(eva);eva.enterHangarStandby();EvaDorsalMechanism.set(eva,0,0);
+                for(var person:passengers)
+                {
+                    if(person instanceof EntryPlugCarrierEntity)continue;
+                    person.stopRiding();person.setInvisible(false);person.setDeltaMovement(Vec3.ZERO);person.resetFallDistance();
+                    if(person instanceof ServerPlayer p)p.teleportTo(l,home.x+4,127,home.z-12,90,0);
+                    else {person.teleportTo(home.x+4,127,home.z-12);if(person instanceof TrainingPilotEntity dummy)dummy.setTrainingStage(TrainingPilotEntity.STAGE_STANDBY);}
+                }
                 if(job.reset())eva.setHealth(eva.getMaxHealth());
+                plug.resetIndependentAtDock(eva);eva.enterHangarStandby();EvaDorsalMechanism.set(eva,0,0);
             }
-            remember(eva);remember(plug);job.source().sendSuccess(()->Component.literal("EVA-UN-0"+job.serial()+" 已回到原机库；"+(extracting?"正在退出原插入栓":"原机体与原插入栓已复位")+"。UUID 保持不变。"),false);
+            remember(eva);remember(plug);job.source().sendSuccess(()->Component.literal("EVA-UN-0"+job.serial()+" 已回到机库。"+(extracting?"插入栓正在退出。":destroyed?"已补充备用插入栓。":"机体和插入栓已复位。")),false);
             ProjectSeele.LOGGER.info("UN R22 {} serial={} eva={} plug={}",job.reset()?"reset":"recover",job.serial(),id,plug.getUUID());it.remove();
         }
     }

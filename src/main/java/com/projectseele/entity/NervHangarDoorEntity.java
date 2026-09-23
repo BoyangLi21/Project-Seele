@@ -35,7 +35,10 @@ public final class NervHangarDoorEntity extends Entity
 
     private float clientOpen;
     private static final EntityDataAccessor<Float> DATA_HEIGHT = SynchedEntityData.defineId(NervHangarDoorEntity.class, EntityDataSerializers.FLOAT);
+    private static final EntityDataAccessor<Float> DATA_WIDTH = SynchedEntityData.defineId(NervHangarDoorEntity.class, EntityDataSerializers.FLOAT);
     public float visualHeight(){return entityData.get(DATA_HEIGHT);}
+    public float visualWidth(){return entityData.get(DATA_WIDTH);}
+    public boolean isSectionalUNGate(){return getVariant()==3&&visualWidth()>40;}
     private float clientOpenO;
     private boolean wasMoving;
 
@@ -56,6 +59,7 @@ public final class NervHangarDoorEntity extends Entity
         this.entityData.define(DATA_OPEN, 0.0F);
         this.entityData.define(DATA_TARGET, 0.0F);
         this.entityData.define(DATA_HEIGHT, 65.0F);
+        this.entityData.define(DATA_WIDTH, 33.0F);
     }
 
     @Override protected void readAdditionalSaveData(CompoundTag tag) {}
@@ -138,6 +142,7 @@ public final class NervHangarDoorEntity extends Entity
         float target = open ? 1.0F : 0.0F;
         door.entityData.set(DATA_HEIGHT, variant < 3 && com.projectseele.world.FacilityLayoutR29.active(level.getServer())
                 ? (float)Math.max(65,-370-centre.y) : 65.0F);
+        door.entityData.set(DATA_WIDTH,variant==3?(float)com.projectseele.world.UNHangarDimensionsR31.width(level):33.0F);
         if (Math.abs(door.entityData.get(DATA_TARGET) - target) > 1.0E-4F)
         {
             door.entityData.set(DATA_TARGET, target);

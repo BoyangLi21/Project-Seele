@@ -1,0 +1,98 @@
+package com.projectseele.world;
+
+import com.projectseele.entity.*;
+import net.minecraft.util.Mth;
+import net.minecraft.world.phys.*;
+import java.util.*;
+
+/** Sweeps both ends of every angular substep, including the aircraft's turn. */
+final class AirCradleClearanceR31
+{
+    private static Vec3 point(Vec3 root,Vec3 local,float pitch,float yaw)
+    {
+        double a=-pitch*Mth.DEG_TO_RAD,c=Math.cos(a),s=Math.sin(a);
+        double y=local.y-EvaAirTransportR31.HIP_HEIGHT;
+        double py=y*c-local.z*s+EvaAirTransportR31.HIP_HEIGHT+EvaAirTransportR31.lift(pitch);
+        double pz=y*s+local.z*c;double heading=(180-yaw)*Mth.DEG_TO_RAD;
+        return root.add(local.x*Math.cos(heading)+pz*Math.sin(heading),py,-local.x*Math.sin(heading)+pz*Math.cos(heading));
+    }
+    private static AABB transformed(AABB box,Vec3 root,float pitch,float yaw)
+    {
+        double x0=Double.POSITIVE_INFINITY,y0=x0,z0=x0,x1=Double.NEGATIVE_INFINITY,y1=x1,z1=x1;
+        for(double x:new double[]{box.minX,box.maxX})for(double y:new double[]{box.minY,box.maxY})for(double z:new double[]{box.minZ,box.maxZ})
+        {var p=point(root,new Vec3(x,y,z),pitch,yaw);x0=Math.min(x0,p.x);y0=Math.min(y0,p.y);z0=Math.min(z0,p.z);x1=Math.max(x1,p.x);y1=Math.max(y1,p.y);z1=Math.max(z1,p.z);}
+        return new AABB(x0,y0,z0,x1,y1,z1);
+    }
+    private static List<AABB> sections(EvaUnit01Entity eva)
+    {
+        List<AABB> measured=EvaBodyPose.carrierHulls(eva),result=new ArrayList<>();
+        double fallback=Math.max(11,eva.getBbWidth()/2D+1.5);
+        for(int i=0;i<4;i++)
+        {
+            double bottom=i*16,top=bottom+16;AABB section=null;
+            for(var hull:measured)if(hull.maxY>bottom&&hull.minY<top)
+            {
+                var cut=new AABB(hull.minX,Math.max(bottom,hull.minY),hull.minZ,hull.maxX,Math.min(top,hull.maxY),hull.maxZ);
+                section=section==null?cut:section.minmax(cut);
+            }
+            if(section==null)section=new AABB(-fallback,bottom,-10,fallback,top,10);
+            result.add(new AABB(section.minX-.18,Math.max(0,section.minY),section.minZ-.18,section.maxX+.18,section.maxY+.18,section.maxZ+.18));
+        }
+        return result;
+    }
+    private static List<Double> initialSupports(EvaUnit01Entity eva,Vec3 root,float pitch,float yaw)
+    {
+        if(Math.abs(pitch)>.5F)return List.of();
+        var contacts=new ArrayList<AABB>();var heights=new ArrayList<Double>();
+        for(var hull:EvaBodyPose.carrierHulls(eva))if(hull.minY<.2&&hull.maxY<2.1)
+        {
+            var sole=transformed(new AABB(hull.minX,Math.max(0,hull.minY),hull.minZ,hull.maxX,Math.max(0,hull.minY)+.01,hull.maxZ),root,pitch,yaw);
+            contacts.add(new AABB(sole.minX,sole.minY-.16,sole.minZ,sole.maxX,sole.minY+.16,sole.maxZ));
+        }
+        if(contacts.isEmpty())
+        {
+            double half=eva.getBbWidth()/2D;
+            contacts.add(new AABB(root.x-half,root.y-.16,root.z-half,root.x+half,root.y+.16,root.z+half));
+        }
+        for(var sole:contacts)for(var shape:eva.level().getBlockCollisions(eva,sole))for(var block:shape.toAabbs())
+            if(block.maxY>=sole.minY&&block.maxY<=sole.maxY&&block.minY<(sole.minY+sole.maxY)*.5+.002
+                    &&heights.stream().noneMatch(y->Math.abs(y-block.maxY)<.002))heights.add(block.maxY);
+        return heights;
+    }
+    private static boolean existingSupport(AABB block,List<Double> supportPlanes)
+    {
+        // The broad foot-section AABB spans the air between the two feet.
+        // Exempt its already-contacted bearing plane, including that gap;
+        // a taller side wall or any ceiling still blocks the angular sweep.
+        for(double height:supportPlanes)if(Math.abs(block.maxY-height)<.002&&block.minY<height-.001)return true;
+        return false;
+    }
+    static boolean clear(EvaUnit01Entity eva,Vec3 delta,float targetYaw)
+    {
+        float startPitch=EvaAirTransportR31.active(eva)?EvaAirTransportR31.acceptedPitch(eva):0;
+        float endPitch=EvaAirTransportR31.active(eva)?EvaAirTransportR31.pitch(eva,0):0;
+        float startYaw=eva.getYRot(),turn=Mth.wrapDegrees(targetYaw-startYaw);
+        int pitchSteps=Math.max(1,Mth.ceil(Math.abs(endPitch-startPitch)/.5F));
+        int yawSteps=Math.max(1,Mth.ceil(Math.abs(turn)/.5F));
+        var root=eva.position();var contacts=initialSupports(eva,root,startPitch,startYaw);var shapes=sections(eva);
+        // Pitch, heading and translation have different easing clocks. Cover
+        // their product interval instead of assuming they share one parameter.
+        double arc=(Math.abs(endPitch-startPitch)/pitchSteps+Math.abs(turn)/yawSteps)*Mth.DEG_TO_RAD;
+        double pad=.012+140*arc*arc/8;
+        for(int ip=0;ip<pitchSteps;ip++)for(int iy=0;iy<yawSteps;iy++)
+        {
+            float pa=Mth.lerp(ip/(float)pitchSteps,startPitch,endPitch),pb=Mth.lerp((ip+1)/(float)pitchSteps,startPitch,endPitch);
+            float ya=startYaw+turn*iy/yawSteps,yb=startYaw+turn*(iy+1)/yawSteps;
+            for(var local:shapes)
+            {
+                AABB sweep=transformed(local,root,pa,ya).minmax(transformed(local,root,pa,yb))
+                        .minmax(transformed(local,root,pb,ya)).minmax(transformed(local,root,pb,yb))
+                        .expandTowards(delta).inflate(pad);
+                for(var collision:eva.level().getBlockCollisions(eva,sweep))for(var box:collision.toAabbs())
+                    if(box.intersects(sweep)&&!existingSupport(box,contacts)){EvaAirTransportR31.holdAtPitch(eva,startPitch);return false;}
+            }
+        }
+        EvaAirTransportR31.acceptPitch(eva,endPitch);return true;
+    }
+    private AirCradleClearanceR31() {}
+}

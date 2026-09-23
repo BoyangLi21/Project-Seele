@@ -31,11 +31,11 @@ public final class EvaScale
      * the body.
      */
     public static final double UMBILICAL_MOUNT_HEIGHT =
-            21.50D * WORLD_MULTIPLIER;
+            47.20D;
     public static final double UMBILICAL_MOUNT_REAR_OFFSET =
             2.055D * WORLD_MULTIPLIER;
     public static final double UMBILICAL_SOCKET_HEIGHT =
-            21.35D * WORLD_MULTIPLIER;
+            47.20D;
     public static final double UMBILICAL_SOCKET_REAR_OFFSET =
             3.155D * WORLD_MULTIPLIER;
 

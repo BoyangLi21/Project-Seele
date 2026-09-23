@@ -11,7 +11,7 @@ final class ShamshelWhipLight
     static void render(ShamshelEntity actor,float partial,PoseStack pose,MultiBufferSource buffers)
     {
         if(!actor.isSweeping())return;
-        float age=actor.sweepAge(partial),weight=ShamshelWhipMotion.envelope(age);if(weight<.04)return;
+        float age=actor.sweepAge(partial),weight=ShamshelWhipMotion.envelope(actor.sweepMode(),age);if(weight<.04)return;
         var points=ShamshelWhipMotion.points(actor,age,partial);var origin=actor.getPosition(partial);var target=buffers.getBuffer(RenderType.lightning());
         for(int i=1;i<points.size();i++)
         {

@@ -228,7 +228,7 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
         boolean nervFloodlit = entity.isNervLogisticsLocked()
                 || entity instanceof com.projectseele.entity.EvaPrototypeEntity prototype && prototype.isInsideTestHangar()
                 || entity.getLaunchPhase() == EvaUnit01Entity.LAUNCH_ASCENT;
-        if (!entity.isExperimentalUnit() && (entity.hasActiveCarrierMotion()
+        if (!entity.isExperimentalUnit() && !com.projectseele.entity.EvaAirTransportR31.active(entity) && (entity.hasActiveCarrierMotion()
                 || entity.getLaunchPhase()==EvaUnit01Entity.LAUNCH_CLEAR || entity.carrierRiseProgress(partialTick)>.001F))
         {
             // The deck is one rigid piece of the rendered EVA assembly.  It
@@ -295,6 +295,7 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
     public boolean shouldRender(EvaUnit01Entity entity, Frustum frustum,
                                 double cameraX, double cameraY, double cameraZ)
     {
+        if(com.projectseele.entity.EvaAirTransportR31.active(entity))return frustum.isVisible(entity.getBoundingBox().inflate(72));
         if (EvaPoseRuntimeRecorder.requestsSmokeRender())
         {
             return true;
@@ -330,6 +331,7 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
         if (!isReRender)
         {
             EvaPoseTransition.restoreGecko(model);
+            EvaMechanicalResetR30.prepare(animatable,model);
         }
         super.preRender(poseStack, animatable, model, bufferSource, buffer, isReRender,
                 partialTick, packedLight, packedOverlay, red, green, blue, alpha);
@@ -381,10 +383,7 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
                 || animatable.getWeapon() == EvaUnit01Entity.WEAPON_RIFLE);
         setWeaponVisibility(model, "lance", animatable.getWeapon() == EvaUnit01Entity.WEAPON_LANCE);
         setWeaponVisibility(model, "n2", animatable.getWeapon() == EvaUnit01Entity.WEAPON_N2);
-        boolean shieldBrace = animatable.isShieldBraced()
-                || (animatable.getUnitVariant() == EvaUnit01Entity.UNIT_00
-                    && animatable.getVisualPose() == EvaUnit01Entity.VISUAL_CROUCH);
-        setWeaponVisibility(model, "shield", shieldBrace);
+        setWeaponVisibility(model, "shield", false);
         // The external carrier owns the entire visible insertion. Once seated,
         // the capsule is inside the artificial spine and the dorsal armour
         // reseals; no duplicate capsule or generic hatch may protrude from the
@@ -414,7 +413,7 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
             this.pendingPoseModel = null;
             this.pendingPoseEntity = null;
             org.joml.Matrix4f world=software.bernie.geckolib.util.RenderUtils.invertAndMultiplyMatrices(poseStack.last().pose(),this.entityRenderTranslations);
-            Vec3 origin=animatable.getPosition(partialTick);
+            Vec3 origin=com.projectseele.entity.EvaAirTransportR31.active(animatable)||com.projectseele.entity.EvaShutdownR30.displayed(animatable)?renderedOrigin(animatable,partialTick):animatable.getPosition(partialTick);
             world.m30(world.m30()+(float)origin.x).m31(world.m31()+(float)origin.y).m32(world.m32()+(float)origin.z);
             EvaPoseGraph.commit(animatable, poseModel,this.pendingPosePartialTick,world);
         }

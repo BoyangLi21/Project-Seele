@@ -269,6 +269,7 @@ public final class ClientForgeEvents
         }
         while(Keybinds.UN_EYE_LASER.consumeClick())if(eva instanceof com.projectseele.entity.EvaPrototypeEntity)send(ServerboundEvaControlPacket.ACTION_UN_EYE_LASER);
         while(Keybinds.UN_FLIGHT.consumeClick())if(eva instanceof com.projectseele.entity.EvaPrototypeEntity)send(ServerboundEvaControlPacket.ACTION_UN_FLIGHT);
+        while(Keybinds.EVA_GRAPPLE.consumeClick())if(eva!=null)send(ServerboundEvaControlPacket.ACTION_GRAPPLE);
         while (Keybinds.COMMANDER_POSE.consumeClick())
         {
             if (player.isPassenger())
@@ -624,16 +625,8 @@ public final class ClientForgeEvents
                 && minecraft.player.getVehicle()
                         instanceof EntryPlugCarrierEntity;
         boolean opticalSight = isCannonScopeActive(eva) || isRifleSightActive(eva);
-        if(eva!=null&&(minecraft.options.getCameraType().isFirstPerson()||eva.isFirstBattleActive()))
-        {
-            var overlay=event.getOverlay();
-            if(overlay==VanillaGuiOverlay.HOTBAR.type()||overlay==VanillaGuiOverlay.CROSSHAIR.type()
-                    ||overlay==VanillaGuiOverlay.PLAYER_HEALTH.type()||overlay==VanillaGuiOverlay.ARMOR_LEVEL.type()
-                    ||overlay==VanillaGuiOverlay.FOOD_LEVEL.type()||overlay==VanillaGuiOverlay.MOUNT_HEALTH.type()
-                    ||overlay==VanillaGuiOverlay.AIR_LEVEL.type()||overlay==VanillaGuiOverlay.EXPERIENCE_BAR.type()
-                    ||overlay==VanillaGuiOverlay.JUMP_BAR.type())event.setCanceled(true);
-        }
-        if ((opticalSight || insideExternalPlug)
+        if(EvaCombatHudR31.shouldHideVanilla(event))event.setCanceled(true);
+        if (minecraft.screen==null&&(opticalSight || insideExternalPlug)
                 && (event.getOverlay() == VanillaGuiOverlay.HOTBAR.type()
                 || event.getOverlay() == VanillaGuiOverlay.CROSSHAIR.type()))
         {

@@ -38,6 +38,7 @@ public class ServerboundEvaControlPacket
     public static final int ACTION_UN_EYE_LASER=19;
     public static final int ACTION_UN_FLIGHT=20;
     public static final int ACTION_UN_FLIGHT_INPUT=21;
+    public static final int ACTION_GRAPPLE=22;
 
     public final int action;
     public final int requestId;
@@ -92,6 +93,7 @@ public class ServerboundEvaControlPacket
                     case ACTION_CYCLE_WEAPON -> eva.cycleWeapon(sender);
                     case ACTION_TOGGLE_AT_FIELD -> eva.toggleAtField(sender);
                     case ACTION_MELEE -> eva.meleeAttack(sender);
+                    case ACTION_GRAPPLE -> com.projectseele.entity.EvaCombatR31.grapple(eva,sender);
                     case ACTION_SMASH -> eva.smashAttack(sender);
                     case ACTION_CHARGE_START -> eva.setChargingHeld(true);
                     case ACTION_CHARGE_STOP -> eva.releaseCannon(sender);

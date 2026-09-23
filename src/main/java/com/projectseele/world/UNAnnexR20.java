@@ -28,17 +28,14 @@ import java.util.*;
 public final class UNAnnexR20
 {
     public static final Vec3 HOME=new Vec3(6282.5,77,-6205.5),DOOR=new Vec3(6282.5,77,-6135.5);
-    private static final BlockPos MIN=new BlockPos(6266,77,-6226),MAX=new BlockPos(6298,120,-6137);
     private static final BlockPos[] BUTTONS={new BlockPos(6234,78,-6141),new BlockPos(6238,78,-6141),new BlockPos(6246,78,-6141)};
-    private static final AABB PIT=new AABB(MIN,MAX.offset(1,1,1)),SWEEP=new AABB(6248,77,-6137,6318,142,-6134);
     private static final TicketType<ChunkPos> TICKET=TicketType.create("seele_un01_annex",Comparator.comparingLong(ChunkPos::toLong),100);
     private static final Map<ServerLevel,UUID> HOISTS=new WeakHashMap<>();
-    private static final int LAYER=33*90,TOTAL=LAYER*44;
     public static final class State extends SavedData
     {
-        public MilitaryR07Director.Phase phase=MilitaryR07Director.Phase.WET;public int cursor;public UUID unitId;
-        static State load(CompoundTag t){State s=new State();try{s.phase=MilitaryR07Director.Phase.valueOf(t.getString("Phase"));}catch(Exception ignored){}s.cursor=t.getInt("Cursor");if(t.hasUUID("Unit"))s.unitId=t.getUUID("Unit");return s;}
-        @Override public CompoundTag save(CompoundTag t){t.putString("Phase",phase.name());t.putInt("Cursor",cursor);if(unitId!=null)t.putUUID("Unit",unitId);return t;}
+        public MilitaryR07Director.Phase phase=MilitaryR07Director.Phase.WET;public int cursor,poolWidth=33;public UUID unitId;
+        static State load(CompoundTag t){State s=new State();try{s.phase=MilitaryR07Director.Phase.valueOf(t.getString("Phase"));}catch(Exception ignored){}s.cursor=t.getInt("Cursor");s.poolWidth=t.contains("PoolWidth")?t.getInt("PoolWidth"):33;if(t.hasUUID("Unit"))s.unitId=t.getUUID("Unit");return s;}
+        @Override public CompoundTag save(CompoundTag t){t.putString("Phase",phase.name());t.putInt("Cursor",cursor);t.putInt("PoolWidth",poolWidth);if(unitId!=null)t.putUUID("Unit",unitId);return t;}
     }
     public static State state(ServerLevel l){return l.getDataStorage().computeIfAbsent(State::load,State::new,"projectseele_un01_annex_r20");}
     public static boolean installed(ServerLevel l){return Files.isRegularFile(l.getServer().getWorldPath(LevelResource.ROOT).resolve("un01_annex_r20.json"));}
@@ -62,7 +59,7 @@ public final class UNAnnexR20
         if(p==null||p.isCreative())return true;
         for(int i=0;i<p.getInventory().getContainerSize();i++){var s=p.getInventory().getItem(i);if(s.is(ModItems.NERV_EMPLOYEE_CARD.get())||s.is(ModItems.TERMINAL_DOGMA_ACCESS_CARD.get()))return true;}return false;
     }
-    private static boolean occupied(ServerLevel l){return !l.getEntities((net.minecraft.world.entity.Entity)null,SWEEP,e->e.isAlive()&&!e.isSpectator()&&!(e instanceof NervHangarDoorEntity)&&!(e instanceof NervCarrierPlatformEntity)).isEmpty();}
+    private static boolean occupied(ServerLevel l){return !l.getEntities((net.minecraft.world.entity.Entity)null,UNHangarDimensionsR31.sweep(l,1),e->e.isAlive()&&!e.isSpectator()&&!(e instanceof NervHangarDoorEntity)&&!(e instanceof NervCarrierPlatformEntity)).isEmpty();}
     public static String request(ServerLevel l,String action,Player p)
     {
         if(!installed(l))return "此存档未安装 UN-01 试验舱";if(!card(p))return "需要工作人员身份卡";State s=state(l);
@@ -75,7 +72,7 @@ public final class UNAnnexR20
                 else if(s.phase==MilitaryR07Director.Phase.OPEN){if(occupied(l))return "舱门区域有人员或载具";s.phase=MilitaryR07Director.Phase.CLOSING;}
                 else return "请等待排液或舱门动作完成";
             }
-            case "fill" -> {if(s.phase!=MilitaryR07Director.Phase.DRY)return "请先关闭舱门";var unit=airframe(l);if(modelsInstalled(l)&&(unit==null||unit.position().distanceTo(HOME)>3||unit.isVehicle()))return "UN-01 须归位并解除驾驶";if(!l.getEntitiesOfClass(Player.class,PIT,q->!q.isSpectator()).isEmpty())return "请先离开 LCL 试验区";s.phase=MilitaryR07Director.Phase.FILLING;s.cursor=0;}
+            case "fill" -> {if(s.phase!=MilitaryR07Director.Phase.DRY)return "请先关闭舱门";var unit=airframe(l);if(modelsInstalled(l)&&(unit==null||unit.position().distanceTo(HOME)>3||unit.isVehicle()))return "UN-01 须归位并解除驾驶";if(!l.getEntitiesOfClass(Player.class,UNHangarDimensionsR31.pit(l,1),q->!q.isSpectator()).isEmpty())return "请先离开 LCL 试验区";s.phase=MilitaryR07Director.Phase.FILLING;s.cursor=0;}
             default -> {return status(s);}
         }
         s.setDirty();return status(s);
@@ -90,11 +87,13 @@ public final class UNAnnexR20
     }
     private static void seal(ServerLevel l,boolean closed)
     {
-        for(BlockPos p:BlockPos.betweenClosed(6266,77,-6136,6298,141,-6136)){var s=l.getBlockState(p);if(s.isAir()||s.is(Blocks.BARRIER))l.setBlock(p,(closed?Blocks.BARRIER:Blocks.AIR).defaultBlockState(),2);}
+        for(BlockPos p:BlockPos.betweenClosed(UNHangarDimensionsR31.minimum(l,1).getX(),77,-6136,UNHangarDimensionsR31.maximum(l,1).getX(),141,-6136)){var s=l.getBlockState(p);if(s.isAir()||s.is(Blocks.BARRIER))l.setBlock(p,(closed?Blocks.BARRIER:Blocks.AIR).defaultBlockState(),2);}
     }
     @SubscribeEvent public static void tick(TickEvent.ServerTickEvent e)
     {
         if(e.phase!=TickEvent.Phase.END)return;var l=e.getServer().getLevel(FacilitySchemaV2.DIMENSION);if(l==null||!installed(l))return;var s=state(l);boolean active=s.phase==MilitaryR07Director.Phase.DRAINING||s.phase==MilitaryR07Director.Phase.FILLING||s.phase==MilitaryR07Director.Phase.OPENING||s.phase==MilitaryR07Director.Phase.CLOSING;
+        int width=UNHangarDimensionsR31.width(l),layerSize=UNHangarDimensionsR31.layer(l),total=UNHangarDimensionsR31.total(l);
+        if(s.poolWidth!=width){s.poolWidth=width;if(s.phase==MilitaryR07Director.Phase.DRAINING||s.phase==MilitaryR07Director.Phase.FILLING)s.cursor=0;s.setDirty();}
         if(active){tickets(l,true);l.resetEmptyTime();}if(!l.hasChunkAt(BUTTONS[0]))return;
         commission(l,s);
         FacilityAudioR21.auxiliary(l,"UN01",s.phase,DOOR);
@@ -102,13 +101,14 @@ public final class UNAnnexR20
         if(s.phase==MilitaryR07Director.Phase.DRAINING||s.phase==MilitaryR07Director.Phase.FILLING)
         {
             var liquid=com.projectseele.registry.ModBlocks.LCL_BLOCK.get();
-            for(int i=0;i<512&&s.cursor<TOTAL;i++,s.cursor++)
+            var minimum=UNHangarDimensionsR31.minimum(l,1);
+            for(int i=0;i<512&&s.cursor<total;i++,s.cursor++)
             {
-                int layer=s.cursor/LAYER,within=s.cursor%LAYER;var p=new BlockPos(MIN.getX()+within%33,s.phase==MilitaryR07Director.Phase.DRAINING?MAX.getY()-layer:MIN.getY()+layer,MIN.getZ()+within/33);var old=l.getBlockState(p);
+                int layer=s.cursor/layerSize,within=s.cursor%layerSize;var p=new BlockPos(minimum.getX()+within%width,s.phase==MilitaryR07Director.Phase.DRAINING?120-layer:77+layer,minimum.getZ()+within/width);var old=l.getBlockState(p);
                 if(s.phase==MilitaryR07Director.Phase.DRAINING&&old.is(liquid))l.setBlock(p,Blocks.AIR.defaultBlockState(),18);
                 else if(s.phase==MilitaryR07Director.Phase.FILLING&&old.isAir())l.setBlock(p,liquid.defaultBlockState(),18);
             }
-            if(s.cursor==TOTAL){s.phase=s.phase==MilitaryR07Director.Phase.DRAINING?MilitaryR07Director.Phase.DRY:MilitaryR07Director.Phase.WET;tickets(l,false);}s.setDirty();
+            if(s.cursor==total){s.phase=s.phase==MilitaryR07Director.Phase.DRAINING?MilitaryR07Director.Phase.DRY:MilitaryR07Director.Phase.WET;tickets(l,false);}s.setDirty();
         }
         else if(s.phase==MilitaryR07Director.Phase.OPENING||s.phase==MilitaryR07Director.Phase.CLOSING)
         {

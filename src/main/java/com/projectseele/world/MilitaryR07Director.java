@@ -38,14 +38,10 @@ import java.util.*;
 public final class MilitaryR07Director
 {
     public enum Phase { WET,DRAINING,DRY,OPENING,OPEN,CLOSING,FILLING }
-    private static final BlockPos WET_MIN=new BlockPos(6426,77,-6226),WET_MAX=new BlockPos(6458,120,-6137);
     private static final Vec3 HOME=new Vec3(6442.5,77,-6205.5),DOOR=new Vec3(6442.5,77,-6135.5);
     private static final BlockPos[] BUTTONS={new BlockPos(6394,78,-6141),new BlockPos(6398,78,-6141),new BlockPos(6406,78,-6141)};
     private static final TicketType<ChunkPos> TICKET=TicketType.create("seele_experimental_cell",Comparator.comparingLong(ChunkPos::toLong),100);
     private static final String DATA="projectseele_military_r07";
-    private static final int LAYER=33*90,TOTAL=LAYER*44;
-    private static final AABB PIT=new AABB(WET_MIN,WET_MAX.offset(1,1,1));
-    private static final AABB DOOR_SWEEP=new AABB(6408,77,-6137,6478,142,-6134);
     private static JsonObject plan;
     private static Path planWorld;
 
@@ -53,11 +49,12 @@ public final class MilitaryR07Director
     {
         public Phase phase=Phase.WET;
         public int cursor;
+        public int poolWidth=33;
         public boolean commissioned,defense=true,power=true,baseGenerator=true,portGenerator=true;
         public final Map<String,UUID> entities=new LinkedHashMap<>();
         static State load(CompoundTag tag)
         {
-            State d=new State();d.commissioned=tag.getBoolean("Commissioned");d.cursor=tag.getInt("Cursor");
+            State d=new State();d.commissioned=tag.getBoolean("Commissioned");d.cursor=tag.getInt("Cursor");d.poolWidth=tag.contains("PoolWidth")?tag.getInt("PoolWidth"):33;
             try { d.phase=Phase.valueOf(tag.getString("Phase")); } catch(Exception ignored) { }
             d.defense=!tag.contains("Defense")||tag.getBoolean("Defense");d.power=!tag.contains("Power")||tag.getBoolean("Power");
             d.baseGenerator=!tag.contains("BaseGenerator")||tag.getBoolean("BaseGenerator");d.portGenerator=!tag.contains("PortGenerator")||tag.getBoolean("PortGenerator");
@@ -67,6 +64,7 @@ public final class MilitaryR07Director
         @Override public CompoundTag save(CompoundTag tag)
         {
             tag.putBoolean("Commissioned",commissioned);tag.putString("Phase",phase.name());tag.putInt("Cursor",cursor);
+            tag.putInt("PoolWidth",poolWidth);
             tag.putBoolean("Defense",defense);tag.putBoolean("Power",power);tag.putBoolean("BaseGenerator",baseGenerator);tag.putBoolean("PortGenerator",portGenerator);CompoundTag ids=new CompoundTag();entities.forEach(ids::putUUID);tag.put("Entities",ids);return tag;
         }
     }
@@ -106,7 +104,7 @@ public final class MilitaryR07Director
         {
             case "drain" -> {
                 if(data.phase!=Phase.WET&&data.phase!=Phase.FILLING)return "当前无需排液";
-                if(!level.getEntitiesOfClass(Player.class,PIT,p->!p.isSpectator()).isEmpty())return "请先离开 LCL 试验区";
+                if(!level.getEntitiesOfClass(Player.class,UNHangarDimensionsR31.pit(level,0),p->!p.isSpectator()).isEmpty())return "请先离开 LCL 试验区";
                 data.phase=Phase.DRAINING;data.cursor=0;
             }
             case "door" -> {
@@ -127,7 +125,7 @@ public final class MilitaryR07Director
                 if(data.phase!=Phase.DRY)return "请先关闭舱门";
                 Entity unit=entity(level,data,"prototype");
                 if(unit==null||unit.position().distanceTo(HOME)>3||unit.isVehicle())return "试验机须归位并解除驾驶";
-                if(!level.getEntitiesOfClass(Player.class,PIT,p->!p.isSpectator()).isEmpty())return "请先离开 LCL 试验区";
+                if(!level.getEntitiesOfClass(Player.class,UNHangarDimensionsR31.pit(level,0),p->!p.isSpectator()).isEmpty())return "请先离开 LCL 试验区";
                 data.phase=Phase.FILLING;data.cursor=0;
             }
             case "defense" -> data.defense=!data.defense;
@@ -142,17 +140,17 @@ public final class MilitaryR07Director
     public static String status(State data)
     {
         String phase=switch(data.phase){case WET->"LCL 保管";case DRAINING->"排液中";case DRY->"干燥 / 舱门关闭";case OPENING->"舱门开启中";case OPEN->"允许出舱";case CLOSING->"舱门关闭中";case FILLING->"注液中";};
-        return "试验格纳库 · "+phase+((data.phase==Phase.DRAINING||data.phase==Phase.FILLING)?" "+(100*data.cursor/TOTAL)+"%":"");
+        return "试验格纳库 · "+phase+((data.phase==Phase.DRAINING||data.phase==Phase.FILLING)?" "+(100*data.cursor/(data.poolWidth*90*44))+"%":"");
     }
     private static boolean occupiedDoor(ServerLevel level)
     {
-        return !level.getEntities((Entity)null,DOOR_SWEEP,e->!(e instanceof NervHangarDoorEntity)&&!(e instanceof ArmorStand stand&&stand.isMarker())
+        return !level.getEntities((Entity)null,UNHangarDimensionsR31.sweep(level,0),e->!(e instanceof NervHangarDoorEntity)&&!(e instanceof ArmorStand stand&&stand.isMarker())
                 &&e.isAlive()&&!e.isSpectator()&&(e instanceof net.minecraft.world.entity.LivingEntity||e.isVehicle()||e.getTags().contains("seele_r07_owned"))).isEmpty();
     }
     public static int fluidCells(ServerLevel level)
     {
         Block lcl=BuiltInRegistries.BLOCK.get(new ResourceLocation("projectseele:lcl"));int count=0;
-        for(BlockPos pos:BlockPos.betweenClosed(WET_MIN,WET_MAX))if(level.getBlockState(pos).is(lcl))count++;
+        for(BlockPos pos:BlockPos.betweenClosed(UNHangarDimensionsR31.minimum(level,0),UNHangarDimensionsR31.maximum(level,0)))if(level.getBlockState(pos).is(lcl))count++;
         return count;
     }
     private static void tickets(ServerLevel level,boolean keep)
@@ -165,13 +163,14 @@ public final class MilitaryR07Director
     }
     private static boolean barrier(ServerLevel level,boolean closed)
     {
-        for(int x=6426;x<=6458;x++)for(int y=77;y<=141;y++)
+        int low=UNHangarDimensionsR31.minimum(level,0).getX(),high=UNHangarDimensionsR31.maximum(level,0).getX();
+        for(int x=low;x<=high;x++)for(int y=77;y<=141;y++)
         {
             BlockState old=level.getBlockState(new BlockPos(x,y,-6136));
             if(!old.isAir()&&!old.is(Blocks.BARRIER))return false;
         }
         BlockState state=(closed?Blocks.BARRIER:Blocks.AIR).defaultBlockState();
-        for(int x=6426;x<=6458;x++)for(int y=77;y<=141;y++)level.setBlock(new BlockPos(x,y,-6136),state,2);
+        for(int x=low;x<=high;x++)for(int y=77;y<=141;y++)level.setBlock(new BlockPos(x,y,-6136),state,2);
         return true;
     }
     @SubscribeEvent public static void interact(PlayerInteractEvent.RightClickBlock event)
@@ -197,6 +196,13 @@ public final class MilitaryR07Director
         if(event.phase!=TickEvent.Phase.END)return;
         ServerLevel level=event.getServer().getLevel(FacilitySchemaV2.DIMENSION);
         if(level==null||plan(level)==null)return;State data=state(level);if(!data.commissioned)return;
+        int width=UNHangarDimensionsR31.width(level),layerSize=UNHangarDimensionsR31.layer(level),total=UNHangarDimensionsR31.total(level);
+        if(data.poolWidth!=width)
+        {
+            data.poolWidth=width;
+            if(data.phase==Phase.DRAINING||data.phase==Phase.FILLING)data.cursor=0;
+            data.setDirty();
+        }
         // The local integrated server must accept genuine SBW aircraft motion.
         // Dedicated distributions already ship allow-flight=true in server.properties.
         if(event.getServer().isSingleplayer()&&!event.getServer().isFlightAllowed())event.getServer().setFlightAllowed(true);
@@ -216,15 +222,16 @@ public final class MilitaryR07Director
         if(data.phase==Phase.DRAINING||data.phase==Phase.FILLING)
         {
             var lcl=BuiltInRegistries.BLOCK.get(new ResourceLocation("projectseele:lcl"));
-            for(int n=0;n<512&&data.cursor<TOTAL;n++,data.cursor++)
+            int minimumX=UNHangarDimensionsR31.minimum(level,0).getX();
+            for(int n=0;n<512&&data.cursor<total;n++,data.cursor++)
             {
-                int layer=data.cursor/LAYER,within=data.cursor%LAYER;
-                BlockPos pos=new BlockPos(6426+within%33,data.phase==Phase.DRAINING?120-layer:77+layer,-6226+within/33);
+                int layer=data.cursor/layerSize,within=data.cursor%layerSize;
+                BlockPos pos=new BlockPos(minimumX+within%width,data.phase==Phase.DRAINING?120-layer:77+layer,-6226+within/width);
                 BlockState old=level.getBlockState(pos);
                 if(data.phase==Phase.DRAINING&&old.is(lcl))level.setBlock(pos,Blocks.AIR.defaultBlockState(),Block.UPDATE_CLIENTS|Block.UPDATE_KNOWN_SHAPE);
                 if(data.phase==Phase.FILLING&&(old.isAir()||old.is(lcl)))level.setBlock(pos,lcl.defaultBlockState(),Block.UPDATE_CLIENTS|Block.UPDATE_KNOWN_SHAPE);
             }
-            if(data.cursor==TOTAL)
+            if(data.cursor==total)
             {
                 if(data.phase==Phase.DRAINING&&fluidCells(level)>0)data.cursor=0;
                 else {data.phase=data.phase==Phase.DRAINING?Phase.DRY:Phase.WET;tickets(level,false);}

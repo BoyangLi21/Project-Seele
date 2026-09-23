@@ -23,6 +23,7 @@ public final class Keybinds
             "key.projectseele.toggle_prone", InputConstants.Type.KEYSYM, GLFW.GLFW_KEY_Z, CATEGORY);
     public static final KeyMapping UN_EYE_LASER=new KeyMapping("key.projectseele.un_eye_laser",InputConstants.Type.KEYSYM,GLFW.GLFW_KEY_K,CATEGORY);
     public static final KeyMapping UN_FLIGHT=new KeyMapping("key.projectseele.un_flight",InputConstants.Type.KEYSYM,GLFW.GLFW_KEY_F,CATEGORY);
+    public static final KeyMapping EVA_GRAPPLE=new KeyMapping("key.projectseele.eva_grapple",InputConstants.Type.KEYSYM,GLFW.GLFW_KEY_COMMA,CATEGORY);
     // Pilot-initiated launch abort while silo-locked: recalls the airframe to
     // its wet cage without waiting for a command-room release.
     public static final KeyMapping CANCEL_LAUNCH = new KeyMapping(

@@ -20,7 +20,7 @@ public final class EvaBodyPose
     private record Data(String[] names,Map<String,Integer> index,Map<String,Clip> clips,
                         Map<Integer,Map<String,Bone>> rigs,Map<String,Vector3f[]> support,
                         JsonObject prone,JsonObject grip,JsonObject mocap,Map<Integer,Vector3f> eyes,Map<Integer,Map<String,Vector3f[]>> rigSupport,
-                        Map<Integer,List<net.minecraft.world.phys.AABB>> carrierHulls) {}
+                        Map<Integer,List<net.minecraft.world.phys.AABB>> carrierHulls,Map<Integer,Map<String,Clip>> combatClips) {}
     private static volatile Data data;
 
     public static final class Sample
@@ -120,12 +120,42 @@ public final class EvaBodyPose
                 {var a=row.getAsJsonArray();boxes.add(new net.minecraft.world.phys.AABB(a.get(0).getAsDouble(),a.get(1).getAsDouble(),a.get(2).getAsDouble(),a.get(3).getAsDouble(),a.get(4).getAsDouble(),a.get(5).getAsDouble()));}
                 carrierHulls.put(Integer.parseInt(entry.getKey()),List.copyOf(boxes));
             }
-            data=new Data(names,index,Map.copyOf(clips),Map.copyOf(rigs),Map.copyOf(support),object(all,"prone"),object(all,"grip"),object(all,"rifle_mocap"),Map.copyOf(eyes),Map.copyOf(rigSupport),Map.copyOf(carrierHulls));
+            Map<Integer,Map<String,Clip>> combatClips=new HashMap<>();
+            for(int variant:rigs.keySet())
+            {
+                var capture=Path.of("projectseele-local-maps/eva_combat_capture_r31"+(variant>=3?(variant==3?"_un00":"_un01"):"")+".json");
+                if(Files.isRegularFile(capture))combatClips.put(variant,readCombatClipsR31(JsonParser.parseString(Files.readString(capture)).getAsJsonObject(),names));
+            }
+            data=new Data(names,index,Map.copyOf(clips),Map.copyOf(rigs),Map.copyOf(support),object(all,"prone"),object(all,"grip"),object(all,"rifle_mocap"),Map.copyOf(eyes),Map.copyOf(rigSupport),Map.copyOf(carrierHulls),Map.copyOf(combatClips));
             ProjectSeele.LOGGER.info("EVA shared body/socket pose loaded: private={} clips={} bones={}",Files.isRegularFile(path),clips.size(),names.length);
         }
         catch(Exception failure){throw new IllegalStateException("Shared EVA body pose could not load",failure);}
     }
     private static JsonObject object(JsonObject p,String n){return p.has(n)?p.getAsJsonObject(n):new JsonObject();}
+    private static Map<String,Clip> readCombatClipsR31(JsonObject capture,String[] names)
+    {
+        var order=capture.getAsJsonArray("bones");if(order.size()!=names.length)throw new IllegalArgumentException("R31 capture bone count");
+        for(int i=0;i<names.length;i++)if(!order.get(i).getAsString().equals(names[i]))throw new IllegalArgumentException("R31 capture bone order");
+        Map<String,Clip> result=new HashMap<>();
+        for(var entry:capture.getAsJsonObject("clips").entrySet())
+        {
+            var clip=entry.getValue().getAsJsonObject();var frames=clip.getAsJsonArray("frames");var rotations=new Quaternionf[frames.size()][names.length];var positions=new Vector3f[frames.size()][names.length];
+            for(int f=0;f<frames.size();f++)
+            {
+                var frame=frames.get(f).getAsJsonObject();var q=frame.getAsJsonArray("rotation_wxyz");
+                for(int b=0;b<names.length;b++)
+                {
+                    var value=q.get(b).getAsJsonArray();rotations[f][b]=new Quaternionf(-value.get(1).getAsFloat(),-value.get(2).getAsFloat(),value.get(3).getAsFloat(),value.get(0).getAsFloat()).normalize();
+                    var p=names[b].equals("root")?vector(frame.get("root_m")).mul(112):frame.has("bone_position_xyz")&&frame.getAsJsonObject("bone_position_xyz").has(names[b])?vector(frame.getAsJsonObject("bone_position_xyz").get(names[b])):new Vector3f();
+                    positions[f][b]=p.mul(-1,1,1).div(16);
+                }
+            }
+            result.put(entry.getKey(),new Clip(clip.get("duration_seconds").getAsFloat(),rotations,positions));
+        }
+        return Map.copyOf(result);
+    }
+    public static boolean combatCaptureReadyR31(EvaUnit01Entity e,String clip)
+    {if(data==null)reload();return data.combatClips().getOrDefault(rigKey(e),Map.of()).containsKey(clip);}
     public static List<net.minecraft.world.phys.AABB> carrierHulls(EvaUnit01Entity eva)
     {if(data==null)reload();return data.carrierHulls().getOrDefault(rigKey(eva),List.of());}
     private static Vector3f vector(JsonElement e){var a=e.getAsJsonArray();return new Vector3f(a.get(0).getAsFloat(),a.get(1).getAsFloat(),a.get(2).getAsFloat());}
@@ -136,8 +166,9 @@ public final class EvaBodyPose
     }
     private static Sample clip(Data d,int variant,String name,float phase)
     {
-        var c=d.clips().get(name);var result=new Sample(d.rigs().get(variant));float f=Mth.clamp(phase,0,1)*(c.rotations().length-1);int a=(int)f,b=Math.min(a+1,c.rotations().length-1);
+        var c=d.combatClips().getOrDefault(variant,Map.of()).getOrDefault(name,d.clips().get(name));var result=new Sample(d.rigs().get(variant));float f=Mth.clamp(phase,0,1)*(c.rotations().length-1);int a=(int)f,b=Math.min(a+1,c.rotations().length-1);
         for(int i=0;i<d.names().length;i++){result.rotations.put(d.names()[i],new Quaternionf(c.rotations()[a][i]).slerp(c.rotations()[b][i],f-a));result.positions.put(d.names()[i],new Vector3f(c.positions()[a][i]).lerp(c.positions()[b][i],f-a));}
+        for(var bone:result.rig.values())if(bone.name().contains("_axis_"))result.rotations.put(bone.name(),new Quaternionf(bone.bindRotation()));
         return result;
     }
     private static Sample mix(Sample a,Sample b,float amount)
@@ -163,12 +194,13 @@ public final class EvaBodyPose
     public static Vector3f eyePoint(EvaUnit01Entity eva){return eva instanceof EvaPrototypeEntity un?EvaUNOptics.lens(un):eyePoint(eva.getUnitVariant());}
     public static net.minecraft.world.phys.Vec3 opticalEye(EvaUnit01Entity eva,float partial)
     {
-        var body=sample(eva,partial);body.rotations.get("head").rotateY((float)Math.toRadians(-eva.pilotHeadYawForRender(partial))).rotateX((float)Math.toRadians(-eva.pilotHeadPitchForRender(partial)));body.dirty();
+        var body=sample(eva,partial);if(!EvaAirTransportR31.active(eva)&&!EvaShutdownR30.displayed(eva))body.rotations.get("head").rotateY((float)Math.toRadians(-eva.pilotHeadYawForRender(partial))).rotateX((float)Math.toRadians(-eva.pilotHeadPitchForRender(partial)));body.dirty();
         var p=new Matrix4f(EvaRifleKinematics.world(eva,partial)).mul(body.matrix("head")).transformPosition(eyePoint(eva));return new net.minecraft.world.phys.Vec3(p.x,p.y,p.z);
     }
     public static Sample sample(EvaUnit01Entity entity,float partial)
     {
         if(data==null)reload();Data d=data;int variant=rigKey(entity);float phase=entity.rifleGaitPhase(partial);phase-=Mth.floor(phase);
+        if(EvaAirTransportR31.active(entity))return EvaAirTransportR31.sample(entity,new Sample(d.rigs().get(variant)),partial);
         if(EvaShutdownR30.displayed(entity)&&!EvaShutdownR30.pose(entity).isEmpty())
         {
             var frozen=new Sample(d.rigs().get(variant));EvaShutdownR30.decode(EvaShutdownR30.pose(entity),frozen);
@@ -246,15 +278,53 @@ public final class EvaBodyPose
             bones.put("head",new Bone(head.name(),head.parent(),new Vector3f(head.pivot()).add(0,cervicalOffset,cervicalOffset),head.bindRotation()));
             var corrected=new Sample(Map.copyOf(bones));corrected.rotations.putAll(body.rotations);corrected.positions.putAll(body.positions);body=corrected;
         }
-        EvaTerrainSupport.apply(entity,body);EvaImpactResponse.applyBody(body,entity,partial);body.dirty();return body;
+        int combat=EvaCombatR31.action(entity);float combatAge=EvaCombatR31.age(entity,partial);
+        String capture=switch(combat){case EvaCombatR31.REACH,EvaCombatR31.HOLD->"r31_grapple_start";case EvaCombatR31.THROW->"r31_shoulder_throw";case EvaCombatR31.AIR_STRIKE,EvaCombatR31.AIR_SLAM,EvaCombatR31.LAND->"r31_air_downstrike";default->"";};
+        if(!capture.isEmpty()&&combatCaptureReadyR31(entity,capture))
+        {
+            float capturePhase=switch(combat){case EvaCombatR31.HOLD->.47F;case EvaCombatR31.REACH->.47F*combatAge/18;case EvaCombatR31.THROW->combatAge/26;case EvaCombatR31.LAND->.7F+combatAge/40;default->combatAge/28;};
+            float w=(float)CombatMotionR29.ease(combatAge/5);if(combat==EvaCombatR31.HOLD)w=1;
+            if(combat==EvaCombatR31.THROW)w*=1-(float)CombatMotionR29.ease((combatAge-21)/5);
+            body=mix(body,clip(d,variant,capture,capturePhase),w);
+        }
+        EvaTerrainSupport.apply(entity,body);EvaImpactResponse.applyBody(body,entity,partial);body.dirty();
+        var beat=CombatFeelR31.beat(entity);
+        if(beat!=null&&(beat.kind()==CombatFeelR31.DOWN||beat.kind()==CombatFeelR31.THROWN))
+        {
+            float age=CombatFeelR31.age(entity,partial);
+            if(EvaRecoveryPoseR31.ready(entity))body=EvaRecoveryPoseR31.apply(entity,body,inactivePoseR30(entity,true),age,beat.duration(),beat.kind()==CombatFeelR31.THROWN&&!entity.onGround());
+            else
+            {
+                float w=(float)CombatMotionR29.ease(age/12)*(1-(float)CombatMotionR29.ease((age-beat.duration()+18)/18));
+                body=mix(body,inactivePoseR30(entity,true),w);
+            }
+        }
+        return body;
     }
 
     public static Sample inactivePoseR30(EvaUnit01Entity entity,boolean prone)
     {
         if(data==null)reload();var d=data;String clip=d.clips.containsKey("unarmed_stance")?"unarmed_stance":"rifle_stance";
-        var result=clip(d,rigKey(entity),clip,prone?1F:1F/3F);
-        if(!prone)result.rotations.get("head").rotateX(.25F);
-        if(hasOwnUnRig(entity))
+        var result=clip(d,rigKey(entity),prone?"idle":clip,prone?0:1F/3F);
+        if(prone)
+        {
+            // A disabled humanoid relaxes onto its back. Reusing a live rifle
+            // prone pose left the arms aiming and compressed the new UN knees.
+            result.rotations.get("root").rotationXYZ((float)Math.PI/2,0,.10F);
+            result.rotations.get("torso_lower").rotationXYZ(-.10F,0,0);
+            result.rotations.get("torso_upper").rotationXYZ(.10F,-.12F,0);
+            result.rotations.get("head").rotationXYZ(.08F,.30F,-.10F);
+            for(String side:List.of("l","r"))
+            {
+                boolean left=side.equals("l");result.rotations.get("leg_"+side).rotationXYZ(left?.24F:.12F,0,left?-.12F:.12F);
+                result.rotations.get("shin_"+side).rotationXYZ(left?-.60F:-.32F,0,0);
+                result.rotations.get("arm_"+side).rotationXYZ(.18F,0,left?-.32F:.27F);
+                result.rotations.get("forearm_"+side).rotationXYZ(left?.48F:.68F,0,0);
+            }
+        }
+        else result.rotations.get("head").rotateX(.25F);
+        result.dirty();
+        if(prone||hasOwnUnRig(entity))
         {
             float floor=Float.POSITIVE_INFINITY;for(var entry:d.rigSupport().getOrDefault(rigKey(entity),d.support()).entrySet())
             {if(!result.rig.containsKey(entry.getKey()))continue;var matrix=result.matrix(entry.getKey());for(var v:entry.getValue())floor=Math.min(floor,matrix.m01()*v.x+matrix.m11()*v.y+matrix.m21()*v.z+matrix.m31());}

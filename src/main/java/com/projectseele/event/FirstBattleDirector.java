@@ -35,6 +35,8 @@ public final class FirstBattleDirector
     private static final Map<ServerLevel,Set<ChunkPos>> TICKETS=new WeakHashMap<>();
     public static boolean tryStart(SachielEntity angel,EvaUnit01Entity eva,boolean review)
     {
+        if(!review&&(com.projectseele.entity.EvaCombatR31.active(eva)||com.projectseele.entity.EvaCombatR31.holds(angel)
+                ||com.projectseele.entity.CombatFeelR31.restrained(eva)||com.projectseele.entity.CombatFeelR31.restrained(angel)))return false;
         if("r10-firstbattle".equals(System.getProperty("projectseele.regionalBuild","")))
             ProjectSeele.LOGGER.info("R10 START CHECK health={} ready={} pilot={} variant={} experimental={} locked={} launch={} crucified={} powered={} prone={} crouch={} weapon={} used={} ground={} position={}",angel.getHealth(),FirstBattleClip.ready(),eva.getPilotEntity(),eva.getUnitVariant(),eva.isExperimentalUnit(),eva.isNervLogisticsLocked(),eva.isLaunchSequenceActive(),eva.isCrucified(),eva.isPoweredOn(),eva.isPilotProne(),eva.isPilotCrouching(),eva.getWeapon(),angel.hasUsedFirstBattle(),eva.onGround(),eva.position());
         if(!(angel.level() instanceof ServerLevel level)||eva.level()!=level||!angel.isAlive()||!eva.isAlive()||!FirstBattleClip.ready())return false;

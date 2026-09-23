@@ -50,7 +50,7 @@ public class ModSounds
         var result=new java.util.LinkedHashMap<String,RegistryObject<SoundEvent>>();
         for(String name:new String[]{"facility_rail_motion","facility_hydraulic","facility_lock","facility_catapult","facility_siren",
                 "pa_prepare","pa_insert","pa_lock","pa_drain","pa_transfer","pa_ready","pa_recover","pa_return","pa_fill","pa_standby","pa_fault","pa_3","pa_2","pa_1","pa_launch","pa_door_open","pa_door_close",
-                "pa_signal_r30","pa_blue_r30","pa_alert_r30"})
+                "pa_signal_r30","pa_blue_r30","pa_alert_r30","pa_combat_r31"})
             result.put(name,SOUNDS.register(name,()->SoundEvent.createFixedRangeEvent(new ResourceLocation(ProjectSeele.MODID,name),220)));
         return java.util.Collections.unmodifiableMap(result);
     }

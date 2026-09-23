@@ -301,3 +301,9 @@ Lux3D 原始网格、本地涂装与蒙皮处理、Pro 原始交付和 Blender �
 - UN 原始网格分别来自本轮既有 Lux3D 任务 `3672326`、`3672329`。本地工具保留比例与原 UV，重新分区、制作独立骨架、关节、手指、光学部件、铭记和背部喷口，并在 Blender 中烘焙新涂装；不是将原始生成结果直接作为成品。原件、编辑模型与检查记录留在本机私有工件目录。
 - 材质按 [shaderLABS LabPBR 1.3](https://shaderlabs.org/wiki/LabPBR_Material_Standard) 编码，配有 4K 基色、粗糙度/金属度、LabPBR 和受供电状态控制的发光资源。法线贴图采用平法线，曲面细节由实际几何及顶点法线提供，未把平图宣称为细节烘焙。
 - R30 的五个 ZIP 是用户现有文件的私人部署备份。独立材质、光影包内保留已下载的作者原始 ZIP 和说明，不进入 Git，也不作为项目公开开源发布物。
+
+## R31 对白与设施广播
+
+`data/projectseele/nerv_dialogue/profiles.json` 的 253 句为重新编写的项目原创中文对白，人物写法参考 TV 系列官方剧情介绍；具体来源和取舍见 [R31 对白记录](DIALOGUE_AUDIO_R31.md)。没有复制原剧完整台词。人物发言只显示文字。
+
+18 段设施广播由 `tools/build_facility_audio_r31.py` 使用标准 Microsoft Xiaoxiao 神经语音生成，原有事件名保持兼容，新增 `pa_combat_r31.ogg`。没有模仿具体演员、使用克隆音色或截取原剧录音。文本、参数、时长和 SHA-256 记录在本机 `artifacts/dialogue_audio_r31/sources.json`，样音为 `facility_pa_sample.mp3`。角色对白、设施广播和公共交通提示使用独立触发途径；R30 的角色报告语音已停止调用。

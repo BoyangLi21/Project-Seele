@@ -24,6 +24,8 @@ public final class UNFlightPoseR29
     private static final Map<EvaPrototypeEntity,Pose> POSES=new WeakHashMap<>();
     private static final Map<EvaPrototypeEntity,Jets> JETS=new WeakHashMap<>();
     private static final Map<String,Vector3f> SOLES=new HashMap<>();
+    public static void resetEntityR31(EvaUnit01Entity eva)
+    {if(eva instanceof EvaPrototypeEntity un){POSES.remove(un);JETS.remove(un);}}
     private static Vector3f sole(String side)
     {
         return SOLES.computeIfAbsent(side,key->

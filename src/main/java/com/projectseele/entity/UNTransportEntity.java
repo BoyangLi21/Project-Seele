@@ -7,6 +7,7 @@ import net.minecraft.network.syncher.*;
 import net.minecraft.world.entity.*;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
 import net.minecraft.util.Mth;
 import net.minecraftforge.network.NetworkHooks;
 
@@ -20,8 +21,10 @@ public final class UNTransportEntity extends Entity
     private static final EntityDataAccessor<Float> DEPLOY=SynchedEntityData.defineId(UNTransportEntity.class,EntityDataSerializers.FLOAT);
     private static final EntityDataAccessor<Boolean> NERV=SynchedEntityData.defineId(UNTransportEntity.class,EntityDataSerializers.BOOLEAN);
     private static final EntityDataAccessor<Float> HOIST=SynchedEntityData.defineId(UNTransportEntity.class,EntityDataSerializers.FLOAT);
-    private float rig,oldRig,jaw=1,oldJaw=1;
-    private double tx,ty,tz;private float targetYaw;private int interpolation;
+    private float rigFrom,rigTarget,jawFrom=1,jawTarget=1;
+    private long rigSince,jawSince;
+    private boolean rigInitialized,jawInitialized;
+    private Vec3 flightFrom,flightTo;private float flightYawFrom,flightYawTo;private long flightSince;
     public UNTransportEntity(EntityType<? extends UNTransportEntity> type,Level level)
     {super(type,level);noPhysics=true;noCulling=true;setNoGravity(true);setInvulnerable(true);}
     @Override protected void defineSynchedData(){entityData.define(SERIAL,0);entityData.define(CARGO,false);entityData.define(KIND,0);entityData.define(CARGO_ID,-1);entityData.define(DEPLOY,0F);entityData.define(NERV,false);entityData.define(HOIST,84F);}
@@ -35,24 +38,61 @@ public final class UNTransportEntity extends Entity
     public boolean groundCart(){return entityData.get(KIND)==1;}
     public void setGroundCart(){entityData.set(KIND,1);}
     public int cargoEntityId(){return entityData.get(CARGO_ID);}
+    /** Entity ids change on load; attachment/jaw state must survive rebinding. */
+    public void rebindCargo(int id){entityData.set(CARGO_ID,id);}
     public void cargo(int id,boolean attached,float deployment){entityData.set(CARGO_ID,id);entityData.set(CARGO,attached);entityData.set(DEPLOY,Mth.clamp(deployment,0,1));}
-    public float rig(float partial){return Mth.lerp(partial,oldRig,rig);}
-    public float jaws(float partial){return Mth.lerp(partial,oldJaw,jaw);}
+    public float targetDeployment(){return entityData.get(DEPLOY);}
+    private static float visual(float from,float target,long since,long now,float partial,float speed)
+    {
+        float elapsed=Math.max(0,(float)(now-since)+(levelPartial(partial)));
+        return Mth.approach(from,target,elapsed*speed);
+    }
+    private static float levelPartial(float partial){return Mth.clamp(partial,0,1);}
+    /** Aircraft can render outside the client's entity-ticking sections. A loaded
+     * cradle must never disappear because its independent local tick cache froze. */
+    public float rig(float partial)
+    {
+        long now=level().getGameTime();float target=carrying()?1:targetDeployment();
+        if(carrying()||!rigInitialized){rigFrom=rigTarget=target;rigSince=now;rigInitialized=true;}
+        else if(target!=rigTarget){rigFrom=visual(rigFrom,rigTarget,rigSince,now,0,.035F);rigTarget=target;rigSince=now;}
+        return visual(rigFrom,rigTarget,rigSince,now,partial,.035F);
+    }
+    public float jaws(float partial)
+    {
+        long now=level().getGameTime();float target=carrying()?0:1;
+        if(level().getEntity(cargoEntityId()) instanceof EvaUnit01Entity eva&&EvaAirTransportR31.active(eva))
+        {
+            target=EvaAirTransportR31.jawOpening(eva,partial);
+            jawFrom=jawTarget=target;jawSince=now;jawInitialized=true;
+            return target;
+        }
+        if(!jawInitialized){jawFrom=jawTarget=target;jawSince=now;jawInitialized=true;}
+        else if(target!=jawTarget){jawFrom=visual(jawFrom,jawTarget,jawSince,now,0,.05F);jawTarget=target;jawSince=now;}
+        return visual(jawFrom,jawTarget,jawSince,now,partial,.05F);
+    }
     @Override public AABB getBoundingBoxForCulling(){return groundCart()?new AABB(getX()-15,getY()-3,getZ()-17,getX()+15,getY()+9,getZ()+17):new AABB(getX()-74,getY()-hoistDistance()-1,getZ()-60,getX()+74,getY()+22,getZ()+60);}
     @Override public boolean shouldRenderAtSqrDistance(double distance){return distance<1600*1600;}
+    public Vec3 renderFlightPosition(float partial)
+    {
+        if(!level().isClientSide||flightTo==null)return new Vec3(Mth.lerp((double)partial,xOld,getX()),Mth.lerp((double)partial,yOld,getY()),Mth.lerp((double)partial,zOld,getZ()));
+        return flightFrom.lerp(flightTo,Mth.clamp(((level().getGameTime()-flightSince)+(double)partial)/3D,0,1));
+    }
+    public float renderFlightYaw(float partial)
+    {return flightTo==null?Mth.rotLerp(partial,yRotO,getYRot()):Mth.rotLerp((float)Mth.clamp(((level().getGameTime()-flightSince)+(double)partial)/3D,0,1),flightYawFrom,flightYawTo);}
     @Override public void lerpTo(double x,double y,double z,float yaw,float pitch,int steps,boolean teleport)
-    {tx=x;ty=y;tz=z;targetYaw=yaw;interpolation=3;}
+    {
+        Vec3 from=flightTo==null?position():renderFlightPosition(0);float fromYaw=flightTo==null?getYRot():renderFlightYaw(0);
+        flightTo=new Vec3(x,y,z);flightFrom=teleport?flightTo:from;flightYawTo=yaw;flightYawFrom=teleport?yaw:fromYaw;flightSince=level().getGameTime();
+        // A service aircraft is tracked beyond loaded client chunks. Leaving
+        // its spatial position at the old airport until tick() runs strands it
+        // outside ticking sections forever. Relocate now; render on this clock.
+        setPos(x,y,z);setYRot(yaw);setXRot(pitch);
+    }
     @Override public void tick()
     {
         super.tick();
         if(!level().isClientSide&&!groundCart()&&getTags().contains("seele_un_airlift")&&tickCount>200
                 &&!com.projectseele.world.UNAirLiftR29.ownsAircraft((net.minecraft.server.level.ServerLevel)level(),getUUID())){discard();return;}
-        if(level().isClientSide){oldRig=rig;oldJaw=jaw;rig=Mth.approach(rig,entityData.get(DEPLOY),.035F);jaw=Mth.approach(jaw,carrying()?0:1,.05F);}
-        if(level().isClientSide&&interpolation>0)
-        {
-            setPos(getX()+(tx-getX())/interpolation,getY()+(ty-getY())/interpolation,getZ()+(tz-getZ())/interpolation);
-            setYRot(getYRot()+Mth.wrapDegrees(targetYaw-getYRot())/interpolation);interpolation--;
-        }
     }
     @Override protected void addAdditionalSaveData(CompoundTag tag){tag.putInt("UNSerial",serial());tag.putBoolean("Cargo",carrying());tag.putInt("Kind",entityData.get(KIND));tag.putFloat("Deploy",entityData.get(DEPLOY));tag.putBoolean("NervAircraft",isNerv());tag.putFloat("HoistDistance",hoistDistance());}
     @Override protected void readAdditionalSaveData(CompoundTag tag){configure(tag.getInt("UNSerial"),tag.getBoolean("Cargo"));entityData.set(KIND,tag.getInt("Kind"));entityData.set(DEPLOY,tag.getFloat("Deploy"));entityData.set(NERV,tag.getBoolean("NervAircraft"));setHoistDistance(tag.contains("HoistDistance")?tag.getFloat("HoistDistance"):84);}

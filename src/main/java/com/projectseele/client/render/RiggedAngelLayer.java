@@ -23,7 +23,7 @@ public final class RiggedAngelLayer<T extends GeoAnimatable> extends GeoRenderLa
     private static final Map<ResourceLocation,Model> CACHE=new HashMap<>();
     private static final Set<ResourceLocation> ATTEMPTED=new HashSet<>();
     private final ResourceLocation resource;
-    private record Model(String[] bones,float[] vertices,int[] indices,float[] weights) {}
+    private record Model(String[] bones,float[] vertices,int[] indices,float[] weights,float[] groundedVertices) {}
 
     public RiggedAngelLayer(GeoRenderer<T> renderer,ResourceLocation resource)
     {
@@ -55,7 +55,7 @@ public final class RiggedAngelLayer<T extends GeoAnimatable> extends GeoRenderLa
             }
             for(int i=0;i<weights.length;i+=4)if(Math.abs(weights[i]+weights[i+1]+weights[i+2]+weights[i+3]-1)>1e-4)throw new IllegalArgumentException("Unnormalized skin weights");
             for(float v:vertices)if(!Float.isFinite(v))throw new IllegalArgumentException("Non-finite skin vertex");
-            Model model=new Model(bones,vertices,indices,weights);CACHE.put(resource,model);
+            Model model=new Model(bones,vertices,indices,weights,new float[vertices.length/8*6]);CACHE.put(resource,model);
             SachielWrapSurface.prepare(resource,vertices.length/8);
             ProjectSeele.LOGGER.info("R10 weighted Angel loaded: {} triangles={} bones={}",resource,vertices.length/24,bones.length);return model;
         }
@@ -109,6 +109,8 @@ public final class RiggedAngelLayer<T extends GeoAnimatable> extends GeoRenderLa
         }
         Quaternionf q=new Quaternionf(),d=new Quaternionf(),translation=new Quaternionf(),conjugate=new Quaternionf();
         Vector3f point=new Vector3f(),normal=new Vector3f(),work=new Vector3f();
+        boolean grounded=entity instanceof net.minecraft.world.entity.LivingEntity living&&AngelCombatPoseR31.needsGroundSupport(living);
+        Matrix4f rootModel=grounded?EvaRigTransforms.model(root):null;float floor=Float.POSITIVE_INFINITY;
         for(int vertex=0;vertex<model.vertices.length/8;vertex++)
         {
             int i=vertex*8,j=vertex*4;float[] v=model.vertices;
@@ -137,8 +139,32 @@ public final class RiggedAngelLayer<T extends GeoAnimatable> extends GeoRenderLa
                 d.x-=q.x*orthogonal;d.y-=q.y*orthogonal;d.z-=q.z*orthogonal;d.w-=q.w*orthogonal;
                 translation.set(d).mul(conjugate.set(q).conjugate());q.transform(point);point.add(2*translation.x,2*translation.y,2*translation.z);q.transform(normal).normalize();
             }
-            emit(target,stack,point,normal,v[i+3],v[i+4],light,overlay);
-            if(vertex%3==2)emit(target,stack,point,normal,v[i+3],v[i+4],light,overlay);
+            if(grounded)
+            {
+                int at=vertex*6;float[] output=model.groundedVertices;
+                output[at]=point.x;output[at+1]=point.y;output[at+2]=point.z;output[at+3]=normal.x;output[at+4]=normal.y;output[at+5]=normal.z;
+                floor=Math.min(floor,rootModel.m01()*point.x+rootModel.m11()*point.y+rootModel.m21()*point.z+rootModel.m31());
+            }
+            else
+            {
+                emit(target,stack,point,normal,v[i+3],v[i+4],light,overlay);
+                if(vertex%3==2)emit(target,stack,point,normal,v[i+3],v[i+4],light,overlay);
+            }
+        }
+        if(grounded&&Float.isFinite(floor))
+        {
+            // Reuse the exact DQS output already calculated above. A fixed
+            // pelvis offset cannot support both Sachiel and Shamshel, nor all
+            // four fall directions. Translate the rigid assembly, never scale
+            // limbs or run an approximate second skinning pass.
+            Vector3f lift=inverseRoot.transformDirection(new Vector3f(0,.016F-floor,0));
+            for(int vertex=0;vertex<model.vertices.length/8;vertex++)
+            {
+                int at=vertex*6,i=vertex*8;float[] output=model.groundedVertices;
+                point.set(output[at],output[at+1],output[at+2]).add(lift);normal.set(output[at+3],output[at+4],output[at+5]);
+                emit(target,stack,point,normal,model.vertices[i+3],model.vertices[i+4],light,overlay);
+                if(vertex%3==2)emit(target,stack,point,normal,model.vertices[i+3],model.vertices[i+4],light,overlay);
+            }
         }
     }
     private static void emit(VertexConsumer target,PoseStack stack,Vector3f p,Vector3f n,float u,float v,int light,int overlay)

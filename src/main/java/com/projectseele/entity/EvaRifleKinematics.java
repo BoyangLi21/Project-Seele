@@ -23,8 +23,9 @@ public final class EvaRifleKinematics
 
     public static Matrix4f world(EvaUnit01Entity entity,float partial)
     {
-        Vec3 position=entity.level().isClientSide?entity.getPosition(partial):entity.position();
-        float yaw=entity.level().isClientSide?Mth.rotLerp(partial,entity.yBodyRotO,entity.yBodyRot):entity.yBodyRot;
+        boolean posed=EvaAirTransportR31.active(entity)||EvaShutdownR30.displayed(entity);
+        Vec3 position=posed?EvaAirTransportR31.framePosition(entity,partial):entity.level().isClientSide?entity.getPosition(partial):entity.position();
+        float yaw=posed?EvaAirTransportR31.frameYaw(entity,partial):entity.level().isClientSide?Mth.rotLerp(partial,entity.yBodyRotO,entity.yBodyRot):entity.yBodyRot;
         return new Matrix4f().translation(position.toVector3f()).rotateY((180-yaw)*Mth.DEG_TO_RAD).scale(EvaScale.RENDER_SCALE);
     }
 

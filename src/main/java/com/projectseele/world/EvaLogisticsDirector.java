@@ -81,6 +81,7 @@ public final class EvaLogisticsDirector
     /** Enforces the world-global UUID contract as entities enter loaded chunks. */
     public static boolean validateCanonical(EvaUnit01Entity unit)
     {
+        if(com.projectseele.visual.CombatR31Review.ownsFixture(unit))return true;
         if (unit.isExperimentalUnit()) return true;
         if (!(unit.level() instanceof ServerLevel level))
         {

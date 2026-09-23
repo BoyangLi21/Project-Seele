@@ -12,6 +12,7 @@ import java.util.*;
 final class EvaShutdownPoseR30
 {
     private static final Map<EvaUnit01Entity,View> VIEWS=new WeakHashMap<>();
+    static void resetEntityR31(EvaUnit01Entity eva){VIEWS.remove(eva);EvaCombatPoseR31.resetEntityR31(eva);CombatFeelR31.clear(eva);}
     private static final class View {CompoundTag live=new CompoundTag(),held=new CompoundTag(),entry=new CompoundTag();int mode;long sent=-1,released;}
     private static CompoundTag capture(BakedGeoModel model)
     {

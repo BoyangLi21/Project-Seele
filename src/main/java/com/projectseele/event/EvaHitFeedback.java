@@ -20,7 +20,17 @@ public final class EvaHitFeedback
     private static final ThreadLocal<Contact> CONTACT=new ThreadLocal<>();
     public static boolean hurt(LivingEntity target,DamageSource source,float amount,Vec3 point,Vec3 direction)
     {
-        Contact old=CONTACT.get();CONTACT.set(new Contact(target,point,direction));try{return target.hurt(source,amount);}finally{if(old==null)CONTACT.remove();else CONTACT.set(old);}
+        Contact old=CONTACT.get();CONTACT.set(new Contact(target,point,direction));
+        float health=target.getHealth(),field=target instanceof Angel angel?angel.getAtField():target instanceof EvaUnit01Entity eva?eva.getAtFieldEnergy():0;
+        try
+        {
+            boolean accepted=target.hurt(source,amount);
+            float after=target instanceof Angel angel?angel.getAtField():target instanceof EvaUnit01Entity eva?eva.getAtFieldEnergy():0;
+            if(target.getHealth()>=health&&after<field&&source.getEntity() instanceof LivingEntity attacker)
+                CombatFeelR31.acceptedHit(target,attacker,amount,direction,true);
+            return accepted;
+        }
+        finally{if(old==null)CONTACT.remove();else CONTACT.set(old);}
     }
     @SubscribeEvent public static void damaged(LivingDamageEvent event)
     {
@@ -30,10 +40,11 @@ public final class EvaHitFeedback
         Vec3 direction=c!=null&&c.target==target?c.direction:target.position().subtract(origin).normalize();
         float strength=(float)Math.min(1.2,.22+Math.sqrt(event.getAmount()/Math.max(1,target.getMaxHealth()))*2.0);
         float height=(float)Math.max(0,Math.min(1,(point.y-target.getY())/target.getBbHeight()));long tick=level.getGameTime();EvaImpactResponse.add(target,tick,direction,strength,height);
+        CombatFeelR31.acceptedHit(target,event.getSource().getEntity() instanceof LivingEntity actor?actor:null,event.getAmount(),direction,false);
         if(target instanceof EvaUnit01Entity eva)EvaImpactResponse.displace(eva,direction,strength);
         SeeleNetwork.CHANNEL.send(PacketDistributor.TRACKING_ENTITY_AND_SELF.with(()->target),new ClientboundImpactResponsePacket(target.getId(),tick,direction,strength,height));
-        level.sendParticles(target instanceof EvaUnit01Entity?ParticleTypes.ELECTRIC_SPARK:ParticleTypes.DAMAGE_INDICATOR,point.x,point.y,point.z,8,.55,.55,.55,.07);
-        level.sendParticles(ParticleTypes.POOF,point.x,point.y,point.z,5,.45,.45,.45,.04);
+        level.sendParticles(target instanceof EvaUnit01Entity?ParticleTypes.ELECTRIC_SPARK:ParticleTypes.DAMAGE_INDICATOR,point.x,point.y,point.z,24,1.6,1.6,1.6,.15);
+        level.sendParticles(ParticleTypes.POOF,point.x,point.y,point.z,12,1.2,1.2,1.2,.08);
     }
     private EvaHitFeedback() {}
 }

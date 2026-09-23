@@ -27,6 +27,20 @@ public final class UNPlugDirector
         if(!(eva.level() instanceof ServerLevel level)||!data.hasUUID("UNPlug"))return null;
         Entity e=level.getEntity(data.getUUID("UNPlug"));return e instanceof EntryPlugCarrierEntity p?p:null;
     }
+    /** A new spare is issued only for an explicitly destroyed, empty field capsule. */
+    public static EntryPlugCarrierEntity replaceDestroyedAtDockR31(EvaPrototypeEntity eva)
+    {
+        EntryPlugCarrierEntity current=capsule(eva);if(current!=null&&!current.isRemoved())return current;
+        if(!(eva.level() instanceof ServerLevel level)||!atDock(eva)||!EntryPlugDisposalR31.replacementAuthorized(eva))return null;
+        UUID former=eva.getPersistentData().getUUID("UNPlug");
+        var plug=ModEntities.ENTRY_PLUG_CARRIER.get().create(level);if(plug==null)return null;
+        plug.assignIndependentEva(eva);plug.snapCanonicalTransformR31(dock(eva));
+        if(!level.addFreshEntity(plug))return null;
+        eva.getPersistentData().putUUID("UNPlug",plug.getUUID());eva.getPersistentData().putUUID("UNReplacedDestroyedPlugR31",former);
+        eva.getPersistentData().putInt("UNSequenceTicks",0);UNRecoveryR22.remember(plug);
+        ProjectSeele.LOGGER.info("UN replacement capsule issued after confirmed destruction: eva={} old={} new={}",eva.getUUID(),former,plug.getUUID());
+        return plug;
+    }
     public static boolean atDock(EvaPrototypeEntity eva)
     {
         var d=eva.getPersistentData();return d.contains("UNHomeX")&&eva.position().distanceTo(new Vec3(d.getDouble("UNHomeX"),d.getDouble("UNHomeY"),d.getDouble("UNHomeZ")))<4;
@@ -44,7 +58,7 @@ public final class UNPlugDirector
     {
         var d=eva.getPersistentData();double yaw=Math.toRadians(d.getFloat("UNHomeYaw"));Vec3 rear=new Vec3(Math.sin(yaw),0,-Math.cos(yaw));
         Vec3 centre=new Vec3(d.getDouble("UNHomeX"),d.getDouble("UNHomeY"),d.getDouble("UNHomeZ"));
-        return EntryPlugKinematics.dockTransform(eva,centre.add(rear.scale(12)).add(0,51.6,0));
+        return EntryPlugKinematics.dockTransform(centre.add(rear.scale(12)).add(0,51.6,0),d.getFloat("UNHomeYaw"));
     }
     public static void tick(EvaPrototypeEntity eva)
     {
@@ -60,6 +74,7 @@ public final class UNPlugDirector
             if(!level.addFreshEntity(plug))return;d.putUUID("UNPlug",plug.getUUID());
             ProjectSeele.LOGGER.info("EVA-UN dedicated capsule commissioned: eva={} plug={}",eva.getUUID(),plug.getUUID());
         }
+        if(plug==null)plug=replaceDestroyedAtDockR31(eva);
         if(plug==null)return; // An unloaded saved capsule is never replaced.
         plug.assignIndependentEva(eva);
         int stage=plug.getInsertionStage(),tick=d.getInt("UNSequenceTicks");

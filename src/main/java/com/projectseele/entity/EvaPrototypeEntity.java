@@ -22,7 +22,7 @@ public final class EvaPrototypeEntity extends EvaUnit01Entity
     public void landUNFlight(){if(isUNFlying())entityData.set(LANDING,true);}
     public void toggleUNFlight(net.minecraft.server.level.ServerPlayer pilot)
     {
-        if(getPilotEntity()!=pilot)return;
+        if(getPilotEntity()!=pilot||CombatFeelR31.restrained(this)||EvaCombatR31.active(this))return;
         if(getUNSerial()!=1){pilot.sendSystemMessage(Component.literal("飞行系统仅配置于 EVA-UN-01。"));return;}
         if(isUNFlying()){entityData.set(LANDING,!isUNLanding());pilot.sendSystemMessage(Component.literal(isUNLanding()?"UN-01 自动降落中。":"UN-01 恢复悬停。"));return;}
         if(isNervLogisticsLocked()||!isPoweredOn()||getActivationTicks()>0||isInsideTestHangar()||isPilotProne()||isPilotCrouching()||isFirstBattleActive())
@@ -38,6 +38,8 @@ public final class EvaPrototypeEntity extends EvaUnit01Entity
     @Override public void travel(Vec3 input)
     {
         if(!isUNFlying()){super.travel(input);return;}
+        if(CombatFeelR31.travel(this))return;
+        if(EvaCombatR31.locksInput(this))input=Vec3.ZERO;
         if(isNervLogisticsLocked()){setDeltaMovement(Vec3.ZERO);return;}
         if(!isControlledByLocalInstance())return;
         double vertical=isUNLanding()?-.48:level().getGameTime()-flightInputAt>10?0:((flightInput&1)!=0?1:0)-((flightInput&2)!=0?1:0);

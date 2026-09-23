@@ -3,9 +3,15 @@ package com.projectseele.world;
 import com.projectseele.entity.EvaScale;
 import com.projectseele.entity.EvaUnit01Entity;
 import com.projectseele.entity.EvaDorsalProfile;
+import com.projectseele.entity.EvaAirTransportR31;
+import com.projectseele.entity.EvaBodyPose;
+import com.projectseele.entity.EvaRifleKinematics;
+import com.projectseele.entity.EvaShutdownR30;
 import net.minecraft.util.Mth;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
+import org.joml.Matrix4f;
+import org.joml.Vector3f;
 
 /**
  * Single coordinate authority for the canonical entry-plug and dorsal socket.
@@ -84,7 +90,12 @@ public final class EntryPlugKinematics
     private EntryPlugKinematics() {}
 
     public static RigidTransform socketTransform(EvaUnit01Entity unit)
+    {return socketTransform(unit,1F);}
+
+    /** Only the locked aerial assembly samples its shared render-time body frame. */
+    public static RigidTransform socketTransform(EvaUnit01Entity unit,float partial)
     {
+        if(EvaAirTransportR31.active(unit)||EvaShutdownR30.displayed(unit))return posedSocketTransform(unit,unit.level().isClientSide?Mth.clamp(partial,0,1):1F);
         Vec3 rear = unit.getRearDirection();
         var profile=EvaDorsalProfile.of(unit);Vec3 marker=profile.centreBlocks();
         RigidTransform orientation = verticalSocketOrientation(rear,profile);
@@ -107,6 +118,21 @@ public final class EntryPlugKinematics
         return normal;
     }
 
+    public static RigidTransform posedSocketTransform(EvaUnit01Entity unit,float partial)
+    {
+        var profile=EvaDorsalProfile.of(unit);
+        var body=EvaBodyPose.sample(unit,partial);
+        Matrix4f chest=EvaRifleKinematics.world(unit,partial).mul(body.matrix("torso_upper"));
+        Vec3 centre=profile.centreModel(),out=profile.outwardModel(),hinge=profile.hingeAxisModel();
+        // Profile coordinates are Gecko model units. The shared pose uses
+        // reflected X and 1/16 units; world() applies RENDER_SCALE exactly once.
+        Vector3f point=chest.transformPosition(new Vector3f((float)-centre.x,(float)centre.y,(float)centre.z).div(16));
+        Vector3f axis=chest.transformDirection(new Vector3f((float)-out.x,(float)out.y,(float)out.z)).normalize();
+        Vector3f hatchUp=chest.transformDirection(new Vector3f((float)-hinge.x,(float)hinge.y,(float)hinge.z)).normalize();
+        Vec3 outward=new Vec3(axis.x,axis.y,axis.z),up=new Vec3(hatchUp.x,hatchUp.y,hatchUp.z);
+        return RigidTransform.fromAxes(new Vec3(point.x,point.y,point.z),up.cross(outward),up,outward);
+    }
+
     /**
      * Authored cage pose whose hatch marker, not entity centre, lands at the
      * boarding point.  The insertion tip points toward the EVA while the
@@ -118,6 +144,12 @@ public final class EntryPlugKinematics
                                                 Vec3 hatchCentreWorld)
     {
         return dockTransform(hatchCentreWorld, unit.getRearDirection());
+    }
+
+    /** UN bridges have their own saved yaw; a parked cradle never follows live body interpolation. */
+    public static RigidTransform dockTransform(Vec3 hatchCentreWorld,float fixedYaw)
+    {
+        return dockTransform(hatchCentreWorld,rearDirectionForYaw(fixedYaw));
     }
 
     /**
@@ -257,8 +289,14 @@ public final class EntryPlugKinematics
     }
 
     public static RigidTransform lockedTransform(EvaUnit01Entity unit)
+    {return lockedTransform(unit,1F);}
+
+    public static RigidTransform lockedTransform(EvaUnit01Entity unit,float partial)
     {
-        return socketTransform(unit).compose(new RigidTransform(
+        RigidTransform socket=EvaShutdownR30.displayed(unit)
+                ?posedSocketTransform(unit,unit.level().isClientSide?Mth.clamp(partial,0,1):1F)
+                :socketTransform(unit,partial);
+        return socket.compose(new RigidTransform(
                 new Vec3(0.0D, 0.0D, -LOCK_DEPTH_BLOCKS),
                 0.0F, 0.0F, 0.0F, 1.0F));
     }

@@ -33,7 +33,7 @@ def ensure_private_pack(game,review=False):
             original=list(selected)
             if required not in selected:selected.append(required)
             extra='file/'+(review if isinstance(review,str) else 'eva_un_r21_review')
-            selected=[p for p in selected if p not in ('file/eva_un_r21_review','file/eva_access_r22_review','file/eva_tv_r24_review','file/eva_un_r30_review')]
+            selected=[p for p in selected if p not in ('file/eva_un_r21_review','file/eva_access_r22_review','file/eva_tv_r24_review','file/eva_un_r30_review','file/eva_un_r31_review')]
             if review:selected.append(extra)
             if original==selected:return
             lines[index]='resourcePacks:'+json.dumps(selected,ensure_ascii=False,separators=(',',':'))

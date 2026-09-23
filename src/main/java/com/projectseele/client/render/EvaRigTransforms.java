@@ -43,14 +43,17 @@ final class EvaRigTransforms
         return new Matrix3f().setColumn(0,x).setColumn(1,y).setColumn(2,new Vector3f(x).cross(y));
     }
     private static void orient(GeoBone bone,Vector3f rest,Vector3f direction,Vector3f hingeAxis,Matrix4f root)
+    {orient(bone,rest,direction,hingeAxis,new Vector3f(1,0,0),root);}
+    private static void orient(GeoBone bone,Vector3f rest,Vector3f direction,Vector3f hingeAxis,Vector3f restAxis,Matrix4f root)
     {
-        var q=new Quaternionf().setFromNormalized(frame(direction,hingeAxis).mul(frame(rest,new Vector3f(1,0,0)).transpose()));
+        var q=new Quaternionf().setFromNormalized(frame(direction,hingeAxis).mul(frame(rest,restAxis).transpose()));
         rotate(bone,rotation(parent(bone,root)).invert().mul(q));
     }
     static double solveArm(GeoBone upper,GeoBone lower,GeoBone wrist,GeoBone hand,String side,
                            Vector3f target,Quaternionf handRotation,Vector3f pole,Matrix4f root)
     {
-        return solveChain(upper,lower,wrist,hand,elbow(lower,side),target,handRotation,pole,root);
+        boolean anatomical=lower.getChildBones().stream().anyMatch(b->b.getName().equals("r30_elbow_socket_"+side));
+        return solveChain(upper,lower,wrist,hand,elbow(lower,side),target,handRotation,pole,root,anatomical);
     }
     static double solveLeg(GeoBone upper,GeoBone lower,GeoBone ankle,GeoBone foot,Vector3f target,Quaternionf rotation,Vector3f pole,Matrix4f root)
     {
@@ -59,6 +62,8 @@ final class EvaRigTransforms
     static double solveGenericArm(GeoBone upper,GeoBone lower,GeoBone hand,Vector3f target,Quaternionf rotation,Vector3f pole,Matrix4f root)
     {return solveChain(upper,lower,hand,hand,pivot(lower),target,rotation,pole,root);}
     private static double solveChain(GeoBone upper,GeoBone lower,GeoBone wrist,GeoBone hand,Vector3f centre,Vector3f target,Quaternionf handRotation,Vector3f pole,Matrix4f root)
+    {return solveChain(upper,lower,wrist,hand,centre,target,handRotation,pole,root,false);}
+    private static double solveChain(GeoBone upper,GeoBone lower,GeoBone wrist,GeoBone hand,Vector3f centre,Vector3f target,Quaternionf handRotation,Vector3f pole,Matrix4f root,boolean anatomical)
     {
         var shoulder=point(upper,pivot(upper),root);
         float scale=root.getScale(new Vector3f()).y;var u=new Vector3f(centre).sub(pivot(upper));var v=pivot(hand).sub(centre);
@@ -71,11 +76,22 @@ final class EvaRigTransforms
         bend.normalize();var joint=new Vector3f(shoulder).fma(along,direction).fma(height,bend);
         var du=new Vector3f(joint).sub(shoulder);var dl=new Vector3f(target).sub(joint);var axis=new Vector3f(du).cross(dl);
         if(axis.lengthSquared()<1e-8F)axis.set(du).cross(bend);
-        axis.normalize();var localSide=rotation(new Matrix4f(root).mul(model(upper))).transform(new Vector3f(1,0,0));if(axis.dot(localSide)<0)axis.negate();
+        axis.normalize();Vector3f restAxis=new Vector3f(1,0,0);
+        if(anatomical)
+        {
+            // The UN bind elbow bends in its measured XY plane, whose normal
+            // is Z, unlike the older rig's X-axis elbow. Using dot(axis, X)
+            // there is mathematically zero: a two-degree dormant torso tilt
+            // flips its floating-point sign and spins both arms by 180 degrees.
+            restAxis.set(u).cross(v);
+            if(restAxis.lengthSquared()<1e-8F)restAxis.set(u).cross(new Vector3f(0,0,1));
+            restAxis.normalize();
+        }
+        var localSide=rotation(new Matrix4f(root).mul(model(upper))).transform(new Vector3f(restAxis));if(axis.dot(localSide)<0)axis.negate();
         for(var bone:new GeoBone[]{lower,wrist,hand}){bone.setPosX(0);bone.setPosY(0);bone.setPosZ(0);}
         wrist.setRotX(0);wrist.setRotY(0);wrist.setRotZ(0);
-        orient(upper,u,du,axis,root);var actual=parent(lower,root).transformPosition(new Vector3f(centre));
-        orient(lower,v,new Vector3f(target).sub(actual),axis,root);hinge(lower,centre);
+        orient(upper,u,du,axis,restAxis,root);var actual=parent(lower,root).transformPosition(new Vector3f(centre));
+        orient(lower,v,new Vector3f(target).sub(actual),axis,restAxis,root);hinge(lower,centre);
         rotate(hand,rotation(parent(hand,root)).invert().mul(handRotation));
         return point(hand,pivot(hand),root).distance(target);
     }

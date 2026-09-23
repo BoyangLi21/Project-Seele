@@ -133,6 +133,7 @@ public class ClientEvents
     {
         event.registerAboveAll("angel_alarm", AlarmOverlay.INSTANCE);
         event.registerAboveAll("eva_cockpit",(gui,g,p,w,h)->{if(!FirstBattleClient.active())EvaHud.COCKPIT.render(gui,g,p,w,h);});
+        event.registerAboveAll("eva_combat_r31",EvaCombatHudR31.OVERLAY);
         event.registerAboveAll("sniper_scope", EvaHud.SCOPE);
         event.registerAboveAll("plug_insertion", EvaHud.INSERTION);
         event.registerAboveAll("nuclear_flash", EvaHud.NUCLEAR_FLASH);
@@ -154,6 +155,7 @@ public class ClientEvents
         event.register(Keybinds.COMMANDER_POSE);
         event.register(Keybinds.UN_EYE_LASER);
         event.register(Keybinds.UN_FLIGHT);
+        event.register(Keybinds.EVA_GRAPPLE);
         event.register(Keybinds.ULTRAMAN_TRANSFORM);
     }
 

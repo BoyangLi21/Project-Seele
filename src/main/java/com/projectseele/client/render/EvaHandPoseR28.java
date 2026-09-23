@@ -9,6 +9,7 @@ final class EvaHandPoseR28
 {
     private record State(long frame,float[] curl) {}
     private static final Map<EvaUnit01Entity,State> STATES=new WeakHashMap<>();
+    static void resetEntityR31(EvaUnit01Entity eva){STATES.remove(eva);}
     static EvaMotionEngineV2.BoneWrites apply(EvaUnit01Entity eva,BakedGeoModel model,float partial)
     {
         if(model.getBone("r30_hand_frame_r").isPresent())return EvaUNHandPoseR30.apply(eva,model,partial);
@@ -16,7 +17,9 @@ final class EvaHandPoseR28
         long now=System.nanoTime();var old=STATES.get(eva);
         float blend=old==null?1:(float)(1-Math.exp(-Math.min(.1,(now-old.frame())/1e9)*20));
         float[] values=new float[15];Set<String> written=new LinkedHashSet<>();int i=0;
-        boolean strike=eva.hasLiveActionForRender(partial)||eva.isFirstBattleActive();
+        int action=com.projectseele.entity.EvaCombatR31.action(eva);
+        boolean grabbing=action>=com.projectseele.entity.EvaCombatR31.REACH&&action<=com.projectseele.entity.EvaCombatR31.THROW;
+        boolean strike=eva.hasLiveActionForRender(partial)||eva.isFirstBattleActive()||action==1||action==2;
         boolean rifle=eva.getWeapon()==EvaUnit01Entity.WEAPON_RIFLE;
         boolean weapon=eva.getWeapon()!=EvaUnit01Entity.WEAPON_FISTS;
         for(String digit:new String[]{"index","middle","ring","little"})
@@ -24,7 +27,7 @@ final class EvaHandPoseR28
             String axis="finger_"+digit+"_axis_r";
             model.getBone(axis).ifPresent(b->{var bind=b.getInitialSnapshot();b.setRotX(bind.getRotX());b.setRotY(bind.getRotY());b.setRotZ(bind.getRotZ());b.setPosX(bind.getOffsetX());b.setPosY(bind.getOffsetY());b.setPosZ(bind.getOffsetZ());});
             written.add(axis);
-            float[] target=rifle&&digit.equals("index")?new float[]{18,28,12}:
+            float[] target=grabbing?new float[]{34,48,25}:rifle&&digit.equals("index")?new float[]{18,28,12}:
                     weapon?new float[]{55,74,36}:strike?new float[]{64,82,48}:new float[]{12,20,10};
             String[] names={"finger_"+digit+"_r","finger_"+digit+"_tip_r","finger_"+digit+"_distal_r"};
             for(int joint=0;joint<3;joint++,i++)
@@ -46,7 +49,7 @@ final class EvaHandPoseR28
             var axis=tangent.cross(toward);if(axis.lengthSquared()>.00001F)axis.normalize();else axis.set(0,0,1);
             int j=0;for(String name:new String[]{"finger_thumb_r","finger_thumb_tip_r","finger_thumb_distal_r"})
             {
-                float target=(weapon||strike?new float[]{30,36,18}:new float[]{8,12,6})[j];
+                float target=(weapon||strike||grabbing?new float[]{30,36,18}:new float[]{8,12,6})[j];
                 values[12+j]=old==null?target:old.curl()[12+j]+(target-old.curl()[12+j])*blend;
                 var bone=model.getBone(name).orElse(null);if(bone!=null)
                 {

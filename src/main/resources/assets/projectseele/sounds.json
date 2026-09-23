@@ -211,8 +211,7 @@
     "sounds": [
       {
         "name": "projectseele:pa_prepare",
-        "attenuation_distance": 220,
-        "stream": false
+        "attenuation_distance": 160
       }
     ]
   },
@@ -221,8 +220,7 @@
     "sounds": [
       {
         "name": "projectseele:pa_insert",
-        "attenuation_distance": 220,
-        "stream": false
+        "attenuation_distance": 160
       }
     ]
   },
@@ -231,8 +229,7 @@
     "sounds": [
       {
         "name": "projectseele:pa_lock",
-        "attenuation_distance": 220,
-        "stream": false
+        "attenuation_distance": 160
       }
     ]
   },
@@ -241,8 +238,7 @@
     "sounds": [
       {
         "name": "projectseele:pa_drain",
-        "attenuation_distance": 220,
-        "stream": false
+        "attenuation_distance": 160
       }
     ]
   },
@@ -251,8 +247,7 @@
     "sounds": [
       {
         "name": "projectseele:pa_transfer",
-        "attenuation_distance": 220,
-        "stream": false
+        "attenuation_distance": 160
       }
     ]
   },
@@ -261,8 +256,7 @@
     "sounds": [
       {
         "name": "projectseele:pa_ready",
-        "attenuation_distance": 220,
-        "stream": false
+        "attenuation_distance": 160
       }
     ]
   },
@@ -271,8 +265,7 @@
     "sounds": [
       {
         "name": "projectseele:pa_recover",
-        "attenuation_distance": 220,
-        "stream": false
+        "attenuation_distance": 160
       }
     ]
   },
@@ -281,8 +274,7 @@
     "sounds": [
       {
         "name": "projectseele:pa_return",
-        "attenuation_distance": 220,
-        "stream": false
+        "attenuation_distance": 160
       }
     ]
   },
@@ -291,8 +283,7 @@
     "sounds": [
       {
         "name": "projectseele:pa_fill",
-        "attenuation_distance": 220,
-        "stream": false
+        "attenuation_distance": 160
       }
     ]
   },
@@ -301,8 +292,7 @@
     "sounds": [
       {
         "name": "projectseele:pa_standby",
-        "attenuation_distance": 220,
-        "stream": false
+        "attenuation_distance": 160
       }
     ]
   },
@@ -311,8 +301,7 @@
     "sounds": [
       {
         "name": "projectseele:pa_fault",
-        "attenuation_distance": 220,
-        "stream": false
+        "attenuation_distance": 160
       }
     ]
   },
@@ -321,8 +310,7 @@
     "sounds": [
       {
         "name": "projectseele:pa_3",
-        "attenuation_distance": 220,
-        "stream": false
+        "attenuation_distance": 160
       }
     ]
   },
@@ -331,8 +319,7 @@
     "sounds": [
       {
         "name": "projectseele:pa_2",
-        "attenuation_distance": 220,
-        "stream": false
+        "attenuation_distance": 160
       }
     ]
   },
@@ -341,8 +328,7 @@
     "sounds": [
       {
         "name": "projectseele:pa_1",
-        "attenuation_distance": 220,
-        "stream": false
+        "attenuation_distance": 160
       }
     ]
   },
@@ -351,8 +337,7 @@
     "sounds": [
       {
         "name": "projectseele:pa_launch",
-        "attenuation_distance": 220,
-        "stream": false
+        "attenuation_distance": 160
       }
     ]
   },
@@ -420,8 +405,7 @@
     "sounds": [
       {
         "name": "projectseele:pa_door_open",
-        "attenuation_distance": 220,
-        "stream": false
+        "attenuation_distance": 160
       }
     ]
   },
@@ -430,8 +414,7 @@
     "sounds": [
       {
         "name": "projectseele:pa_door_close",
-        "attenuation_distance": 220,
-        "stream": false
+        "attenuation_distance": 160
       }
     ]
   },
@@ -513,6 +496,15 @@
     "sounds": [
       {
         "name": "projectseele:pa_alert_r30",
+        "attenuation_distance": 160
+      }
+    ]
+  },
+  "pa_combat_r31": {
+    "subtitle": "subtitles.projectseele.pa_combat_r31",
+    "sounds": [
+      {
+        "name": "projectseele:pa_combat_r31",
         "attenuation_distance": 160
       }
     ]

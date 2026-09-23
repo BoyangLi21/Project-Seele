@@ -52,6 +52,12 @@ public final class NervHangarDoorRenderer
             int packedLight)
     {
         int facilityLight = LightTexture.FULL_BRIGHT;
+        if(door.isSectionalUNGate())
+        {
+            sectionalUN(door,partialTick,poses,buffers,facilityLight);
+            super.render(door,yaw,partialTick,poses,buffers,packedLight);
+            return;
+        }
         double slide = door.getOpenProgress(partialTick) * 17.0D;
         poses.pushPose();
         poses.scale(1,door.visualHeight()/65F,1);
@@ -59,6 +65,49 @@ public final class NervHangarDoorRenderer
         splitLogo(poses, buffers, slide,door.getVariant()==3);
         poses.popPose();
         super.render(door, yaw, partialTick, poses, buffers, packedLight);
+    }
+
+    private static void sectionalUN(NervHangarDoorEntity door,float partialTick,
+            PoseStack poses,MultiBufferSource buffers,int light)
+    {
+        double width=door.visualWidth(),height=door.visualHeight(),section=height/4.0;
+        double progress=door.getOpenProgress(partialTick);
+        progress=progress*progress*(3-2*progress);
+        // All four leaves remain inside the enclosed Y142..160 header. Unlike
+        // a widened sideways gate, their sweep cannot cross the personnel door.
+        NervDoorFinish.frame(poses,buffers,light,width/2,height,progress>.99);
+        for(int i=0;i<4;i++)
+        {
+            double base=i*section,lift=(height-base)*progress,z=-.30+i*.68;
+            double y=base+lift;
+            NervDoorFinish.leaf(poses,buffers,light,-width/2,y,z,width,section+.04,.60,true);
+            for(int column=1;column<4;column++)
+                NervDoorFinish.leaf(poses,buffers,light,-width/2+column*width/4-.05,y+.15,z-.04,.10,section-.35,.045,false);
+            unLogoSection(poses,buffers,base,base+section,lift,z);
+        }
+        for(int side:new int[]{-1,1})
+            NervDoorFinish.leaf(poses,buffers,light,side<0?-width/2-.55:width/2+.10,0,-.4,.45,height+section,2.8,true);
+    }
+
+    private static void unLogoSection(PoseStack poses,MultiBufferSource buffers,
+            double bottom,double top,double lift,double z)
+    {
+        double low=Math.max(20,bottom),high=Math.min(44,top);
+        if(high<=low)return;
+        ResourceLocation texture=com.projectseele.client.UNIdentityClient.logoTexture();
+        if(texture==null)return;
+        var out=buffers.getBuffer(RenderType.entityCutout(texture));
+        var pose=poses.last().pose();var normal=poses.last().normal();
+        float vTop=(float)((44-high)/24),vBottom=(float)((44-low)/24);
+        // Each slice travels with its own leaf, preserving the full mark when shut.
+        vertex(out,pose,normal,-12,high+lift,z-.012,1,vTop);
+        vertex(out,pose,normal,12,high+lift,z-.012,0,vTop);
+        vertex(out,pose,normal,12,low+lift,z-.012,0,vBottom);
+        vertex(out,pose,normal,-12,low+lift,z-.012,1,vBottom);
+        vertex(out,pose,normal,12,high+lift,z+.615,1,vTop);
+        vertex(out,pose,normal,-12,high+lift,z+.615,0,vTop);
+        vertex(out,pose,normal,-12,low+lift,z+.615,0,vBottom);
+        vertex(out,pose,normal,12,low+lift,z+.615,1,vBottom);
     }
 
     private static void splitLogo(PoseStack poses,

@@ -167,6 +167,9 @@ public final class EntryPlugCarrierEntity extends PathfinderMob
     private RigidTransform clientPreviousRotation = RigidTransform.identity();
     private RigidTransform clientCurrentRotation = RigidTransform.identity();
     private int clientRotationUpdateTick = Integer.MIN_VALUE;
+    private Vec3 clientPreviousPosePosition=Vec3.ZERO;
+    private Vec3 clientCurrentPosePosition=Vec3.ZERO;
+    private boolean clientPoseInitialized;
     private float clientPreviousCabinProgress;
     private float clientCurrentCabinProgress;
     private int clientCabinProgressUpdateTick = Integer.MIN_VALUE;
@@ -223,9 +226,13 @@ public final class EntryPlugCarrierEntity extends PathfinderMob
         this.entityData.define(DATA_HOST_EVA_ID, -1);
         this.entityData.define(DATA_SHELL_VISIBLE, true);
         this.entityData.define(DATA_ABORT_REQUESTED, false);
+        this.entityData.define(DATA_HARD_POSE_R31,0);
     }
 
     private static final net.minecraft.network.syncher.EntityDataAccessor<Boolean> DATA_INDEPENDENT_UN=net.minecraft.network.syncher.SynchedEntityData.defineId(EntryPlugCarrierEntity.class,net.minecraft.network.syncher.EntityDataSerializers.BOOLEAN);
+    // Declared last so the hard-boundary callback sees the complete pose packet.
+    private static final EntityDataAccessor<Integer> DATA_HARD_POSE_R31=
+            SynchedEntityData.defineId(EntryPlugCarrierEntity.class,EntityDataSerializers.INT);
     public boolean isIndependentUNPlug(){return entityData.get(DATA_INDEPENDENT_UN);}
     public void assignIndependentEva(EvaPrototypeEntity eva){entityData.set(DATA_INDEPENDENT_UN,true);hostEvaUuid=eva.getUUID();entityData.set(DATA_HOST_EVA_ID,eva.getId());}
 
@@ -249,6 +256,8 @@ public final class EntryPlugCarrierEntity extends PathfinderMob
 
     public Quaternionf getCanonicalRotation(float partialTick)
     {
+        RigidTransform attached=this.lockedBodyRenderTransformR31(partialTick);
+        if(attached!=null)return attached.rotation();
         if (!this.level().isClientSide)
         {
             return this.getCanonicalTransform().rotation();
@@ -285,18 +294,29 @@ public final class EntryPlugCarrierEntity extends PathfinderMob
     /** Render-frame transform shared by the shell and first-person camera. */
     public RigidTransform getInterpolatedCanonicalTransform(float partialTick)
     {
+        RigidTransform attached=this.lockedBodyRenderTransformR31(partialTick);
+        if(attached!=null)return attached;
         if (!this.level().isClientSide || !this.hasCanonicalPose())
         {
             return this.getCanonicalTransform();
         }
         float alpha = Mth.clamp(partialTick, 0.0F, 1.0F);
-        Vec3 translation = new Vec3(
-                Mth.lerp(alpha, this.xo, this.getX()),
-                Mth.lerp(alpha, this.yo, this.getY()),
-                Mth.lerp(alpha, this.zo, this.getZ()));
+        // A vehicle correction can change vanilla position history after the
+        // pose packet. The shell, hatch and cabin instead share this stream.
+        Vec3 translation=!clientPoseInitialized?getCanonicalTransform().translation()
+                :this.tickCount==clientRotationUpdateTick?clientPreviousPosePosition.lerp(clientCurrentPosePosition,alpha)
+                :clientCurrentPosePosition;
         Quaternionf rotation = this.getCanonicalRotation(partialTick);
         return new RigidTransform(translation, rotation.x, rotation.y,
                 rotation.z, rotation.w);
+    }
+
+    @Nullable
+    private RigidTransform lockedBodyRenderTransformR31(float partial)
+    {
+        if(!this.level().isClientSide||!this.hasCanonicalPose()||!this.isLockedToEva())return null;
+        var unit=this.getLinkedEva();
+        return unit!=null&&(EvaAirTransportR31.active(unit)||EvaShutdownR30.displayed(unit))?EntryPlugKinematics.lockedTransform(unit,Mth.clamp(partial,0,1)):null;
     }
 
     /** Camera marker inside the sealed capsule, never on its exterior AABB. */
@@ -339,12 +359,27 @@ public final class EntryPlugCarrierEntity extends PathfinderMob
      */
     public void setCanonicalTransform(RigidTransform transform)
     {
+        setCanonicalTransform(transform,false);
+    }
+
+    /** Administrative reset is a discontinuity, never an insertion arc. */
+    public void snapCanonicalTransformR31(RigidTransform transform)
+    {
+        setCanonicalTransform(transform,true);
+        this.lerpSteps=0;
+        this.xo=this.xOld=this.getX();this.yo=this.yOld=this.getY();this.zo=this.zOld=this.getZ();
+        int generation=this.entityData.get(DATA_HARD_POSE_R31);
+        this.entityData.set(DATA_HARD_POSE_R31,generation==Integer.MAX_VALUE?1:generation+1);
+    }
+
+    private void setCanonicalTransform(RigidTransform transform,boolean force)
+    {
         RigidTransform current = this.getCanonicalTransform();
         boolean unchanged = this.hasCanonicalPose()
                 && current.translation().distanceToSqr(transform.translation())
                         <= 1.0D / (4096.0D * 4096.0D)
                 && current.rotationErrorDegrees(transform) <= 0.01D;
-        if (unchanged)
+        if (unchanged&&!force)
         {
             // Do not publish a fresh pose sequence for the same dock frame.
             // The stage edge used to send an otherwise-identical quaternion
@@ -362,8 +397,8 @@ public final class EntryPlugCarrierEntity extends PathfinderMob
         this.entityData.set(DATA_POSE_QZ, transform.qz());
         this.entityData.set(DATA_POSE_QW, transform.qw());
         this.entityData.set(DATA_CANONICAL_POSE, true);
-        this.entityData.set(DATA_POSE_SEQUENCE,
-                this.entityData.get(DATA_POSE_SEQUENCE) + 1);
+        int sequence=this.entityData.get(DATA_POSE_SEQUENCE);
+        this.entityData.set(DATA_POSE_SEQUENCE,sequence==Integer.MAX_VALUE?1:sequence+1);
         if (!this.level().isClientSide && this.isVehicle())
         {
             /*
@@ -623,7 +658,9 @@ public final class EntryPlugCarrierEntity extends PathfinderMob
             throw new IllegalStateException("Independent capsule identity mismatch");
         this.ejectPassengers();this.unlockFromEva();eva.clearEntryPlugLink(this);this.assignIndependentEva(eva);
         this.setInsertionStage(STAGE_SUSPENDED);this.setInsertionProgress(0);this.setCabinRecoveryProgress(0);
-        this.clearInsertionAbortRequest();this.setCanonicalTransform(com.projectseele.world.UNPlugDirector.dock(eva));this.openCabin();
+        this.clearInsertionAbortRequest();this.snapCanonicalTransformR31(com.projectseele.world.UNPlugDirector.dock(eva));this.openCabin();
+        this.ejectionTicks=0;this.fieldEjectionStart=this.fieldEjectionEscape=this.fieldEjectionLanding=Vec3.ZERO;
+        this.lockedSocketToPlug=new RigidTransform(new Vec3(0,0,-EntryPlugKinematics.LOCK_DEPTH_BLOCKS),0,0,0,1);
         eva.getPersistentData().putInt("UNSequenceTicks",0);
     }
 
@@ -1195,6 +1232,8 @@ public final class EntryPlugCarrierEntity extends PathfinderMob
     @Override
     public void tick()
     {
+        if(this.level() instanceof ServerLevel level&&com.projectseele.world.EntryPlugDisposalR31.destroyed(level,this.getUUID()))
+        {this.discard();return;}
         super.tick();
         if(!this.level().isClientSide&&this.isIndependentUNPlug())
             com.projectseele.world.UNRecoveryR22.remember(this);
@@ -1427,7 +1466,9 @@ public final class EntryPlugCarrierEntity extends PathfinderMob
     @Override
     public boolean hurt(DamageSource source, float amount)
     {
-        return false;
+        if(this.level().isClientSide)return this.getInsertionStage()==STAGE_FIELD_LANDED&&!this.isVehicle()&&!this.isPassenger();
+        if(!(amount>0)||this.isInvulnerableTo(source))return false;
+        return com.projectseele.world.EntryPlugDisposalR31.destroyLanded(this);
     }
 
     @Override
@@ -1589,6 +1630,17 @@ public final class EntryPlugCarrierEntity extends PathfinderMob
     public void onSyncedDataUpdated(EntityDataAccessor<?> key)
     {
         super.onSyncedDataUpdated(key);
+        if(DATA_HARD_POSE_R31.equals(key)&&this.level().isClientSide)
+        {
+            RigidTransform pose=this.getCanonicalTransform();
+            this.setPos(pose.translation());this.lerpSteps=0;
+            this.xo=this.xOld=this.getX();this.yo=this.yOld=this.getY();this.zo=this.zOld=this.getZ();
+            this.clientPreviousPosePosition=this.clientCurrentPosePosition=pose.translation();
+            this.clientPoseInitialized=true;
+            this.clientPreviousRotation=this.clientCurrentRotation=new RigidTransform(Vec3.ZERO,pose.qx(),pose.qy(),pose.qz(),pose.qw());
+            this.clientRotationUpdateTick=Integer.MIN_VALUE;
+            return;
+        }
         if (DATA_STAGE_EPOCH.equals(key))
         {
             /*
@@ -1629,6 +1681,8 @@ public final class EntryPlugCarrierEntity extends PathfinderMob
                 double oldY = this.getY();
                 double oldZ = this.getZ();
                 RigidTransform pose = this.getCanonicalTransform();
+                this.clientPreviousPosePosition=this.clientPoseInitialized?this.clientCurrentPosePosition:pose.translation();
+                this.clientCurrentPosePosition=pose.translation();this.clientPoseInitialized=true;
                 this.setPos(pose.translation());
                 this.xo = oldX;
                 this.yo = oldY;

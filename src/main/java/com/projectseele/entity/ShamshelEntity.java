@@ -28,24 +28,27 @@ public class ShamshelEntity extends Monster implements Angel, SiegeAnchorAware, 
     @Override public void registerControllers(software.bernie.geckolib.core.animation.AnimatableManager.ControllerRegistrar controllers)
     {
         controllers.add(new software.bernie.geckolib.core.animation.AnimationController<>(this,"base",6,state->state.setAndContinue(
-                software.bernie.geckolib.core.animation.RawAnimation.begin().thenLoop(state.isMoving()?"animation.Shamshel.move":"animation.Shamshel.idle"))));
+                software.bernie.geckolib.core.animation.RawAnimation.begin().thenLoop(state.isMoving()&&!CombatFeelR31.restrained(this)&&!EvaCombatR31.holds(this)?"animation.Shamshel.move":"animation.Shamshel.idle"))));
     }
     private static final EntityDataAccessor<Float> FIELD=SynchedEntityData.defineId(ShamshelEntity.class,EntityDataSerializers.FLOAT);
     private static final EntityDataAccessor<Integer> SWEEP=SynchedEntityData.defineId(ShamshelEntity.class,EntityDataSerializers.INT);
     private static final EntityDataAccessor<Integer> SIDE=SynchedEntityData.defineId(ShamshelEntity.class,EntityDataSerializers.INT);
     private static final EntityDataAccessor<Float> YAW=SynchedEntityData.defineId(ShamshelEntity.class,EntityDataSerializers.FLOAT);
+    private static final EntityDataAccessor<Integer> SWEEP_MODE=SynchedEntityData.defineId(ShamshelEntity.class,EntityDataSerializers.INT);
     private final EvaPoseSignalClock sweepClock=new EvaPoseSignalClock();
     private final Set<UUID> hitVictims=new HashSet<>();
     @Override public float getAtField(){return entityData.get(FIELD);}
     public boolean isSweeping(){return entityData.get(SWEEP)>=0;}
     public int sweepSide(){return entityData.get(SIDE);}
+    public int sweepMode(){return entityData.get(SWEEP_MODE);}
     public float sweepYaw(){return entityData.get(YAW);}
     public float sweepAge(float partial){return level().isClientSide?sweepClock.sample(FirstBattleSignals.clientFrameTime()):entityData.get(SWEEP);}
     @Override protected void defineSynchedData()
-    {super.defineSynchedData();entityData.define(FIELD,700F);entityData.define(SWEEP,-1);entityData.define(SIDE,-1);entityData.define(YAW,0F);}
+    {super.defineSynchedData();entityData.define(FIELD,700F);entityData.define(SWEEP,-1);entityData.define(SIDE,-1);entityData.define(YAW,0F);entityData.define(SWEEP_MODE,0);}
     @Override public void onSyncedDataUpdated(EntityDataAccessor<?> key)
     {super.onSyncedDataUpdated(key);if(key.equals(SWEEP)&&sweepClock!=null&&level().isClientSide)sweepClock.accept(entityData.get(SWEEP),false,true);}
     private int sweepCooldown = 30;
+    private int sweepChoice;
     private BlockPos siegeBeacon;
 
     public ShamshelEntity(EntityType<? extends ShamshelEntity> type, Level level)
@@ -73,12 +76,25 @@ public class ShamshelEntity extends Monster implements Angel, SiegeAnchorAware, 
         this.targetSelector.addGoal(2, new NearestAttackableTargetGoal<>(this, Player.class, true));
     }
 
+    public void cancelSweepR31()
+    {if(isSweeping()){entityData.set(SWEEP,-1);hitVictims.clear();sweepCooldown=Math.max(sweepCooldown,16);}getNavigation().stop();}
+
+    @Override public void aiStep()
+    {
+        if(!level().isClientSide&&(EvaCombatR31.constrainVictim(this)||CombatFeelR31.travel(this)))return;
+        if(!level().isClientSide&&CombatFeelR31.hitPaused(this)){setDeltaMovement(Vec3.ZERO);return;}
+        super.aiStep();
+    }
+
     @Override
     public void tick()
     {
         super.tick();
-        this.setNoGravity(true);
+        var reaction=CombatFeelR31.beat(this);
+        this.setNoGravity(reaction==null||reaction.kind()!=CombatFeelR31.THROWN&&reaction.kind()!=CombatFeelR31.DOWN);
         if(level().isClientSide)return;
+        if(CombatFeelR31.restrained(this)||EvaCombatR31.holds(this))
+        {if(EvaCombatR31.holds(this)||reaction!=null&&reaction.kind()>=CombatFeelR31.STAGGER&&reaction.kind()<=CombatFeelR31.THROWN)cancelSweepR31();return;}
         if(isSweeping()){tickSweep();return;}
         if(sweepCooldown>0)sweepCooldown--;
         LivingEntity target = this.getTarget();
@@ -117,17 +133,18 @@ public class ShamshelEntity extends Monster implements Angel, SiegeAnchorAware, 
         if (distance < 44.0D && this.sweepCooldown <= 0
                 &&Math.abs(net.minecraft.util.Mth.wrapDegrees(yaw-getYRot()))<15)
         {
-            entityData.set(SWEEP,0);entityData.set(SIDE,-sweepSide());entityData.set(YAW,getYRot());hitVictims.clear();
+            entityData.set(SWEEP,0);entityData.set(SIDE,-sweepSide());entityData.set(SWEEP_MODE,sweepChoice++%3);entityData.set(YAW,getYRot());hitVictims.clear();
             playSound(com.projectseele.registry.ModSounds.SHAMSHEL_WHIP_CHARGE.get(),1.3F,1);
         }
     }
 
     private void tickSweep()
     {
+        if(CombatFeelR31.hitPaused(this))return;
         int age=entityData.get(SWEEP)+1;entityData.set(SWEEP,age);setDeltaMovement(getDeltaMovement().scale(.6));
         setYRot(sweepYaw());yBodyRot=yHeadRot=getYRot();
-        if(age==ShamshelWhipMotion.CONTACT_START)playSound(com.projectseele.registry.ModSounds.SHAMSHEL_WHIP_CRACK.get(),1.6F,1);
-        if(age>=ShamshelWhipMotion.CONTACT_START&&age<=ShamshelWhipMotion.CONTACT_END)
+        if(age==ShamshelWhipMotion.contactStart(sweepMode()))playSound(com.projectseele.registry.ModSounds.SHAMSHEL_WHIP_CRACK.get(),1.6F,sweepMode()==1?1.15F:.92F);
+        if(age>=ShamshelWhipMotion.contactStart(sweepMode())&&age<=ShamshelWhipMotion.contactEnd(sweepMode()))
         {
             // Sample the same rendered chain through time. The old invisible
             // thirteen-block damage box also hit behind walls and through EVA.
@@ -154,7 +171,7 @@ public class ShamshelEntity extends Monster implements Angel, SiegeAnchorAware, 
                 }
             }
         }
-        if(age>=ShamshelWhipMotion.CYCLE){entityData.set(SWEEP,-1);sweepCooldown=0;}
+        if(age>=ShamshelWhipMotion.cycle(sweepMode())){entityData.set(SWEEP,-1);sweepCooldown=8;}
     }
 
     @Override
@@ -169,6 +186,7 @@ public class ShamshelEntity extends Monster implements Angel, SiegeAnchorAware, 
         super.addAdditionalSaveData(tag);
         tag.putFloat("AtField",getAtField());tag.putInt("SweepCooldown",sweepCooldown);tag.putInt("SweepAge",entityData.get(SWEEP));
         tag.putInt("SweepSide",sweepSide());tag.putFloat("SweepYaw",sweepYaw());
+        tag.putInt("SweepModeR31",sweepMode());tag.putInt("SweepChoiceR31",sweepChoice);
         var hits=new net.minecraft.nbt.ListTag();hitVictims.forEach(id->hits.add(net.minecraft.nbt.StringTag.valueOf(id.toString())));tag.put("SweepHits",hits);
         if (this.siegeBeacon != null)
         {
@@ -184,6 +202,7 @@ public class ShamshelEntity extends Monster implements Angel, SiegeAnchorAware, 
         if(tag.contains("SweepCooldown"))sweepCooldown=Math.max(0,Math.min(34,tag.getInt("SweepCooldown")));
         if(tag.contains("SweepAge"))entityData.set(SWEEP,Math.max(-1,Math.min(ShamshelWhipMotion.CYCLE-1,tag.getInt("SweepAge"))));
         entityData.set(SIDE,tag.getInt("SweepSide")<0?-1:1);entityData.set(YAW,tag.getFloat("SweepYaw"));
+        entityData.set(SWEEP_MODE,Math.max(0,Math.min(2,tag.getInt("SweepModeR31"))));sweepChoice=Math.max(0,tag.getInt("SweepChoiceR31"));
         hitVictims.clear();for(var hit:tag.getList("SweepHits",8))try{hitVictims.add(UUID.fromString(hit.getAsString()));}catch(IllegalArgumentException ignored){}
         this.siegeBeacon = tag.contains("SiegeBeacon")
                 ? BlockPos.of(tag.getLong("SiegeBeacon")) : null;

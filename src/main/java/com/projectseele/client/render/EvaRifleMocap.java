@@ -15,6 +15,7 @@ public final class EvaRifleMocap
     private record Clip(double duration, Quaternionf[][] frames) {}
     private static final Map<String,Clip> CLIPS=new HashMap<>();
     private static final Map<EvaUnit01Entity, Filter> FILTERS=new WeakHashMap<>();
+    static void resetEntityR31(EvaUnit01Entity eva){FILTERS.remove(eva);}
     private static final class Filter
     {
         double time=Double.NaN;

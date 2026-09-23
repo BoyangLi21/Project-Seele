@@ -164,6 +164,13 @@ public class HybridAddonRenderer<T extends LivingEntity & GeoEntity> extends Ent
             super.applyRotations(entity,pose,age,yaw,partial);
         }
 
+        @Override public void preRender(PoseStack pose,T entity,software.bernie.geckolib.cache.object.BakedGeoModel model,
+                MultiBufferSource buffers,VertexConsumer vertex,boolean rerender,float partial,int light,int overlay,float red,float green,float blue,float alpha)
+        {
+            if(!rerender)AngelCombatPoseR31.restoreBeforeGecko(entity,model);
+            super.preRender(pose,entity,model,buffers,vertex,rerender,partial,light,overlay,red,green,blue,alpha);
+        }
+
         @Override
         public void renderCubesOfBone(PoseStack poseStack, GeoBone bone, VertexConsumer buffer,
                                       int packedLight, int packedOverlay, float red, float green,
