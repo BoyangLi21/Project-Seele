@@ -125,11 +125,10 @@ public class ShamshelEntity extends Monster implements Angel, SiegeAnchorAware, 
         double distance = aim.length();
         float yaw=(float)Math.toDegrees(Math.atan2(-aim.x,aim.z));
         setYRot(net.minecraft.util.Mth.approachDegrees(getYRot(),yaw,3));yBodyRot=getYRot();yHeadRot=getYRot();
-        if (distance > 28.0D)
-        {
-            this.setDeltaMovement(this.getDeltaMovement().scale(0.70D).add(aim.normalize().scale(0.10D)));
-        }
-        else this.setDeltaMovement(this.getDeltaMovement().scale(.78));
+        Vec3 toward=aim.multiply(1,0,1).normalize(),lateral=new Vec3(toward.z,0,-toward.x);
+        double closing=distance>46?1.05:distance<27?-.90:distance>36?.35:0;
+        Vec3 intended=toward.scale(closing).add(lateral.scale(sweepChoice%2==0?.52:-.52)).add(0,net.minecraft.util.Mth.clamp(aim.y*.018,-.25,.25),0);
+        this.setDeltaMovement(this.getDeltaMovement().lerp(intended,.14));
         if (distance < 44.0D && this.sweepCooldown <= 0
                 &&Math.abs(net.minecraft.util.Mth.wrapDegrees(yaw-getYRot()))<15)
         {

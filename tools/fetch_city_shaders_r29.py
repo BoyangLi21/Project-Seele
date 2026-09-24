@@ -13,6 +13,9 @@ def install(enable=False):
             assert hashlib.sha512(data).hexdigest()==row['sha512'];p.write_bytes(data)
         if row['project']!='oculus':shader=p.name
     if enable:
+        if shader=='ComplementaryUnbound_r5.3.zip':
+            from patch_lcl_shader_compat_r35 import build
+            shader=build(ROOT/'run/shaderpacks'/shader,ROOT/'run/shaderpacks/ComplementaryUnbound_r5.3_SEELE_LCL.zip').name
         folder=ROOT/'run/config';folder.mkdir(exist_ok=True);p=folder/'oculus.properties'
         if p.exists():
             backup=ROOT/'.Codex/shader-config-backup'/datetime.datetime.now().strftime('%Y%m%d_%H%M%S');backup.mkdir(parents=True,exist_ok=True);shutil.copy2(p,backup/p.name)

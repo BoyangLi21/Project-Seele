@@ -37,7 +37,7 @@ public final class EvaMovementSounds
     }
     public static void tick(EvaUnit01Entity eva,boolean moving)
     {
-        if(eva.level().isClientSide)return;
+        if(eva.level().isClientSide||com.projectseele.physics.CombatBodyDynamics.active(eva))return;
         float phase=eva.rifleGaitPhase(1);Float previous=PREVIOUS.put(eva,phase);
         if(previous==null||!moving||!eva.onGround()||!eva.isPoweredOn()||eva.isNervLogisticsLocked()||eva.isPilotProne()||eva.isSilent())return;
         float delta=phase-previous;if(delta>.5F)delta-=1;if(delta<-.5F)delta+=1;
@@ -45,7 +45,8 @@ public final class EvaMovementSounds
         boolean backwards=delta<0;float run=eva.rifleRunBlend(1);
         for(String side:new String[]{"l","r"})
         {
-            float threshold=eva.isPilotCrouching()?contact("crouch_walk",side,backwards):Mth.lerp(run,contact("walk",side,backwards),contact("run",side,backwards));
+            boolean directed=EvaGameplayMotionR32.directed(eva)&&EvaGameplayMotionR32.guardWeight(eva)>.5F&&!eva.isPilotCrouching()&&run<.5F;
+            float threshold=directed?(side.equals("l")?0:.5F):eva.isPilotCrouching()?contact("crouch_walk",side,backwards):Mth.lerp(run,contact("walk",side,backwards),contact("run",side,backwards));
             float before=Mth.positiveModulo(previous-threshold,1),after=Mth.positiveModulo(phase-threshold,1);
             if(backwards?after<=before:after>=before)continue;
             Vec3 forward=eva.getForward().multiply(1,0,1).normalize(),lateral=new Vec3(forward.z,0,-forward.x);

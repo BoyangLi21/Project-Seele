@@ -87,6 +87,14 @@ def newest_project_jar() -> Path:
     ]
     if not jars:
         raise FileNotFoundError("Missing Project SEELE build JAR; run gradlew.bat build first")
+    bundled=[path for path in jars if path.name.endswith('-all.jar')]
+    if bundled:
+        candidate=max(bundled,key=lambda path:path.stat().st_mtime_ns)
+        with zipfile.ZipFile(candidate) as jar:
+            if 'META-INF/jarjar/metadata.json' not in jar.namelist():raise ValueError('Bundled physics dependencies are missing')
+        return candidate
+    if 'minecraftLibrary(\'com.github.stephengold:jbullet' in (ROOT/'build.gradle').read_text(encoding='utf8'):
+        raise FileNotFoundError('Build the bundled Project SEELE JAR; plain JAR has no physics runtime')
     return max(jars, key=lambda path: path.stat().st_mtime_ns)
 
 

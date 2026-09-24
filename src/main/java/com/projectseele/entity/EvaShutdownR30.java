@@ -16,22 +16,34 @@ public final class EvaShutdownR30
     private static final EntityDataAccessor<CompoundTag> POSE=SynchedEntityData.defineId(EvaUnit01Entity.class,EntityDataSerializers.COMPOUND_TAG);
     private static final EntityDataAccessor<CompoundTag> ORIGIN=SynchedEntityData.defineId(EvaUnit01Entity.class,EntityDataSerializers.COMPOUND_TAG);
     private static final EntityDataAccessor<Boolean> WAITING=SynchedEntityData.defineId(EvaUnit01Entity.class,EntityDataSerializers.BOOLEAN);
+    private static final EntityDataAccessor<CompoundTag> REST_BOUNDS=SynchedEntityData.defineId(EvaUnit01Entity.class,EntityDataSerializers.COMPOUND_TAG);
     private static final Map<EvaUnit01Entity,Memory> MEMORY=new WeakHashMap<>();
     private static final class Memory {boolean pilot;CompoundTag last=new CompoundTag();}
     public static boolean bootstrap(){return true;}
-    public static void define(SynchedEntityData d){d.define(MODE,ACTIVE);d.define(SINCE,0L);d.define(POSE,new CompoundTag());d.define(ORIGIN,new CompoundTag());d.define(WAITING,false);}
+    public static void define(SynchedEntityData d){d.define(MODE,ACTIVE);d.define(SINCE,0L);d.define(POSE,new CompoundTag());d.define(ORIGIN,new CompoundTag());d.define(WAITING,false);d.define(REST_BOUNDS,new CompoundTag());}
     public static int mode(EvaUnit01Entity e){return e.getEntityData().get(MODE);}
     public static boolean disabled(EvaUnit01Entity e){return mode(e)!=ACTIVE;}
     public static boolean wreck(EvaUnit01Entity e){return mode(e)==WRECK;}
+    public static boolean updatesBounds(EntityDataAccessor<?> accessor){return accessor==MODE||accessor==REST_BOUNDS;}
     public static long since(EvaUnit01Entity e){return e.getEntityData().get(SINCE);}
     public static CompoundTag pose(EvaUnit01Entity e){return e.getEntityData().get(POSE);}
     public static CompoundTag origin(EvaUnit01Entity e){return e.getEntityData().get(ORIGIN);}
     public static float collapse(EvaUnit01Entity e,float partial){return mode(e)==POWER_LOCK?1:EvaDorsalMechanism.smooth((float)(((e.level().getGameTime()-since(e))+(double)partial)/18D));}
     public static boolean displayed(EvaUnit01Entity e){return disabled(e)&&(!e.isNervLogisticsLocked()||e.getEntityData().get(WAITING))&&!e.hasActiveCarrierMotion()&&!e.isLaunchSequenceActive();}
     public static void waitingR31(EvaUnit01Entity e,boolean waiting){if(!e.level().isClientSide)e.getEntityData().set(WAITING,waiting);}
-    public static void save(EvaUnit01Entity e,CompoundTag t){t.putInt("R30Shutdown",mode(e));t.putLong("R30ShutdownSince",since(e));t.put("R30FrozenPose",pose(e).copy());t.put("R30ShutdownOrigin",origin(e).copy());}
+    public static void save(EvaUnit01Entity e,CompoundTag t){t.putInt("R30Shutdown",mode(e));t.putLong("R30ShutdownSince",since(e));t.put("R30FrozenPose",pose(e).copy());t.put("R30ShutdownOrigin",origin(e).copy());t.put("R35RestBounds",e.getEntityData().get(REST_BOUNDS).copy());}
     public static void load(EvaUnit01Entity e,CompoundTag t)
-    {e.getEntityData().set(MODE,Math.max(0,Math.min(3,t.getInt("R30Shutdown"))));e.getEntityData().set(SINCE,t.getLong("R30ShutdownSince"));e.getEntityData().set(POSE,t.getCompound("R30FrozenPose").copy());e.getEntityData().set(ORIGIN,t.getCompound("R30ShutdownOrigin").copy());}
+    {e.getEntityData().set(MODE,Math.max(0,Math.min(3,t.getInt("R30Shutdown"))));e.getEntityData().set(SINCE,t.getLong("R30ShutdownSince"));e.getEntityData().set(POSE,t.getCompound("R30FrozenPose").copy());e.getEntityData().set(ORIGIN,t.getCompound("R30ShutdownOrigin").copy());e.getEntityData().set(REST_BOUNDS,t.getCompound("R35RestBounds").copy());}
+    public static net.minecraft.world.phys.AABB restBounds(EvaUnit01Entity e)
+    {
+        if(e.tickCount<=0||!displayed(e)||EvaAirTransportR31.active(e))return null;var b=e.getEntityData().get(REST_BOUNDS);if(b.isEmpty())return null;
+        return new net.minecraft.world.phys.AABB(b.getDouble("x0"),b.getDouble("y0"),b.getDouble("z0"),b.getDouble("x1"),b.getDouble("y1"),b.getDouble("z1")).move(e.position());
+    }
+    public static void physicalRest(EvaUnit01Entity e,EvaBodyPose.Sample pose,net.minecraft.world.phys.AABB worldBounds)
+    {
+        var frozen=encode(pose);e.getEntityData().set(POSE,frozen);e.getEntityData().set(ORIGIN,frozen.copy());
+        var b=worldBounds.move(e.position().scale(-1));CompoundTag bounds=new CompoundTag();bounds.putDouble("x0",b.minX);bounds.putDouble("y0",b.minY);bounds.putDouble("z0",b.minZ);bounds.putDouble("x1",b.maxX);bounds.putDouble("y1",b.maxY);bounds.putDouble("z1",b.maxZ);e.getEntityData().set(REST_BOUNDS,bounds);
+    }
     public static void stored(EvaUnit01Entity e)
     {
         MEMORY.remove(e);
@@ -40,6 +52,7 @@ public final class EvaShutdownR30
     public static void clear(EvaUnit01Entity e)
     {
         if(e.level().isClientSide)return;e.getEntityData().set(MODE,ACTIVE);e.getEntityData().set(POSE,new CompoundTag());e.getEntityData().set(ORIGIN,new CompoundTag());e.getPersistentData().remove("R30FrozenPoseConfirmed");
+        e.getEntityData().set(REST_BOUNDS,new CompoundTag());com.projectseele.physics.CombatBodyDynamics.cancel(e);
     }
     public static void ensureUnpilotedR31(EvaUnit01Entity e)
     {if(!e.level().isClientSide&&e.getPilotEntity()==null&&mode(e)==ACTIVE)begin(e,EMPTY);}
@@ -50,11 +63,15 @@ public final class EvaShutdownR30
     private static void begin(EvaUnit01Entity e,int mode)
     {
         if(mode(e)==mode)return;
+        if(mode!=POWER_LOCK&&!com.projectseele.physics.CombatBodyDynamics.active(e)&&!e.isNervLogisticsLocked()&&!e.hasActiveCarrierMotion())
+            com.projectseele.physics.CombatBodyDynamics.start(e,e.getBoundingBox().getCenter(),e.getForward(),-1);
         var memory=MEMORY.computeIfAbsent(e,k->new Memory());
         e.getEntityData().set(ORIGIN,memory.last.isEmpty()?encode(EvaBodyPose.sample(e,1)):memory.last.copy());
         if(mode!=POWER_LOCK)e.stowHandsForShutdownR30();
         CompoundTag snapshot=mode==POWER_LOCK&&!memory.last.isEmpty()?memory.last.copy():encode(mode==POWER_LOCK?EvaBodyPose.sample(e,1):EvaBodyPose.inactivePoseR30(e,mode==WRECK));
         e.getEntityData().set(POSE,snapshot);e.getEntityData().set(SINCE,e.level().getGameTime());e.getEntityData().set(MODE,mode);
+        if(mode==POWER_LOCK&&com.projectseele.physics.CombatBodyDynamics.active(e))
+        {physicalRest(e,EvaBodyPose.sample(e,0),e.getBoundingBox());com.projectseele.physics.CombatBodyDynamics.cancel(e);}
         e.getPersistentData().putInt("R31ShutdownPoseVersion",31);
         e.getPersistentData().remove("R30FrozenPoseConfirmed");e.getNavigation().stop();e.setTarget(null);
         if(e instanceof EvaPrototypeEntity un)un.stopUNFlight();

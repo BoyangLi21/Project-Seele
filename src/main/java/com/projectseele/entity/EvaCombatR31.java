@@ -153,7 +153,7 @@ public final class EvaCombatR31
                 // Broaden only the candidate search; keep the swept contact below.
                 for(var t:e.level().getEntitiesOfClass(LivingEntity.class,e.getBoundingBox().inflate(52,80,52),t->t instanceof Angel&&t.isAlive()))
                 {
-                    var box=t.getBoundingBox().inflate(2);var clipped=box.clip(previous,hand);if(clipped.isEmpty()&&!box.contains(previous))continue;
+                    var clipped=com.projectseele.physics.CombatBodyContacts.clip(t,previous,hand,2);if(clipped.isEmpty())continue;
                     Vec3 hit=clipped.orElse(previous);
                     if(e.distanceTo(t)<45&&visible(e,previous,hit))
                     {Vec3 impulse=hand.subtract(previous).normalize().scale(.35).add(forward(e).scale(.65)).normalize();s.contact=EvaHitFeedback.hurt(t,e.damageSources().mobAttack(e),35,hit,impulse);if(s.contact)break;}

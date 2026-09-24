@@ -46,13 +46,22 @@ public final class EvaGameplayMotionR32
     public static int variant(EvaUnit01Entity e){return e instanceof EvaPrototypeEntity un?3+un.getUNSerial():e.getUnitVariant();}
     public static float guardWeight(EvaUnit01Entity e){return e.getEntityData().get(GUARD);}
     public static boolean ready(EvaUnit01Entity e){return profile(variant(e))!=null;}
+    public static boolean directed(EvaUnit01Entity e){var p=profile(variant(e));return p!=null&&p.has("combat_foundation")&&p.get("combat_foundation").getAsInt()>=34;}
+    public static boolean planted(EvaUnit01Entity e,String side,float partial)
+    {
+        if(!directed(e)||!EvaCombatSupportR33.strike(e))return true;
+        String name=EvaBerserkMotionR34.striking(e)?EvaBerserkMotionR34.name(e):e.isHeavyMotionActive()?"heavy":ordinary(e.getOrdinaryAttackStage());
+        float phase=EvaBerserkMotionR34.striking(e)?EvaBerserkMotionR34.phase(e,partial):e.isHeavyMotionActive()?e.heavyMotionProgress(partial):e.getOrdinaryAttackProgress(partial);
+        var frames=clip(e,name).getAsJsonArray("frames");var f=frames.get(Math.min(frames.size()-1,Math.round(Mth.clamp(phase,0,1)*(frames.size()-1)))).getAsJsonObject();
+        return f.getAsJsonArray("foot_contact").get(side.equals("l")?0:1).getAsBoolean();
+    }
     private static JsonObject clip(EvaUnit01Entity e,String name){return profile(variant(e)).getAsJsonObject("clips").getAsJsonObject("r32_"+name);}
     public static float contactPhase(EvaUnit01Entity e,String name){return clip(e,name).get("contact_phase").getAsFloat();}
     public static String side(EvaUnit01Entity e,String name){return clip(e,name).get("leading_side").getAsString();}
     public static String ordinary(int stage){return switch(stage){case 1->"cross";case 2->"hook";default->"jab";};}
     public static float phase(EvaUnit01Entity e,String name,float progress)
     {
-        if(EvaCombatSupportR33.ready(e)&&java.util.Set.of("jab","cross","hook","heavy").contains(name))return progress;
+        if(directed(e)&&name.startsWith("berserk")||EvaCombatSupportR33.ready(e)&&java.util.Set.of("jab","cross","hook","heavy").contains(name))return progress;
         float contact=contactPhase(e,name),at=name.equals("heavy")?.50F:.45F;
         return progress<at?Mth.lerp(progress/at,0,contact):Mth.lerp((progress-at)/(1-at),contact,1);
     }
@@ -75,7 +84,7 @@ public final class EvaGameplayMotionR32
         {String name=e.isHeavyMotionActive()?"heavy":ordinary(e.getOrdinaryAttackStage());state.previousContact=hand(e,side(e,name),0);}
         else state.previousContact=null;
         float dy=(float)(e.getY()-state.y);state.y=e.getY();state.velocity=Mth.lerp(.5F,state.velocity,dy);e.getEntityData().set(VERTICAL,state.velocity);
-        boolean blocked=e.isNervLogisticsLocked()||e.isFirstBattleActive()||EvaShutdownR30.disabled(e)||e instanceof EvaPrototypeEntity un&&un.isUNFlying();
+        boolean blocked=e.isNervLogisticsLocked()||e.isFirstBattleActive()||EvaShutdownR30.disabled(e)||com.projectseele.physics.CombatBodyDynamics.active(e)||e instanceof EvaPrototypeEntity un&&un.isUNFlying();
         boolean air=!blocked&&!e.onGround()&&e.isVisuallyAirborneForRender();
         if(air)
         {
@@ -116,6 +125,7 @@ public final class EvaGameplayMotionR32
     public static EvaBodyPose.Sample apply(EvaUnit01Entity e,EvaBodyPose.Sample base,float partial)
     {
         if(!owns(e,partial))return base;
+        if(EvaBerserkMotionR34.active(e))return actionPose(e,EvaBerserkMotionR34.name(e),EvaBerserkMotionR34.phase(e,partial),base,partial);
         float air=airAge(e,partial),land=landAge(e,partial);
         if(age(e,TAKEOFF,partial)>=0&&air<0)
         {

@@ -288,5 +288,6 @@
   "subtitles.projectseele.pa_blue_r30": "Pattern blue. Angel confirmed.",
   "subtitles.projectseele.pa_alert_r30": "All personnel, combat stations.",
   "subtitles.projectseele.pa_combat_r31": "Battle stations. All personnel to assigned posts.",
-  "key.projectseele.eva_grapple": "Grapple / throw Angel"
+  "key.projectseele.eva_grapple": "Grapple / throw Angel",
+  "subtitles.projectseele.facility_hydraulic_launch": "Catapult hydraulics pressurize"
 }

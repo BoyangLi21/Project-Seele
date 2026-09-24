@@ -170,6 +170,11 @@ public final class EvaPoseGraph
         }
         EvaCervicalPivotR25.apply(entity,model,partialTick);
         EvaPoseTransition.rememberGecko(model);
+        if(com.projectseele.physics.CombatBodyDynamics.active(entity))
+        {
+            var physical=PhysicalBodyRenderer.apply(entity,model,partialTick);
+            return finish(entity,model,partialTick,modelToWorld,physical,EvaMotionEngineV2.BoneWrites.empty(),EvaMotionEngineV2.BoneWrites.empty());
+        }
         if(com.projectseele.entity.EvaCombatSupportR33.ready(entity)
                 &&com.projectseele.entity.EvaGameplayMotionR32.owns(entity,partialTick)
                 &&entity.getWeapon()==EvaUnit01Entity.WEAPON_FISTS)

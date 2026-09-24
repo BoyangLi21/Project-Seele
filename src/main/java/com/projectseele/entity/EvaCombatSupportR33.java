@@ -22,7 +22,7 @@ public final class EvaCombatSupportR33
         var p=EvaGameplayMotionR32.profile(EvaGameplayMotionR32.variant(e));
         return p!=null&&p.has("combat_foundation")&&p.get("combat_foundation").getAsInt()>=33;
     }
-    public static boolean strike(EvaUnit01Entity e){return e.getOrdinaryAttackStage()>=0||e.isHeavyMotionActive();}
+    public static boolean strike(EvaUnit01Entity e){return e.getOrdinaryAttackStage()>=0||e.isHeavyMotionActive()||EvaBerserkMotionR34.striking(e);}
     public static float stride(EvaUnit01Entity e,double dx,double dz,float fallback)
     {
         if(!ready(e)||EvaGameplayMotionR32.guardWeight(e)<.5F||e.isPilotProne()||e.isPilotCrouching()||e.isPilotSprinting())return fallback;
@@ -72,12 +72,14 @@ public final class EvaCombatSupportR33
             if(floor.getType()!=net.minecraft.world.phys.HitResult.Type.BLOCK)
             {e.getEntityData().set(CONTACTS,new CompoundTag());return;}
             t.putDouble(s+"x",w.x);t.putDouble(s+"y",floor.getLocation().y);t.putDouble(s+"z",w.z);t.putDouble(s+"startY",Math.max(w.y,floor.getLocation().y));
+            t.putBoolean(s+"active",true);t.putLong(s+"plant",e.level().getGameTime());
         }
         e.getEntityData().set(CONTACTS,t);
     }
     private static Vec3 plantTarget(EvaUnit01Entity e,CompoundTag t,String side,float partial,float soleOffset)
     {
-        float step=Mth.clamp((e.level().getGameTime()-t.getLong("plant")+partial)/4F,0,1),u=step*step*step*(10+step*(-15+6*step));
+        long since=EvaGameplayMotionR32.directed(e)?t.getLong(side+"plant"):t.getLong("plant");
+        float step=Mth.clamp((e.level().getGameTime()-since+partial)/4F,0,1),u=step*step*step*(10+step*(-15+6*step));
         double ground=t.getDouble(side+"y")+soleOffset*EvaScale.RENDER_SCALE;
         double y=Mth.lerp(u,Math.max(t.getDouble(side+"startY"),ground),ground);
         return new Vec3(t.getDouble(side+"x"),y,t.getDouble(side+"z"));
@@ -94,6 +96,31 @@ public final class EvaCombatSupportR33
                 ||e.getWeapon()!=EvaUnit01Entity.WEAPON_FISTS||e.isPilotCrouching()||e.isPilotProne()||fallen||!strike(e)&&e.rifleMoveBlend(1)>.18F;
         if(release&&!e.getEntityData().get(CONTACTS).isEmpty())e.getEntityData().set(CONTACTS,new CompoundTag());
         var t=e.getEntityData().get(CONTACTS);
+        if(EvaGameplayMotionR32.directed(e)&&strike(e)&&!t.isEmpty())
+        {
+            var updated=t.copy();boolean changed=false;
+            for(String side:new String[]{"l","r"})
+            {
+                boolean plant=EvaGameplayMotionR32.planted(e,side,0);
+                if(plant==t.getBoolean(side+"active"))continue;
+                updated.putBoolean(side+"active",plant);changed=true;
+                if(plant)
+                {
+                    var pose=EvaBodyPose.sample(e,0);String n="foot_"+side;
+                    var point=pose.matrix(n).transformPosition(new Vector3f(pose.rig.get(n).pivot()).add(toe(e,side))).mul(EvaScale.RENDER_SCALE).rotateY((180-e.getYRot())*Mth.DEG_TO_RAD);
+                    var world=e.position().add(point.x,point.y,point.z);
+                    var floor=e.level().clip(new net.minecraft.world.level.ClipContext(world.add(0,6,0),world.add(0,-10,0),net.minecraft.world.level.ClipContext.Block.COLLIDER,net.minecraft.world.level.ClipContext.Fluid.NONE,e));
+                    if(floor.getType()==net.minecraft.world.phys.HitResult.Type.BLOCK)
+                    {
+                        updated.putDouble(side+"x",world.x);updated.putDouble(side+"y",floor.getLocation().y);updated.putDouble(side+"z",world.z);
+                        updated.putDouble(side+"startY",world.y);updated.putLong(side+"plant",e.level().getGameTime());
+                        e.level().playSound(null,world.x,floor.getLocation().y,world.z,com.projectseele.registry.ModSounds.EVA_FOOT_CONCRETE.get(),net.minecraft.sounds.SoundSource.PLAYERS,2.8F,.94F);
+                    }
+                    else updated.putBoolean(side+"active",false);
+                }
+            }
+            if(changed){e.getEntityData().set(CONTACTS,updated);t=updated;}
+        }
         if(!t.isEmpty()&&!strike(e))
         {
             if(!t.contains("release")&&Math.abs(Mth.wrapDegrees(e.getYRot()-t.getFloat("yaw")))>35)
@@ -113,6 +140,10 @@ public final class EvaCombatSupportR33
         {
             String s=sides[i];
             String foot="foot_"+s;var orientation=p.matrix(foot).getUnnormalizedRotation(new Quaternionf());
+            if(EvaGameplayMotionR32.directed(e)&&!t.getBoolean(s+"active"))
+            {
+                targets[i]=point(p,foot);orientations[i]=orientation;continue;
+            }
             // A boot rolls on its real sole, not on an abstract marker floating
             // inside the mesh. Keep X/Z planted while its support patch changes.
             var planted=plantTarget(e,t,s,partial,EvaBodyPose.soleBelowToeR33(e,s,orientation,toe(e,s)));worldTargets[i]=planted;
@@ -134,12 +165,13 @@ public final class EvaCombatSupportR33
         // support point and the visible sole silently slides several metres.
         for(int pass=0;pass<12;pass++)for(int i=0;i<2;i++)
         {
+            if(EvaGameplayMotionR32.directed(e)&&!t.getBoolean(sides[i]+"active"))continue;
             String s=sides[i],a="leg_"+s,c="foot_"+s;Vector3f joint=knee(p,s);
             float reach=(joint.distance(p.rig.get(a).pivot())+joint.distance(p.rig.get(c).pivot()))*.997F;
             Vector3f delta=point(p,a).sub(targets[i]);float distance=delta.length();
             if(distance>reach){p.positions.get("root").sub(delta.mul(1-reach/distance));p.dirty();}
         }
-        for(int i=0;i<2;i++)solve(p,sides[i],targets[i],orientations[i]);
+        for(int i=0;i<2;i++)if(!EvaGameplayMotionR32.directed(e)||t.getBoolean(sides[i]+"active"))solve(p,sides[i],targets[i],orientations[i]);
         TARGETS.put(e,worldTargets);
     }
     private static Vector3f point(EvaBodyPose.Sample p,String n){return p.matrix(n).transformPosition(new Vector3f(p.rig.get(n).pivot()));}

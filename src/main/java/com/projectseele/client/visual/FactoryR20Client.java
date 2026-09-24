@@ -17,11 +17,17 @@ public final class FactoryR20Client
 {
     private static int distance=-1,exit,age,lastStill=-1,dropped,phaseTicks;private static String previous="",inputPhase="";private static Path folder;
     private static final JsonArray frames=new JsonArray();private static long began,lastFrame;private static boolean closing;
+    private static final java.util.Map<String,Integer> facilitySounds=new java.util.HashMap<>();
+    public static final java.util.Map<Integer,Integer> bodyDraws=new java.util.HashMap<>(),bodyCandidates=new java.util.HashMap<>();
+    public static void bodyDraw(EvaUnit01Entity actor){if(FactoryR20Review.R35)bodyDraws.merge(actor.getId(),1,Integer::sum);}
+    public static void bodyCandidate(EvaUnit01Entity actor){if(FactoryR20Review.R35)bodyCandidates.merge(actor.getId(),1,Integer::sum);}
     private static volatile String frameError="";private static boolean oldGui;
     private static final ThreadPoolExecutor writer=new ThreadPoolExecutor(2,2,0,TimeUnit.SECONDS,new ArrayBlockingQueue<>(8),r->{Thread t=new Thread(r,"r20-factory-frames");t.setDaemon(true);return t;});
     public record CameraView(net.minecraft.world.phys.Vec3 position,net.minecraft.world.phys.Vec3 target){}
     @SubscribeEvent public static void sound(net.minecraftforge.client.event.sound.PlaySoundEvent event)
     {
+        if(FactoryR20Review.R35&&event.getSound()!=null)
+        {String name=event.getSound().getLocation().toString();if(name.contains("facility_hydraulic_launch")||name.contains("facility_catapult"))facilitySounds.merge(name,1,Integer::sum);}
         if(!FactoryR20Review.R28_VISUAL||event.getSound()==null)return;
         var id=event.getSound().getLocation();
         if(id.toString().equals("superbwarfare:ntw_20_fire_3p")&&Minecraft.getInstance().getSoundManager().getSoundEvent(id)!=null)
@@ -29,6 +35,15 @@ public final class FactoryR20Client
     }
     public static CameraView cameraView()
     {
+        if(FactoryR20Review.R35)
+        {
+            var mc=Minecraft.getInstance();if(mc.player==null)return null;
+            var eva=com.projectseele.world.EvaPilotResolver.controlTarget(mc.player);if(eva==null)return null;
+            var p=eva.hasActiveCarrierMotion()?eva.carrierRenderPosition(mc.getFrameTime()):eva.getPosition(mc.getFrameTime());
+            if(FactoryR20Review.phase.equals("prepare_transfer")||FactoryR20Review.phase.equals("recover_from_sideways"))return new CameraView(p.add(19,39,24),p.add(0,25,7));
+            var bed=FactoryR20Review.launchRoot;
+            if(FactoryR20Review.phase.equals("launch")&&bed!=null&&p.y<bed.y+70)return new CameraView(bed.add(16,19,14),bed.add(0,5,0));
+        }
         if(!FactoryR20Review.ENABLED||!Boolean.getBoolean("projectseele.factoryCinematic")||!FactoryR20Review.phase.equals("prepare_transfer"))return null;
         var mc=Minecraft.getInstance();if(mc.level==null)return null;
         var units=mc.level.getEntitiesOfClass(EvaUnit01Entity.class,new net.minecraft.world.phys.AABB(-30,-470,-290,96,-330,-180),e->e.getUnitVariant()==1&&!e.isExperimentalUnit());
@@ -38,7 +53,7 @@ public final class FactoryR20Client
     @SubscribeEvent public static void tick(TickEvent.ClientTickEvent e)
     {
         if(!FactoryR20Review.ENABLED||e.phase!=TickEvent.Phase.END)return;var mc=Minecraft.getInstance();mc.options.pauseOnLostFocus=false;if(mc.screen instanceof PauseScreen)mc.setScreen(null);
-        if(FactoryR20Review.finished){if(distance>=0){mc.options.renderDistance().set(distance);mc.options.broadcastOptions();mc.options.hideGui=oldGui;distance=-1;}if(!closing){writer.shutdown();closing=true;}if(writer.isTerminated()&&++exit==1&&folder!=null){try{JsonObject report=new JsonObject();report.addProperty("source","Unmodified native framebuffer; real F5 pilot camera and carrier motion");report.addProperty("dropped",dropped);report.addProperty("write_failure",frameError);report.add("frames",frames);Files.writeString(folder.resolve("frames.json"),report.toString());}catch(Exception x){throw new IllegalStateException(x);}}if(exit>30)mc.stop();return;}
+        if(FactoryR20Review.finished){if(distance>=0){mc.options.renderDistance().set(distance);mc.options.broadcastOptions();mc.options.hideGui=oldGui;distance=-1;}if(!closing){writer.shutdown();closing=true;}if(writer.isTerminated()&&++exit==1&&folder!=null){try{JsonObject report=new JsonObject();report.addProperty("source","Unmodified native framebuffer; real F5 pilot camera and carrier motion");report.addProperty("dropped",dropped);report.addProperty("write_failure",frameError);report.add("frames",frames);report.add("facility_sounds",new Gson().toJsonTree(facilitySounds));Files.writeString(folder.resolve("frames.json"),report.toString());}catch(Exception x){throw new IllegalStateException(x);}}if(exit>30)mc.stop();return;}
         if(mc.player==null||mc.level==null||mc.screen!=null)return;
         if(distance<0){distance=mc.options.renderDistance().get();oldGui=mc.options.hideGui;mc.options.hideGui=true;mc.options.renderDistance().set(10);mc.options.broadcastOptions();mc.options.setCameraType(CameraType.THIRD_PERSON_BACK);folder=mc.gameDirectory.toPath().resolve((FactoryR20Review.R29?"../artifacts/facility_r29/native_factory_":FactoryR20Review.R28?"../artifacts/facility_r28/native_cycle_":FactoryR20Review.R27?"../artifacts/facility_r27/native_cycle_":"r21-factory".equals(System.getProperty("projectseele.regionalBuild",""))?"../artifacts/world_repair_r21/factory/native_cycle_":"../artifacts/world_rebuild_r20/factory/native_cycle_")+System.currentTimeMillis());try{Files.createDirectories(folder);}catch(Exception x){throw new IllegalStateException(x);}}
         FactoryR20Review.ready=true;age++;
@@ -76,7 +91,8 @@ public final class FactoryR20Client
         var camera=mc.gameRenderer.getMainCamera().getPosition();f.addProperty("camera_x",camera.x);f.addProperty("camera_y",camera.y);f.addProperty("camera_z",camera.z);
         var eva=com.projectseele.world.EvaPilotResolver.controlTarget(mc.player);
         f.addProperty("locked_capsule",!(mc.player.getVehicle() instanceof com.projectseele.entity.EntryPlugCarrierEntity plug)||plug.isLockedToEva());
-        if(eva!=null){var p=eva.hasActiveCarrierMotion()?eva.carrierRenderPosition(mc.getFrameTime()):eva.getPosition(mc.getFrameTime());f.addProperty("carrier",eva.hasActiveCarrierMotion());f.addProperty("locked",eva.isNervLogisticsLocked());f.addProperty("camera_type",mc.options.getCameraType().name());f.addProperty("eva_x",p.x);f.addProperty("eva_y",p.y);f.addProperty("eva_z",p.z);}
+        if(eva!=null){var p=eva.hasActiveCarrierMotion()?eva.carrierRenderPosition(mc.getFrameTime()):eva.getPosition(mc.getFrameTime());f.addProperty("carrier",eva.hasActiveCarrierMotion());f.addProperty("locked",eva.isNervLogisticsLocked());f.addProperty("camera_type",mc.options.getCameraType().name());f.addProperty("eva_x",p.x);f.addProperty("eva_y",p.y);f.addProperty("eva_z",p.z);
+            if(FactoryR20Review.R35){f.addProperty("entity_ticks",eva.tickCount);f.addProperty("entity_health",eva.getHealth());f.addProperty("entity_invisible",eva.isInvisible());f.addProperty("entity_removed",eva.isRemoved());f.addProperty("raw_position",eva.position().toString());f.addProperty("body_draws",bodyDraws.getOrDefault(eva.getId(),0));f.addProperty("body_candidates",bodyCandidates.getOrDefault(eva.getId(),0));f.addProperty("raw_chunk_present",mc.level.getChunkSource().hasChunk(eva.blockPosition().getX()>>4,eva.blockPosition().getZ()>>4));f.addProperty("render_chunk_present",mc.level.getChunkSource().hasChunk((int)Math.floor(p.x)>>4,(int)Math.floor(p.z)>>4));}}
         var im=Screenshot.takeScreenshot(mc.getMainRenderTarget());frames.add(f);writer.execute(()->{try(im){NativeReviewFrames.writeJpeg(im,folder.resolve(name));}catch(Exception x){frameError=x.toString();}});
     }
 }

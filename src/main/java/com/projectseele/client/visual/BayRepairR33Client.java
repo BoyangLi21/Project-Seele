@@ -21,7 +21,7 @@ public final class BayRepairR33Client
             if(mc.screen!=null)mc.setScreen(null);
             if(mc.level.getEntity(BayRepairR33Review.actorId) instanceof com.projectseele.entity.EvaUnit01Entity eva)
             {
-                var d=eva.position().add(0,BayRepairR33Review.VISUAL_ONLY?46:32,0).subtract(mc.player.getEyePosition());float yaw=(float)Math.toDegrees(Math.atan2(-d.x,d.z));float pitch=(float)-Math.toDegrees(Math.atan2(d.y,d.horizontalDistance()));
+                var d=eva.position().add(0,BayRepairR33Review.WET_REVIEW?29:BayRepairR33Review.VISUAL_ONLY?46:32,0).subtract(mc.player.getEyePosition());float yaw=(float)Math.toDegrees(Math.atan2(-d.x,d.z));float pitch=(float)-Math.toDegrees(Math.atan2(d.y,d.horizontalDistance()));
                 mc.player.setYRot(yaw);mc.player.yRotO=yaw;mc.player.setXRot(pitch);mc.player.xRotO=pitch;
             }
             if(BayRepairR33Review.done&&++closing>35)mc.stop();

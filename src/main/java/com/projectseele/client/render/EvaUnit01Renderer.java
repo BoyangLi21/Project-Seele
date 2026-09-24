@@ -207,6 +207,7 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
     public void render(EvaUnit01Entity entity, float entityYaw, float partialTick, PoseStack poseStack,
                        MultiBufferSource bufferSource, int packedLight)
     {
+        com.projectseele.client.visual.FactoryR20Client.bodyDraw(entity);
         LocalVisualAssetFingerprint.Fingerprint fingerprint =
                 entity.isExperimentalUnit()?LocalVisualAssetFingerprint.inspect(entity.experimentalAssetName()):visualFingerprintForVariant(entity.getUnitVariant());
         if (LocalVisualAssetFingerprint.isStrictMode() && !fingerprint.valid())
@@ -298,7 +299,13 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
     public boolean shouldRender(EvaUnit01Entity entity, Frustum frustum,
                                 double cameraX, double cameraY, double cameraZ)
     {
+        com.projectseele.client.visual.FactoryR20Client.bodyCandidate(entity);
         if(com.projectseele.entity.EvaAirTransportR31.active(entity))return frustum.isVisible(entity.getBoundingBox().inflate(72));
+        if(entity.hasActiveCarrierMotion())
+        {
+            var p=entity.carrierRenderPosition(Minecraft.getInstance().getFrameTime());
+            return frustum.isVisible(new net.minecraft.world.phys.AABB(p.x-24,p.y-4,p.z-24,p.x+24,p.y+70,p.z+24));
+        }
         if (EvaPoseRuntimeRecorder.requestsSmokeRender())
         {
             return true;

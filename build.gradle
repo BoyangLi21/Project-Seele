@@ -33,6 +33,7 @@ base {
 java.toolchain.languageVersion = JavaLanguageVersion.of(17)
 
 println "Java: ${System.getProperty 'java.version'}, JVM: ${System.getProperty 'java.vm.version'} (${System.getProperty 'java.vendor'}), Arch: ${System.getProperty 'os.arch'}"
+jarJar.enable()
 minecraft {
     // The mappings can be changed at any time and must be in the following format.
     // Channel:   Version:
@@ -295,6 +296,23 @@ dependencies {
     // GeckoLib: animated entity pipeline (EVA units and humanoid Angels)
     implementation fg.deobf("software.bernie.geckolib:geckolib-forge-${minecraft_version}:${geckolib_version}")
 
+    // Cross-platform articulated body dynamics; no native DLL or second engine process.
+    minecraftLibrary('com.github.stephengold:jbullet:1.0.3') { transitive = false }
+    minecraftLibrary('com.github.stephengold:stack-alloc:1.0.2') { transitive = false }
+    minecraftLibrary('javax.vecmath:vecmath:1.5.2') { transitive = false }
+    jarJar(group: 'com.github.stephengold', name: 'jbullet', version: '1.0.3') {
+        jarJar.ranged(it, '[1.0.3,1.0.4)')
+        transitive = false
+    }
+    jarJar(group: 'com.github.stephengold', name: 'stack-alloc', version: '1.0.2') {
+        jarJar.ranged(it, '[1.0.2,1.0.3)')
+        transitive = false
+    }
+    jarJar(group: 'javax.vecmath', name: 'vecmath', version: '1.5.2') {
+        jarJar.ranged(it, '[1.5.2,1.5.3)')
+        transitive = false
+    }
+
     def localArs = file('.Codex/local-mods/ars-nouveau-4.12.7.jar')
     def localCurios = file('.Codex/local-mods/curios-forge-1.20.1-5.14.1.jar')
     def localAnotherFurniture = file('.Codex/local-mods/another-furniture-1.20.1-3.0.4.jar')
@@ -420,6 +438,12 @@ tasks.named('jar', Jar).configure {
     // This is the preferred method to reobfuscate your jar file
     finalizedBy 'reobfJar'
 }
+
+tasks.named('jarJar').configure {
+    manifest.from tasks.named('jar').get().manifest
+    finalizedBy 'reobfJarJar'
+}
+tasks.named('assemble').configure { dependsOn 'jarJar' }
 
 // However if you are in a multi-project build, dev time needs unobfed jar files, so you can delay the obfuscation until publishing by doing:
 // tasks.named('publish').configure {

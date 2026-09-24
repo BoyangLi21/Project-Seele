@@ -12,7 +12,7 @@ public final class EvaImpactResponse
     public record Pose(float pitch,float roll,float head,float energy) {}
     public static void displace(EvaUnit01Entity eva,Vec3 direction,float strength)
     {
-        if(eva.isNervLogisticsLocked()||eva.isLaunchSequenceActive()||eva.isFirstBattleActive())return;
+        if(eva.isNervLogisticsLocked()||eva.isLaunchSequenceActive()||eva.isFirstBattleActive()||com.projectseele.physics.CombatBodyDynamics.active(eva))return;
         Vec3 outward=direction.multiply(1,0,1);if(outward.lengthSqr()<1e-8)return;outward=outward.normalize();
         Vec3 velocity=eva.getDeltaMovement();double desired=Math.min(1.65,.5+strength),current=velocity.dot(outward);
         if(current<desired)eva.setDeltaMovement(velocity.add(outward.scale(desired-current)));

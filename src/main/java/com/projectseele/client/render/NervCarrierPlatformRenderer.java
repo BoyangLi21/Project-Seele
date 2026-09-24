@@ -145,18 +145,19 @@ public final class NervCarrierPlatformRenderer
                                   int packedLight)
     {
         float level = entity.getLclVisualLevel(partialTick);
-        if (level <= 0.01F)
+        if (level <= 0.01F || Math.abs(level-Math.round(level))<.002F)
         {
             return;
         }
         // Keep the interpolated hydraulic surface the same amber as the real
         // fluid. The old opaque purple overlay hid its correct orange tint.
-        var out=buffers.getBuffer(net.minecraft.client.renderer.RenderType.entityTranslucent(
-                new ResourceLocation("minecraft","textures/block/white_concrete.png")));
+        // A moving fractional layer must not write a second opaque depth
+        // sheet over the body beneath the actual fluid surface.
+        var out=buffers.getBuffer(EnergyGlowR24.SMOKE);
         float y=level+.93F;
         int tint=com.projectseele.fluid.LclFluidType.TINT;
         for(float[] p:new float[][]{{-19.5F,26.5F,0,1},{19.5F,26.5F,1,1},{19.5F,-26.5F,1,0},{-19.5F,-26.5F,0,0}})
-            out.vertex(poses.last().pose(),p[0],y,p[1]).color((tint>>16)&255,(tint>>8)&255,tint&255,(tint>>>24)&255).uv(p[2],p[3]).overlayCoords(OverlayTexture.NO_OVERLAY).uv2(packedLight).normal(poses.last().normal(),0,1,0).endVertex();
+            out.vertex(poses.last().pose(),p[0],y,p[1]).color((tint>>16)&255,(tint>>8)&255,tint&255,(tint>>>24)&255).endVertex();
     }
 
     /**

@@ -42,6 +42,8 @@ public final class CombatR31Client
     private static boolean started,oldPause,oldGui;private static int oldDistance,epoch,end;
     private static CameraType oldCamera;private static Path folder;private static String lastPhoto="";
     private static long nextFrame,lastWitness;private static int frame;
+    private static final java.util.concurrent.ThreadPoolExecutor frameWriter=new java.util.concurrent.ThreadPoolExecutor(2,2,0,java.util.concurrent.TimeUnit.SECONDS,new java.util.concurrent.ArrayBlockingQueue<>(8),r->{var t=new Thread(r,"r35-combat-frames");t.setDaemon(true);return t;});
+    private static boolean writerClosing;private static int droppedFrames;private static volatile String frameWriteFailure="";
     private static final JsonArray frames=new JsonArray(),hands=new JsonArray(),keys=new JsonArray(),normalBones=new JsonArray(),angelSoles=new JsonArray();
     private static long lastAngelSole;
     public static void angelSupport(net.minecraft.world.entity.LivingEntity actor,double lowest)
@@ -87,11 +89,13 @@ public final class CombatR31Client
         if(mc.screen!=null&&!CombatR31Review.done)mc.setScreen(null);
         CombatR31Review.tracked=mc.level.getEntity(CombatR31Review.evaId)!=null&&mc.level.getEntity(CombatR31Review.angelId)!=null;
         CombatR31Review.mounted=mc.player.getRootVehicle().getId()==CombatR31Review.evaId;
-        boolean driving=CombatR31Review.mounted&&!CombatR31Review.done;int forward=driving?CombatR31Review.forward:0;
+        boolean autonomous=mc.level.getEntity(CombatR31Review.evaId) instanceof EvaUnit01Entity actor&&actor.isBerserk();
+        boolean driving=CombatR31Review.mounted&&!CombatR31Review.done&&!autonomous;int forward=driving?CombatR31Review.forward:0;
         mc.options.keyUp.setDown(forward>0);mc.options.keyDown.setDown(forward<0);mc.options.keyJump.setDown(driving&&CombatR31Review.jump);
-        mc.options.keyLeft.setDown(false);mc.options.keyRight.setDown(false);mc.options.keySprint.setDown(false);mc.options.keyShift.setDown(false);
-        mc.player.input.up=forward>0;mc.player.input.down=forward<0;mc.player.input.left=mc.player.input.right=false;mc.player.input.forwardImpulse=forward;mc.player.input.leftImpulse=0;
-        mc.player.input.jumping=driving&&CombatR31Review.jump;mc.player.zza=forward;mc.player.xxa=0;
+        int strafe=driving?CombatR31Review.strafe:0;
+        mc.options.keyLeft.setDown(strafe>0);mc.options.keyRight.setDown(strafe<0);mc.options.keySprint.setDown(false);mc.options.keyShift.setDown(false);
+        mc.player.input.up=forward>0;mc.player.input.down=forward<0;mc.player.input.left=strafe>0;mc.player.input.right=strafe<0;mc.player.input.forwardImpulse=forward;mc.player.input.leftImpulse=strafe;
+        mc.player.input.jumping=driving&&CombatR31Review.jump;mc.player.zza=forward;mc.player.xxa=strafe;
         mc.player.setYRot(CombatR31Review.heading);mc.player.setXRot(0);mc.setCameraEntity(mc.player);
         if(event.phase==TickEvent.Phase.START&&driving&&epoch!=CombatR31Review.inputEpoch)
         {
@@ -99,11 +103,14 @@ public final class CombatR31Client
             KeyMapping key=switch(action){case 1->mc.options.keyAttack;case 2->mc.options.keyUse;case 3->Keybinds.EVA_GRAPPLE;case 4->Keybinds.TOGGLE_AT_FIELD;default->null;};
             if(key!=null){KeyMapping.click(key.getKey());var row=new JsonObject();row.addProperty("epoch",epoch);row.addProperty("key",key.getName());row.addProperty("stage",CombatR31Review.stageName);row.addProperty("tick",CombatR31Review.stageTicks);keys.add(row);}
         }
-        if(CombatR31Review.done&&event.phase==TickEvent.Phase.END&&++end>30)
+        if(CombatR31Review.done&&event.phase==TickEvent.Phase.END)
         {
+            if(!writerClosing){frameWriter.shutdown();writerClosing=true;}
+            if(!frameWriter.isTerminated()||++end<=30)return;
             try
             {
                 var output=new JsonObject();output.add("frames",frames);output.add("hand_contacts",hands);output.add("production_key_inputs",keys);output.add("angel_draw_support",angelSoles);output.addProperty("server_failure",CombatR31Review.failure);
+                output.addProperty("dropped_capture_frames",droppedFrames);output.addProperty("capture_write_failure",frameWriteFailure);
                 output.add("normal_bones",normalBones);output.add("support_contacts_r33",supportContacts);output.add("render_performance",performance());Files.writeString(folder.resolve("render_performance.json"),new GsonBuilder().setPrettyPrinting().create().toJson(performance()));
                 Files.writeString(folder.resolve("client_evidence.json"),new GsonBuilder().setPrettyPrinting().create().toJson(output));
             }
@@ -153,8 +160,12 @@ public final class CombatR31Client
             if(now>=nextFrame&&(stage.startsWith("normal_")||Set.of("air_strike","air_slam","reach","hold","throw","reaction","duel").contains(stage))&&frames.size()<(video?1800:180))
             {
                 nextFrame=now+(video?41_666_667L:400_000_000L);String file=String.format(Locale.ROOT,"contact_%04d.jpg",frame++);
-                try(var capture=net.minecraft.client.Screenshot.takeScreenshot(mc.getMainRenderTarget())){NativeReviewFrames.writeJpeg(capture,folder.resolve(file));}
-                var row=new JsonObject();row.addProperty("file",file);row.addProperty("stage",stage);row.addProperty("server_tick",CombatR31Review.stageTicks);row.addProperty("actual_rendered_frame",renderCount);row.addProperty("render_elapsed_seconds",(now-firstRender)/1e9);frames.add(row);
+                if(frameWriter.getQueue().remainingCapacity()==0){droppedFrames++;return;}
+                var capture=net.minecraft.client.Screenshot.takeScreenshot(mc.getMainRenderTarget());
+                frameWriter.execute(()->{try(capture){NativeReviewFrames.writeJpeg(capture,folder.resolve(file));}catch(Exception failure){frameWriteFailure=failure.toString();}});
+                var row=new JsonObject();row.addProperty("file",file);row.addProperty("stage",stage);row.addProperty("server_tick",CombatR31Review.stageTicks);row.addProperty("actual_rendered_frame",renderCount);row.addProperty("render_elapsed_seconds",(now-firstRender)/1e9);
+                row.addProperty("capture_epoch_ms",System.currentTimeMillis());
+                frames.add(row);
             }
         }
         catch(Exception error){throw new IllegalStateException("R31 native frame capture",error);}

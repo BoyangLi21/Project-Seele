@@ -41,6 +41,7 @@ public final class FirstBattleDirector
             ProjectSeele.LOGGER.info("R10 START CHECK health={} ready={} pilot={} variant={} experimental={} locked={} launch={} crucified={} powered={} prone={} crouch={} weapon={} used={} ground={} position={}",angel.getHealth(),FirstBattleClip.ready(),eva.getPilotEntity(),eva.getUnitVariant(),eva.isExperimentalUnit(),eva.isNervLogisticsLocked(),eva.isLaunchSequenceActive(),eva.isCrucified(),eva.isPoweredOn(),eva.isPilotProne(),eva.isPilotCrouching(),eva.getWeapon(),angel.hasUsedFirstBattle(),eva.onGround(),eva.position());
         if(!(angel.level() instanceof ServerLevel level)||eva.level()!=level||!angel.isAlive()||!eva.isAlive()||!FirstBattleClip.ready())return false;
         if(level.getEntity(eva.getUUID())!=eva||level.getEntity(angel.getUUID())!=angel)return false;
+        if(com.projectseele.physics.CombatBodyDynamics.active(eva)||com.projectseele.physics.CombatBodyDynamics.active(angel))return false;
         var occupant=eva.getPilotEntity();ServerPlayer pilot=occupant instanceof ServerPlayer p?p:null;
         if(occupant instanceof com.projectseele.entity.TrainingPilotEntity)
         {

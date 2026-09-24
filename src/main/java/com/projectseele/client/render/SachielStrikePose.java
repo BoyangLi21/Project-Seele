@@ -9,7 +9,12 @@ public final class SachielStrikePose
 {
     public static void apply(SachielEntity actor,BakedGeoModel model,float partial)
     {
-        if(!actor.isStrikeActive()||actor.isFirstBattleActive())return;
+        if(actor.isFirstBattleActive())return;
+        if(!actor.isStrikeActive())
+        {
+            if(SachielGameplayMotionR32.directed()&&!EvaCombatR31.holds(actor))write(model,SachielGameplayMotionR32.locomotion(actor,partial));
+            return;
+        }
         int mode=actor.strikeMode();float age=actor.strikeAge(partial),w=SachielStrike.weight(mode,age);
         if(SachielGameplayMotionR32.ready())
         {
@@ -43,6 +48,10 @@ public final class SachielStrikePose
             model.getBone("forearm_"+guard).ifPresent(b->b.setRotX(b.getRotX()-.28F*w));
         }
         model.getBone("head").ifPresent(b->b.setRotX(b.getRotX()-.07F*w));
+    }
+    private static void write(BakedGeoModel model,EvaBodyPose.Sample pose)
+    {
+        for(String n:pose.rig.keySet())model.getBone(n).ifPresent(b->{EvaRigTransforms.rotate(b,pose.rotations.get(n));var p=pose.positions.get(n);b.setPosX(-p.x*16);b.setPosY(p.y*16);b.setPosZ(p.z*16);});
     }
     private static void solve(SachielEntity actor,BakedGeoModel model,float partial,float age,boolean left)
     {

@@ -29,7 +29,7 @@ public final class EvaBodyPose
         public final Map<String,Quaternionf> rotations=new HashMap<>();
         public final Map<String,Vector3f> positions=new HashMap<>();
         private final Map<String,Matrix4f> matrices=new HashMap<>();
-        Sample(Map<String,Bone> rig)
+        public Sample(Map<String,Bone> rig)
         {
             this.rig=rig;for(String n:rig.keySet()){rotations.put(n,new Quaternionf());positions.put(n,new Vector3f());}
         }
@@ -232,6 +232,7 @@ public final class EvaBodyPose
     }
     public static Sample sample(EvaUnit01Entity entity,float partial)
     {
+        if(com.projectseele.physics.CombatBodyDynamics.active(entity))return com.projectseele.physics.CombatBodyDynamics.sample(entity,partial);
         if(data==null)reload();Data d=data;int variant=rigKey(entity);float phase=entity.rifleGaitPhase(partial);phase-=Mth.floor(phase);
         if(EvaAirTransportR31.active(entity))return EvaAirTransportR31.sample(entity,new Sample(d.rigs().get(variant)),partial);
         if(EvaShutdownR30.displayed(entity)&&!EvaShutdownR30.pose(entity).isEmpty())
@@ -355,7 +356,10 @@ public final class EvaBodyPose
                 body=mix(body,inactivePoseR30(entity,true),w);
             }
         }
-        groundGameplay(entity,body,partial);EvaCombatSupportR33.apply(entity,body,partial);return body;
+        groundGameplay(entity,body,partial);EvaCombatSupportR33.apply(entity,body,partial);
+        if(!entity.isNervLogisticsLocked()&&!entity.isFirstBattleActive()&&!EvaAirTransportR31.active(entity))
+        {EvaAerialContactR35.apply(entity,body,partial);com.projectseele.physics.CombatBodyDynamics.normalize(entity,body);}
+        return body;
     }
 
     public static Sample inactivePoseR30(EvaUnit01Entity entity,boolean prone)

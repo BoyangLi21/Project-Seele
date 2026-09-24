@@ -21,6 +21,7 @@ public final class AngelCombatPoseR31
     private static boolean handles(LivingEntity actor){return actor instanceof SachielEntity||actor instanceof ShamshelEntity;}
     static boolean needsGroundSupport(LivingEntity actor)
     {
+        if(com.projectseele.physics.CombatBodyDynamics.active(actor))return false;
         var beat=CombatFeelR31.beat(actor);if(!handles(actor)||beat==null||beat.kind()!=CombatFeelR31.DOWN)return false;
         if(actor.onGround())return true;
         var b=actor.getBoundingBox();return actor.level().getBlockCollisions(actor,new net.minecraft.world.phys.AABB(b.minX+.1,b.minY-.15,b.minZ+.1,b.maxX-.1,b.minY+.01,b.maxZ-.1)).iterator().hasNext();

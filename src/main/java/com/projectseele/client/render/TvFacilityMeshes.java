@@ -20,10 +20,11 @@ import java.util.Map;
 public final class TvFacilityMeshes
 {
     private static final Map<String,VertexBuffer> PARTS=new HashMap<>();
+    private static final Map<Integer,float[][]> CARRIER_MOUNTS=new HashMap<>();
     private static boolean attempted;
     public static void clearCache()
     {
-        Runnable release=()->{PARTS.values().forEach(VertexBuffer::close);PARTS.clear();attempted=false;EvaBayMachineryR33.clearCache();};
+        Runnable release=()->{PARTS.values().forEach(VertexBuffer::close);PARTS.clear();CARRIER_MOUNTS.clear();attempted=false;EvaBayMachineryR33.clearCache();};
         if(RenderSystem.isOnRenderThread())release.run();else RenderSystem.recordRenderCall(release::run);
     }
     private static void load()
@@ -32,7 +33,13 @@ public final class TvFacilityMeshes
         try(var stream=Minecraft.getInstance().getResourceManager().open(new ResourceLocation(ProjectSeele.MODID,"mesh/tv_facilities_r16.json"));
             var reader=new InputStreamReader(stream,StandardCharsets.UTF_8))
         {
-            var parts=JsonParser.parseReader(reader).getAsJsonObject().getAsJsonObject("parts");
+            var resource=JsonParser.parseReader(reader).getAsJsonObject();var parts=resource.getAsJsonObject("parts");
+            if(resource.has("carrier_actuator_mounts"))for(var entry:resource.getAsJsonObject("carrier_actuator_mounts").entrySet())
+            {
+                var rows=entry.getValue().getAsJsonArray();float[][] mounts=new float[rows.size()][4];
+                for(int i=0;i<rows.size();i++)for(int j=0;j<4;j++)mounts[i][j]=rows.get(i).getAsJsonArray().get(j).getAsFloat();
+                CARRIER_MOUNTS.put(Integer.parseInt(entry.getKey()),mounts);
+            }
             for(var part:parts.entrySet())
             {
                 var vertices=part.getValue().getAsJsonArray();BufferBuilder builder=new BufferBuilder(262144);
@@ -86,15 +93,28 @@ public final class TvFacilityMeshes
     {
         float opacity=1;
         draw("carrier_deck",poses,light);
+        draw("carrier_deck_guides",poses,light);
         poses.pushPose();
         poses.translate(0,-64*(1-unit.carrierRiseProgress(partial)),0);
         draw("carrier_spine",poses,light,opacity);
+        draw("carrier_support_members",poses,light);
         float release=unit.getLaunchPhase()==EvaUnit01Entity.LAUNCH_CLEAR?ramp(1-(unit.getLaunchTicks()-partial)/18F,0,1):0;
         poses.pushPose();poses.translate(0,0,-3*release);draw("carrier_clamp",poses,light,opacity);poses.popPose();
-        poses.pushPose();
-        poses.translate(0,0,6*(1-ramp(unit.carrierRiseProgress(partial),.80F,1))+4*release);
-        draw("carrier_contacts_"+unit.getUnitVariant(),poses,light,opacity);
-        poses.popPose();
+        var mounts=CARRIER_MOUNTS.get(unit.getUnitVariant());
+        if(mounts!=null)
+        {
+            draw("carrier_actuator_housings",poses,light);
+            float stroke=6*(1-ramp(unit.carrierRiseProgress(partial),.80F,1))+4*release;
+            for(var mount:mounts)stroke=Math.min(stroke,mount[3]-mount[2]-.28F);
+            poses.pushPose();poses.translate(0,0,stroke);draw("carrier_contact_pads_"+unit.getUnitVariant(),poses,light);poses.popPose();
+            for(var mount:mounts)
+            {
+                poses.pushPose();poses.translate(mount[0],mount[1],mount[2]+stroke);poses.scale(1,1,mount[3]-mount[2]-stroke);
+                draw("carrier_ram_unit",poses,light);poses.popPose();
+            }
+        }
+        else
+        {poses.pushPose();poses.translate(0,0,6*(1-ramp(unit.carrierRiseProgress(partial),.80F,1))+4*release);draw("carrier_contacts_"+unit.getUnitVariant(),poses,light,opacity);poses.popPose();}
         draw("carrier_power_reel",poses,light,opacity);
         poses.popPose();
     }

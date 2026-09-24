@@ -22,6 +22,7 @@ public final class BayRepairR33Review
     public static volatile String error="",shot="";
     public static final int SERIAL=Integer.getInteger("projectseele.bayRepairSerial",-1);
     public static final boolean VISUAL_ONLY=Boolean.getBoolean("projectseele.bayRepairVisual");
+    public static final boolean WET_REVIEW=Boolean.getBoolean("projectseele.facilityWetReview");
     private static EvaUnit01Entity unit;private static long started;private static UUID original;
     private static final JsonArray samples=new JsonArray();private static int ticks,variant=1;
     private static final TicketType<ChunkPos> TICKET=TicketType.create("seele_repair_review",Comparator.comparingLong(ChunkPos::toLong));
@@ -44,11 +45,19 @@ public final class BayRepairR33Review
                 if(!EvaBayRepairR33.docked(unit))throw new IllegalStateException("Original Unit01 is not parked");
                 pilot.stopRiding();pilot.setGameMode(net.minecraft.world.level.GameType.SPECTATOR);
                 var f=unit.getForward().multiply(1,0,1).normalize();var right=new net.minecraft.world.phys.Vec3(f.z,0,-f.x);
-                var eye=unit.position().add(f.scale(21)).add(right.scale(12)).add(0,51,0);
+                var eye=unit.position().add(f.scale(WET_REVIEW?16:21)).add(right.scale(WET_REVIEW?9:12)).add(0,WET_REVIEW?59:51,0);
                 pilot.teleportTo(level,eye.x,eye.y,eye.z,151,10);
-                unit.getPersistentData().remove("R33Repair");EvaShutdownR30.fail(unit);unit.setHealth(0);started=level.getGameTime();actorId=unit.getId();
+                if(!WET_REVIEW){unit.getPersistentData().remove("R33Repair");EvaShutdownR30.fail(unit);unit.setHealth(0);}started=level.getGameTime();actorId=unit.getId();
             }
             elapsed=(int)(level.getGameTime()-started);
+            if(WET_REVIEW)
+            {
+                if(!unit.getUUID().equals(original))throw new IllegalStateException("Wet view changed original identity");
+                if(elapsed==90)shot="lcl_top";
+                if(elapsed>=150){done=true;shot="lcl_top_settled";}
+            }
+            else
+            {
             if(elapsed%120==0)
             {
                 var row=new JsonObject();row.addProperty("tick",elapsed);row.addProperty("health",unit.getHealth());row.addProperty("repairing",EvaBayRepairR33.active(unit));row.addProperty("shutdown",EvaShutdownR30.mode(unit));samples.add(row);
@@ -68,6 +77,7 @@ public final class BayRepairR33Review
             {
                 if(EvaBayRepairR33.active(unit)||unit.getHealth()!=unit.getMaxHealth()||EvaShutdownR30.wreck(unit))throw new IllegalStateException("Repair did not finish in 2400 ticks");
                 shot="repair_complete";done=true;
+            }
             }
         }
         catch(Exception failure){error=failure.toString();done=true;}

@@ -41,6 +41,10 @@ public class LocalAddonGeoModel<T extends GeoEntity> extends GeoModel<T>
     public void setCustomAnimations(T animatable,long instanceId,software.bernie.geckolib.core.animation.AnimationState<T> state)
     {
         super.setCustomAnimations(animatable,instanceId,state);
+        if(animatable instanceof net.minecraft.world.entity.LivingEntity body&&com.projectseele.physics.CombatBodyDynamics.active(body))
+        {PhysicalBodyRenderer.apply(body,this.getBakedModel(this.getModelResource(animatable)),state.getPartialTick());return;}
+        if(animatable instanceof com.projectseele.entity.SachielEntity actor&&!actor.isFirstBattleActive()&&com.projectseele.physics.CombatBodyDynamics.available(actor))
+        {PhysicalBodyRenderer.write(com.projectseele.entity.SachielBodyPoseR35.sample(actor,state.getPartialTick()),this.getBakedModel(this.getModelResource(animatable)));return;}
         if(animatable instanceof net.minecraft.world.entity.LivingEntity living)
             AngelCombatPoseR31.rememberGecko(living,this.getBakedModel(this.getModelResource(animatable)));
         if(animatable instanceof com.projectseele.entity.SachielEntity angel)SachielStrikePose.apply(angel,this.getBakedModel(this.getModelResource(animatable)),state.getPartialTick());

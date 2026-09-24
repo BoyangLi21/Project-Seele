@@ -12,7 +12,7 @@ import java.util.*;
 public final class SachielGameplayMotionR32
 {
     private record Clip(Quaternionf[][] rotations,Vector3f[][] positions,Vec3[] travel,float contact,String side) {}
-    private record Data(String[] names,Map<String,EvaBodyPose.Bone> rig,Map<String,Clip> clips) {}
+    private record Data(String[] names,Map<String,EvaBodyPose.Bone> rig,Map<String,Clip> clips,boolean directed,float stride) {}
     private static Optional<Data> cached;
     private static Vector3f vector(JsonElement value){var a=value.getAsJsonArray();return new Vector3f(a.get(0).getAsFloat(),a.get(1).getAsFloat(),a.get(2).getAsFloat());}
     private static synchronized Data data()
@@ -45,11 +45,15 @@ public final class SachielGameplayMotionR32
                 }
                 clips.put(entry.getKey().substring(4),new Clip(rotations,positions,travel,c.get("contact_phase").getAsFloat(),c.get("leading_side").getAsString()));
             }
-            cached=Optional.of(new Data(names.toArray(String[]::new),Map.copyOf(rig),Map.copyOf(clips)));return cached.get();
+            boolean directed=json.has("combat_foundation")&&json.get("combat_foundation").getAsInt()>=34;
+            float stride=directed?json.getAsJsonObject("clips").getAsJsonObject("r32_advance").get("stride_blocks").getAsFloat():15;
+            cached=Optional.of(new Data(names.toArray(String[]::new),Map.copyOf(rig),Map.copyOf(clips),directed,stride));return cached.get();
         }
         catch(Exception error){throw new IllegalStateException("Rejected calibrated Sachiel motion",error);}
     }
     public static boolean ready(){return data()!=null;}
+    public static boolean directed(){return ready()&&data().directed;}
+    public static float stride(){return data().stride;}
     public static String name(int mode){return switch(mode){case SachielStrike.PILE->"cross";case SachielStrike.HOOK->"hook";case SachielStrike.OVERHEAD->"heavy";case SachielStrike.SHOVE->"shove";case SachielStrike.STOMP->"stomp";default->"jab";};}
     public static boolean left(int mode){return data().clips.get(name(mode)).side.equals("l");}
     private static float phase(int mode,float age)
@@ -59,9 +63,27 @@ public final class SachielGameplayMotionR32
     }
     public static EvaBodyPose.Sample pose(SachielEntity e,float age)
     {
-        var d=data();var c=d.clips.get(name(e.strikeMode()));float at=phase(e.strikeMode(),age)*(c.rotations.length-1);int a=(int)at,b=Math.min(a+1,c.rotations.length-1);var sample=new EvaBodyPose.Sample(d.rig);
+        return sample(name(e.strikeMode()),phase(e.strikeMode(),age));
+    }
+    private static EvaBodyPose.Sample sample(String name,float phase)
+    {
+        var d=data();var c=d.clips.get(name);float at=Mth.clamp(phase,0,1)*(c.rotations.length-1);int a=(int)at,b=Math.min(a+1,c.rotations.length-1);var sample=new EvaBodyPose.Sample(d.rig);
         for(int i=0;i<d.names.length;i++){sample.rotations.put(d.names[i],new Quaternionf(c.rotations[a][i]).slerp(c.rotations[b][i],at-a));sample.positions.put(d.names[i],new Vector3f(c.positions[a][i]).lerp(c.positions[b][i],at-a));}
         return sample;
+    }
+    public static EvaBodyPose.Sample locomotion(SachielEntity e,float partial)
+    {
+        if(!directed())return sample("guard",(e.tickCount+partial)%60/60);
+        var m=SachielTacticsR34.motion(e);float phase=SachielTacticsR34.phase(e,partial);
+        var guard=sample("guard",(e.tickCount+partial)%60/60);
+        var front=sample(m.z>=0?"advance":"retreat",phase);var side=sample(m.x>=0?"right":"left",phase);
+        return blend(guard,blend(front,side,Math.abs(m.x)/Math.max(.001F,Math.abs(m.x)+Math.abs(m.z))),Mth.clamp(m.length()/.35F,0,1));
+    }
+    private static EvaBodyPose.Sample blend(EvaBodyPose.Sample a,EvaBodyPose.Sample b,float weight)
+    {
+        // Sachiel has anatomical pivots already. EVA's knee/elbow correction
+        // must never be applied to this unrelated skeleton.
+        for(String n:a.rig.keySet()){a.rotations.get(n).slerp(b.rotations.get(n),weight);a.positions.get(n).lerp(b.positions.get(n),weight);}a.dirty();return a;
     }
     public static Vec3 travel(int mode,float age)
     {
@@ -69,7 +91,7 @@ public final class SachielGameplayMotionR32
     }
     public static SachielStrike.Frame contact(SachielEntity e,float age,float partial,boolean left)
     {
-        var pose=pose(e,age);String side=left?"l":"r",name=e.strikeMode()==SachielStrike.STOMP?"foot_"+side:"hand_"+side;
+        var pose=pose(e,age);com.projectseele.physics.CombatBodyDynamics.normalize(e,pose);String side=left?"l":"r",name=e.strikeMode()==SachielStrike.STOMP?"foot_"+side:"hand_"+side;
         var matrix=SachielStrike.root(e,partial);var local=pose.matrix(name).transformPosition(new Vector3f(pose.rig.get(name).pivot()));var hand=new Vec3(matrix.transformPosition(local));
         String upstream=e.strikeMode()==SachielStrike.STOMP?"shin_"+side:"forearm_"+side;
         var elbow=new Vec3(matrix.transformPosition(pose.matrix(upstream).transformPosition(new Vector3f(pose.rig.get(upstream).pivot()))));

@@ -1087,8 +1087,14 @@ public final class EvaLogisticsDirector
             }
             if (compactS20)
             {
-                List<EvaUnit01Entity> fleet = ensureFleet(level);
-                if (fleet.size() < 3)
+                if (!fleetStationEntitiesSettled(level))return;
+                ensureFleet(level);
+                // A deployed canonical may live in an unloaded field chunk.
+                // Its saved identity is sufficient here; requiring three
+                // locally loaded airframes froze every other preparation.
+                boolean receiptsReady=true;
+                for(int variant=0;variant<3;variant++)receiptsReady&=entry(level,variant)!=null;
+                if (!receiptsReady)
                 {
                     return;
                 }

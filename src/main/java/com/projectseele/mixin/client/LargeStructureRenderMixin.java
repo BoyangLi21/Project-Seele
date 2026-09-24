@@ -31,6 +31,7 @@ public abstract class LargeStructureRenderMixin
     private boolean seele$useLoadedGeometryForTallEntities(LevelRenderer renderer,BlockPos position)
     {
         Entity entity=this.seele$renderCandidate;
+        if(entity instanceof EvaUnit01Entity eva&&eva.hasActiveCarrierMotion()&&entity.blockPosition().equals(position))return true;
         if((entity instanceof EvaUnit01Entity||entity instanceof IndustrialMemberEntity||entity instanceof com.projectseele.entity.Angel)
                 &&entity.blockPosition().equals(position))
         {

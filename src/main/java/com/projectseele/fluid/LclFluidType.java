@@ -22,7 +22,7 @@ public final class LclFluidType extends FluidType
             "minecraft", "block/water_flow");
     private static final ResourceLocation OVERLAY = new ResourceLocation(
             "minecraft", "block/water_overlay");
-    public static final int TINT = 0xD9E36A12;
+    public static final int TINT = 0x60E36A12;
 
     public LclFluidType()
     {
