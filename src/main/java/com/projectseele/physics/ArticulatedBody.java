@@ -21,6 +21,8 @@ public final class ArticulatedBody implements AutoCloseable
     private final Map<String,List<Vector3f>> surfaceVertices=new HashMap<>();
     private final List<TypedConstraint> joints=new ArrayList<>();
     private final List<RigidBody> scenery=new ArrayList<>();
+    private final Map<String,RigidBody> actors=new HashMap<>();
+    private final Set<String> actorFrame=new HashSet<>();
     private boolean closed;
 
     private static Transform transform(JsonArray values)
@@ -42,6 +44,9 @@ public final class ArticulatedBody implements AutoCloseable
         var configuration=new DefaultCollisionConfiguration();dispatcher=new CollisionDispatcher(configuration);
         world=new DiscreteDynamicsWorld(dispatcher,new DbvtBroadphase(),new SequentialImpulseConstraintSolver(),configuration);
         world.setGravity(new Vector3f(0,-9.81F,0));world.getSolverInfo().numIterations=30;
+        // Separating an overlap with an animated opponent must not become
+        // launch velocity that drives a connected limb through a thin floor.
+        world.getSolverInfo().splitImpulse=true;world.getSolverInfo().splitImpulsePenetrationThreshold=-.003F;
         for(var element:definition.getAsJsonArray("bodies"))
         {
             var row=element.getAsJsonObject();String name=row.get("name").getAsString();var dimensions=row.getAsJsonArray("size");
@@ -49,13 +54,16 @@ public final class ArticulatedBody implements AutoCloseable
             if(row.has("hulls")&&!row.getAsJsonArray("hulls").isEmpty())
             {
                 List<Vector3f> surface=new ArrayList<>();
-                CompoundShape compound=new CompoundShape();Transform identity=new Transform();identity.setIdentity();
+                var envelope=new com.bulletphysics.util.ObjectArrayList<Vector3f>();
                 for(var hull:row.getAsJsonArray("hulls"))
                 {
-                    var points=new com.bulletphysics.util.ObjectArrayList<Vector3f>();for(var point:hull.getAsJsonArray()){var vertex=vector(point.getAsJsonArray());points.add(vertex);surface.add(vertex);}
-                    ConvexHullShape convex=new ConvexHullShape(points);convex.setMargin(.003F);compound.addChildShape(identity,convex);
+                    for(var point:hull.getAsJsonArray()){var vertex=vector(point.getAsJsonArray());envelope.add(vertex);surface.add(vertex);}
                 }
-                shape=compound;
+                // JBullet's CCD path explicitly skips CompoundShape. A rigid
+                // anatomical segment uses its convex envelope so fast falls
+                // cannot tunnel through thin Minecraft floors. Hit queries
+                // still use the original separate armor hull planes.
+                shape=new ConvexHullShape(envelope);
                 surfaceVertices.put(name,List.copyOf(surface));
             }
             var bind=transform(row.getAsJsonArray("bind"));binds.put(name,bind);
@@ -94,6 +102,34 @@ public final class ArticulatedBody implements AutoCloseable
     }
     public void clearTerrain()
     {for(var body:scenery)world.removeRigidBody(body);scenery.clear();}
+    public void beginActorFrame(){actorFrame.clear();}
+    public void actor(String id,JsonObject definition,Map<String,org.joml.Matrix4f> deformation,org.joml.Matrix4f frame)
+    {
+        for(var element:definition.getAsJsonArray("bodies"))
+        {
+            var row=element.getAsJsonObject();String name=row.get("name").getAsString();
+            if(!name.startsWith("torso_")&&!name.startsWith("leg_")&&!name.startsWith("shin_")&&!name.equals("head"))continue;
+            String key=id+":"+name;actorFrame.add(key);Transform at=transform(new org.joml.Matrix4f(frame).mul(deformation.get(name)));at.mul(transform(row.getAsJsonArray("bind")));
+            var body=actors.get(key);
+            if(body==null)
+            {
+                var shape=new CompoundShape();var identity=new Transform();identity.setIdentity();
+                for(var hull:row.getAsJsonArray("hulls"))
+                {
+                    var points=new com.bulletphysics.util.ObjectArrayList<Vector3f>();for(var vertex:hull.getAsJsonArray())points.add(vector(vertex.getAsJsonArray()));
+                    var convex=new ConvexHullShape(points);convex.setMargin(.003F);shape.addChildShape(identity,convex);
+                }
+                body=makeBody(0,shape,at);world.removeRigidBody(body);
+                body.setCollisionFlags((body.getCollisionFlags()&~CollisionFlags.STATIC_OBJECT)|CollisionFlags.KINEMATIC_OBJECT);body.setActivationState(4);body.setUserPointer("other-actor");
+                // Re-register after setting the type; a static proxy retained
+                // the wrong broadphase mask and kinematic world membership.
+                world.addRigidBody(body,com.bulletphysics.collision.broadphase.CollisionFilterGroups.KINEMATIC_FILTER,com.bulletphysics.collision.broadphase.CollisionFilterGroups.DEFAULT_FILTER);actors.put(key,body);
+            }
+            body.setCenterOfMassTransform(at);body.setInterpolationWorldTransform(at);body.getMotionState().setWorldTransform(at);
+        }
+    }
+    public void endActorFrame()
+    {var it=actors.entrySet().iterator();while(it.hasNext()){var e=it.next();if(!actorFrame.contains(e.getKey())){world.removeRigidBody(e.getValue());it.remove();}}world.updateAabbs();}
     public void impulse(String bone,org.joml.Vector3f point,org.joml.Vector3f impulse)
     {
         var body=bodies.getOrDefault(bone,bodies.get("torso_upper"));var origin=body.getCenterOfMassPosition(new Vector3f());
@@ -115,7 +151,7 @@ public final class ArticulatedBody implements AutoCloseable
         }
     }
     public void step(float seconds)
-    {if(closed)throw new IllegalStateException("Closed body");world.stepSimulation(Math.min(seconds,.10F),8,1F/120);}
+    {if(closed)throw new IllegalStateException("Closed body");world.stepSimulation(Math.min(seconds,.10F),16,1F/240);}
     public void controlledPose(Map<String,org.joml.Matrix4f> deformations)
     {
         for(var entry:bodies.entrySet())
@@ -156,5 +192,5 @@ public final class ArticulatedBody implements AutoCloseable
         return new Frame(Map.copyOf(result),min,max,speed,contacts,impulse,impactPoint);
     }
     @Override public void close()
-    {if(closed)return;for(var joint:joints)world.removeConstraint(joint);for(var body:bodies.values())world.removeRigidBody(body);for(var body:scenery)world.removeRigidBody(body);closed=true;}
+    {if(closed)return;for(var joint:joints)world.removeConstraint(joint);for(var body:bodies.values())world.removeRigidBody(body);for(var body:scenery)world.removeRigidBody(body);for(var body:actors.values())world.removeRigidBody(body);closed=true;}
 }

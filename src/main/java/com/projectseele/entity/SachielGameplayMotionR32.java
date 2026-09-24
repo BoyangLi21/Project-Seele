@@ -46,6 +46,7 @@ public final class SachielGameplayMotionR32
                 clips.put(entry.getKey().substring(4),new Clip(rotations,positions,travel,c.get("contact_phase").getAsFloat(),c.get("leading_side").getAsString()));
             }
             boolean directed=json.has("combat_foundation")&&json.get("combat_foundation").getAsInt()>=34;
+            PHRASES=json.has("combat_foundation")&&json.get("combat_foundation").getAsInt()>=36;
             float stride=directed?json.getAsJsonObject("clips").getAsJsonObject("r32_advance").get("stride_blocks").getAsFloat():15;
             cached=Optional.of(new Data(names.toArray(String[]::new),Map.copyOf(rig),Map.copyOf(clips),directed,stride));return cached.get();
         }
@@ -53,6 +54,8 @@ public final class SachielGameplayMotionR32
     }
     public static boolean ready(){return data()!=null;}
     public static boolean directed(){return ready()&&data().directed;}
+    public static boolean phrases(){return ready()&&data().clips.containsKey("guard")&&PHRASES;}
+    private static boolean PHRASES;
     public static float stride(){return data().stride;}
     public static String name(int mode){return switch(mode){case SachielStrike.PILE->"cross";case SachielStrike.HOOK->"hook";case SachielStrike.OVERHEAD->"heavy";case SachielStrike.SHOVE->"shove";case SachielStrike.STOMP->"stomp";default->"jab";};}
     public static boolean left(int mode){return data().clips.get(name(mode)).side.equals("l");}
@@ -91,7 +94,7 @@ public final class SachielGameplayMotionR32
     }
     public static SachielStrike.Frame contact(SachielEntity e,float age,float partial,boolean left)
     {
-        var pose=pose(e,age);com.projectseele.physics.CombatBodyDynamics.normalize(e,pose);String side=left?"l":"r",name=e.strikeMode()==SachielStrike.STOMP?"foot_"+side:"hand_"+side;
+        var pose=SachielBodyPoseR35.sampleAt(e,age,partial);String side=left?"l":"r",name=e.strikeMode()==SachielStrike.STOMP?"foot_"+side:"hand_"+side;
         var matrix=SachielStrike.root(e,partial);var local=pose.matrix(name).transformPosition(new Vector3f(pose.rig.get(name).pivot()));var hand=new Vec3(matrix.transformPosition(local));
         String upstream=e.strikeMode()==SachielStrike.STOMP?"shin_"+side:"forearm_"+side;
         var elbow=new Vec3(matrix.transformPosition(pose.matrix(upstream).transformPosition(new Vector3f(pose.rig.get(upstream).pivot()))));

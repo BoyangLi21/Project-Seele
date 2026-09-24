@@ -943,17 +943,7 @@ public final class EvaMotionEngineV2
     static Vector3f motionQuaternionToAuthoredEuler(
             Quaternionf rotation)
     {
-        double x = rotation.x;
-        double y = rotation.y;
-        double z = rotation.z;
-        double w = rotation.w;
-        double eulerX = Math.atan2(2.0D * (w * x + y * z),
-                1.0D - 2.0D * (x * x + y * y));
-        double sinY = 2.0D * (w * y - z * x);
-        double eulerY = Math.asin(Mth.clamp(sinY, -1.0D, 1.0D));
-        double eulerZ = Math.atan2(2.0D * (w * z + x * y),
-                1.0D - 2.0D * (y * y + z * z));
-        return new Vector3f((float)eulerX, (float)eulerY, (float)eulerZ);
+        return QuaternionChannels.euler(rotation);
     }
 
     private static double liveActionHalfLife(boolean kick,

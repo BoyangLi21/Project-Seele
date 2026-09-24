@@ -26,7 +26,14 @@ public final class SachielTacticsR34 extends Goal
         return Mth.positiveModulo(now+partial*speed/SachielGameplayMotionR32.stride(),1);
     }
     public static Vector3f motion(SachielEntity actor){return new Vector3f(actor.getEntityData().get(MOTION));}
-    @Override public boolean canUse(){return SachielGameplayMotionR32.directed()&&!actor.isFirstBattleActive()&&!actor.isSelfDestructing()&&actor.getTarget()!=null&&actor.getTarget().isAlive();}
+    @Override public boolean canUse(){return SachielGameplayMotionR32.directed()&&!SachielGameplayMotionR32.phrases()&&!actor.isFirstBattleActive()&&!actor.isSelfDestructing()&&actor.getTarget()!=null&&actor.getTarget().isAlive();}
+    public static void recordMotion(SachielEntity actor,Vec3 delta)
+    {
+        double angle=Math.toRadians(actor.getYRot());float right=(float)(delta.x*Math.cos(angle)+delta.z*Math.sin(angle)),front=(float)(-delta.x*Math.sin(angle)+delta.z*Math.cos(angle));
+        actor.getEntityData().set(MOTION,new Vector3f(right,0,front));
+        float old=actor.getEntityData().get(PHASE),next=Mth.positiveModulo(old+(float)delta.horizontalDistance()/SachielGameplayMotionR32.stride(),1);actor.getEntityData().set(PHASE,next);
+        if(delta.horizontalDistance()>.05&&(next<old||old<.5F&&next>=.5F))CombatFoleyR36.step(actor,actor.position(),false,1);
+    }
     @Override public boolean requiresUpdateEveryTick(){return true;}
     @Override public void stop(){velocity=Vec3.ZERO;actor.getEntityData().set(MOTION,new Vector3f());actor.getNavigation().stop();}
     @Override public void tick()

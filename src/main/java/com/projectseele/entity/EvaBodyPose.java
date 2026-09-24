@@ -16,7 +16,7 @@ import org.joml.Vector3f;
 public final class EvaBodyPose
 {
     public record Bone(String name,String parent,Vector3f pivot,Quaternionf bindRotation) {}
-    private record Clip(float duration,Quaternionf[][] rotations,Vector3f[][] positions) {}
+    private record Clip(float duration,String[] names,Quaternionf[][] rotations,Vector3f[][] positions) {}
     private record Data(String[] names,Map<String,Integer> index,Map<String,Clip> clips,
                         Map<Integer,Map<String,Bone>> rigs,Map<String,Vector3f[]> support,
                         JsonObject prone,JsonObject grip,JsonObject mocap,Map<Integer,Vector3f> eyes,Map<Integer,Map<String,Vector3f[]>> rigSupport,
@@ -84,7 +84,7 @@ public final class EvaBodyPose
                         ps[f][b]=v.mul(-1,1,1).div(16);
                     }
                 }
-                clips.put(e.getKey(),new Clip(c.get("duration_seconds").getAsFloat(),qs,ps));
+                clips.put(e.getKey(),new Clip(c.get("duration_seconds").getAsFloat(),names,qs,ps));
             }
             Map<Integer,Map<String,Bone>> rigs=new HashMap<>();
             for(int variant=0;variant<5;variant++)
@@ -136,8 +136,12 @@ public final class EvaBodyPose
     private static JsonObject object(JsonObject p,String n){return p.has(n)?p.getAsJsonObject(n):new JsonObject();}
     private static Map<String,Clip> readCombatClipsR31(JsonObject capture,String[] names)
     {
-        var order=capture.getAsJsonArray("bones");if(order.size()!=names.length)throw new IllegalArgumentException("R31 capture bone count");
-        for(int i=0;i<names.length;i++)if(!order.get(i).getAsString().equals(names[i]))throw new IllegalArgumentException("R31 capture bone order");
+        var order=capture.getAsJsonArray("bones");var channels=new ArrayList<String>();
+        for(var value:order)channels.add(value.getAsString());
+        if(new HashSet<>(channels).size()!=channels.size()||!channels.containsAll(Arrays.asList(names)))throw new IllegalArgumentException("Combat capture has missing or duplicate bones");
+        // Each capture owns its channel order. The old fixed locomotion order
+        // omitted thumbs and cannot describe the UN hand adapters.
+        names=channels.toArray(String[]::new);
         Map<String,Clip> result=new HashMap<>();
         for(var entry:capture.getAsJsonObject("clips").entrySet())
         {
@@ -152,7 +156,7 @@ public final class EvaBodyPose
                     positions[f][b]=p.mul(-1,1,1).div(16);
                 }
             }
-            result.put(entry.getKey(),new Clip(clip.get("duration_seconds").getAsFloat(),rotations,positions));
+            result.put(entry.getKey(),new Clip(clip.get("duration_seconds").getAsFloat(),names,rotations,positions));
         }
         return Map.copyOf(result);
     }
@@ -196,8 +200,12 @@ public final class EvaBodyPose
     private static Sample clip(Data d,int variant,String name,float phase)
     {
         var c=d.combatClips().getOrDefault(variant,Map.of()).getOrDefault(name,d.clips().get(name));var result=new Sample(d.rigs().get(variant));float f=Mth.clamp(phase,0,1)*(c.rotations().length-1);int a=(int)f,b=Math.min(a+1,c.rotations().length-1);
-        for(int i=0;i<d.names().length;i++){result.rotations.put(d.names()[i],new Quaternionf(c.rotations()[a][i]).slerp(c.rotations()[b][i],f-a));result.positions.put(d.names()[i],new Vector3f(c.positions()[a][i]).lerp(c.positions()[b][i],f-a));}
-        for(var bone:result.rig.values())if(bone.name().contains("_axis_"))result.rotations.put(bone.name(),new Quaternionf(bone.bindRotation()));
+        for(int i=0;i<c.names().length;i++)
+        {
+            String n=c.names()[i];if(!result.rig.containsKey(n))throw new IllegalArgumentException("Combat capture bone absent from rig: "+n);
+            result.rotations.put(n,new Quaternionf(c.rotations()[a][i]).slerp(c.rotations()[b][i],f-a));result.positions.put(n,new Vector3f(c.positions()[a][i]).lerp(c.positions()[b][i],f-a));
+        }
+        for(var bone:result.rig.values())if(bone.name().contains("_axis_")&&!Arrays.asList(c.names()).contains(bone.name()))result.rotations.put(bone.name(),new Quaternionf(bone.bindRotation()));
         return result;
     }
     private static Sample mix(Sample a,Sample b,float amount)
@@ -326,7 +334,7 @@ public final class EvaBodyPose
         preserveJointCentres(body);
         EvaTerrainSupport.apply(entity,body);body.dirty();
         var beat=CombatFeelR31.beat(entity);
-        if(beat!=null&&beat.kind()==CombatFeelR31.STAGGER&&!entity.isPilotProne()&&!entity.isPilotCrouching()&&entity.onGround())
+        if(beat!=null&&beat.kind()==CombatFeelR31.STAGGER&&!CombatReactionsR36.enabled(entity)&&!entity.isPilotProne()&&!entity.isPilotCrouching()&&entity.onGround())
         {
             float age=CombatFeelR31.age(entity,partial);
             float weight=(float)(CombatMotionR29.ease(age/2)*(1-CombatMotionR29.ease((age-7)/9)));
@@ -345,7 +353,7 @@ public final class EvaBodyPose
             }
             preserveJointCentres(body);body.dirty();
         }
-        EvaImpactResponse.applyBody(body,entity,partial);body.dirty();
+        if(!CombatReactionsR36.active(entity))EvaImpactResponse.applyBody(body,entity,partial);body=CombatReactionsR36.apply(entity,body,partial);body.dirty();
         if(beat!=null&&(beat.kind()==CombatFeelR31.DOWN||beat.kind()==CombatFeelR31.THROWN))
         {
             float age=CombatFeelR31.age(entity,partial);

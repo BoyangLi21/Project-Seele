@@ -114,7 +114,7 @@ public final class EvaCombatSupportR33
                     {
                         updated.putDouble(side+"x",world.x);updated.putDouble(side+"y",floor.getLocation().y);updated.putDouble(side+"z",world.z);
                         updated.putDouble(side+"startY",world.y);updated.putLong(side+"plant",e.level().getGameTime());
-                        e.level().playSound(null,world.x,floor.getLocation().y,world.z,com.projectseele.registry.ModSounds.EVA_FOOT_CONCRETE.get(),net.minecraft.sounds.SoundSource.PLAYERS,2.8F,.94F);
+                        CombatFoleyR36.step(e,new Vec3(world.x,floor.getLocation().y,world.z),false,1.1F);
                     }
                     else updated.putBoolean(side+"active",false);
                 }
@@ -131,6 +131,7 @@ public final class EvaCombatSupportR33
     public static void apply(EvaUnit01Entity e,EvaBodyPose.Sample p,float partial)
     {
         TARGETS.remove(e);
+        if(CombatReactionsR36.active(e))return;
         if(!ready(e)||!supported(e)||!EvaGameplayMotionR32.owns(e,partial)||e.isNervLogisticsLocked()||EvaShutdownR30.disabled(e))return;
         var beat=CombatFeelR31.beat(e);if(beat!=null&&(beat.kind()==CombatFeelR31.DOWN||beat.kind()==CombatFeelR31.THROWN))return;
         var t=e.getEntityData().get(CONTACTS);if(t.isEmpty()||t.getInt("weapon")!=EvaUnit01Entity.WEAPON_FISTS)return;

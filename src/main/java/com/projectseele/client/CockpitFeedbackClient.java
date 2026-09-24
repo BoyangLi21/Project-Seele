@@ -33,7 +33,7 @@ public final class CockpitFeedbackClient
         {
             if(actor()!=eva||!eva.isAlive()||!eva.isPoweredOn()){stop();return;}
             float speed=(float)Math.min(1,eva.getDeltaMovement().horizontalDistance()/1.6);
-            float wanted=eva.isFirstBattleActive()?0:.025F+.055F*speed;
+            float wanted=eva.isFirstBattleActive()?0:.03F*speed;
             volume+=(wanted-volume)*.12F;pitch+=(.82F+speed*.25F-pitch)*.10F;
         }
     }

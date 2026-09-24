@@ -237,7 +237,10 @@ public final class CombatR31Review
             }
             return;
         }
-        if(sawDown&&!CombatFeelR31.restrained(eva)&&eva.onGround())
+        // Keep the original two-hit requirement. A first hit can already
+        // knock the body down; recovering from it must not end the review
+        // before the second independent incoming strike can be attempted.
+        if(sawDown&&contactHits>=2&&!CombatFeelR31.restrained(eva)&&eva.onGround())
         {
             record("angel_actual_hits_and_knockdown",contactHits>=2&&maximumEvaReactionMove>.5&&eva.getY()>=FLOOR+.5,"actual_damage",initialEvaHealth-eva.getHealth());
             var last=cases.get(cases.size()-1).getAsJsonObject();last.addProperty("hits",contactHits);last.addProperty("eva_displacement",maximumEvaReactionMove);next(Stage.FINISH);return;

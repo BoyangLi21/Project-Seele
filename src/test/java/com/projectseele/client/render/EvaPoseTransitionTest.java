@@ -59,8 +59,26 @@ public final class EvaPoseTransitionTest
             throw new AssertionError("Pose discontinuity or unsettled endpoint");
     }
 
+    private static void quaternionChannels()
+    {
+        var random=new java.util.Random(360041);
+        for(int i=0;i<2400;i++)
+        {
+            float x=(random.nextFloat()*2-1)*(float)Math.PI,z=(random.nextFloat()*2-1)*(float)Math.PI;
+            float y=i<1200?(i%2==0?1:-1)*(float)(Math.PI/2+(i%3-1)*1e-6):(random.nextFloat()*2-1)*(float)Math.PI;
+            var original=new Quaternionf().rotationZYX(z,y,x);
+            var channels=QuaternionChannels.euler(original);
+            var restored=new Quaternionf().rotationZYX(channels.z,channels.y,channels.x);
+            for(var axis:new Vector3f[]{new Vector3f(1,0,0),new Vector3f(0,1,0),new Vector3f(0,0,1)})
+                if(original.transform(new Vector3f(axis)).distance(restored.transform(new Vector3f(axis)))>2e-4F)
+                    throw new AssertionError("Rendered rotation changed near a vertical axis: "+i);
+        }
+        System.out.println("Quaternion channels: 2400 regular and gimbal-axis orientations retain all three basis vectors PASS");
+    }
+
     public static void main(String[] args) throws Exception
     {
+        quaternionChannels();
         Object start = pose(3, 3.12F);
         Object end = pose(43, -3.12F);
         Object track = TRACK_CTOR.newInstance(start);

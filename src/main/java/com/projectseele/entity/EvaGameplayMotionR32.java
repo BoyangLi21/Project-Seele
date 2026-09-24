@@ -23,18 +23,31 @@ public final class EvaGameplayMotionR32
     private static final EntityDataAccessor<Float> GUARD=SynchedEntityData.defineId(EvaUnit01Entity.class,EntityDataSerializers.FLOAT);
     private static final EntityDataAccessor<CompoundTag> LAND_FROM=SynchedEntityData.defineId(EvaUnit01Entity.class,EntityDataSerializers.COMPOUND_TAG);
     private static final EntityDataAccessor<CompoundTag> ACTION_FROM=SynchedEntityData.defineId(EvaUnit01Entity.class,EntityDataSerializers.COMPOUND_TAG);
+    private static final EntityDataAccessor<Boolean> LOW_TARGET=SynchedEntityData.defineId(EvaUnit01Entity.class,EntityDataSerializers.BOOLEAN);
+    private static final EntityDataAccessor<Boolean> SERVER_MOVEMENT=SynchedEntityData.defineId(EvaUnit01Entity.class,EntityDataSerializers.BOOLEAN);
+    private static final EntityDataAccessor<CompoundTag> RELEASE_FROM=SynchedEntityData.defineId(EvaUnit01Entity.class,EntityDataSerializers.COMPOUND_TAG);
     private static final WeakIdentityMap<EvaUnit01Entity,State> STATES=new WeakIdentityMap<>();
     private static final Map<Integer,Optional<JsonObject>> PROFILES=new HashMap<>();
     private static final class State {boolean air,guard;double y;float velocity;int scan;Vec3 previousContact;}
     public static boolean bootstrap(){return true;}
-    public static void define(SynchedEntityData d){d.define(AIR,-1L);d.define(LAND,-1L);d.define(TAKEOFF,-1L);d.define(FLOOR,-1000000F);d.define(VERTICAL,0F);d.define(GUARD,0F);d.define(LAND_FROM,new CompoundTag());d.define(ACTION_FROM,new CompoundTag());}
+    public static void define(SynchedEntityData d){d.define(AIR,-1L);d.define(LAND,-1L);d.define(TAKEOFF,-1L);d.define(FLOOR,-1000000F);d.define(VERTICAL,0F);d.define(GUARD,0F);d.define(LAND_FROM,new CompoundTag());d.define(ACTION_FROM,new CompoundTag());d.define(LOW_TARGET,false);d.define(SERVER_MOVEMENT,false);d.define(RELEASE_FROM,new CompoundTag());}
+    public static boolean serverMovement(EvaUnit01Entity e){return e.getEntityData().get(SERVER_MOVEMENT);}
     public static boolean prepareJump(EvaUnit01Entity e)
     {
         if(!ready(e))return true;
         if(age(e,TAKEOFF,0)<0){beginAction(e);e.getEntityData().set(TAKEOFF,e.level().getGameTime());return false;}
         return age(e,TAKEOFF,0)>=3;
     }
-    public static void beginAction(EvaUnit01Entity e){if(ready(e)&&!e.level().isClientSide){var pose=EvaBodyPose.sample(e,0);EvaCombatSupportR33.capture(e,pose);e.getEntityData().set(ACTION_FROM,EvaShutdownR30.encode(pose));}}
+    public static void beginAction(EvaUnit01Entity e)
+    {
+        if(!ready(e)||e.level().isClientSide)return;
+        var pose=EvaBodyPose.sample(e,0);EvaCombatSupportR33.capture(e,pose);e.getEntityData().set(ACTION_FROM,EvaShutdownR30.encode(pose));
+        e.getEntityData().set(RELEASE_FROM,new CompoundTag());
+        var target=e.level().getEntitiesOfClass(net.minecraft.world.entity.LivingEntity.class,e.getBoundingBox().inflate(36),a->a instanceof Angel&&a.isAlive()
+                &&a.position().subtract(e.position()).multiply(1,0,1).normalize().dot(e.getForward())>.35)
+                .stream().min(java.util.Comparator.comparingDouble(e::distanceToSqr)).orElse(null);
+        e.getEntityData().set(LOW_TARGET,phrases(e)&&target!=null&&com.projectseele.physics.CombatBodyDynamics.active(target)&&target.getBoundingBox().getYsize()<36);
+    }
     public static synchronized JsonObject profile(int variant)
     {
         return PROFILES.computeIfAbsent(variant,key->{
@@ -46,7 +59,13 @@ public final class EvaGameplayMotionR32
     public static int variant(EvaUnit01Entity e){return e instanceof EvaPrototypeEntity un?3+un.getUNSerial():e.getUnitVariant();}
     public static float guardWeight(EvaUnit01Entity e){return e.getEntityData().get(GUARD);}
     public static boolean ready(EvaUnit01Entity e){return profile(variant(e))!=null;}
+    public static boolean sharedHands(EvaUnit01Entity e,float partial)
+    {
+        var p=profile(variant(e));return e.getWeapon()==EvaUnit01Entity.WEAPON_FISTS&&p!=null
+                &&p.has("hand_pose_revision")&&p.get("hand_pose_revision").getAsInt()>=2&&owns(e,partial);
+    }
     public static boolean directed(EvaUnit01Entity e){var p=profile(variant(e));return p!=null&&p.has("combat_foundation")&&p.get("combat_foundation").getAsInt()>=34;}
+    public static boolean phrases(EvaUnit01Entity e){var p=profile(variant(e));return p!=null&&p.has("combat_foundation")&&p.get("combat_foundation").getAsInt()>=36;}
     public static boolean planted(EvaUnit01Entity e,String side,float partial)
     {
         if(!directed(e)||!EvaCombatSupportR33.strike(e))return true;
@@ -55,8 +74,21 @@ public final class EvaGameplayMotionR32
         var frames=clip(e,name).getAsJsonArray("frames");var f=frames.get(Math.min(frames.size()-1,Math.round(Mth.clamp(phase,0,1)*(frames.size()-1)))).getAsJsonObject();
         return f.getAsJsonArray("foot_contact").get(side.equals("l")?0:1).getAsBoolean();
     }
-    private static JsonObject clip(EvaUnit01Entity e,String name){return profile(variant(e)).getAsJsonObject("clips").getAsJsonObject("r32_"+name);}
+    private static String resolve(EvaUnit01Entity e,String name)
+    {return phrases(e)&&e.getEntityData().get(LOW_TARGET)&&java.util.Set.of("jab","cross","hook","heavy").contains(name)?"low_"+name:name;}
+    private static JsonObject clip(EvaUnit01Entity e,String name){return profile(variant(e)).getAsJsonObject("clips").getAsJsonObject("r32_"+resolve(e,name));}
     public static float contactPhase(EvaUnit01Entity e,String name){return clip(e,name).get("contact_phase").getAsFloat();}
+    public static float releasePhase(EvaUnit01Entity e)
+    {
+        var c=clip(e,ordinary(e.getOrdinaryAttackStage()));
+        return c.has("release_phase")?Mth.clamp(c.get("release_phase").getAsFloat(),.65F,.98F):.76F;
+    }
+    public static EvaBodyPose.Sample committedContactPose(EvaUnit01Entity e)
+    {
+        if(!phrases(e)||e.getEntityData().get(LOW_TARGET)||e.getOrdinaryAttackStage()<0&&!e.isHeavyMotionActive()&&!EvaBerserkMotionR34.striking(e))return null;
+        String name=EvaBerserkMotionR34.striking(e)?EvaBerserkMotionR34.name(e):e.isHeavyMotionActive()?"heavy":ordinary(e.getOrdinaryAttackStage());
+        return EvaBodyPose.gameplayClip(e,resolve(e,name),contactPhase(e,name));
+    }
     public static String side(EvaUnit01Entity e,String name){return clip(e,name).get("leading_side").getAsString();}
     public static String ordinary(int stage){return switch(stage){case 1->"cross";case 2->"hook";default->"jab";};}
     public static float phase(EvaUnit01Entity e,String name,float progress)
@@ -105,13 +137,22 @@ public final class EvaGameplayMotionR32
         if(blocked){e.getEntityData().set(AIR,-1L);e.getEntityData().set(LAND,-1L);}
         state.air=air;
         if(air||blocked||age(e,TAKEOFF,0)>8)e.getEntityData().set(TAKEOFF,-1L);
-        if(++state.scan%8==0)
+        if(++state.scan%8==0||serverMovement(e)&&!state.guard&&!blocked)
         {
             boolean nearby=!blocked&&e.isPoweredOn()&&e.getWeapon()==EvaUnit01Entity.WEAPON_FISTS&&!e.isPilotProne()&&!e.isPilotCrouching()
                     &&!e.level().getEntitiesOfClass(net.minecraft.world.entity.LivingEntity.class,e.getBoundingBox().inflate(64,40,64),a->a instanceof Angel&&a.isAlive()).isEmpty();
             state.guard=nearby;
         }
         e.getEntityData().set(GUARD,Mth.approach(e.getEntityData().get(GUARD),state.guard?1:0,EvaCombatSupportR33.ready(e)?.045F:.14F));
+        // Keep one movement owner throughout an engagement. Alternating local
+        // vehicle prediction and server poses on every punch/recoil made their
+        // different-time collision queries repeatedly correct each other.
+        boolean hardBlock=e.isNervLogisticsLocked()||e.isFirstBattleActive()||EvaShutdownR30.disabled(e)
+                ||e instanceof EvaPrototypeEntity un&&un.isUNFlying()||e.getPilotEntity()==null||!phrases(e);
+        boolean owned=serverMovement(e);
+        if(hardBlock)owned=false;
+        else if(!com.projectseele.physics.CombatBodyDynamics.active(e)&&e.onGround())owned=state.guard;
+        e.getEntityData().set(SERVER_MOVEMENT,owned);
     }
     public static boolean owns(EvaUnit01Entity e,float partial)
     {
@@ -123,6 +164,25 @@ public final class EvaGameplayMotionR32
                 ||e.getWeapon()==EvaUnit01Entity.WEAPON_FISTS&&!e.hasLiveActionForRender(partial)&&!e.isPilotProne()&&!e.isPilotCrouching()&&e.getEntityData().get(GUARD)>.01F;
     }
     public static EvaBodyPose.Sample apply(EvaUnit01Entity e,EvaBodyPose.Sample base,float partial)
+    {
+        var pose=applyAction(e,base,partial);var tag=e.getEntityData().get(RELEASE_FROM);
+        if(tag.isEmpty()||!owns(e,partial)||e.getOrdinaryAttackStage()>=0||e.isHeavyMotionActive()||airAge(e,partial)>=0||CombatReactionsR36.active(e)||EvaCombatR31.action(e)!=0)return pose;
+        float age=e.level().getGameTime()-tag.getLong("release_at")+partial;
+        if(age<0||age>=6)return pose;
+        var from=EvaBodyPose.neutralForTransportR32(e);EvaShutdownR30.decode(tag,from);
+        Vec3 origin=e.level().isClientSide?e.getPosition(partial):e.position();
+        var shift=new Vector3f((float)(tag.getDouble("release_x")-origin.x),0,(float)(tag.getDouble("release_z")-origin.z))
+                .rotateY(-(180-e.getYRot())*Mth.DEG_TO_RAD).div(com.projectseele.entity.EvaScale.RENDER_SCALE);
+        from.positions.get("root").add(shift);from.dirty();float u=age/6;u=u*u*(3-2*u);
+        return EvaBodyPose.blend(from,pose,u);
+    }
+    public static void releaseToMovement(EvaUnit01Entity e)
+    {
+        if(e.level().isClientSide||!phrases(e))return;
+        var tag=EvaShutdownR30.encode(EvaBodyPose.sample(e,0));tag.putLong("release_at",e.level().getGameTime());tag.putDouble("release_x",e.getX());tag.putDouble("release_z",e.getZ());
+        e.getEntityData().set(RELEASE_FROM,tag);
+    }
+    private static EvaBodyPose.Sample applyAction(EvaUnit01Entity e,EvaBodyPose.Sample base,float partial)
     {
         if(!owns(e,partial))return base;
         if(EvaBerserkMotionR34.active(e))return actionPose(e,EvaBerserkMotionR34.name(e),EvaBerserkMotionR34.phase(e,partial),base,partial);
@@ -175,10 +235,10 @@ public final class EvaGameplayMotionR32
     }
     private static EvaBodyPose.Sample actionPose(EvaUnit01Entity e,String name,float progress,EvaBodyPose.Sample base,float partial)
     {
-        var pose=EvaBodyPose.gameplayClip(e,name,phase(e,name,progress));
+        var pose=EvaBodyPose.gameplayClip(e,resolve(e,name),phase(e,name,progress));
         if(progress<.18F&&!e.getEntityData().get(ACTION_FROM).isEmpty())
         {var from=EvaBodyPose.neutralForTransportR32(e);EvaShutdownR30.decode(e.getEntityData().get(ACTION_FROM),from);return EvaBodyPose.blend(from,pose,progress/.18F);}
-        if(progress>.86F){var end=e.getEntityData().get(GUARD)>.5F?EvaBodyPose.gameplayClip(e,"guard",(e.level().getGameTime()%120+partial)/120F):base;pose=EvaBodyPose.blend(pose,end,(progress-.86F)/.14F);}
+        if(progress>.86F&&!phrases(e)){var end=e.getEntityData().get(GUARD)>.5F?EvaBodyPose.gameplayClip(e,"guard",(e.level().getGameTime()%120+partial)/120F):base;pose=EvaBodyPose.blend(pose,end,(progress-.86F)/.14F);}
         return pose;
     }
     public static Vec3 hand(EvaUnit01Entity e,String side,float partial)

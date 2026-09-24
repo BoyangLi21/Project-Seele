@@ -32,7 +32,7 @@ public final class CombatBodyDynamics
     private static final class State
     {
         CombatBodyProfiles.Profile profile;ArticulatedBody simulation;EvaBodyPose.Sample template,pose,resting;
-        boolean groundImpact;
+        boolean groundImpact,thrown;
         Vec3 origin,position;float yaw;AABB bounds,terrainCoverage;long started;int age,stable,recoveryAge=-1;float recoveryStart,recoveryYaw,groundY;Vector3f recoveryOffset,endShift;
     }
     private static final class ClientState
@@ -43,7 +43,7 @@ public final class CombatBodyDynamics
     {var p=CombatBodyProfiles.get(entity);return p!=null&&p.recovery()!=null;}
     public static boolean ownsGroundAction(EvaUnit01Entity eva)
     {
-        return eva.isMeleeWeapon()&&eva.hasLiveActionForRender(0)&&!eva.isVisuallyAirborneForRender()
+        return (EvaGameplayMotionR32.serverMovement(eva)||(eva.isMeleeWeapon()&&eva.hasLiveActionForRender(0)||CombatReactionsR36.ownsDisplacement(eva))&&!eva.isVisuallyAirborneForRender())
                 &&!eva.isNervLogisticsLocked()&&!eva.isLaunchSequenceActive()&&!eva.isFirstBattleActive()
                 &&!EvaShutdownR30.disabled(eva)&&available(eva);
     }
@@ -156,7 +156,7 @@ public final class CombatBodyDynamics
             release=CombatBodyProfiles.render(raw(entity,0),matrices,new Vector3f());
         }
         if(!start(entity,entity.getBoundingBox().getCenter(),velocity.normalize(),0,release))return false;
-        State state=SERVER.get(entity);if(state==null)return false;
+        State state=SERVER.get(entity);if(state==null)return false;state.thrown=true;
         state.simulation.velocity(velocity.toVector3f().rotateY(-(180-state.yaw)*Mth.DEG_TO_RAD).mul(20*SCALE));return true;
     }
     private static void addTerrain(ServerLevel level,LivingEntity entity,State s)
@@ -184,6 +184,22 @@ public final class CombatBodyDynamics
         AABB result=null;for(float x:new float[]{min.x,max.x})for(float y:new float[]{min.y,max.y})for(float z:new float[]{min.z,max.z})
         {Vec3 p=world(s,new Vector3f(x,y,z));AABB point=new AABB(p,p);result=result==null?point:result.minmax(point);}return result;
     }
+    private static void updateStandingActors(LivingEntity entity,State s)
+    {
+        if(!CombatReactionsR36.enabled(entity))return;s.simulation.beginActorFrame();
+        for(var other:entity.level().getEntitiesOfClass(LivingEntity.class,s.bounds.inflate(45),e->e!=entity&&(e instanceof EvaUnit01Entity||e instanceof SachielEntity)&&e.isAlive()&&!active(e)))
+        {
+            if(other instanceof EvaUnit01Entity eva&&(eva.isNervLogisticsLocked()||eva.isFirstBattleActive()||EvaAirTransportR31.active(eva)))continue;
+            // The throwing pair deliberately overlaps at the shoulder grip.
+            // Enable body contact after release, not inside the paired hold.
+            if(other instanceof EvaUnit01Entity eva&&EvaCombatR31.target(eva)==entity&&EvaCombatR31.action(eva)==EvaCombatR31.THROW)continue;
+            var profile=CombatBodyProfiles.get(other);if(profile==null)continue;
+            var pose=raw(other,0);AnatomicalLimbConstraints.apply(pose,profile);
+            var frame=new Matrix4f().translation(local(s,other.position())).rotateY((s.yaw-other.getYRot())*Mth.DEG_TO_RAD);
+            s.simulation.actor(other.getStringUUID(),profile.definition(),CombatBodyProfiles.physicalMatrices(pose,profile),frame);
+        }
+        s.simulation.endActorFrame();
+    }
     @SubscribeEvent public static void tick(TickEvent.ServerTickEvent event)
     {
         if(event.phase!=TickEvent.Phase.END)return;
@@ -205,7 +221,11 @@ public final class CombatBodyDynamics
                 s.age++;
                 if(s.recoveryAge<0)
                 {
-                    if(!s.terrainCoverage.deflate(8).contains(s.bounds.getCenter())||s.bounds.minY<s.terrainCoverage.minY+6)addTerrain((ServerLevel)entity.level(),entity,s);
+                    updateStandingActors(entity,s);
+                    var needed=s.bounds.inflate(12,8,12);
+                    if(!s.terrainCoverage.contains(new Vec3(needed.minX,needed.minY,needed.minZ))
+                            ||!s.terrainCoverage.contains(new Vec3(needed.maxX,needed.maxY,needed.maxZ)))
+                        addTerrain((ServerLevel)entity.level(),entity,s);
                     if(s.age>2)s.simulation.step(.05F);var frame=s.simulation.frame();s.bounds=worldBounds(s,frame.min(),frame.max());
                     if(!s.groundImpact&&s.age>5&&frame.groundImpulse()>4)
                     {s.groundImpact=true;groundImpact((ServerLevel)entity.level(),world(s,frame.impactPoint()));}
@@ -215,8 +235,8 @@ public final class CombatBodyDynamics
                     s.pose=CombatBodyProfiles.render(s.template,frame.deformation(),offset);stitch(s.pose,s.profile);
                     s.stable=frame.supportContacts()>1&&frame.speed()<.40F?s.stable+1:0;
                     var beat=CombatFeelR31.beat(entity);
-                    if(s.stable>0&&s.age>10&&beat!=null&&beat.kind()==CombatFeelR31.THROWN)
-                        CombatFeelR31.send(entity,CombatFeelR31.DOWN,beat.direction(),beat.strength(),64,0);
+                    if(s.stable>0&&s.age>10&&s.thrown)
+                    {s.thrown=false;CombatFeelR31.send(entity,CombatFeelR31.DOWN,beat==null?Vec3.ZERO:beat.direction(),beat==null?1:beat.strength(),64,0);}
                     if(s.age>18&&s.stable>=5&&entity.isAlive()&&!(entity instanceof EvaUnit01Entity eva&&EvaShutdownR30.disabled(eva)))beginRecovery(entity,s);
                 }
                 else recover(entity,s);

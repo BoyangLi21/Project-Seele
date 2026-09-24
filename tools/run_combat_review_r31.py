@@ -7,6 +7,16 @@ from launch_rendered_client_r17 import run_prepared,java_environment
 ROOT=Path(__file__).resolve().parents[1]
 WORLD='SEELE_FIELD_R31_REVIEW'
 
+def compiled_hash():
+    base=ROOT/'build/classes/java/main/com/projectseele';digest=hashlib.sha256();files=sorted(base.rglob('*.class'))
+    if not files:raise RuntimeError('Compile the current mod before a native review')
+    for source in (ROOT/'src/main/java/com/projectseele').rglob('*.java'):
+        target=base/source.relative_to(ROOT/'src/main/java/com/projectseele').with_suffix('.class')
+        if target.is_file() and source.stat().st_mtime>target.stat().st_mtime+.001:
+            raise RuntimeError('Source changed after compilation: '+source.relative_to(ROOT).as_posix())
+    for p in files:digest.update(p.relative_to(base).as_posix().encode()+b'\0');digest.update(p.read_bytes())
+    return digest.hexdigest()
+
 @contextmanager
 def temporary_motion(source):
     if source is None:yield;return
@@ -85,16 +95,17 @@ def main():
     if a.capture_audio:review_options.update(soundCategory_master='0.8',soundCategory_music='0.0',soundDevice='')
     if a.video:review_options['lang']='zh_cn'
     paths={p.name:p for p in (a.gameplay_motion_directory or ROOT/'run/projectseele-local-maps').glob('*gameplay_r32*.json')}
-    if a.body_physics_profiles:paths['articulated_bodies_r35.json']=a.body_physics_profiles
-    hashes={n:hashlib.sha256(p.read_bytes()).hexdigest() for n,p in paths.items()};began=time.time()
+    body=a.body_physics_profiles or ROOT/'run/projectseele-local-maps/articulated_bodies_r35.json'
+    if body.is_file():paths['articulated_bodies_r35.json']=body
+    hashes={n:hashlib.sha256(p.read_bytes()).hexdigest() for n,p in paths.items()};implementation=compiled_hash();began=time.time()
     with temporary_options(options,':',review_options):
         with temporary_options(ROOT/'run/config/oculus.properties','=',{'enableShaders':'false'}):
             from record_combat_pcm_r34 import capture
-            with temporary_motion(a.gameplay_motion_directory),capture(a.capture_audio):code=run_prepared(launch,java_environment()[1])
+            with temporary_motion(a.gameplay_motion_directory),capture(a.capture_audio,start_log=ROOT/'run/logs/latest.log'):code=run_prepared(launch,java_environment()[1])
     print('Combat review evidence: '+str(world/'Review'))
     candidates=[p for p in (world/'Review').glob('r3*_*.json') if p.name.startswith(('r31_combat_','r32_normal_')) and p.stat().st_mtime>=began]
     if candidates:
-        proof=json.loads(max(candidates,key=lambda p:p.stat().st_mtime).read_text());proof['inputs_sha256']=hashes
+        proof=json.loads(max(candidates,key=lambda p:p.stat().st_mtime).read_text());proof['inputs_sha256']=hashes;proof['implementation_sha256']=implementation
         media=(ROOT/'run'/proof['media']).resolve();(media/'server_evidence.json').write_text(json.dumps(proof,indent=2))
         print('Server evidence:',media/'server_evidence.json')
         if code==0 and not proof.get('passed'):print('Native review failed:',proof.get('error',''),proof.get('cases',[]));code=2

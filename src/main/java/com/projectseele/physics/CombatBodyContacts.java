@@ -39,7 +39,23 @@ public final class CombatBodyContacts
     public static double torsoFrontage(LivingEntity actor,Vec3 toward)
     {
         var profile=CombatBodyProfiles.get(actor);if(profile==null)return Double.NaN;
-        var pose=CombatBodyDynamics.raw(actor,0);var matrices=CombatBodyProfiles.physicalMatrices(pose,profile);
+        var pose=CombatBodyDynamics.raw(actor,0);
+        double current=frontage(actor,toward,profile,pose);
+        // Reserve the trunk space of the committed contact pose before a
+        // lunge. Checking only today's guard pose let the next shoulder/head
+        // animation grow through the opponent after both roots had stopped.
+        if(actor instanceof EvaUnit01Entity eva)
+        {
+            var next=EvaGameplayMotionR32.committedContactPose(eva);
+            if(next!=null)current=Math.max(current,frontage(actor,toward,profile,next));
+        }
+        else if(actor instanceof SachielEntity angel&&SachielGameplayMotionR32.phrases()&&angel.isStrikeActive())
+            current=Math.max(current,frontage(actor,toward,profile,SachielGameplayMotionR32.pose(angel,SachielStrike.contactStart(angel.strikeMode())+2)));
+        return current;
+    }
+    private static double frontage(LivingEntity actor,Vec3 toward,CombatBodyProfiles.Profile profile,EvaBodyPose.Sample pose)
+    {
+        var matrices=CombatBodyProfiles.physicalMatrices(pose,profile);
         var direction=toward.toVector3f().rotateY(-(180-actor.getYRot())*(float)Math.PI/180);float reach=Float.NEGATIVE_INFINITY;
         for(var part:parts(profile))if(part.bone.startsWith("torso_")||part.bone.equals("head"))
         {
@@ -77,6 +93,22 @@ public final class CombatBodyContacts
             }
         }
         return Float.isFinite(best)?Optional.of(from.lerp(to,best)):Optional.empty();
+    }
+    public static net.minecraft.world.phys.AABB coreBounds(LivingEntity actor)
+    {
+        var profile=CombatBodyProfiles.get(actor);if(profile==null)return actor.getBoundingBox();
+        var pose=CombatBodyDynamics.active(actor)?CombatBodyDynamics.sample(actor,0):CombatBodyDynamics.raw(actor,0);
+        var matrices=CombatBodyProfiles.physicalMatrices(pose,profile);net.minecraft.world.phys.AABB result=null;
+        for(var part:parts(profile))if(part.bone.startsWith("torso_"))
+        {
+            var transform=new Matrix4f(matrices.get(part.bone)).mul(part.bind);
+            for(var vertex:part.vertices)
+            {
+                var p=transform.transformPosition(new Vector3f(vertex)).div(CombatBodyProfiles.BLOCK_TO_PHYSICS).rotateY((180-actor.getYRot())*(float)Math.PI/180);
+                var v=actor.position().add(p.x,p.y,p.z);var box=new net.minecraft.world.phys.AABB(v,v);result=result==null?box:result.minmax(box);
+            }
+        }
+        return result==null?actor.getBoundingBox():result;
     }
     private CombatBodyContacts(){}
 }

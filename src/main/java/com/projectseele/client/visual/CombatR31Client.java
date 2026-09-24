@@ -21,6 +21,13 @@ import java.util.*;
 @Mod.EventBusSubscriber(modid="projectseele",value=Dist.CLIENT)
 public final class CombatR31Client
 {
+    private static final Map<String,Integer> receivedSounds=new java.util.concurrent.ConcurrentHashMap<>();
+    @SubscribeEvent public static void sound(net.minecraftforge.client.event.sound.PlaySoundEvent event)
+    {
+        if(!CombatR31Review.ENABLED||event.getSound()==null)return;
+        String id=event.getSound().getLocation().toString();
+        if(id.startsWith("projectseele:eva_")||id.startsWith("projectseele:sachiel_"))receivedSounds.merge(id,1,Integer::sum);
+    }
     public record View(Vec3 position,Vec3 target) {}
     public static View cameraView(float partial)
     {
@@ -111,6 +118,7 @@ public final class CombatR31Client
             {
                 var output=new JsonObject();output.add("frames",frames);output.add("hand_contacts",hands);output.add("production_key_inputs",keys);output.add("angel_draw_support",angelSoles);output.addProperty("server_failure",CombatR31Review.failure);
                 output.addProperty("dropped_capture_frames",droppedFrames);output.addProperty("capture_write_failure",frameWriteFailure);
+                var soundCounts=new JsonObject();receivedSounds.forEach(soundCounts::addProperty);output.add("received_combat_sounds",soundCounts);
                 output.add("normal_bones",normalBones);output.add("support_contacts_r33",supportContacts);output.add("render_performance",performance());Files.writeString(folder.resolve("render_performance.json"),new GsonBuilder().setPrettyPrinting().create().toJson(performance()));
                 Files.writeString(folder.resolve("client_evidence.json"),new GsonBuilder().setPrettyPrinting().create().toJson(output));
             }
@@ -142,7 +150,7 @@ public final class CombatR31Client
         long now=System.nanoTime();if(point.equals("before")&&now-boneAt<35_000_000)return;if(point.equals("before"))boneAt=now;else if(now-boneAt>25_000_000)return;
         var row=new JsonObject();row.addProperty("stage",CombatR31Review.stageName);row.addProperty("tick",CombatR31Review.stageTicks);row.addProperty("point",point);row.addProperty("action",com.projectseele.entity.EvaCombatR31.action(eva));row.addProperty("ordinary",eva.getOrdinaryAttackStage());row.addProperty("live_phase",eva.combatPhaseR31());row.addProperty("gameplay",com.projectseele.entity.EvaGameplayMotionR32.ready(eva));row.addProperty("gameplay_air_age",com.projectseele.entity.EvaGameplayMotionR32.airAge(eva,0));row.addProperty("ground",eva.onGround());row.addProperty("airborne",eva.isVisuallyAirborneForRender());row.addProperty("y",eva.getY());
         var beat=com.projectseele.entity.CombatFeelR31.beat(eva);row.addProperty("reaction",beat==null?0:beat.kind());
-        var bones=new JsonObject();for(String n:List.of("root","torso_lower","torso_upper","head","arm_l","arm_r","forearm_l","forearm_r","wrist_l","wrist_r","hand_l","hand_r","leg_l","leg_r","shin_l","shin_r","ankle_l","ankle_r","foot_l","foot_r"))model.getBone(n).ifPresent(b->{var values=new JsonArray();for(float value:new float[]{b.getRotX(),b.getRotY(),b.getRotZ(),b.getPosX(),b.getPosY(),b.getPosZ(),b.getScaleX(),b.getScaleY(),b.getScaleZ()})values.add(value);bones.add(n,values);});row.add("bones",bones);normalBones.add(row);
+        var bones=new JsonObject();for(String n:List.of("root","torso_lower","torso_upper","head","arm_l","arm_r","forearm_l","forearm_r","wrist_l","wrist_r","hand_l","hand_r","leg_l","leg_r","shin_l","shin_r","ankle_l","ankle_r","foot_l","foot_r","finger_thumb_l","finger_thumb_r","finger_thumb_axis_l","finger_thumb_axis_r","finger_thumb_tip_l","finger_thumb_tip_r","finger_middle_l","finger_middle_r","finger_middle_tip_l","finger_middle_tip_r","finger_middle_distal_l","finger_middle_distal_r"))model.getBone(n).ifPresent(b->{var values=new JsonArray();for(float value:new float[]{b.getRotX(),b.getRotY(),b.getRotZ(),b.getPosX(),b.getPosY(),b.getPosZ(),b.getScaleX(),b.getScaleY(),b.getScaleZ()})values.add(value);bones.add(n,values);});row.add("bones",bones);normalBones.add(row);
     }
     @SubscribeEvent public static void render(TickEvent.RenderTickEvent event)
     {

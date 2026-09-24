@@ -46,6 +46,8 @@ public final class EvaHitFeedback
         float strength=(float)Math.min(1.2,.22+Math.sqrt(event.getAmount()/Math.max(1,target.getMaxHealth()))*2.0);
         float height=(float)Math.max(0,Math.min(1,(point.y-target.getY())/target.getBbHeight()));long tick=level.getGameTime();EvaImpactResponse.add(target,tick,direction,strength,height);
         CombatFeelR31.acceptedHit(target,event.getSource().getEntity() instanceof LivingEntity actor?actor:null,event.getAmount(),direction,false,point);
+        if(event.getSource().getEntity() instanceof Angel||event.getSource().getEntity() instanceof EvaUnit01Entity eva&&eva.isMeleeWeapon())
+            SeeleNetwork.CHANNEL.send(PacketDistributor.TRACKING_ENTITY_AND_SELF.with(()->target),new ClientboundCombatImpactR36(point,direction,strength,target instanceof EvaUnit01Entity));
         if(target instanceof EvaUnit01Entity eva)EvaImpactResponse.displace(eva,direction,strength);
         SeeleNetwork.CHANNEL.send(PacketDistributor.TRACKING_ENTITY_AND_SELF.with(()->target),new ClientboundImpactResponsePacket(target.getId(),tick,direction,strength,height));
         if(target instanceof EvaUnit01Entity)com.projectseele.world.GiantParticles.send(level,ParticleTypes.ELECTRIC_SPARK,point.x,point.y,point.z,40,2.3,2.3,2.3,.35);

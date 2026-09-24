@@ -13,6 +13,8 @@ final class EvaHandPoseR28
     static EvaMotionEngineV2.BoneWrites apply(EvaUnit01Entity eva,BakedGeoModel model,float partial)
     {
         if(model.getBone("r30_hand_frame_r").isPresent())return EvaUNHandPoseR30.apply(eva,model,partial);
+        if(com.projectseele.entity.EvaGameplayMotionR32.sharedHands(eva,partial))
+        {STATES.remove(eva);return EvaMotionEngineV2.BoneWrites.empty();}
         if(model.getBone("finger_index_axis_r").isEmpty())return EvaMotionEngineV2.BoneWrites.empty();
         long now=System.nanoTime();var old=STATES.get(eva);
         float blend=old==null?1:(float)(1-Math.exp(-Math.min(.1,(now-old.frame())/1e9)*20));

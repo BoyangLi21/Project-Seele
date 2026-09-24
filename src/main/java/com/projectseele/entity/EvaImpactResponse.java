@@ -12,6 +12,8 @@ public final class EvaImpactResponse
     public record Pose(float pitch,float roll,float head,float energy) {}
     public static void displace(EvaUnit01Entity eva,Vec3 direction,float strength)
     {
+        if(eva.level().isClientSide&&CombatReactionsR36.ownsDisplacement(eva))
+        {eva.setDeltaMovement(0,eva.getDeltaMovement().y,0);return;}
         if(eva.isNervLogisticsLocked()||eva.isLaunchSequenceActive()||eva.isFirstBattleActive()||com.projectseele.physics.CombatBodyDynamics.active(eva))return;
         Vec3 outward=direction.multiply(1,0,1);if(outward.lengthSqr()<1e-8)return;outward=outward.normalize();
         Vec3 velocity=eva.getDeltaMovement();double desired=Math.min(1.65,.5+strength),current=velocity.dot(outward);
@@ -31,9 +33,9 @@ public final class EvaImpactResponse
         {
             double t=(entity.level().getGameTime()-hit.tick)+(double)partial;if(t<0||t>=24)continue;
             double shape=CombatMotionR29.recoil(t)*hit.strength;
-            p+=shape*hit.direction.dot(forward)*.31;r-=shape*hit.direction.dot(right)*.28;
+            p-=shape*hit.direction.dot(forward)*.31;r+=shape*hit.direction.dot(right)*.28;
             // Head lag follows the same force; rear and side hits must not all nod forward.
-            h+=CombatMotionR29.recoil(t-1.5)*hit.strength*hit.direction.dot(forward)*(hit.height>.78?.08:.025);
+            h-=CombatMotionR29.recoil(t-1.5)*hit.strength*hit.direction.dot(forward)*(hit.height>.78?.08:.025);
             e=Math.max(e,CombatMotionR29.brace(t)*hit.strength);
         }
         float weight=entity instanceof EvaUnit01Entity eva?(eva.isPilotProne()?.35F:eva.hasLiveActionForRender(partial)?.75F:1):1;

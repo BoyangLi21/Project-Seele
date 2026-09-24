@@ -28,6 +28,10 @@ public class ModSounds
     public static final RegistryObject<SoundEvent> EVA_SERVO=register("eva_servo");
     public static final RegistryObject<SoundEvent> EVA_SWING=register("eva_swing");
     public static final RegistryObject<SoundEvent> EVA_IMPACT=register("eva_impact");
+    public static final RegistryObject<SoundEvent> EVA_IMPACT_HEAVY=register("eva_impact_heavy");
+    public static final RegistryObject<SoundEvent> EVA_JOINT_LOAD=register("eva_joint_load");
+    public static final RegistryObject<SoundEvent> SACHIEL_FOOT=register("sachiel_foot");
+    public static final RegistryObject<SoundEvent> SACHIEL_SWING=register("sachiel_swing");
     public static final RegistryObject<SoundEvent> EVA_ARMOR_IMPACT=register("eva_armor_impact");
     public static final RegistryObject<SoundEvent> EVA_KNIFE_CUT=register("eva_knife_cut");
     public static final RegistryObject<SoundEvent> EVA_CORE_BREAK=register("eva_core_break");

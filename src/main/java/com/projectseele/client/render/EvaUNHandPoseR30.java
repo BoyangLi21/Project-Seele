@@ -12,6 +12,12 @@ final class EvaUNHandPoseR30
     static void resetEntityR31(EvaUnit01Entity eva){STATES.remove(eva);}
     static EvaMotionEngineV2.BoneWrites apply(EvaUnit01Entity eva,BakedGeoModel model,float partial)
     {
+        if(EvaGameplayMotionR32.sharedHands(eva,partial))
+        {
+            // The complete shared pose already owns these joints. The legacy
+            // overlay used to overwrite its thumb opposition after sampling.
+            STATES.remove(eva);return new EvaMotionEngineV2.BoneWrites(Set.of(),Set.of(),"MOTION_ENGINE_LIVE_ACTION");
+        }
         long now=System.nanoTime();State old=STATES.get(eva);float mix=old==null?1:(float)(1-Math.exp(-Math.min(.1,(now-old.at())/1e9)*20));
         float[] values=new float[30],opposition=new float[2];Set<String> changed=new LinkedHashSet<>();int at=0;
         int action=EvaCombatR31.action(eva);boolean grabbing=action>=EvaCombatR31.REACH&&action<=EvaCombatR31.THROW;

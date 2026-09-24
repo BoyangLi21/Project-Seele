@@ -18,7 +18,25 @@ public final class CombatSpacingR32
         for(var other:actor.level().getEntitiesOfClass(LivingEntity.class,actor.getBoundingBox().inflate(36,8,36),e->e!=actor&&e.isAlive()&&(e instanceof Angel||e instanceof EvaUnit01Entity)))
         {
             if(Math.abs(actor.getY()-other.getY())>12)continue;
-            if(com.projectseele.physics.CombatBodyDynamics.active(other))continue;
+            if(com.projectseele.physics.CombatBodyDynamics.active(other))
+            {
+                if(CombatReactionsR36.enabled(actor)&&!EvaCombatR31.holds(other))
+                {
+                    var core=com.projectseele.physics.CombatBodyContacts.coreBounds(other).inflate(Math.min(5,actor.getBbWidth()*.22));
+                    var planar=new net.minecraft.world.phys.AABB(core.minX,actor.getY()-2,core.minZ,core.maxX,actor.getY()+2,core.maxZ);
+                    Vec3 at=actor.position(),centre=planar.getCenter();
+                    if(planar.contains(at))
+                    {
+                        Vec3 away=at.subtract(centre).multiply(1,0,1).normalize();double inward=clipped.dot(away);if(inward<0)clipped=clipped.subtract(away.scale(inward));
+                    }
+                    else
+                    {
+                        var hit=planar.clip(at,at.add(clipped));
+                        if(hit.isPresent())clipped=clipped.scale(Math.max(0,at.distanceTo(hit.get())/clipped.length()-.015));
+                    }
+                }
+                continue;
+            }
             var reaction=CombatFeelR31.beat(other);if(reaction!=null&&(reaction.kind()==CombatFeelR31.DOWN||reaction.kind()==CombatFeelR31.THROWN))continue;
             if(other instanceof EvaUnit01Entity eva&&(eva.isNervLogisticsLocked()||eva.isPilotProne()||EvaShutdownR30.disabled(eva)))continue;
             Vec3 delta=actor.position().subtract(other.position()).multiply(1,0,1);double radius=Math.min(22,Math.max(20,(actor.getBbWidth()+other.getBbWidth())*.52));

@@ -1473,6 +1473,11 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
         this.triggerAnim("strike", "takeoff");
         this.entityData.set(DATA_JUMP_SEQUENCE,
                 this.entityData.get(DATA_JUMP_SEQUENCE) + 1);
+        if(EvaGameplayMotionR32.serverMovement(this))
+        {
+            Vec3 motion=this.getDeltaMovement();this.setDeltaMovement(motion.x,JUMP_VELOCITY,motion.z);
+            this.setOnGround(false);this.hasImpulse=true;
+        }
         this.explicitJumpInProgress = true;
         this.explicitJumpObservedAirborne = false;
         this.explicitJumpAuthorizationTicks = JUMP_BUFFER_TICKS;
@@ -2709,6 +2714,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
     private void beginOrdinaryGroupCAttack()
     {
         EvaGameplayMotionR32.beginAction(this);
+        if(EvaGameplayMotionR32.phrases(this))CombatFoleyR36.load(this);
         this.gameplayOrdinaryContactR32=false;
         if(EvaGameplayMotionR32.ready(this)&&!EvaGameplayMotionR32.directed(this))EvaMovementSounds.swing(this,.8F);
         boolean continuing = this.ordinaryAttackComboGraceTicks > 0;
@@ -3257,7 +3263,11 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
             Vec3 impulse=from==null?away:away.scale(.65).add(fxCenter.subtract(from).multiply(1,.12,1).normalize().scale(.35)).normalize();
             boolean accepted=com.projectseele.event.EvaHitFeedback.hurt(target,this.damageSources().mobAttack(this),damage,hitPoint,impulse);
             if(!accepted&&!field)continue;
-            if(!anyHit)EvaMovementSounds.play(this,fxCenter,field?ModSounds.EVA_AT_PRESSURE.get():knife?ModSounds.EVA_KNIFE_CUT.get():ModSounds.EVA_IMPACT.get(),field?2.0F:this.isHeavyMotionActive()?5.2F:3.8F,1);
+            if(!anyHit)
+            {
+                if(knife)EvaMovementSounds.play(this,hitPoint,ModSounds.EVA_KNIFE_CUT.get(),3.8F,1);
+                else CombatFoleyR36.impact(this,target,hitPoint,field,this.isHeavyMotionActive());
+            }
             if(!accepted){anyHit=true;continue;}
             target.knockback(knockback, this.getX() - target.getX(), this.getZ() - target.getZ());
             anyHit = true;
@@ -3461,6 +3471,11 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
         this.cancelLiveActionsForStanceChange();
         this.cancelHeavyMotion();
         if(!EvaGameplayMotionR32.prepareJump(this))return false;
+        if(EvaGameplayMotionR32.serverMovement(this))
+        {
+            Vec3 motion=this.getDeltaMovement();this.setDeltaMovement(motion.x,JUMP_VELOCITY,motion.z);
+            this.setOnGround(false);this.hasImpulse=true;
+        }
         this.triggerAnim("strike", "takeoff");
         // A ridden living entity is movement-authoritative on the pilot's
         // client. Setting velocity only on the logical server is overwritten
@@ -4273,13 +4288,14 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
         EvaCombatSupportR33.tick(this);
         EvaGameplayMotionR32.tick(this);
         if(!this.level().isClientSide&&this.getPilotEntity() instanceof ServerPlayer player
-                &&(player.zza<-.15F||Math.abs(player.xxa)>.15F||this.getWeapon()==WEAPON_FISTS&&this.needsClosingStepR32(player))
+                &&(player.zza<-.15F||Math.abs(player.xxa)>.15F)
                 &&this.entityData.get(DATA_LIVE_ACTION_PHASE)>=.72F
                 &&(this.getOrdinaryAttackStage()>=0||this.isHeavyMotionActive())
                 &&!CombatFeelR31.hitPaused(this)&&!this.isPilotControlLocked())
         {
             // Preserve wind-up/contact. A deliberate retreat can leave the recovery
             // rather than committing the player to another buffered stationary combo.
+            EvaGameplayMotionR32.releaseToMovement(this);
             this.cancelLiveActionsForStanceChange();
             this.cancelHeavyMotion();
         }
@@ -4435,6 +4451,15 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
         }
         if (this.ordinaryAttackVisualTicks > 0)
         {
+            // Buffered follow-ups leave from the braking pose. Waiting for the
+            // full neutral release made every attack restart the whole body.
+            if(EvaGameplayMotionR32.phrases(this)&&this.entityData.get(DATA_LIVE_ACTION_PHASE)>=EvaGameplayMotionR32.releasePhase(this)
+                    &&this.meleeInputBufferTicks>0&&!this.queuedHeavy&&this.kickAfterOrdinaryBufferTicks==0
+                    &&combatPilot!=null&&!this.isPilotControlLocked())
+            {
+                this.meleeInputBufferTicks=0;
+                this.beginOrdinaryGroupCAttack();
+            }
             this.ordinaryAttackVisualTicks--;
             if (this.ordinaryAttackVisualTicks == 0)
             {

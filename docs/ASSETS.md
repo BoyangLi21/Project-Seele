@@ -330,3 +330,17 @@ Recorded combat foley derivatives use the following CC0 1.0 recordings: [Punch b
 `facility_hydraulic_launch.ogg` is a 3.2-second edited excerpt of **Hydraulic Press** by **Luan-Van-Den-Berg**, [source](https://freesound.org/people/Luan-Van-Den-Berg/sounds/708004/), [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Changes: start at 1.46 seconds, mono conversion, 45 Hz highpass, 5.5 kHz lowpass, short fade-in/out. This attribution must accompany distributions of the derivative.
 
 The optional local `eva_roar_r34` audition pack is not part of this repository. Its EVA-labelled community upload has no independently verified master-recording provenance or redistribution license; it must not be described as CC0 or verified original TV Japanese audio.
+
+## R36 recorded movement and contact foley (2026-09-24)
+
+R36 revised ground motion (2026-09-25) reuses the permitted Haley Tuffles captures above and adds `ArmsSinglePunch2` for the opposite-side follow-up. `author_combat_performance_r36.py` records the source file and SHA-256 for each derived clip. The earlier R36 wrist-path experiment is retained as a rejected comparison and cannot overwrite the active profiles from its CLI.
+
+The following recordings are licensed CC0 1.0 on their original Freesound pages:
+
+- Philipp Grzemba / Sheyvan: [Metal Impact Container 1 5](https://freesound.org/people/Sheyvan/sounds/569413/).
+- newagesoup: [long-metal-hit-01](https://freesound.org/people/newagesoup/sounds/337832/), originally edited from EpicWizard's shed-door recording, as credited on the source page.
+- Nox_Sound: [Foley Object Metal Oven Creaks](https://freesound.org/people/Nox_Sound/sounds/585734/), [Strong Stone Impacts with Debris](https://freesound.org/people/Nox_Sound/sounds/554148/), and [Rocks/Stones Impacts](https://freesound.org/people/Nox_Sound/sounds/567701/).
+- velcronator: [Whoosh 01](https://freesound.org/people/velcronator/sounds/733888/).
+- TRP: [210415 Punching bag, foley, ms](https://freesound.org/people/TRP/sounds/616953/), separately selected body-impact takes.
+
+`tools/build_combat_audio_r36.py` fetches the public HQ preview files and authors mono game cues through excerpt selection, pitch/speed changes, equalization, fades and layering. Generated names end in `r36_<take>`. They are edited recordings, not original Evangelion TV sound effects. Source pages, original hashes and per-output hashes are retained in the local build manifest. The generator does not generate a new roar or sample an anime soundtrack.

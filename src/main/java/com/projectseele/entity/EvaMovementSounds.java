@@ -39,7 +39,7 @@ public final class EvaMovementSounds
     {
         if(eva.level().isClientSide||com.projectseele.physics.CombatBodyDynamics.active(eva))return;
         float phase=eva.rifleGaitPhase(1);Float previous=PREVIOUS.put(eva,phase);
-        if(previous==null||!moving||!eva.onGround()||!eva.isPoweredOn()||eva.isNervLogisticsLocked()||eva.isPilotProne()||eva.isSilent())return;
+        if(previous==null||!moving||!eva.onGround()||!eva.isPoweredOn()||eva.isNervLogisticsLocked()||eva.isPilotProne()||eva.isSilent()||EvaCombatSupportR33.strike(eva))return;
         float delta=phase-previous;if(delta>.5F)delta-=1;if(delta<-.5F)delta+=1;
         if(Math.abs(delta)<1e-5F||Math.abs(delta)>.3F)return;
         boolean backwards=delta<0;float run=eva.rifleRunBlend(1);
@@ -51,9 +51,15 @@ public final class EvaMovementSounds
             if(backwards?after<=before:after>=before)continue;
             Vec3 forward=eva.getForward().multiply(1,0,1).normalize(),lateral=new Vec3(forward.z,0,-forward.x);
             Vec3 foot=eva.position().add(lateral.scale((side.equals("l")?1:-1)*eva.getBbWidth()*.24)).add(forward.scale(backwards?-2:3));
+            if(EvaGameplayMotionR32.phrases(eva))
+            {
+                var body=EvaBodyPose.sample(eva,0);String n="foot_"+side;
+                var point=body.matrix(n).transformPosition(new org.joml.Vector3f(body.rig.get(n).pivot())).mul(5).rotateY((180-eva.getYRot())*Mth.DEG_TO_RAD);
+                foot=eva.position().add(point.x,0,point.z);
+            }
             var state=eva.level().getBlockState(BlockPos.containing(foot.x,foot.y-.2,foot.z));
             boolean soil=state.is(BlockTags.DIRT)||state.is(BlockTags.SAND)||state.is(BlockTags.LEAVES);
-            play(eva,foot,soil?ModSounds.EVA_FOOT_SOIL.get():ModSounds.EVA_FOOT_CONCRETE.get(),eva.isPilotCrouching()?1.25F:2.6F+.7F*run,.86F+eva.getRandom().nextFloat()*.06F);
+            CombatFoleyR36.step(eva,foot,soil,eva.isPilotCrouching()?.5F:1+.28F*run);
             if(eva.getTags().contains("seele_motion_lab"))ProjectSeele.LOGGER.info("EVA FOOT CONTACT side={} phase={} position={} material={}",side,phase,foot,state);
         }
     }

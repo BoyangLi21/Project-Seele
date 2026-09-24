@@ -26,14 +26,15 @@ public final class CombatFeelR31
     public static boolean hitPaused(LivingEntity e){var b=beat(e);return b!=null&&age(e,0)<b.stopTicks;}
     public static void clear(LivingEntity e){BEATS.remove(e);POISE.remove(e);POISE_AT.remove(e);PHASES.remove(e);com.projectseele.physics.CombatBodyDynamics.cancel(e);}
     public static float frozenPhase(EvaUnit01Entity e){return PHASES.getOrDefault(e,e.combatPhaseR31());}
-    public static void receive(LivingEntity e,Beat beat,float phase){BEATS.put(e,beat);PHASES.put(e,phase);}
+    public static void receive(LivingEntity e,Beat beat,float phase){CombatReactionsR36.capture(e,beat);BEATS.put(e,beat);PHASES.put(e,phase);}
     public static void send(LivingEntity e,int kind,Vec3 direction,float strength,int duration,int stop)
     {
         if(!(e.level() instanceof ServerLevel))return;
         if(kind==CONTACT&&restrained(e))return;
         var current=beat(e);
+        if(kind==CONTACT&&current!=null&&current.kind()!=CONTACT&&age(e,0)<current.duration())return;
         if(current!=null&&(current.kind==THROWN&&kind!=THROWN&&kind!=DOWN||current.kind==DOWN&&(kind==FLINCH||kind==STAGGER||kind==DOWN&&age(e,0)<current.duration-8)))return;
-        var beat=new Beat(kind,e.level().getGameTime(),duration,direction,strength,stop);BEATS.put(e,beat);
+        var beat=new Beat(kind,e.level().getGameTime(),duration,direction,strength,stop);CombatReactionsR36.capture(e,beat);BEATS.put(e,beat);
         float phase=e instanceof EvaUnit01Entity eva?eva.combatPhaseR31():0;PHASES.put(e,phase);
         if((kind==DOWN||kind==THROWN)&&e instanceof EvaPrototypeEntity un)un.stopUNFlight();
         SeeleNetwork.CHANNEL.send(PacketDistributor.TRACKING_ENTITY_AND_SELF.with(()->e),new ClientboundCombatFeelR31(e.getId(),beat,phase));
@@ -79,7 +80,23 @@ public final class CombatFeelR31
     public static boolean travel(LivingEntity e)
     {
         if(com.projectseele.physics.CombatBodyDynamics.active(e)){e.setDeltaMovement(Vec3.ZERO);return true;}
-        var b=beat(e);if(b==null||b.kind==CONTACT||b.kind==FLINCH||b.kind==BLOCKED)return false;
+        var b=beat(e);if(b==null||b.kind==CONTACT||b.kind==BLOCKED)return false;
+        if(b.kind==FLINCH)
+        {
+            // Committing to a blow keeps the attack, not immunity to momentum.
+            // A short skid leaves its arm action intact while the body yields.
+            if(e instanceof SachielEntity&&CombatReactionsR36.enabled(e)&&!e.level().isClientSide)
+            {
+                float age=age(e,0);
+                if(age>=b.stopTicks&&age<6)
+                {
+                    boolean grounded=e.onGround();double speed=1.15*b.strength*Math.exp(-(age-b.stopTicks)/3);
+                    Vec3 force=b.direction.multiply(1,0,1).normalize().scale(speed);e.move(MoverType.SELF,CombatSpacingR32.clip(e,force));
+                    if(grounded&&e.level().getBlockCollisions(e,e.getBoundingBox().deflate(.1).move(0,-.15,0)).iterator().hasNext())e.setOnGround(true);
+                }
+            }
+            return false;
+        }
         if(e instanceof EvaUnit01Entity eva&&(eva.isNervLogisticsLocked()||!eva.isControlledByLocalInstance()))return false;
         if(!(e instanceof EvaUnit01Entity)&&e.level().isClientSide)return false;
         double t=age(e,0);if(t>=(b.kind==STAGGER?7:b.duration-8))return false;

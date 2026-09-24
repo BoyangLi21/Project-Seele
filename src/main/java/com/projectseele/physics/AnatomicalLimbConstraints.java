@@ -29,6 +29,17 @@ public final class AnatomicalLimbConstraints
             solve(pose,"arm_"+side,"forearm_"+side,"hand_"+side,joint,axis,row.getAsJsonArray("hinge").get(1).getAsFloat(),target);return;
         }
     }
+    public static void reachFoot(EvaBodyPose.Sample pose,CombatBodyProfiles.Profile profile,String side,Vector3f target,Quaternionf orientation)
+    {
+        for(var element:profile.definition().getAsJsonArray("bodies"))
+        {
+            var row=element.getAsJsonObject();if(!row.get("name").getAsString().equals("shin_"+side))continue;var m=row.getAsJsonArray("joint");
+            var joint=new Vector3f(m.get(3).getAsFloat(),m.get(7).getAsFloat(),m.get(11).getAsFloat()).div(CombatBodyProfiles.MODEL_TO_PHYSICS);
+            var axis=new Vector3f(m.get(2).getAsFloat(),m.get(6).getAsFloat(),m.get(10).getAsFloat()).normalize();
+            solve(pose,"leg_"+side,"shin_"+side,"foot_"+side,joint,axis,row.getAsJsonArray("hinge").get(1).getAsFloat(),target);
+            pose.rotations.put("foot_"+side,parent(pose,"foot_"+side).invert().mul(orientation));pose.dirty();return;
+        }
+    }
     private static Vector3f point(EvaBodyPose.Sample p,String name){return p.matrix(name).transformPosition(new Vector3f(p.rig.get(name).pivot()));}
     private static Quaternionf parent(EvaBodyPose.Sample p,String name){String parent=p.rig.get(name).parent();return parent==null?new Quaternionf():p.matrix(parent).getUnnormalizedRotation(new Quaternionf()).normalize();}
     private static Matrix3f frame(Vector3f first,Vector3f second)
