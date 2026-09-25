@@ -81,6 +81,7 @@ def seal():
     rows=[]
     for kind in ('Client','Server','World','Shaders','Textures'):
         folder=STAGE/kind.lower();data(folder/'R39_BATCH.json',batch)
+        if kind!='World':base.write_manifest(folder,'r39-'+kind.lower())
         target=OUT/f'Project_SEELE_R39_{kind}.zip';assert not target.exists()
         with zipfile.ZipFile(target,'x',zipfile.ZIP_DEFLATED,compresslevel=6) as z:
             prefix='overrides/' if kind=='Client' else ''
