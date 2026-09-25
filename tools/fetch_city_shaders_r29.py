@@ -24,6 +24,10 @@ def install(enable=False):
         settings='SHADOW_QUALITY=1\nshadowDistance=128.0\nWATER_REFLECT_QUALITY=2\nBLOCK_REFLECT_QUALITY=1\nLIGHTSHAFT_QUALI_DEFINE=1\nSSAO_QUALI_DEFINE=2\nFXAA_DEFINE=1\nDETAIL_QUALITY=2\nCLOUD_QUALITY=2\nCOLORED_LIGHTING=0\nENTITY_SHADOWS_DEFINE=-1\n'
         settings+='CAVE_FOG=false\nAMBIENT_MULT=110\nBLOOM_STRENGTH=0.081\n'
         if (ROOT/'run/resourcepacks/eva_real_model/assets/projectseele/eva/un_models_r30.json').is_file():settings+='RP_MODE=3\n'
+        if (ROOT/'run/resourcepacks/eva_real_model/assets/projectseele/eva/materials_r37.json').is_file():
+            values=dict(line.split('=',1) for line in settings.splitlines() if '=' in line)
+            values.update(SHADOW_QUALITY='2',shadowDistance='160.0',BLOCK_REFLECT_QUALITY='2',ENTITY_SHADOWS_DEFINE='1',RP_MODE='3',NORMAL_MAP_STRENGTH='70')
+            settings=''.join(k+'='+v+'\n' for k,v in values.items())
         (ROOT/'run/shaderpacks'/(shader+'.txt')).write_text(settings,encoding='utf8')
     print('Verified Oculus and Complementary Unbound; enabled='+str(enable))
 if __name__=='__main__':

@@ -73,7 +73,8 @@ public final class LocalVisualAssetFingerprint
                 || R21_CONTRACTS.containsKey(assetName) && R21_CONTRACTS.get(assetName).matches(meshTag,mesh)
                 || R22_CONTRACTS.containsKey(assetName) && R22_CONTRACTS.get(assetName).matches(meshTag,mesh)
                 || R23_CONTRACTS.containsKey(assetName) && R23_CONTRACTS.get(assetName).matches(meshTag,mesh)
-                || matchesR30(assetName,sourcePack,resources,meshTag));
+                || matchesR30(assetName,sourcePack,resources,meshTag)
+                || matchesR37(assetName,sourcePack,resources,meshTag));
         boolean valid = complete && sameSource && meshMatches;
         String reason = !complete ? "missing-resource"
                 : !sameSource ? "mixed-resource-packs"
@@ -99,6 +100,22 @@ public final class LocalVisualAssetFingerprint
             return true;
         }
         catch(Exception error){ProjectSeele.LOGGER.warn("R30 model manifest rejected for {}",name,error);return false;}
+    }
+
+    private static boolean matchesR37(String name,String pack,Map<String,ResourceDigest> resources,String tag)
+    {
+        if(!name.equals("eva_unit01"))return false;
+        var manifest=Minecraft.getInstance().getResourceManager().getResource(resource("eva/unit01_tv_jaw_r37.json"));
+        if(manifest.isEmpty()||!pack.equals(manifest.get().sourcePackId()))return false;
+        try(var reader=manifest.get().openAsReader())
+        {
+            var model=com.google.gson.JsonParser.parseReader(reader).getAsJsonObject();
+            if(!model.get("schema").getAsString().equals("projectseele.tv-jaw-r37.v1")||model.get("triangles").getAsInt()<11666||model.get("parts").getAsInt()!=49)return false;
+            if(!tag.startsWith("triangle-mesh-"+model.get("triangles").getAsInt()+"-p49-"))return false;
+            for(var entry:resources.entrySet())if(!model.getAsJsonObject("sha256").get(entry.getKey()).getAsString().equals(entry.getValue().sha256()))return false;
+            return true;
+        }
+        catch(Exception error){ProjectSeele.LOGGER.warn("R37 jaw manifest rejected",error);return false;}
     }
 
     private static ResourceLocation resource(String path)

@@ -41,7 +41,12 @@ public final class EvaGameplayMotionR32
     public static void beginAction(EvaUnit01Entity e)
     {
         if(!ready(e)||e.level().isClientSide)return;
-        var pose=EvaBodyPose.sample(e,0);EvaCombatSupportR33.capture(e,pose);e.getEntityData().set(ACTION_FROM,EvaShutdownR30.encode(pose));
+        beginAction(e,EvaBodyPose.sample(e,0));
+    }
+    public static void beginAction(EvaUnit01Entity e,EvaBodyPose.Sample pose)
+    {
+        if(!ready(e)||e.level().isClientSide)return;
+        EvaCombatSupportR33.capture(e,pose);e.getEntityData().set(ACTION_FROM,EvaShutdownR30.encode(pose));
         e.getEntityData().set(RELEASE_FROM,new CompoundTag());
         var target=e.level().getEntitiesOfClass(net.minecraft.world.entity.LivingEntity.class,e.getBoundingBox().inflate(36),a->a instanceof Angel&&a.isAlive()
                 &&a.position().subtract(e.position()).multiply(1,0,1).normalize().dot(e.getForward())>.35)
@@ -185,7 +190,14 @@ public final class EvaGameplayMotionR32
     private static EvaBodyPose.Sample applyAction(EvaUnit01Entity e,EvaBodyPose.Sample base,float partial)
     {
         if(!owns(e,partial))return base;
+        if(EvaBerserkMotionR34.silent(e))return EvaBerserkMotionR34.stillPose(e);
         if(EvaBerserkMotionR34.active(e))return actionPose(e,EvaBerserkMotionR34.name(e),EvaBerserkMotionR34.phase(e,partial),base,partial);
+        if(e.isBerserk()&&profile(variant(e)).getAsJsonObject("clips").has("r32_berserk_run"))
+        {
+            float cycle=e.rifleGaitPhase(partial);cycle-=Mth.floor(cycle);
+            var guard=EvaBodyPose.gameplayClip(e,"berserk_guard",(e.tickCount+partial)%100/100);
+            return EvaBodyPose.blend(guard,EvaBodyPose.gameplayClip(e,"berserk_run",cycle),e.rifleMoveBlend(partial));
+        }
         float air=airAge(e,partial),land=landAge(e,partial);
         if(age(e,TAKEOFF,partial)>=0&&air<0)
         {

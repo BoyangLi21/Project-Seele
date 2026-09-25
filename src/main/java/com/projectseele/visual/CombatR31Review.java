@@ -30,6 +30,8 @@ public final class CombatR31Review
     public static final boolean EXCHANGE=Boolean.getBoolean("projectseele.combatExchange");
     public static final boolean RECOVERY=Boolean.getBoolean("projectseele.combatRecovery");
     public static final boolean WRECK=Boolean.getBoolean("projectseele.combatWreck");
+    public static final boolean AWAKENING=Boolean.getBoolean("projectseele.combatAwakening");
+    public static final boolean MOUTH_ONLY=Boolean.getBoolean("projectseele.combatMouth");
     public static final String WORLD="SEELE_FIELD_R31_REVIEW";
     public static final int X=12000,Z=12000,FLOOR=280;
     public static volatile boolean ready,tracked,mounted,done,jump;
@@ -47,6 +49,7 @@ public final class CombatR31Review
     private static double previousObservedY,olderObservedY,observedVerticalPerTick;
     private static Vec3 stageOrigin,angelOrigin;private static boolean sawAction,sawThrown,sawDown;
     private static int falseAerial,normalFrames;
+    private static boolean sawSilence,sawRoar,sawFinale,protectedHull=true;private static final Set<Integer> feralKinds=new HashSet<>();
     private static final JsonArray cases=new JsonArray(),trace=new JsonArray(),events=new JsonArray();
     private static final Map<Integer,UUID> fleetIds=new HashMap<>();
 
@@ -77,23 +80,33 @@ public final class CombatR31Review
             }
             stageTicks++;stageOrdinal=stage.ordinal();stageName=stage.name().toLowerCase(Locale.ROOT);
             if(stage==Stage.ARENA){buildArena();return;}
+            if(AWAKENING&&sawFinale&&eva!=null&&!eva.isFirstBattleActive()&&(angel==null||!angel.isAlive()||angel.isRemoved()))
+            {
+                record("natural_awakening_to_finale",sawSilence&&sawRoar&&protectedHull&&feralKinds.size()>=3,"attack_kinds",feralKinds.size());
+                var row=cases.get(cases.size()-1).getAsJsonObject();row.addProperty("silence",sawSilence);row.addProperty("roar",sawRoar);row.addProperty("protection",protectedHull);row.addProperty("automatic_finale",sawFinale);finish("");return;
+            }
             if(stage==Stage.DUEL&&eva!=null&&!eva.isRemoved()&&angel!=null&&angel.isRemoved()&&angel.isSelfDestructing())
-            {finishDuel(true);finish("");return;}
+            {if(AWAKENING)throw new IllegalStateException("Angel exploded without the requested paired finale");finishDuel(true);finish("");return;}
+            if(AWAKENING&&sawFinale&&eva!=null&&eva.isFirstBattleActive()&&angel!=null&&angel.isRemoved())
+            {
+                var encounter=com.projectseele.world.FirstBattleSavedData.get(level).active;
+                if(encounter!=null&&encounter.deathResolved&&encounter.angel.equals(angel.getUUID())&&stageTicks<1900)return;
+            }
             if(eva==null||eva.isRemoved()||angel==null||angel.isRemoved())throw new IllegalStateException("Review actor missing; no replacement or canonical lookup permitted");
             // Ridden vehicles report authoritative positions, while vanilla
             // clears their server velocity. Derive descent from those samples.
             observedVerticalPerTick=(eva.getY()-olderObservedY)*.5;olderObservedY=previousObservedY;previousObservedY=eva.getY();
-            if(stageTicks>700)throw new IllegalStateException("Deadline in "+stage+" action="+EvaCombatR31.action(eva)+" eva="+eva.position()+" angel="+angel.position());
+            if(stageTicks>(AWAKENING?1900:700))throw new IllegalStateException("Deadline in "+stage+" action="+EvaCombatR31.action(eva)+" eva="+eva.position()+" angel="+angel.position());
             if(totalTicks%2==0)sample();
             switch(stage)
             {
                 case TRACK->{if(tracked&&stageTicks>20){pilot.setGameMode(GameType.SURVIVAL);pilot.setHealth(pilot.getMaxHealth());pilot.getFoodData().setFoodLevel(20);pilot.getCapability(EvaPilotCapability.DATA).ifPresent(c->c.setSynchronization(100));if(!eva.boardFromExternalPlug(pilot,100))throw new IllegalStateException("R31 real pilot boarding failed");next(Stage.MOUNT);}}
                 case MOUNT->{if(mounted&&eva.getActivationTicks()==0&&stageTicks>20){if(eva.isAtFieldOn())input(4);next(Stage.WARM);}}
-                case WARM->{if(warmFrames>=35&&stageTicks>25){photo="01_ready";if(RECOVERY){arrange(23);initialEvaHealth=eva.getHealth();next(Stage.REACTION);}else if(EXCHANGE){arrange(39);angel.setNoAi(false);angel.setTarget(eva);initialEvaHealth=eva.getHealth();if(Boolean.getBoolean("projectseele.combatBerserk"))eva.reviewBerserkR34();next(Stage.DUEL);}else next(Stage.WALK_FORWARD);}}
+                case WARM->{if(warmFrames>=35&&stageTicks>25){photo="01_ready";if(RECOVERY){arrange(23);initialEvaHealth=eva.getHealth();next(Stage.REACTION);}else if(EXCHANGE){arrange(MOUTH_ONLY?100:39);angel.setNoAi(MOUTH_ONLY);if(!MOUTH_ONLY)angel.setTarget(eva);initialEvaHealth=eva.getHealth();if(AWAKENING){eva.setHealth(70);pilot.getCapability(EvaPilotCapability.DATA).ifPresent(c->c.setSynchronization(10));eva.hurt(angel.damageSources().mobAttack(angel),60);if(!eva.isBerserk()||eva.getHealth()!=50)throw new IllegalStateException("Natural 50 HP awakening did not trigger");}else if(Boolean.getBoolean("projectseele.combatBerserk"))eva.reviewBerserkR34();next(Stage.DUEL);}else next(Stage.WALK_FORWARD);}}
                 case WALK_FORWARD->{forward=1;if(eva.getZ()-stageOrigin.z>=10){record("real_forward",true,"distance",eva.getZ()-stageOrigin.z);forward=0;photo="02_forward";next(Stage.WALK_BACKWARD);}}
                 case WALK_BACKWARD->{forward=-1;if(stageOrigin.z-eva.getZ()>=7){record("real_backward",true,"distance",stageOrigin.z-eva.getZ());forward=0;arrange(NORMALS?100:23);next(NORMALS?Stage.NORMAL_EMPTY:Stage.AIR_STRIKE);}}
                 case NORMAL_EMPTY,NORMAL_CONTACT,NORMAL_HEAVY,NORMAL_MOVING->normalAttack();
-                case DUEL->duel();
+                case DUEL->{if(AWAKENING)awakening();else duel();}
                 case AIR_STRIKE->airborne(false);
                 case AIR_SLAM->airborne(true);
                 case REACH->
@@ -147,7 +160,7 @@ public final class CombatR31Review
         if(eva instanceof EvaPrototypeEntity un)un.setUNSerial(variant-3);
         if(eva==null||angel==null)throw new IllegalStateException("Combat test actor factory");
         eva.addTag("seele_r31_combat_fixture");eva.addTag("seele_motion_lab");eva.prepareForMotionLab();eva.setNoGravity(false);eva.setNoAi(false);eva.setPersistenceRequired();
-        CompoundTag tag=new CompoundTag();angel.saveWithoutId(tag);tag.putBoolean("FirstBattleUsed",true);tag.putInt("SachielSelfDestruct",-1);angel.load(tag);angel.setFirstBattleField(0);angel.setNoAi(true);angel.addTag("seele_r31_combat_fixture");angel.setPersistenceRequired();
+        CompoundTag tag=new CompoundTag();angel.saveWithoutId(tag);tag.putBoolean("FirstBattleUsed",!AWAKENING);tag.putInt("SachielSelfDestruct",-1);angel.load(tag);angel.setFirstBattleField(0);angel.setNoAi(true);angel.addTag("seele_r31_combat_fixture");angel.setPersistenceRequired();
         eva.moveTo(X+.5,FLOOR+1,Z-30.5,0,0);eva.yBodyRot=eva.yHeadRot=0;eva.setOnGround(true);
         angel.moveTo(X+.5,FLOOR+1,Z+80.5,180,0);angel.yBodyRot=angel.yHeadRot=180;
         if(!level.addFreshEntity(eva)||!level.addFreshEntity(angel))throw new IllegalStateException("Review actor spawn rejected");
@@ -214,6 +227,22 @@ public final class CombatR31Review
             finishDuel(false);
             angel.setNoAi(true);angel.setTarget(null);forward=strafe=0;next(Stage.FINISH);
         }
+    }
+    private static void awakening()
+    {
+        forward=strafe=0;heading=eva.getYRot();sawFinale|=eva.isFirstBattleActive();
+        if(MOUTH_ONLY&&stageTicks>=96){record("native_mouth_open_close_render",sawSilence&&sawRoar&&protectedHull,"native_ticks",stageTicks);finish("");return;}
+        if(EvaBerserkMotionR34.silent(eva))
+        {sawSilence=true;if(eva.isPoweredOn()||eva.getPowerTicks()!=0||EvaBerserkMotionR34.mouth(eva,0)>0)throw new IllegalStateException("Silence phase kept power or opened mouth");photo="r37_silence";}
+        if(EvaBerserkMotionR34.kind(eva)==1&&EvaBerserkMotionR34.mouth(eva,0)>.8F){sawRoar=true;photo="r37_roar";}
+        if(EvaBerserkMotionR34.striking(eva))feralKinds.add(EvaBerserkMotionR34.kind(eva));
+        if(eva.isBerserk()&&!eva.isFirstBattleActive())
+        {
+            if(stageTicks==20||stageTicks==110)eva.hurt(angel.damageSources().mobAttack(angel),100);
+            if(eva.getHealth()!=50||EvaShutdownR30.wreck(eva)){protectedHull=false;throw new IllegalStateException("Plot-protected hull was damaged");}
+        }
+        if(MOUTH_ONLY&&stageTicks==76)photo="r37_mouth_fully_open";
+        if(stageTicks>120&&!eva.isBerserk()&&!sawFinale)throw new IllegalStateException("Berserk ended before the low-health finale");
     }
     private static void finishDuel(boolean defeated)
     {

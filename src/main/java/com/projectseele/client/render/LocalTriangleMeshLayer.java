@@ -163,7 +163,7 @@ public final class LocalTriangleMeshLayer<T extends GeoAnimatable> extends GeoRe
                 &&(targetBuffer instanceof com.mojang.blaze3d.vertex.BufferBuilder
                     ||targetBuffer.getClass().getName().equals("me.jellysquid.mods.sodium.client.render.vertex.buffer.SodiumBufferBuilder"))
                 &&RigidCapsuleGpu.draw(part,values,stride,part.pivotX(),part.pivotY(),part.pivotZ(),
-                this.textureSelector.apply(animatable),poseStack,vertexLight,packedOverlay))return;
+                this.textureSelector.apply(animatable),poseStack,vertexLight,packedOverlay,part.red(),part.green(),part.blue()))return;
         for (int index = 0; index + stride * 3 <= values.length; index += stride * 3)
         {
             emitVertex(targetBuffer, pose, normal, values, index, part,
@@ -188,8 +188,8 @@ public final class LocalTriangleMeshLayer<T extends GeoAnimatable> extends GeoRe
         float x = -(values[index] + part.pivotX()) / 16.0F;
         float y = (values[index + 1] + part.pivotY()) / 16.0F;
         float z = (values[index + 2] + part.pivotZ()) / 16.0F;
-        MeshVertexWriter.emit(buffer,pose,normal,x,y,z,values[index+3],values[index+4],
-                packedLight,packedOverlay,-values[index+5],values[index+6],values[index+7]);
+        MeshVertexWriter.emitTinted(buffer,pose,normal,x,y,z,values[index+3],values[index+4],
+                packedLight,packedOverlay,-values[index+5],values[index+6],values[index+7],part.red(),part.green(),part.blue());
     }
 
     public static void clearCache()
@@ -369,7 +369,10 @@ public final class LocalTriangleMeshLayer<T extends GeoAnimatable> extends GeoRe
                         pivotX, pivotY, pivotZ);
                 parts.put(entry.getKey(), new MeshPart(
                         pivotX, pivotY, pivotZ, vertices,
-                        muzzle[0], muzzle[1], muzzle[2]));
+                        muzzle[0], muzzle[1], muzzle[2],
+                        object.has("tint")?object.getAsJsonArray("tint").get(0).getAsFloat():1,
+                        object.has("tint")?object.getAsJsonArray("tint").get(1).getAsFloat():1,
+                        object.has("tint")?object.getAsJsonArray("tint").get(2).getAsFloat():1));
             }
             int triangleCount = parts.values().stream()
                     .mapToInt(part -> part.vertices().length / (stride * 3)).sum();
@@ -400,7 +403,7 @@ public final class LocalTriangleMeshLayer<T extends GeoAnimatable> extends GeoRe
             MeshData mesh = new MeshData(stride, Map.copyOf(parts),
                     triangleCount, captureTag,
                     (minimumX + maximumX) * 0.5F, minimumY,
-                    (minimumZ + maximumZ) * 0.5F, root.has("jointSkins")?authoredJointSkins(root.getAsJsonObject("jointSkins"),parts,stride):jointSkins(parts,stride));
+                    (minimumZ + maximumZ) * 0.5F, resolvedJointSkins(root,parts,stride));
             CACHE.put(meshLocation, mesh);
             ProjectSeele.LOGGER.info("Loaded local triangle mesh {}: {}",
                     meshLocation, captureTag);
@@ -501,6 +504,16 @@ public final class LocalTriangleMeshLayer<T extends GeoAnimatable> extends GeoRe
             }
             else witness.frameOwners.put(entry.getKey(),bone.getName());
         }
+    }
+
+    private static Map<String,JointSkin> resolvedJointSkins(JsonObject root,Map<String,MeshPart> parts,int stride) throws IOException
+    {
+        if(!root.has("jointSkins"))return jointSkins(parts,stride);
+        var authored=authoredJointSkins(root.getAsJsonObject("jointSkins"),parts,stride);
+        if(!root.has("r37_mouth"))return authored;
+        // A new jaw membrane must not disable the source rig's welded knees
+        // and elbows simply by adding the first authored skin to this mesh.
+        var merged=new HashMap<>(jointSkins(parts,stride));merged.putAll(authored);return Map.copyOf(merged);
     }
 
     private static Map<String,JointSkin> authoredJointSkins(JsonObject definitions,Map<String,MeshPart> parts,int stride) throws IOException
@@ -666,5 +679,5 @@ public final class LocalTriangleMeshLayer<T extends GeoAnimatable> extends GeoRe
 
     private record MeshPart(float pivotX, float pivotY, float pivotZ,
                             float[] vertices, float muzzleX,
-                            float muzzleY, float muzzleZ) {}
+                            float muzzleY, float muzzleZ,float red,float green,float blue) {}
 }

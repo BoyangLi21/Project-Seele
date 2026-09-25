@@ -35,9 +35,12 @@ public final class RigidCapsuleGpu
     }
     public static boolean draw(Object key,float[] vertices,int stride,float px,float py,float pz,
                                ResourceLocation texture,PoseStack poses,int light,int overlay)
+    {return draw(key,vertices,stride,px,py,pz,texture,poses,light,overlay,1,1,1);}
+    public static boolean draw(Object key,float[] vertices,int stride,float px,float py,float pz,
+                               ResourceLocation texture,PoseStack poses,int light,int overlay,float r,float g,float b)
     {
         if(shader==null||Boolean.getBoolean("projectseele.disableRigidCapsuleGpu"))return false;
-        if(externalShaderActive())return drawExternal(key,vertices,stride,px,py,pz,texture,poses,light,overlay);
+        if(externalShaderActive())return drawExternal(key,vertices,stride,px,py,pz,texture,poses,light,overlay,r,g,b);
         VertexBuffer mesh=PARTS.get(key);
         if(mesh==null)
         {
@@ -46,7 +49,7 @@ public final class RigidCapsuleGpu
             builder.begin(VertexFormat.Mode.QUADS,DefaultVertexFormat.NEW_ENTITY);
             for(int i=0;i+stride*3<=vertices.length;i+=stride*3)
             {
-                vertex(builder,vertices,i,px,py,pz);vertex(builder,vertices,i+stride,px,py,pz);vertex(builder,vertices,i+stride*2,px,py,pz);vertex(builder,vertices,i+stride*2,px,py,pz);
+                vertex(builder,vertices,i,px,py,pz,r,g,b);vertex(builder,vertices,i+stride,px,py,pz,r,g,b);vertex(builder,vertices,i+stride*2,px,py,pz,r,g,b);vertex(builder,vertices,i+stride*2,px,py,pz,r,g,b);
             }
             mesh=new VertexBuffer(VertexBuffer.Usage.STATIC);mesh.bind();mesh.upload(builder.end());VertexBuffer.unbind();PARTS.put(key,mesh);
             if(PARTS.size()==1)ProjectSeele.LOGGER.info("Rigid local-mesh GPU draw path active; first part vertices={}",count);
@@ -57,11 +60,11 @@ public final class RigidCapsuleGpu
         shader.safeGetUniform("FrameOverlay").set((float)(overlay&65535),(float)(overlay>>>16&65535));
         mesh.bind();mesh.drawWithShader(RenderSystem.getModelViewMatrix(),RenderSystem.getProjectionMatrix(),shader);VertexBuffer.unbind();type.clearRenderState();drawCalls++;return true;
     }
-    private static void vertex(BufferBuilder b,float[] a,int i,float px,float py,float pz)
+    private static void vertex(BufferBuilder b,float[] a,int i,float px,float py,float pz,float r,float g,float blue)
     {
-        b.vertex(-(a[i]+px)/16,(a[i+1]+py)/16,(a[i+2]+pz)/16,1,1,1,1,a[i+3],a[i+4],0,0,-a[i+5],a[i+6],a[i+7]);
+        b.vertex(-(a[i]+px)/16,(a[i+1]+py)/16,(a[i+2]+pz)/16,r,g,blue,1,a[i+3],a[i+4],0,0,-a[i+5],a[i+6],a[i+7]);
     }
-    private static boolean drawExternal(Object key,float[] vertices,int stride,float px,float py,float pz,ResourceLocation texture,PoseStack poses,int light,int overlay)
+    private static boolean drawExternal(Object key,float[] vertices,int stride,float px,float py,float pz,ResourceLocation texture,PoseStack poses,int light,int overlay,float r,float g,float b)
     {
         var type=RenderType.entityCutoutNoCull(texture);type.setupRenderState();var active=RenderSystem.getShader();
         if(active==null||!active.getClass().getName().contains("ExtendedShader")){type.clearRenderState();return false;}
@@ -75,10 +78,10 @@ public final class RigidCapsuleGpu
             // matrix from the supplied model-view matrix on every apply().
             BufferBuilder builder=new BufferBuilder(Math.max(1024,count*96+64));builder.begin(VertexFormat.Mode.QUADS,DefaultVertexFormat.NEW_ENTITY);
             for(int i=0;i+stride*3<=vertices.length;i+=stride*3)for(int corner:new int[]{0,1,2,2})
-            {int at=i+corner*stride;builder.vertex(-(vertices[at]+px)/16,(vertices[at+1]+py)/16,(vertices[at+2]+pz)/16,1,1,1,1,vertices[at+3],vertices[at+4],overlay,light,-vertices[at+5],vertices[at+6],vertices[at+7]);}
+            {int at=i+corner*stride;builder.vertex(-(vertices[at]+px)/16,(vertices[at+1]+py)/16,(vertices[at+2]+pz)/16,r,g,b,1,vertices[at+3],vertices[at+4],overlay,light,-vertices[at+5],vertices[at+6],vertices[at+7]);}
             VertexBuffer buffer=new VertexBuffer(VertexBuffer.Usage.STATIC);buffer.bind();buffer.upload(builder.end());VertexBuffer.unbind();cached=new ExternalMesh(buffer,light,overlay);layers.put(texture,cached);
         }
-        var combined=new Matrix4f(RenderSystem.getModelViewMatrix()).mul(poses.last().pose());cached.buffer().bind();cached.buffer().drawWithShader(combined,RenderSystem.getProjectionMatrix(),active);VertexBuffer.unbind();type.clearRenderState();drawCalls++;
+        var combined=new Matrix4f(RenderSystem.getModelViewMatrix()).mul(poses.last().pose());cached.buffer().bind();cached.buffer().drawWithShader(combined,RenderSystem.getProjectionMatrix(),active);EvaMaterialAuditR37.capture(texture,active);VertexBuffer.unbind();type.clearRenderState();drawCalls++;
         if(!externalReadyLogged){externalReadyLogged=true;ProjectSeele.LOGGER.info("R30 rigid GPU buffers active inside the Oculus entity pipeline");}
         return true;
     }

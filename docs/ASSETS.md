@@ -344,3 +344,9 @@ The following recordings are licensed CC0 1.0 on their original Freesound pages:
 - TRP: [210415 Punching bag, foley, ms](https://freesound.org/people/TRP/sounds/616953/), separately selected body-impact takes.
 
 `tools/build_combat_audio_r36.py` fetches the public HQ preview files and authors mono game cues through excerpt selection, pitch/speed changes, equalization, fades and layering. Generated names end in `r36_<take>`. They are edited recordings, not original Evangelion TV sound effects. Source pages, original hashes and per-output hashes are retained in the local build manifest. The generator does not generate a new roar or sample an anime soundtrack.
+
+## R37 TV jaw and feral action (2026-09-25)
+
+The Unit-01 jaw is a derivative of the existing credited Tigerar1 CC BY-SA model, split at its painted serrated armour seam. The inset red interlocks, continuous mouth lining and edge bevels are original procedural geometry; the TV episode-2 production cel and broadcast frame were visual references only and are not included in the assets. The rejected external white dental arch is not installed or distributed. `tools/build_tv_jaw_r37.py` preserves a local source snapshot and writes an exact mesh/skeleton hash manifest.
+
+The R37 feral clips adapt the already permitted Haley Tuffles recordings `ArmsSlap`, `ArmsLariat`, `ArmsSlapUpwards`, `ArmsSinglePunch2`, and `SlapDownwards`, with retargeting, timing changes, continuous supports and new claw finger poses. SNK's Iori material informed the attack direction only; no SNK model or animation data was imported. Source SHA-256 values remain in each private profile. R37 LabPBR derivatives use the existing credited colour/normal/material maps and generated shallow normal and reflectance channels; no official frame is used as a texture. Existing source-model licenses remain applicable.

@@ -51,6 +51,7 @@ def temporary_options(path,separator,changes):
 def main():
     ap=argparse.ArgumentParser();ap.add_argument('--prepared-file',type=Path,default=ROOT/'.Codex/client-launch-r17.json');ap.add_argument('--prepare-only',action='store_true');ap.add_argument('--video',action='store_true');ap.add_argument('--normal-attacks',action='store_true');ap.add_argument('--duel',action='store_true');ap.add_argument('--variant',type=int,choices=range(5),default=1)
     ap.add_argument('--body-physics-profiles',type=Path)
+    ap.add_argument('--asset-overlay',type=Path,action='append',default=[]);ap.add_argument('--city-shaders',action='store_true');ap.add_argument('--awakening',action='store_true');ap.add_argument('--mouth-only',action='store_true')
     ap.add_argument('--recovery-only',action='store_true')
     ap.add_argument('--shutdown',action='store_true')
     ap.add_argument('--gameplay-motion-directory',type=Path);ap.add_argument('--side-view',action='store_true');ap.add_argument('--early-air',action='store_true');ap.add_argument('--exchange-only',action='store_true');ap.add_argument('--capture-audio',type=Path);ap.add_argument('--field-energy',type=float,default=0);ap.add_argument('--berserk',action='store_true');a=ap.parse_args()
@@ -70,6 +71,9 @@ def main():
     if a.recovery_only:command.insert(1,'-Dprojectseele.combatRecovery=true')
     if a.shutdown:command.insert(1,'-Dprojectseele.combatWreck=true');command.insert(1,'-Dprojectseele.combatRecovery=true')
     if a.berserk:command.insert(1,'-Dprojectseele.combatBerserk=true')
+    if a.mouth_only:a.awakening=True;command.insert(1,'-Dprojectseele.combatMouth=true')
+    if a.awakening:command.insert(1,'-Dprojectseele.combatAwakening=true');command.insert(1,'-Dprojectseele.combatExchange=true')
+    if a.city_shaders:command.insert(1,'-Dprojectseele.r37MaterialAudit=true')
     command.insert(1,'-Dprojectseele.combatFieldEnergy='+str(a.field_energy))
     if a.capture_audio:
         audio=a.capture_audio.resolve()
@@ -98,14 +102,34 @@ def main():
     body=a.body_physics_profiles or ROOT/'run/projectseele-local-maps/articulated_bodies_r35.json'
     if body.is_file():paths['articulated_bodies_r35.json']=body
     hashes={n:hashlib.sha256(p.read_bytes()).hexdigest() for n,p in paths.items()};implementation=compiled_hash();began=time.time()
-    with temporary_options(options,':',review_options):
-        with temporary_options(ROOT/'run/config/oculus.properties','=',{'enableShaders':'false'}):
+    from contextlib import ExitStack
+    render_hashes={}
+    with ExitStack() as stack:
+        base=(ROOT/'run/resourcepacks/eva_real_model').resolve();saved={}
+        def restore_assets():
+            for p,b in saved.items():
+                if b is None:p.unlink(missing_ok=True)
+                else:p.write_bytes(b)
+        stack.callback(restore_assets)
+        for overlay in a.asset_overlay:
+            for p in overlay.resolve().rglob('*'):
+                if not p.is_file():continue
+                relative=p.relative_to(overlay.resolve());target=(base/relative).resolve()
+                if not target.is_relative_to(base) or relative.parts[0] not in ('assets','texture.properties'):raise ValueError('Invalid asset overlay')
+                if target not in saved:saved[target]=target.read_bytes() if target.exists() else None
+                target.parent.mkdir(parents=True,exist_ok=True);shutil.copy2(p,target);render_hashes[relative.as_posix()]=hashlib.sha256(p.read_bytes()).hexdigest()
+        stack.enter_context(temporary_options(options,':',review_options))
+        shader_settings={'enableShaders':'false'}
+        if a.city_shaders:
+            shader='ComplementaryUnbound_r5.3_SEELE_LCL.zip';shader_settings={'enableShaders':'true','shaderPack':shader}
+            stack.enter_context(temporary_options(ROOT/'run/shaderpacks'/(shader+'.txt'),'=',{'RP_MODE':'3','SHADOW_QUALITY':'2','shadowDistance':'160.0','BLOCK_REFLECT_QUALITY':'2','ENTITY_SHADOWS_DEFINE':'1','NORMAL_MAP_STRENGTH':'70','CLOUD_STYLE_DEFINE':'0'}))
+        with temporary_options(ROOT/'run/config/oculus.properties','=',shader_settings):
             from record_combat_pcm_r34 import capture
             with temporary_motion(a.gameplay_motion_directory),capture(a.capture_audio,start_log=ROOT/'run/logs/latest.log'):code=run_prepared(launch,java_environment()[1])
     print('Combat review evidence: '+str(world/'Review'))
     candidates=[p for p in (world/'Review').glob('r3*_*.json') if p.name.startswith(('r31_combat_','r32_normal_')) and p.stat().st_mtime>=began]
     if candidates:
-        proof=json.loads(max(candidates,key=lambda p:p.stat().st_mtime).read_text());proof['inputs_sha256']=hashes;proof['implementation_sha256']=implementation
+        proof=json.loads(max(candidates,key=lambda p:p.stat().st_mtime).read_text());proof['inputs_sha256']=hashes;proof['implementation_sha256']=implementation;proof['render_inputs_sha256']=render_hashes;proof['city_shaders']=a.city_shaders
         media=(ROOT/'run'/proof['media']).resolve();(media/'server_evidence.json').write_text(json.dumps(proof,indent=2))
         print('Server evidence:',media/'server_evidence.json')
         if code==0 and not proof.get('passed'):print('Native review failed:',proof.get('error',''),proof.get('cases',[]));code=2

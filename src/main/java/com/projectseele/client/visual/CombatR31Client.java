@@ -29,12 +29,19 @@ public final class CombatR31Client
         if(id.startsWith("projectseele:eva_")||id.startsWith("projectseele:sachiel_"))receivedSounds.merge(id,1,Integer::sum);
     }
     public record View(Vec3 position,Vec3 target) {}
+    private static Vec3 lastAngelCamera;
     public static View cameraView(float partial)
     {
         if(!CombatR31Review.ENABLED||!Boolean.getBoolean("projectseele.combatSideView"))return null;
         var mc=Minecraft.getInstance();if(mc.level==null)return null;
-        var eva=mc.level.getEntity(CombatR31Review.evaId);var angel=mc.level.getEntity(CombatR31Review.angelId);if(eva==null||angel==null)return null;
-        Vec3 p=eva.getPosition(partial),q=angel.getPosition(partial),centre=p.lerp(q,.5).add(0,30,0);
+        var eva=mc.level.getEntity(CombatR31Review.evaId);var angel=mc.level.getEntity(CombatR31Review.angelId);if(eva==null)return null;
+        if(angel!=null)lastAngelCamera=angel.getPosition(partial);if(lastAngelCamera==null)return null;
+        Vec3 p=eva.getPosition(partial),q=lastAngelCamera,centre=p.lerp(q,.5).add(0,30,0);
+        if(CombatR31Review.AWAKENING&&eva instanceof EvaUnit01Entity unit&&com.projectseele.entity.EvaBerserkMotionR34.introduction(unit))
+        {
+            Vec3 target=com.projectseele.entity.EvaBodyPose.opticalEye(unit,partial).add(0,-1.8,0);
+            return new View(target.add(new Vec3(5,2,12).yRot(-(float)Math.toRadians(unit.getYRot()))),target);
+        }
         double spread=Math.min(80,p.distanceTo(q)*.35);
         return new View(centre.add(62+spread*.25,24,-52-spread*.10),centre);
     }
@@ -149,6 +156,8 @@ public final class CombatR31Client
         if(!CombatR31Review.ENABLED||eva.getId()!=CombatR31Review.evaId||CombatR31Review.done||normalBones.size()>3500)return;
         long now=System.nanoTime();if(point.equals("before")&&now-boneAt<35_000_000)return;if(point.equals("before"))boneAt=now;else if(now-boneAt>25_000_000)return;
         var row=new JsonObject();row.addProperty("stage",CombatR31Review.stageName);row.addProperty("tick",CombatR31Review.stageTicks);row.addProperty("point",point);row.addProperty("action",com.projectseele.entity.EvaCombatR31.action(eva));row.addProperty("ordinary",eva.getOrdinaryAttackStage());row.addProperty("live_phase",eva.combatPhaseR31());row.addProperty("gameplay",com.projectseele.entity.EvaGameplayMotionR32.ready(eva));row.addProperty("gameplay_air_age",com.projectseele.entity.EvaGameplayMotionR32.airAge(eva,0));row.addProperty("ground",eva.onGround());row.addProperty("airborne",eva.isVisuallyAirborneForRender());row.addProperty("y",eva.getY());
+        row.addProperty("berserk",eva.isBerserk());row.addProperty("berserk_kind",com.projectseele.entity.EvaBerserkMotionR34.kind(eva));row.addProperty("mouth",com.projectseele.entity.EvaBerserkMotionR34.mouth(eva,0));row.addProperty("powered",eva.isPoweredOn());row.addProperty("health",eva.getHealth());
+        model.getBone("r37_jaw").ifPresent(b->{var jaw=new JsonArray();jaw.add(b.getRotX());jaw.add(b.getPosZ());row.add("jaw",jaw);});
         var beat=com.projectseele.entity.CombatFeelR31.beat(eva);row.addProperty("reaction",beat==null?0:beat.kind());
         var bones=new JsonObject();for(String n:List.of("root","torso_lower","torso_upper","head","arm_l","arm_r","forearm_l","forearm_r","wrist_l","wrist_r","hand_l","hand_r","leg_l","leg_r","shin_l","shin_r","ankle_l","ankle_r","foot_l","foot_r","finger_thumb_l","finger_thumb_r","finger_thumb_axis_l","finger_thumb_axis_r","finger_thumb_tip_l","finger_thumb_tip_r","finger_middle_l","finger_middle_r","finger_middle_tip_l","finger_middle_tip_r","finger_middle_distal_l","finger_middle_distal_r"))model.getBone(n).ifPresent(b->{var values=new JsonArray();for(float value:new float[]{b.getRotX(),b.getRotY(),b.getRotZ(),b.getPosX(),b.getPosY(),b.getPosZ(),b.getScaleX(),b.getScaleY(),b.getScaleZ()})values.add(value);bones.add(n,values);});row.add("bones",bones);normalBones.add(row);
     }

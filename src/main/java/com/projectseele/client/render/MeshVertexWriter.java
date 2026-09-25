@@ -11,13 +11,19 @@ public final class MeshVertexWriter
                             float x,float y,float z,float u,float v,int light,int overlay,
                             float nx,float ny,float nz)
     {
+        emitTinted(out,pose,normal,x,y,z,u,v,light,overlay,nx,ny,nz,1,1,1);
+    }
+    public static void emitTinted(VertexConsumer out,Matrix4f pose,Matrix3f normal,
+                            float x,float y,float z,float u,float v,int light,int overlay,
+                            float nx,float ny,float nz,float r,float g,float b)
+    {
         float px=pose.m00()*x+pose.m10()*y+pose.m20()*z+pose.m30();
         float py=pose.m01()*x+pose.m11()*y+pose.m21()*z+pose.m31();
         float pz=pose.m02()*x+pose.m12()*y+pose.m22()*z+pose.m32();
         float ax=normal.m00()*nx+normal.m10()*ny+normal.m20()*nz;
         float ay=normal.m01()*nx+normal.m11()*ny+normal.m21()*nz;
         float az=normal.m02()*nx+normal.m12()*ny+normal.m22()*nz;
-        out.vertex(px,py,pz,1,1,1,1,u,v,overlay,light,ax,ay,az);
+        out.vertex(px,py,pz,r,g,b,1,u,v,overlay,light,ax,ay,az);
     }
     private MeshVertexWriter() {}
 }

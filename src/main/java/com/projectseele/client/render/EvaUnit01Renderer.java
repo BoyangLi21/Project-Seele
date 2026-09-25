@@ -94,7 +94,7 @@ public class EvaUnit01Renderer extends GeoEntityRenderer<EvaUnit01Entity>
     private static final ResourceLocation LONGINUS_TEXTURE =
             new ResourceLocation(ProjectSeele.MODID, "textures/entity/longinus_lance.png");
     private static final Set<String> CAMERA_COVER_BONES = Set.of(
-            "head", "Head", "horn", "Horn", "neck", "Neck");
+            "head", "Head", "horn", "Horn", "neck", "Neck", "r37_jaw", "r37_red_upper", "r37_red_lower", "r37_lining");
     private static final Set<String> PILOT_CAMERA_MESH_COVER = Set.of(
             "torso_lower", "torso_upper", "pylon_l", "pylon_r");
     private boolean pilotView;

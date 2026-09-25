@@ -656,6 +656,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
     private int berserkAttackCooldown;
     private int berserkTargetSearchCooldown;
     private int berserkPounceVisualCooldown;
+    private int berserkPatternR37;
     @Nullable
     private UUID lockedEntryPlugUuid;
     private Vec3 autonomousInputR30=Vec3.ZERO;
@@ -792,6 +793,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
             tag.putLong("SeeleUmbilicalAnchor", this.getUmbilicalAnchor().asLong());
         tag.putFloat("SeelePilotSynchronization", this.getPilotSynchronization());
         tag.putBoolean("SeeleBerserk", this.isBerserk());
+        EvaBerserkMotionR34.save(this,tag);
         tag.putInt("SeeleBerserkTicks", this.getBerserkTicks());
         tag.putInt("SeeleBerserkRecoveryTicks", this.berserkRecoveryTicks);
         if (this.sortieDestinationDimension != null && this.sortieDestinationBed != null)
@@ -868,6 +870,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
         boolean savedBerserk = tag.getBoolean("SeeleBerserk")
                 && this.getUnitVariant() == UNIT_01;
         this.entityData.set(DATA_BERSERK, savedBerserk);
+        EvaBerserkMotionR34.load(this,tag);
         this.entityData.set(DATA_BERSERK_TICKS, savedBerserk
                 ? Math.max(1, tag.getInt("SeeleBerserkTicks")) : 0);
         this.berserkRecoveryTicks = Math.max(0,
@@ -1049,6 +1052,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
      */
     public boolean isPoweredOn()
     {
+        if(EvaBerserkMotionR34.silent(this))return false;
         if(EvaShutdownR30.disabled(this)||EvaBayRepairR33.active(this))return false;
         return this.isBerserk() || this.entityData.get(DATA_MOTION_LAB_ACTIVE)
                 || (this.isEntryPlugInserted()
@@ -2720,13 +2724,13 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
         boolean continuing = this.ordinaryAttackComboGraceTicks > 0;
         int stage = continuing
                 ? Math.floorMod(this.ordinaryAttackComboStage + 1,
-                        ORDINARY_ATTACK_FRAME_INTERVALS.length)
+                        EvaGameplayMotionR32.phrases(this)?2:ORDINARY_ATTACK_FRAME_INTERVALS.length)
                 : 0;
-        int visualStage = continuing && stage == 0 ? 3 : stage;
+        int visualStage = !EvaGameplayMotionR32.phrases(this)&&continuing&&stage==0?3:stage;
         int visualTicks = this.ordinaryAttackVisualTicks(visualStage);
         this.ordinaryAttackComboStage = stage;
         this.ordinaryAttackComboGraceTicks = Math.max(
-                MELEE_INPUT_BUFFER_TICKS, visualTicks + 4);
+                MELEE_INPUT_BUFFER_TICKS, visualTicks + 14);
         this.ordinaryAttackVisualTicks = visualTicks;
         this.entityData.set(DATA_LIVE_ACTION_PHASE, 0.0F);
         this.ordinaryAttackElapsedTicks = 0;
@@ -3987,7 +3991,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
                 this.setYRot(yaw);this.yBodyRot=this.yHeadRot=yaw;float error=Math.abs(Mth.wrapDegrees(wanted-yaw));aligned=error<18;
                 if(distance>27&&!CombatFeelR31.restrained(this))
                 {
-                    boolean ground=this.onGround();double speed=error<35?1.6:.35;this.move(MoverType.SELF,this.getForward().multiply(speed,0,speed));
+                    boolean ground=this.onGround();double speed=error<35?2.6:.35;this.move(MoverType.SELF,CombatSpacingR32.clip(this,this.getForward().multiply(speed,0,speed)));
                     if(ground&&this.level().getBlockCollisions(this,this.getBoundingBox().deflate(.1).move(0,-.15,0)).iterator().hasNext())this.setOnGround(true);
                 }
                 this.setDeltaMovement(0,this.getDeltaMovement().y,0);
@@ -4002,7 +4006,14 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
             if (distance <= (EvaGameplayMotionR32.directed(this)?31.0D:14.0D) && Math.abs(target.getY() - this.getY()) <= 16.0D
                     && this.berserkAttackCooldown <= 0&&aligned&&!CombatFeelR31.restrained(this))
             {
-                this.berserkClaw(target, server);
+                boolean finishing=target instanceof SachielEntity sachiel&&!sachiel.hasUsedFirstBattle()&&sachiel.getHealth()<=sachiel.getMaxHealth()*.32F;
+                if(finishing)
+                {
+                    // Let an existing knockdown recover into the paired scene
+                    // instead of repeatedly knocking the victim down again.
+                    if(!com.projectseele.physics.CombatBodyDynamics.active(target))com.projectseele.event.FirstBattleDirector.tryStart((SachielEntity)target,this,false);
+                }
+                else this.berserkClaw(target, server);
             }
         }
         else
@@ -4022,20 +4033,13 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
 
     private boolean canEnterBerserk()
     {
-        if (this.getUnitVariant() != UNIT_01 || this.berserkRecoveryTicks > 0
-                || this.isCrucified() || this.isLaunchSequenceActive()
-                || this.getPowerTicks() > 0
-                || !(this.getControllingPassenger() instanceof ServerPlayer))
-        {
-            return false;
-        }
-        double healthThreshold = SeeleConfig.COMMON_SPEC.isLoaded()
-                ? SeeleConfig.EVA_BERSERK_HEALTH_THRESHOLD.get() : 0.15D;
-        double syncThreshold = SeeleConfig.COMMON_SPEC.isLoaded()
-                ? SeeleConfig.EVA_BERSERK_SYNC_THRESHOLD.get() : 60.0D;
-        return this.getHealth() > 0.0F
-                && this.getHealth() <= this.getMaxHealth() * healthThreshold
-                && this.getPilotSynchronization() >= syncThreshold;
+        return canArmBerserkR37()&&getHealth()>0&&getHealth()<=50;
+    }
+    private boolean canArmBerserkR37()
+    {
+        return getUnitVariant()==UNIT_01&&!isExperimentalUnit()&&!isBerserk()&&berserkRecoveryTicks==0
+                &&!isCrucified()&&!isLaunchSequenceActive()&&!isNervLogisticsLocked()&&!isFirstBattleActive()
+                &&!EvaAirTransportR31.active(this)&&!EvaShutdownR30.wreck(this)&&!EvaBayRepairR33.active(this)&&getPilotEntity()!=null;
     }
 
     public void reviewBerserkR34()
@@ -4047,8 +4051,10 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
     {
         int duration = SeeleConfig.COMMON_SPEC.isLoaded()
                 ? SeeleConfig.EVA_BERSERK_DURATION_TICKS.get() : 900;
-        ServerPlayer pilot = this.getControllingPassenger() instanceof ServerPlayer player
+        ServerPlayer pilot = this.getPilotEntity() instanceof ServerPlayer player
                 ? player : null;
+        this.interruptCombatR31();EvaShutdownR30.clear(this);CombatFeelR31.clear(this);
+        this.setHealth(50);this.setUmbilicalAnchor(null);this.entityData.set(DATA_POWER_TICKS,0);
         this.entityData.set(DATA_BERSERK, true);
         this.entityData.set(DATA_BERSERK_TICKS, duration);
         this.entityData.set(DATA_AT_ON, false);
@@ -4064,14 +4070,12 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
         this.berserkAttackCooldown = 0;
         this.berserkTargetSearchCooldown = 0;
         this.berserkPounceVisualCooldown = 0;
-        this.triggerAnim("strike", "berserk_roar");
+        this.berserkPatternR37=0;
         EvaBerserkMotionR34.clear(this);
-        EvaBerserkMotionR34.begin(this,1,null);
-        EvaMovementSounds.play(this,this.position().add(0,this.getBbHeight()*.9,0),ModSounds.EVA_BERSERK_ROAR.get(),2.2F,1);
+        EvaBerserkMotionR34.begin(this,0,null);
         if (pilot != null)
         {
-            pilot.displayClientMessage(Component.translatable(
-                    "msg.projectseele.berserk_triggered"), false);
+            pilot.displayClientMessage(Component.literal("律子：主电源切断。初号机停止活动。"), false);
         }
         ProjectSeele.LOGGER.warn(
                 "EVA Unit-01 berserk: eva={} synchronization={} durationTicks={}",
@@ -4103,7 +4107,9 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
     {
         if(EvaGameplayMotionR32.directed(this))
         {
-            this.leftSwing=!this.leftSwing;EvaBerserkMotionR34.begin(this,this.leftSwing?2:3,target);this.berserkAttackCooldown=28;return;
+            boolean low=com.projectseele.physics.CombatBodyDynamics.active(target)&&target.getBoundingBox().getYsize()<32;
+            int kind=low?6:new int[]{2,3,4,3,5,2}[this.berserkPatternR37++%6];
+            EvaBerserkMotionR34.begin(this,kind,target);this.berserkAttackCooldown=EvaBerserkMotionR34.duration(this)+2;return;
         }
         this.cancelOrdinaryGroupCAttack();
         this.cancelSideKick();
@@ -5836,6 +5842,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
     @Override
     public boolean hurt(DamageSource source, float amount)
     {
+        if(this.isBerserk()&&!source.is(DamageTypeTags.BYPASSES_INVULNERABILITY))return false;
         if(EvaShutdownR30.wreck(this)&&source.is(DamageTypes.GENERIC_KILL)){remove(RemovalReason.KILLED);return true;}
         if(EvaShutdownR30.wreck(this)&&!source.is(DamageTypes.GENERIC_KILL))return false;
         if(this.isFirstBattleActive()&&!source.is(DamageTypeTags.BYPASSES_INVULNERABILITY))return false;
@@ -5886,7 +5893,9 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
     private boolean applyHullDamage(DamageSource source, float amount)
     {
         float healthBefore = this.getHealth();
+        if(canArmBerserkR37()&&!source.is(DamageTypeTags.BYPASSES_INVULNERABILITY))amount=Math.min(amount,Math.max(0,healthBefore-1));
         boolean accepted = super.hurt(source, amount);
+        if(accepted&&canEnterBerserk())this.beginBerserk();
         float actualHullDamage = Math.max(0.0F, healthBefore - this.getHealth());
         if (accepted && actualHullDamage > 0.0F && !this.isNervLogisticsLocked()
                 && this.isUmbilicalConnected())

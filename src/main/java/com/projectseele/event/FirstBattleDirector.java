@@ -35,6 +35,7 @@ public final class FirstBattleDirector
     private static final Map<ServerLevel,Set<ChunkPos>> TICKETS=new WeakHashMap<>();
     public static boolean tryStart(SachielEntity angel,EvaUnit01Entity eva,boolean review)
     {
+        if(!review&&(EvaBerserkMotionR34.introduction(eva)||EvaBerserkMotionR34.striking(eva)&&EvaBerserkMotionR34.phase(eva,0)<.72F))return false;
         if(!review&&(com.projectseele.entity.EvaCombatR31.active(eva)||com.projectseele.entity.EvaCombatR31.holds(angel)
                 ||com.projectseele.entity.CombatFeelR31.restrained(eva)||com.projectseele.entity.CombatFeelR31.restrained(angel)))return false;
         if("r10-firstbattle".equals(System.getProperty("projectseele.regionalBuild","")))
@@ -53,7 +54,7 @@ public final class FirstBattleDirector
         if(eva.isPilotProne()||eva.isPilotCrouching()||eva.getWeapon()==EvaUnit01Entity.WEAPON_N2||angel.hasUsedFirstBattle())return false;
         FirstBattleSavedData data=FirstBattleSavedData.get(level);if(data.active!=null)return false;
         boolean selectedReplay=pilot.getUUID().equals(data.missionOwner)&&com.projectseele.world.TvCampaignSavedData.get(level).active.equals("sachiel");
-        if(!review&&!selectedReplay&&data.completedPilots.contains(pilot.getUUID())&&!angel.getTags().contains("seele_first_battle_replay"))return false;
+        if(!review&&!selectedReplay&&!eva.isBerserk()&&data.completedPilots.contains(pilot.getUUID())&&!angel.getTags().contains("seele_first_battle_replay"))return false;
         Vec3 delta=angel.position().subtract(eva.position());double distance=delta.horizontalDistance();
         if(!review&&(angel.getHealth()>angel.getMaxHealth()*.32F||!stableSupport(eva)||distance<14||distance>46||Math.abs(delta.y)>4))
         {
