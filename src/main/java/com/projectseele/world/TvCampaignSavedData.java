@@ -24,7 +24,7 @@ public final class TvCampaignSavedData extends SavedData
     {
         public int unit,resumeTicks;
         public UUID commander,eva,plug;
-        public boolean npc,rifle,wasRiding,resumePending;
+        public boolean npc,rifle,wasRiding,resumePending,dispatchRequested;
         public BlockPos position;
         public Sortie(int unit,UUID commander,boolean npc,boolean rifle)
         {this.unit=unit;this.commander=commander;this.npc=npc;this.rifle=rifle;}
@@ -54,6 +54,7 @@ public final class TvCampaignSavedData extends SavedData
             var t=(CompoundTag)raw;int unit=t.getInt("Unit");if(unit<0||unit>4||!t.hasUUID("Commander"))continue;
             var s=new Sortie(unit,t.getUUID("Commander"),t.getBoolean("Npc"),t.getBoolean("Rifle"));
             if(t.hasUUID("Eva"))s.eva=t.getUUID("Eva");if(t.hasUUID("Plug"))s.plug=t.getUUID("Plug");
+            s.dispatchRequested=t.getBoolean("DispatchRequestedR39");
             s.wasRiding=t.getBoolean("Riding");s.resumePending=!s.npc&&s.wasRiding&&s.eva!=null&&s.plug!=null;
             if(t.contains("Position"))s.position=BlockPos.of(t.getLong("Position"));data.sorties.put(unit,s);
         }
@@ -73,7 +74,7 @@ public final class TvCampaignSavedData extends SavedData
         if (lastPosition != null) tag.putLong("LastPosition", lastPosition.asLong());
         var roster=new ListTag();for(var s:sorties.values())
         {
-            var t=new CompoundTag();t.putInt("Unit",s.unit);t.putUUID("Commander",s.commander);t.putBoolean("Npc",s.npc);t.putBoolean("Rifle",s.rifle);t.putBoolean("Riding",s.wasRiding);
+            var t=new CompoundTag();t.putInt("Unit",s.unit);t.putUUID("Commander",s.commander);t.putBoolean("Npc",s.npc);t.putBoolean("Rifle",s.rifle);t.putBoolean("Riding",s.wasRiding);t.putBoolean("DispatchRequestedR39",s.dispatchRequested);
             if(s.eva!=null)t.putUUID("Eva",s.eva);if(s.plug!=null)t.putUUID("Plug",s.plug);if(s.position!=null)t.putLong("Position",s.position.asLong());roster.add(t);
         }tag.put("SortiesR32",roster);
         var list = new ListTag(); completed.forEach(id -> list.add(StringTag.valueOf(id))); tag.put("Completed", list); return tag;

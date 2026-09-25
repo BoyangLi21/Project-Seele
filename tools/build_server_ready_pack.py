@@ -42,8 +42,15 @@ def validate_private_eva_mesh_contracts() -> None:
     }
     r30_file=asset_root/'eva/un_models_r30.json'
     r30=json.loads(r30_file.read_text(encoding='utf8'))['models'] if r30_file.exists() else {}
+    jaw_file=asset_root/'eva/unit01_tv_jaw_r37.json'
+    jaw=json.loads(jaw_file.read_text(encoding='utf8')) if jaw_file.exists() else None
     for name in ("eva_unit00", "eva_unit01", "eva_unit02", "eva_prototype", "eva_un01"):
         expected = (r30[name]['triangles'],r30[name]['parts']) if name in r30 else contracts.get(name)
+        if name=='eva_unit01' and jaw:
+            if jaw.get('schema')!='projectseele.tv-jaw-r37.v1' or jaw.get('parts')!=49:raise ValueError('Invalid R37 jaw contract')
+            expected=(jaw['triangles'],jaw['parts'])
+            for key,relative in {'mesh':f'mesh/{name}.mesh.json','geo':f'geo/{name}.geo.json','animation':f'animations/{name}.animation.json','texture':f'textures/entity/{name}.png'}.items():
+                if sha256(asset_root/relative)!=jaw['sha256'][key]:raise ValueError('R37 jaw identity mismatch: '+key)
         if expected is None:
             raise ValueError(f"Missing Java mesh contract for {name}")
         path = asset_root / "mesh" / f"{name}.mesh.json"

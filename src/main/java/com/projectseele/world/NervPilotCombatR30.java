@@ -26,6 +26,7 @@ public final class NervPilotCombatR30
     }
     public static boolean controls(EvaUnit01Entity e)
     {
+        if(PilotReturnR39.controls(e))return true;
         if(!(e.level() instanceof ServerLevel l)||e.isExperimentalUnit())return false;var d=TvCampaignSavedData.get(l);
         var sortie=d.sorties.get(e.getUnitVariant());
         return sortie!=null&&sortie.npc&&!d.active.isEmpty()&&!d.phase.equals("cancel")
@@ -72,8 +73,8 @@ public final class NervPilotCombatR30
             {
                 var pilot=TrainingPilotDirector.pilots(l).stream().filter(p->p.getAssignedVariant()==sortie.unit).findFirst().orElse(null);
                 AutoSortieR32.assignCommander(eva,owner);
-                if(pilot==null||pilot.getTrainingStage()==TrainingPilotEntity.STAGE_STANDBY)
-                {var result=TrainingPilotDirector.start(l,sortie.unit);d.notice=result.message();d.setDirty();}
+                if(!sortie.dispatchRequested)
+                {var result=TrainingPilotDirector.start(l,sortie.unit);sortie.dispatchRequested=result.accepted();d.notice=result.message();d.setDirty();}
             }
             return;
         }

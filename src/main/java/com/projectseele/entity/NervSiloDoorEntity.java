@@ -158,6 +158,21 @@ public final class NervSiloDoorEntity extends Entity
         }
     }
 
+    public static boolean hasOpenRecoveryRoute(ServerLevel level,int variant,BlockPos surface)
+    {
+        int[] offsets=com.projectseele.world.TvLaunchFacility.enabled(level)
+                ? com.projectseele.world.TvLaunchFacility.BULKHEAD_BELOW_SURFACE : new int[0];
+        for(int index=-1;index<offsets.length;index++)
+        {
+            BlockPos centre=(index<0?surface:surface.below(offsets[index])).above();
+            var doors=level.getEntitiesOfClass(NervSiloDoorEntity.class,new AABB(centre).inflate(3),
+                e->e.getVariant()==variant);
+            if(doors.isEmpty()||doors.stream().anyMatch(e->e.entityData.get(DATA_OPEN)<.999F)
+                    ||!level.getBlockState(centre).isAir())return false;
+        }
+        return true;
+    }
+
     /** The pilot can be released only after the actual surface seal bears weight. */
     public static boolean hasClosedSurfaceSupport(ServerLevel level, BlockPos surfaceBed)
     {

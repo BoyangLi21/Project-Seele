@@ -29,7 +29,7 @@ public final class NervAirLiftR30
     private static final TicketType<ChunkPos> TICKET=TicketType.create("nerv_airlift_r30",Comparator.comparingLong(ChunkPos::toLong),120);
     private static final class Job
     {
-        UUID unit,owner;int variant,age,duration;Phase phase=Phase.PREPARE;boolean returning,carrying,crew,rebase,paused;
+        UUID unit,owner;int variant,age,duration;Phase phase=Phase.PREPARE;boolean returning,carrying,crew,rebase,paused,tilting;
         float landingYaw=EvaUnit01Entity.SILO_BAY_YAW;
         Vec3 from=Vec3.ZERO,to=Vec3.ZERO,destination=Vec3.ZERO;String note="接收运输指令";
     }
@@ -61,7 +61,7 @@ public final class NervAirLiftR30
     private static void put(CompoundTag t,String k,Vec3 v){t.putDouble(k+"X",v.x);t.putDouble(k+"Y",v.y);t.putDouble(k+"Z",v.z);}
     public static State state(ServerLevel l){return l.getDataStorage().computeIfAbsent(State::load,State::new,"projectseele_nerv_airlift_r30");}
     public static Vec3 head(ServerLevel l,int unit){var p=EvaLogisticsDirector.surfaceTransportBedR30(l,unit);return new Vec3(p.getX()+.5,p.getY()+2,p.getZ()+.5);}
-    public static boolean waitingAtHead(EvaUnit01Entity e){return e.level() instanceof ServerLevel l&&!e.isExperimentalUnit()&&e.getPersistentData().getBoolean("R30AwaitingNervRecovery")&&e.position().distanceToSqr(head(l,e.getUnitVariant()))<.25;}
+    public static boolean waitingAtHead(EvaUnit01Entity e){return e.level() instanceof ServerLevel l&&!e.isExperimentalUnit()&&e.getPersistentData().getBoolean("R30AwaitingNervRecovery")&&e.position().distanceToSqr(head(l,e.getUnitVariant()).add(0,e.getPersistentData().getDouble("R39LandingLift"),0))<.25;}
     public static boolean ownsMotion(EvaUnit01Entity e)
     {
         if(!(e.level() instanceof ServerLevel l))return false;var j=state(l).job;
@@ -113,7 +113,7 @@ public final class NervAirLiftR30
             unit.disconnectForAirliftR32();unit.normalizeAfterTransportR30(false);
             unit.moveOnNervCarrier(destination.x,destination.y,destination.z,EvaUnit01Entity.SILO_BAY_YAW);
             unit.setNervLogisticsLocked(true);unit.setNoGravity(true);unit.setOnGround(true);unit.resetFallDistance();
-            unit.getPersistentData().putBoolean("R30AwaitingNervRecovery",true);EvaShutdownR30.waitingR31(unit,true);
+            unit.getPersistentData().remove("R39LandingLift");unit.getPersistentData().putBoolean("R30AwaitingNervRecovery",true);EvaShutdownR30.waitingR31(unit,true);
             s.locations.put(job.variant,unit.blockPosition());
             returnedCargo=true;
             }
@@ -140,6 +140,17 @@ public final class NervAirLiftR30
         if(e!=null&&e.getPilotEntity() instanceof ServerPlayer pilot&&pilot!=p)return "请由当前驾驶员本人呼叫空运，或先让驾驶员离开插入栓。";
         var j=new Job();j.variant=variant;j.unit=receipt.canonicalId();j.owner=p.getUUID();j.returning=returning;j.crew=e!=null&&e.getPilotEntity()==p;j.destination=returning?head(l,variant):new Vec3(x+.5,0,z+.5);s.job=j;s.setDirty();return "运输部门收到。正在确认机体身份、地表净空与降落位置。";
     }
+    /** Called only by a persisted, completed NPC sortie; it does not require the commander online. */
+    public static boolean requestPilotReturnR39(ServerLevel level,EvaUnit01Entity unit,UUID commander)
+    {
+        var s=state(level);if(s.job!=null||s.forceRecovery)return false;
+        if(unit.isExperimentalUnit()||!(unit.getPilotEntity() instanceof TrainingPilotEntity))return false;
+        var receipt=EvaFleetSavedData.get(level.getServer()).entry(unit.getUnitVariant()).orElse(null);
+        if(receipt==null||receipt.phase()!=EvaFleetSavedData.Phase.DEPLOYED||!receipt.canonicalId().equals(unit.getUUID()))return false;
+        var j=new Job();j.variant=unit.getUnitVariant();j.unit=unit.getUUID();j.owner=commander;
+        j.returning=true;j.destination=head(level,j.variant);s.locations.put(j.variant,unit.blockPosition());s.job=j;s.setDirty();return true;
+    }
+
     public static String cancel(ServerPlayer p)
     {
         var s=state(p.serverLevel());var j=s.job;if(j==null)return "运输机待命中。";
@@ -157,7 +168,7 @@ public final class NervAirLiftR30
         return loaded&&l.isPositionEntityTicking(BlockPos.containing(p));
     }
     private static double cruise(ServerLevel l){return l.getMaxBuildHeight()+224;}
-    private static int duration(Vec3 a,Vec3 b){return Math.max(80,Mth.ceil(a.distanceTo(b)/20));}
+    private static int duration(Vec3 a,Vec3 b){return AirRouteR39.duration(a,b);}
     private static boolean movingCargo(Phase p){return Set.of(Phase.ASCEND,Phase.CRUISE,Phase.DESCEND).contains(p);}
     private static void note(ServerLevel l,Job j,String text)
     {if(j.note.equals(text))return;j.note=text;var p=l.getServer().getPlayerList().getPlayer(j.owner);if(p!=null)p.sendSystemMessage(Component.literal("[NERV 运输管制] "+text));}
@@ -167,7 +178,7 @@ public final class NervAirLiftR30
         j.phase=phase;j.from=a;j.to=b;j.age=0;j.duration=Math.max(1,ticks);j.rebase=false;
         if(phase==Phase.APPROACH)EvaAirTransportR31.begin(e);
         if(phase==Phase.CLAMP)EvaAirTransportR31.transition(e,0,1,j.duration);
-        if(phase==Phase.ASCEND)EvaAirTransportR31.transition(e,90,1,j.duration);
+        if(phase==Phase.ASCEND){j.tilting=false;EvaAirTransportR31.transition(e,EvaAirTransportR31.pitch(e,0),1,1);}
         if(phase==Phase.CRUISE)EvaAirTransportR31.transition(e,90,1,1);
         if(phase==Phase.DESCEND)EvaAirTransportR31.transition(e,0,1,Math.max(40,j.duration*2/3));
         if(phase==Phase.RELEASE)EvaAirTransportR31.release(e,j.duration);
@@ -212,18 +223,21 @@ public final class NervAirLiftR30
             if(!j.returning){Vec3 site=TransportClearanceR30.landing(l,j.destination,e);if(site==null){s.last="目标附近没有安全落点，请换一个开阔位置";s.job=null;s.setDirty();return;}j.destination=site;}
             begin(l,j,Phase.TAKEOFF,plane.position(),new Vec3(STAND.x,cruise(l),STAND.z),100,e);s.setDirty();return;
         }
-        if(j.rebase){Vec3 from=movingCargo(j.phase)?e.position():plane.position();int remaining=Math.max(30,j.duration-j.age);if(j.phase==Phase.CRUISE||j.phase==Phase.FERRY||j.phase==Phase.RETURN)remaining=Math.max(remaining,duration(from,j.to));begin(l,j,j.phase,from,j.to,remaining,e);}
+        if(j.rebase){Vec3 from=movingCargo(j.phase)?e.position():plane.position();int remaining=Math.max(30,j.duration-j.age);if(j.phase==Phase.CRUISE||j.phase==Phase.FERRY||j.phase==Phase.RETURN)remaining=duration(from,j.to);begin(l,j,j.phase,from,j.to,remaining,e);}
         if(j.phase==Phase.FERRY&&j.age==0){j.to=new Vec3(e.getX(),cruise(l),e.getZ());j.duration=duration(j.from,j.to);}
+        if(j.phase==Phase.CRUISE||j.phase==Phase.FERRY||j.phase==Phase.RETURN)AirRouteR39.prefetch(l,j.from,j.to,j.age,j.duration);
         double look=Mth.clamp((double)(j.age+6)/j.duration,0,1);look=look*look*look*(look*(look*6-15)+10);ready(l,j.from.lerp(j.to,look),3);
         double t=Mth.clamp((double)(j.age+1)/j.duration,0,1);t=t*t*t*(t*(t*6-15)+10);Vec3 at=j.from.lerp(j.to,t);
-        if(!ready(l,at,2)){if(movingCargo(j.phase)){e.endNervCarrierMotion();EvaAirTransportR31.hold(e);j.rebase=true;}return;}
+        if(!ready(l,at,2)){if(movingCargo(j.phase)){e.endNervCarrierMotion();}return;}
         if(movingCargo(j.phase))
         {
-            lock(e);Vec3 delta=at.subtract(e.position());
+            lock(e);
+            if(j.phase==Phase.ASCEND&&!j.tilting&&(e.getY()-j.from.y>=24||j.age>=j.duration/2)){j.tilting=true;EvaAirTransportR31.transition(e,90,1,Math.max(1,j.duration-j.age));}
+            Vec3 delta=at.subtract(e.position());
             float yaw=e.getYRot();if(j.phase==Phase.CRUISE){Vec3 d=j.to.subtract(j.from);yaw=Mth.approachDegrees(yaw,(float)Math.toDegrees(Math.atan2(-d.x,d.z)),2.5F);}
             if(j.phase==Phase.DESCEND&&j.returning)yaw=Mth.approachDegrees(yaw,j.landingYaw,2.5F);
-            if(!AirCradleClearanceR31.clear(e,delta,yaw)){e.endNervCarrierMotion();throw new IllegalStateException("机体运输路径受阻，保持当前位置");}
-            e.moveOnNervCarrier(at.x,at.y,at.z,yaw);plane.setPos(at.add(0,OFFSET,0));plane.setYRot(yaw);plane.cargo(e.getId(),true,1);
+            if(!AirCradleClearanceR31.clear(e,delta,yaw)){e.endNervCarrierMotion();throw new IllegalStateException("机体运输路径受阻："+j.phase+" / "+e.blockPosition().toShortString());}
+            Vec3 previous=e.position();e.moveOnNervCarrier(at.x,at.y,at.z,yaw);e.publishAirCarrierFrameR39(previous,at);plane.setPos(at.add(0,OFFSET,0));plane.setYRot(yaw);plane.cargo(e.getId(),true,1);
         }
         else if(j.phase==Phase.CLAMP){lock(e);plane.cargo(e.getId(),true,1);}
         else if(j.phase==Phase.RELEASE){lock(e);EvaAirTransportR31.refreshRelease(e,Math.max(1,j.duration-j.age));plane.cargo(e.getId(),false,1);}
@@ -246,6 +260,9 @@ public final class NervAirLiftR30
             case ASCEND -> {Vec3 dest=new Vec3(j.destination.x,cruise(l)-OFFSET,j.destination.z);begin(l,j,Phase.CRUISE,e.position(),dest,duration(e.position(),dest),e);}
             case CRUISE -> {
                 if(j.returning){j.landingYaw=AirCradleClearanceR31.landingYaw(e,j.destination,EvaUnit01Entity.SILO_BAY_YAW);if(!Float.isFinite(j.landingYaw))throw new IllegalStateException("原发射口周围没有容纳当前机体姿态的净空");}
+                Vec3 floor=j.returning?head(l,j.variant):j.destination;
+                j.destination=AirCradleClearanceR31.landingRoot(e,floor,j.returning?j.landingYaw:e.getYRot());
+                if(j.returning)e.getPersistentData().putDouble("R39LandingLift",j.destination.y-floor.y);
                 begin(l,j,Phase.DESCEND,e.position(),j.destination,140,e);
             }
             case DESCEND -> {e.endNervCarrierMotion();begin(l,j,Phase.RELEASE,plane.position(),plane.position(),70,e);}
@@ -255,9 +272,9 @@ public final class NervAirLiftR30
                 if(j.returning){e.setNervLogisticsLocked(true);e.setNoGravity(true);e.getPersistentData().putBoolean("R30AwaitingNervRecovery",true);EvaShutdownR30.waitingR31(e,true);}
                 begin(l,j,Phase.RETREAT,plane.position(),new Vec3(plane.getX(),cruise(l),plane.getZ()),100,e);
             }
-            case RETREAT -> {Vec3 atStand=new Vec3(STAND.x,cruise(l),STAND.z);begin(l,j,Phase.RETURN,plane.position(),atStand,duration(plane.position(),atStand),e);}
+            case RETREAT -> {if(j.returning&&waitingAtHead(e))EvaLogisticsDirector.requestRecovery(l,j.variant);Vec3 atStand=new Vec3(STAND.x,cruise(l),STAND.z);begin(l,j,Phase.RETURN,plane.position(),atStand,duration(plane.position(),atStand),e);}
             case RETURN -> begin(l,j,Phase.LAND,plane.position(),STAND,100,e);
-            case LAND -> {plane.setPos(STAND);plane.setYRot(0);s.aircraftAt=STAND;s.last=j.returning?"机体已交付原发射井顶部，等待指挥室“回收”指令；运输机在 NERV 机场待命。":"机体投放完成，运输机在 NERV 机场待命。";note(l,j,s.last);s.job=null;s.setDirty();}
+            case LAND -> {plane.setPos(STAND);plane.setYRot(0);s.aircraftAt=STAND;s.last=j.returning?"机体已交付原发射井，支撑架与舱门按回收顺序工作；运输机已返回 NERV 机场。":"机体投放完成，运输机在 NERV 机场待命。";note(l,j,s.last);s.job=null;s.setDirty();}
             default -> {}
         }
     }

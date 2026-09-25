@@ -1,6 +1,7 @@
 package com.projectseele.world;
 
 import com.projectseele.entity.EntryPlugCarrierEntity;
+import com.projectseele.entity.EvaAirTransportR31;
 import com.projectseele.entity.EvaUnit01Entity;
 import com.projectseele.entity.TrainingPilotEntity;
 import net.minecraft.server.level.ServerLevel;
@@ -36,13 +37,17 @@ public final class PilotRadioR28
     public static String topic(TrainingPilotEntity pilot)
     {
         var eva = occupiedUnit(pilot);
+        if (eva == null && pilot.getVehicle() instanceof EntryPlugCarrierEntity && pilot.level() instanceof ServerLevel level
+                && java.util.Set.of("DESCENDING","TO_HANGAR","FILLING").contains(EvaLogisticsDirector.status(level,pilot.getAssignedVariant()).phase())) return "return";
         if (eva == null) return switch (pilot.getTrainingStage())
         {
-            case TrainingPilotEntity.STAGE_WALKING -> "boarding";
+            case TrainingPilotEntity.STAGE_WALKING -> pilot.getPersistentData().getString("SeelePilotRouteR30").equals("return") ? "disembark" : "boarding";
             case TrainingPilotEntity.STAGE_IN_PLUG -> "plug";
             default -> "standby";
         };
         if (eva.isFirstBattleActive()) return "silent";
+        if (EvaAirTransportR31.active(eva)) return "air_transport";
+        if (PilotReturnR39.controls(eva) && EvaLogisticsDirector.status((ServerLevel) pilot.level(),pilot.getAssignedVariant()).phase().equals("DEPLOYED")) return "returning";
         var phase = EvaLogisticsDirector.status((ServerLevel) pilot.level(), pilot.getAssignedVariant()).phase();
         return phaseTopic(phase, eva.isLaunchSequenceActive());
     }
@@ -64,7 +69,7 @@ public final class PilotRadioR28
     public static String response(ServerPlayer player, TrainingPilotEntity pilot, boolean rotate)
     {
         String topic = topic(pilot);
-        if (topic.equals("silent")) return "自主行动期间，驾驶员频道暂停。";
+        if (topic.equals("silent")) return "……";
         return rotate ? StaffDialogueCatalogR24.next(player, profile(pilot.getAssignedVariant()), "technician", topic)
                 : StaffDialogueCatalogR24.line(profile(pilot.getAssignedVariant()), "technician", topic, player.tickCount / 600);
     }
@@ -76,7 +81,7 @@ public final class PilotRadioR28
         var voice = VOICES.computeIfAbsent(pilot, key -> new Voice());
         String topic = topic(pilot);
         var eva = occupiedUnit(pilot);
-        boolean low = eva != null && !eva.isUmbilicalConnected() && eva.getPowerTicks() < 1200;
+        boolean low = topic.equals("field") && eva != null && !eva.isUmbilicalConnected() && eva.getPowerTicks() < 1200;
         boolean hit = eva != null && voice.health >= 0 && eva.getHealth() < voice.health - .1F;
         voice.health = eva == null ? -1 : eva.getHealth();
         // Never replay an old phase report after a cooldown or over the directed scene.

@@ -428,6 +428,8 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
             SynchedEntityData.defineId(EvaUnit01Entity.class, EntityDataSerializers.INT);
     private static final EntityDataAccessor<Integer> DATA_LAUNCH_TICKS =
             SynchedEntityData.defineId(EvaUnit01Entity.class, EntityDataSerializers.INT);
+    private static final EntityDataAccessor<Boolean> DATA_RECOVERY_RACK_R39 = SynchedEntityData.defineId(EvaUnit01Entity.class, EntityDataSerializers.BOOLEAN);
+    private static final EntityDataAccessor<Boolean> DATA_CARRIER_FRAME_R39 = SynchedEntityData.defineId(EvaUnit01Entity.class, EntityDataSerializers.BOOLEAN);
     private static final EntityDataAccessor<Boolean> DATA_CARRIER_MOTION_ACTIVE =
             SynchedEntityData.defineId(EvaUnit01Entity.class, EntityDataSerializers.BOOLEAN);
     private static final EntityDataAccessor<Integer> DATA_CARRIER_MOTION_START =
@@ -729,6 +731,8 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
         this.entityData.define(DATA_VISUAL_POSE, VISUAL_NORMAL);
         this.entityData.define(DATA_LAUNCH_PHASE, LAUNCH_IDLE);
         this.entityData.define(DATA_LAUNCH_TICKS, 0);
+        this.entityData.define(DATA_RECOVERY_RACK_R39, false);
+        this.entityData.define(DATA_CARRIER_FRAME_R39, false);
         this.entityData.define(DATA_CARRIER_MOTION_ACTIVE, false);
         this.entityData.define(DATA_CARRIER_MOTION_START, 0);
         this.entityData.define(DATA_CARRIER_MOTION_DURATION, 1);
@@ -1017,6 +1021,8 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
 
     private static final EntityDataAccessor<Float> DATA_CARRIER_RISE_R26 = SynchedEntityData.defineId(EvaUnit01Entity.class,EntityDataSerializers.FLOAT);
     private float oldCarrierRiseR26;
+    public void setRecoveryRackR39(boolean active){this.entityData.set(DATA_RECOVERY_RACK_R39,active);}
+    public boolean recoveryRackR39(){return this.entityData.get(DATA_RECOVERY_RACK_R39);}
     public void setCarrierRiseProgress(float progress) { this.entityData.set(DATA_CARRIER_RISE_R26,Mth.clamp(progress,0,1)); }
     public float carrierRiseProgress(float partial) { return Mth.lerp(partial,this.oldCarrierRiseR26,this.entityData.get(DATA_CARRIER_RISE_R26)); }
 
@@ -1932,6 +1938,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
 
     private void beginCarrierMotion(Vec3 from, Vec3 to, int duration)
     {
+        this.entityData.set(DATA_CARRIER_FRAME_R39, false);
         this.entityData.set(DATA_CARRIER_FROM_X, (float) from.x);
         this.entityData.set(DATA_CARRIER_FROM_Y, (float) from.y);
         this.entityData.set(DATA_CARRIER_FROM_Z, (float) from.z);
@@ -1952,6 +1959,15 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
         {
             this.beginCarrierMotion(from, to, duration);
         }
+    }
+
+    /** Streaming flights publish the actual pair of positions, never a speculative full leg. */
+    public void publishAirCarrierFrameR39(Vec3 previous, Vec3 current)
+    {
+        if(this.level().isClientSide)return;
+        beginCarrierMotion(previous,current,1);
+        this.entityData.set(DATA_CARRIER_FRAME_R39,true);
+        this.entityData.set(DATA_CARRIER_MOTION_START,(int)this.level().getGameTime()-1);
     }
 
     public Vec3 sampleCarrierMotion(float partialTick)
@@ -1980,6 +1996,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
                 && this.entityData.get(DATA_CARRIER_FROM_Y) < -200
                 && this.entityData.get(DATA_CARRIER_TO_Y) >= 80)
             eased = com.projectseele.world.LaunchMotionR29.progress(progress);
+        if(this.entityData.get(DATA_CARRIER_FRAME_R39))eased=progress;
         return new Vec3(
                 Mth.lerp(eased,
                         this.entityData.get(DATA_CARRIER_FROM_X),

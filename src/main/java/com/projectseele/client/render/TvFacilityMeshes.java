@@ -92,8 +92,11 @@ public final class TvFacilityMeshes
     public static void carrier(PoseStack poses,int light,EvaUnit01Entity unit,float partial)
     {
         float opacity=1;
+        poses.pushPose();
+        if(unit.recoveryRackR39())poses.translate(0,-3*(1-unit.carrierRiseProgress(partial)),0);
         draw("carrier_deck",poses,light);
         draw("carrier_deck_guides",poses,light);
+        poses.popPose();
         poses.pushPose();
         poses.translate(0,-64*(1-unit.carrierRiseProgress(partial)),0);
         draw("carrier_spine",poses,light,opacity);

@@ -36,7 +36,7 @@ public final class UNAirLiftR29
             for(var raw:tag.getList("Jobs",Tag.TAG_COMPOUND))
             {
                 var t=(CompoundTag)raw;Job j=new Job();j.serial=t.getInt("Serial");j.owner=t.getUUID("Owner");j.unit=t.getUUID("Unit");j.plug=t.hasUUID("Plug")?t.getUUID("Plug"):null;j.plane=t.hasUUID("Plane")?t.getUUID("Plane"):null;
-                j.phase=Phase.valueOf(t.getString("Phase"));j.from=read(t,"From");j.to=read(t,"To");j.destination=read(t,"Destination");j.pickup=read(t,"Pickup");j.planePosition=read(t,"PlanePosition");j.age=t.getInt("Age");j.duration=t.getInt("Duration");j.total=t.getInt("Total");j.homebound=t.getBoolean("Homebound");j.groundOnly=t.getBoolean("GroundOnly");j.crew=t.getBoolean("Crew");j.cancel=t.getBoolean("Cancel");j.carrying=t.getBoolean("Carrying");j.note=t.getString("Note");j.rebase=true;s.jobs.put(j.serial,j);
+                j.phase=Phase.valueOf(t.getString("Phase"));j.from=read(t,"From");j.to=read(t,"To");j.destination=read(t,"Destination");j.pickup=read(t,"Pickup");j.planePosition=read(t,"PlanePosition");j.age=t.getInt("Age");j.duration=t.getInt("Duration");j.total=t.getInt("Total");j.homebound=t.getBoolean("Homebound");j.groundOnly=t.getBoolean("GroundOnly");j.crew=t.getBoolean("Crew");j.cancel=t.getBoolean("Cancel");j.carrying=t.getBoolean("Carrying");j.note=t.getString("Note");j.nextReport=t.getLong("NextReportR39");j.rebase=true;s.jobs.put(j.serial,j);
             }
             for(int i=0;i<2;i++){if(tag.hasUUID("Cart"+i))s.carts.put(i,tag.getUUID("Cart"+i));if(tag.contains("CartPos"+i))s.cartPositions.put(i,BlockPos.of(tag.getLong("CartPos"+i)));s.last.put(i,tag.getString("Last"+i));}return s;
         }
@@ -44,16 +44,16 @@ public final class UNAirLiftR29
         {
             ListTag list=new ListTag();for(var j:jobs.values())
             {
-                CompoundTag t=new CompoundTag();t.putInt("Serial",j.serial);t.putUUID("Owner",j.owner);t.putUUID("Unit",j.unit);if(j.plug!=null)t.putUUID("Plug",j.plug);if(j.plane!=null)t.putUUID("Plane",j.plane);t.putString("Phase",j.phase.name());put(t,"From",j.from);put(t,"To",j.to);put(t,"Destination",j.destination);put(t,"Pickup",j.pickup);put(t,"PlanePosition",j.planePosition);t.putInt("Age",j.age);t.putInt("Duration",j.duration);t.putInt("Total",j.total);t.putBoolean("Homebound",j.homebound);t.putBoolean("GroundOnly",j.groundOnly);t.putBoolean("Crew",j.crew);t.putBoolean("Cancel",j.cancel);t.putBoolean("Carrying",j.carrying);t.putString("Note",j.note);list.add(t);
+                CompoundTag t=new CompoundTag();t.putInt("Serial",j.serial);t.putUUID("Owner",j.owner);t.putUUID("Unit",j.unit);if(j.plug!=null)t.putUUID("Plug",j.plug);if(j.plane!=null)t.putUUID("Plane",j.plane);t.putString("Phase",j.phase.name());put(t,"From",j.from);put(t,"To",j.to);put(t,"Destination",j.destination);put(t,"Pickup",j.pickup);put(t,"PlanePosition",j.planePosition);t.putInt("Age",j.age);t.putInt("Duration",j.duration);t.putInt("Total",j.total);t.putBoolean("Homebound",j.homebound);t.putBoolean("GroundOnly",j.groundOnly);t.putBoolean("Crew",j.crew);t.putBoolean("Cancel",j.cancel);t.putBoolean("Carrying",j.carrying);t.putString("Note",j.note);t.putLong("NextReportR39",j.nextReport);list.add(t);
             }
             tag.put("Jobs",list);for(int i=0;i<2;i++){if(carts.containsKey(i))tag.putUUID("Cart"+i,carts.get(i));if(cartPositions.containsKey(i))tag.putLong("CartPos"+i,cartPositions.get(i).asLong());tag.putString("Last"+i,last.getOrDefault(i,"待命"));}return tag;
         }
     }
     private static final class Job
     {
-        int serial,age,duration,total,loadCursor,missing,planeMissing;UUID owner,unit,plug,plane;Phase phase=Phase.PREPARE;
+        long nextReport;int serial,age,duration,total,loadCursor,missing,planeMissing;UUID owner,unit,plug,plane;Phase phase=Phase.PREPARE;
         Vec3 from=Vec3.ZERO,to=Vec3.ZERO,destination=Vec3.ZERO,pickup=Vec3.ZERO,planePosition=Vec3.ZERO;
-        boolean homebound,crew,cancel,carrying,rebase,paused,siteReady,groundOnly;String note="正在定位原机体";CompletableFuture<?> loading;Vec3 waitAt;
+        boolean homebound,crew,cancel,carrying,rebase,paused,siteReady,groundOnly,tilting;String note="正在定位原机体";CompletableFuture<?> loading;Vec3 waitAt;
     }
     private static void put(CompoundTag tag,String key,Vec3 v){tag.putDouble(key+"X",v.x);tag.putDouble(key+"Y",v.y);tag.putDouble(key+"Z",v.z);}
     private static Vec3 read(CompoundTag tag,String key){return new Vec3(tag.getDouble(key+"X"),tag.getDouble(key+"Y"),tag.getDouble(key+"Z"));}
@@ -105,6 +105,23 @@ public final class UNAirLiftR29
         if(eva instanceof EvaPrototypeEntity e&&e.getPilotEntity()!=null&&e.getPilotEntity()!=player)return "该机体由另一名驾驶员控制，请由驾驶员本人呼叫运输。";
         s.jobs.put(serial,j);s.setDirty();return "运输指令已接受。正在加载原机体与目的地，随后检查落点和机库联锁。";
     }
+    public static boolean stageCruiseReviewR39(ServerLevel level,ServerPlayer owner)
+    {
+        if(!"r39-transport".equals(System.getProperty("projectseele.regionalBuild"))||!level.getServer().getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT).normalize().getFileName().toString().equals("SEELE_FIELD_R39_REVIEW"))throw new IllegalStateException("Isolated flight fixture only");
+        var id=UNRecoveryR22.identity(level,0);if(id==null)throw new IllegalStateException("No original UN-00");
+        var known=UNRecoveryR22.lastKnownPosition(level,id);retain(level,known==null?BlockPos.containing(UNRecoveryR22.home(0)):known,4);
+        if(!(ServiceAircraftR32.payload(level,id) instanceof EvaPrototypeEntity eva))return false;
+        if(active(level,0))throw new IllegalStateException("Existing UN flight in review copy");
+        var j=new Job();j.serial=0;j.unit=id;j.owner=owner.getUUID();j.homebound=true;j.carrying=true;j.siteReady=true;j.destination=apron(0);
+        var from=new Vec3(-1800.5,cruise(level)-OFFSET,1300.5);retain(level,BlockPos.containing(from),4);
+        if(!readyAt(level,from))return false;
+        var plane=ModEntities.UN_TRANSPORT.get().create(level);plane.configure(0,true);plane.addTag("seele_un_airlift");plane.setPos(from.add(0,OFFSET,0));plane.setHoistDistance((float)OFFSET);
+        if(!level.addFreshEntity(plane))return false;
+        eva.normalizeAfterTransportR30(false);EvaAirTransportR31.begin(eva);EvaAirTransportR31.transition(eva,90,1,1);lock(eva);eva.moveOnNervCarrier(from.x,from.y,from.z,0);
+        j.plane=plane.getUUID();j.planePosition=plane.position();state(level).jobs.put(0,j);UNRecoveryR22.remember(eva);
+        begin(level,j,Phase.CRUISE,from,new Vec3(j.destination.x,from.y,j.destination.z),duration(from,j.destination),eva);state(level).setDirty();return true;
+    }
+
     public static String cancel(ServerPlayer player,int serial)
     {
         var s=state(player.serverLevel());var j=s.jobs.get(serial);if(j==null)return "没有正在执行的运输。";
@@ -165,15 +182,28 @@ public final class UNAirLiftR29
     }
     private static void note(ServerLevel l,Job j,String text)
     {
-        if(text.equals(j.note))return;j.note=text;var p=l.getServer().getPlayerList().getPlayer(j.owner);if(p!=null)p.sendSystemMessage(Component.literal("[UN 运输管制] "+text));
+        j.note=text;
     }
+    private static void report(ServerLevel l,Job j)
+    {
+        long now=System.currentTimeMillis();
+        if(j.nextReport==0||j.nextReport>now+10000){j.nextReport=now+10000;return;}
+        if(now<j.nextReport)return;
+        j.nextReport=now+10000;state(l).setDirty();
+        var p=l.getServer().getPlayerList().getPlayer(j.owner);
+        Vec3 at=j.planePosition;
+        if(j.plane==null){var known=UNRecoveryR22.lastKnownPosition(l,j.unit);if(known!=null)at=Vec3.atCenterOf(known);}
+        if(p!=null)p.sendSystemMessage(Component.literal("[UN 运输管制 · 0"+j.serial+"] "+BlockPos.containing(at).toShortString()+" · "+j.note));
+    }
+    private static boolean cruisePhase(Phase phase)
+    {return phase==Phase.CRUISE||phase==Phase.FERRY||phase==Phase.RETURN_FLIGHT;}
     private static void begin(ServerLevel l,Job j,Phase phase,Vec3 from,Vec3 to,int duration,EvaPrototypeEntity eva)
     {
         j.phase=phase;j.from=from;j.to=to;j.age=0;j.duration=Math.max(1,duration);j.rebase=false;
         if(phase==Phase.APPROACH)EvaAirTransportR31.begin(eva);
         if(phase==Phase.ROLL_IN||phase==Phase.GROUND_LIFT)EvaAirTransportR31.transition(eva,0,1,Math.min(60,j.duration));
         if(phase==Phase.CLAMP)EvaAirTransportR31.transition(eva,0,1,j.duration);
-        if(phase==Phase.ASCEND)EvaAirTransportR31.transition(eva,90,1,j.duration);
+        if(phase==Phase.ASCEND){j.tilting=false;EvaAirTransportR31.transition(eva,EvaAirTransportR31.pitch(eva,0),1,1);}
         if(phase==Phase.CRUISE)EvaAirTransportR31.transition(eva,90,1,1);
         if(phase==Phase.DESCEND)EvaAirTransportR31.transition(eva,0,1,Math.max(40,j.duration*2/3));
         if(phase==Phase.RELEASE&&EvaAirTransportR31.active(eva))EvaAirTransportR31.release(eva,j.duration);
@@ -181,7 +211,7 @@ public final class UNAirLiftR29
         note(l,j,switch(phase){case GROUND_LIFT->"自行载台升起";case ROLL_OUT->"机体正在移至库外吊装点";case FERRY->"运输机前往接载点";case APPROACH->"运输机下降，展开吊装架";case CLAMP->"夹具接触，正在固定肩部、腰部和双腿";case ASCEND->"机体离地，运输鞍座收平";case CRUISE->"机体已横置固定，运输机巡航中";case DESCEND->"抵达目标，鞍座翻转后垂直下放";case RELEASE->"接地，解除夹具";case ROLL_IN->"自行载台将机体送回库位";case GROUND_LOWER->"机体落座原机库";case RETREAT,RETURN_FLIGHT->"机体已交付，运输机返航";default->"运输准备中";});
     }
     private static boolean movesEva(Phase p){return switch(p){case GROUND_LIFT,ROLL_OUT,ASCEND,CRUISE,DESCEND,ROLL_IN,GROUND_LOWER->true;default->false;};}
-    private static int duration(Vec3 a,Vec3 b){return Math.max(80,Mth.ceil(a.distanceTo(b)/20));}
+    private static int duration(Vec3 a,Vec3 b){return AirRouteR39.duration(a,b);}
     private static double smooth(double x){return x*x*x*(x*(x*6-15)+10);}
     private static void lock(EvaPrototypeEntity eva){eva.stopUNFlight();eva.setNervLogisticsLocked(true);eva.setNoGravity(true);eva.setDeltaMovement(Vec3.ZERO);}
     private static void release(EvaPrototypeEntity eva)
@@ -198,11 +228,11 @@ public final class UNAirLiftR29
     @SubscribeEvent public static void tick(TickEvent.ServerTickEvent event)
     {
         if(event.phase!=TickEvent.Phase.END)return;var l=event.getServer().getLevel(FacilitySchemaV2.DIMENSION);if(l==null)return;var s=state(l);if(s.jobs.isEmpty())return;l.resetEmptyTime();
-        for(var j:new ArrayList<>(s.jobs.values()))try{advance(l,s,j);}catch(Exception error){j.phase=Phase.HOLD;if(l.getEntity(j.unit) instanceof EvaUnit01Entity held){held.endNervCarrierMotion();EvaAirTransportR31.hold(held);}j.note="运输暂停："+error.getMessage();s.setDirty();ProjectSeele.LOGGER.error("UN airlift held serial={}",j.serial,error);}
+        for(var j:new ArrayList<>(s.jobs.values()))try{advance(l,s,j);report(l,j);}catch(Exception error){j.phase=Phase.HOLD;if(l.getEntity(j.unit) instanceof EvaUnit01Entity held){held.endNervCarrierMotion();EvaAirTransportR31.hold(held);}j.note="运输暂停："+error.getMessage();s.setDirty();ProjectSeele.LOGGER.error("UN airlift held serial={}",j.serial,error);}
     }
     private static void advance(ServerLevel l,State s,Job j)
     {
-        BlockPos last=UNRecoveryR22.lastKnownPosition(l,j.unit);retain(l,last==null?BlockPos.containing(UNRecoveryR22.home(j.serial)):last,3);retain(l,BlockPos.containing(UNRecoveryR22.home(j.serial)),6);
+        BlockPos last=UNRecoveryR22.lastKnownPosition(l,j.unit);retain(l,last==null?BlockPos.containing(UNRecoveryR22.home(j.serial)):last,3);retain(l,BlockPos.containing(UNRecoveryR22.home(j.serial)),j.phase==Phase.PREPARE?6:3);
         if(!(ServiceAircraftR32.payload(l,j.unit) instanceof EvaPrototypeEntity eva))
         {if(++j.missing>600){j.phase=Phase.HOLD;note(l,j,"原机体未能加载，请由管理员检查登记或执行维护复位");s.setDirty();}return;}
         // Keep the persisted clamp/deployment state. CLAMP is attached before
@@ -238,7 +268,7 @@ public final class UNAirLiftR29
                 if(at==null){s.jobs.remove(j.serial);s.last.put(j.serial,"落点及邻近地面没有足够净空，请选择开阔位置");note(l,j,s.last.get(j.serial));s.setDirty();return;}
                 j.destination=at;j.siteReady=true;note(l,j,"落点确认："+BlockPos.containing(at).toShortString());
             }
-            if(!openBase(l,j.serial)){note(l,j,"等待机库排液与舱门开启");return;}
+            if(eva.isInsideTestHangar()&&!openBase(l,j.serial)){note(l,j,"等待机库排液与舱门开启");return;}
             if(eva.isUNFlying()){eva.landUNFlight();note(l,j,"等待 UN-01 降落后接载");return;}
             if(!j.homebound&&!EvaShutdownR30.wreck(eva)&&UNPlugDirector.atDock(eva))
             {
@@ -288,7 +318,7 @@ public final class UNAirLiftR29
         {
             if(j.waitAt!=null&&!readyAt(l,j.waitAt))return;j.waitAt=null;
             Vec3 from=movesEva(j.phase)?eva.position():plane.position();int remaining=Math.max(30,j.duration-j.age);
-            if(j.phase==Phase.CRUISE||j.phase==Phase.FERRY||j.phase==Phase.RETURN_FLIGHT)remaining=Math.max(remaining,duration(from,j.to));
+            if(j.phase==Phase.CRUISE||j.phase==Phase.FERRY||j.phase==Phase.RETURN_FLIGHT)remaining=duration(from,j.to);
             begin(l,j,j.phase,from,j.to,remaining,eva);
         }
         if(j.cancel&&(j.phase==Phase.CRUISE||j.phase==Phase.ASCEND||j.phase==Phase.DESCEND))
@@ -303,22 +333,24 @@ public final class UNAirLiftR29
         if(j.homebound)
         {
             Vec3 target=apron(j.serial);Vec3 delta=target.subtract(cart.position());if(delta.length()>.1)cart.setPos(cart.position().add(delta.normalize().scale(Math.min(.8,delta.length()))));
-            openBase(l,j.serial);
         }
+        if(cruisePhase(j.phase))AirRouteR39.prefetch(l,j.from,j.to,j.age,j.duration);
         j.age++;double t=smooth(Mth.clamp((double)j.age/Math.max(1,j.duration),0,1));Vec3 point=j.from.lerp(j.to,t);
         if(j.phase==Phase.CRUISE||j.phase==Phase.FERRY||j.phase==Phase.RETURN_FLIGHT)
             readyAt(l,j.from.lerp(j.to,smooth(Mth.clamp((j.age+8D)/Math.max(1,j.duration),0,1))));
         if(!readyAt(l,point))
-        {j.age--;if(movesEva(j.phase)){j.waitAt=point;j.rebase=true;eva.endNervCarrierMotion();EvaAirTransportR31.hold(eva);}note(l,j,"前方区块正在加载，保持位置");s.setDirty();return;}
+        {j.age--;if(movesEva(j.phase)){eva.endNervCarrierMotion();}note(l,j,"前方区块正在加载，保持位置");s.setDirty();return;}
         if(movesEva(j.phase))
         {
             lock(eva);
+            if(j.phase==Phase.ASCEND&&!j.tilting&&(eva.getY()-j.from.y>=24||j.age>=j.duration/2)){j.tilting=true;EvaAirTransportR31.transition(eva,90,1,Math.max(1,j.duration-j.age));}
             Vec3 wanted=point.subtract(eva.position());
             // Sweep the restrained model's measured parts, preserving the
             // dorsal walkway that lies outside the actual chest and shoulders.
             float yaw=eva.getYRot();if(j.phase==Phase.CRUISE){Vec3 d=j.to.subtract(j.from);float target=(float)Math.toDegrees(Math.atan2(-d.x,d.z));yaw=Mth.approachDegrees(yaw,target,2.5F);}else if(j.phase==Phase.ROLL_IN||j.phase==Phase.ROLL_OUT)yaw=Mth.approachDegrees(yaw,0,2.5F);
             if(!(j.carrying?AirCradleClearanceR31.clear(eva,wanted,yaw):UNCarrierClearanceR30.clear(eva,wanted)))throw new IllegalStateException("运输路径受阻，停在 "+eva.blockPosition().toShortString());
-            eva.moveOnNervCarrier(point.x,point.y,point.z,yaw);
+            Vec3 previous=eva.position();eva.moveOnNervCarrier(point.x,point.y,point.z,yaw);
+            eva.publishAirCarrierFrameR39(previous,point);
             if(j.carrying){plane.setPos(point.x,point.y+OFFSET,point.z);plane.setYRot(yaw);plane.cargo(eva.getId(),true,1);}
             else {cart.setPos(point);cart.setYRot(yaw);}
         }
@@ -344,7 +376,7 @@ public final class UNAirLiftR29
             case APPROACH -> {plane.setYRot(eva.getYRot());begin(l,j,Phase.CLAMP,plane.position(),plane.position(),100,eva);}
             case CLAMP -> {j.carrying=true;begin(l,j,Phase.ASCEND,eva.position(),new Vec3(eva.getX(),cruise(l)-OFFSET,eva.getZ()),120,eva);}
             case ASCEND -> {Vec3 dest=new Vec3(j.destination.x,cruise(l)-OFFSET,j.destination.z);begin(l,j,Phase.CRUISE,eva.position(),dest,duration(eva.position(),dest),eva);}
-            case CRUISE -> begin(l,j,Phase.DESCEND,eva.position(),j.destination,160,eva);
+            case CRUISE -> {j.destination=AirCradleClearanceR31.landingRoot(eva,j.destination,eva.getYRot());begin(l,j,Phase.DESCEND,eva.position(),j.destination,160,eva);}
             case DESCEND -> {eva.endNervCarrierMotion();begin(l,j,Phase.RELEASE,plane.position(),plane.position(),70,eva);}
             case RELEASE ->
             {

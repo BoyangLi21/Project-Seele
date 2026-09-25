@@ -603,6 +603,8 @@ public final class EvaLogisticsDirector
                     + " must be motionless before surface command authorizes recovery.");
         }
         unit.getPersistentData().remove("R30AwaitingNervRecovery");
+        unit.getPersistentData().putBoolean("RecoveryRiseR39",true);
+        unit.setCarrierRiseProgress(0);
         unit.prepareForNervRecovery();
         unit.setNervLogisticsLocked(true);
         unit.moveOnNervCarrier(surface.getX() + 0.5D,
@@ -613,7 +615,7 @@ public final class EvaLogisticsDirector
         level.playSound(null, surface, SoundEvents.PISTON_CONTRACT,
                 SoundSource.BLOCKS, 4.0F, 0.48F);
         return new ActionResult(true, label(variant)
-                + " recovery deck locked; physical descent started.");
+                + " 回收已开始：支撑架升起、舱门开启，然后下降。");
     }
 
     /**
@@ -1143,7 +1145,8 @@ public final class EvaLogisticsDirector
                 target = 1.0F;
             }
             else if (unit.getLaunchPhase() == EvaUnit01Entity.LAUNCH_ASCENT
-                    || fleet.phase() == Phase.DESCENDING)
+                    || fleet.phase() == Phase.DESCENDING
+                       && (!unit.getPersistentData().getBoolean("RecoveryRiseR39") || fleet.ticks() >= 100))
             {
                 // Once command releases a sortie, the owned hatch remains
                 // fully open for the complete ascent/descent.  Closing it at
@@ -1220,11 +1223,13 @@ public final class EvaLogisticsDirector
         float rackRise = switch(entry.phase())
         {
             case DRAINING -> com.projectseele.entity.EvaDorsalMechanism.smooth(entry.ticks()/100F);
-            case TO_SILO, SILO_READY, DESCENDING, TO_HANGAR -> 1F;
+            case TO_SILO, SILO_READY, TO_HANGAR -> 1F;
+            case DESCENDING -> unit.getPersistentData().getBoolean("RecoveryRiseR39") ? com.projectseele.entity.EvaDorsalMechanism.smooth(entry.ticks()/100F) : 1F;
             case FILLING -> 1-com.projectseele.entity.EvaDorsalMechanism.smooth(entry.ticks()/80F);
-            case DEPLOYED -> unit.getLaunchPhase()==EvaUnit01Entity.LAUNCH_CLEAR||NervAirLiftR30.waitingAtHead(unit) ? 1F : 0F;
+            case DEPLOYED -> unit.getLaunchPhase()==EvaUnit01Entity.LAUNCH_CLEAR ? 1F : 0F;
             default -> 0F;
         };
+        unit.setRecoveryRackR39(entry.phase()==Phase.DESCENDING&&unit.getPersistentData().getBoolean("RecoveryRiseR39"));
         unit.setCarrierRiseProgress(rackRise);
         NervCarrierVisuals.updateLclSurface(level, unit,
                 hangar.getX() + 0.5D, hangar.getY(),
@@ -2080,14 +2085,28 @@ public final class EvaLogisticsDirector
                                     EvaUnit01Entity unit, FleetEntry entry,
                                     BlockPos surface, BlockPos silo)
     {
+        boolean staged=unit.getPersistentData().getBoolean("RecoveryRiseR39");
+        int offset=staged?100:0;
+        if(staged && entry.ticks()<=100)
+        {
+            unit.setNervLogisticsLocked(true);unit.setNoGravity(true);unit.setDeltaMovement(Vec3.ZERO);
+            if(entry.ticks()<100)
+                put(level,variant,entry.withPhase(Phase.DESCENDING,entry.ticks()+1,surface.getY()+1,0));
+            else if(NervSiloDoorEntity.hasOpenRecoveryRoute(level,variant,surface))
+            {
+                put(level,variant,entry.withPhase(Phase.DESCENDING,101,surface.getY()+1,0));
+                ProjectSeele.LOGGER.info("R39 recovery descent released variant={} support=1 hatch=open",variant);
+            }
+            return;
+        }
         int surfaceCarrierY = surface.getY() + 1;
         int distance = surfaceCarrierY - silo.getY();
         int duration = Math.max(1, Mth.ceil(distance / VERTICAL_BLOCKS_PER_TICK));
-        int ticks = Math.min(duration, entry.ticks() + 1);
+        int ticks = Math.min(duration, entry.ticks() - offset + 1);
         double progress = smoothCarrierProgress(ticks / (double) duration);
         double exactY = Mth.lerp(progress, surfaceCarrierY, silo.getY());
         int carrierY = Mth.floor(exactY + 0.5D);
-        if (entry.ticks() == 0)
+        if (entry.ticks() == (staged?101:0))
         {
             unit.beginNervCarrierMotion(
                     new Vec3(surface.getX() + 0.5D,
@@ -2105,9 +2124,10 @@ public final class EvaLogisticsDirector
         if (ticks < duration)
         {
             put(level, variant, entry.withPhase(Phase.DESCENDING,
-                    ticks, carrierY, 0));
+                    ticks + offset, carrierY, 0));
             return;
         }
+        unit.getPersistentData().remove("RecoveryRiseR39");
         NervCarrierVisuals.remove(level, unit);
         unit.endNervCarrierMotion();
         restoreStaticCarrier(level, variant, silo);

@@ -90,10 +90,32 @@ final class AirCradleClearanceR31
                         .expandTowards(delta).inflate(pad);
                 if(sweep.minY>=eva.level().getMaxBuildHeight()||sweep.maxY<eva.level().getMinBuildHeight())continue;
                 for(var collision:eva.level().getBlockCollisions(eva,sweep))for(var box:collision.toAabbs())
-                    if(box.intersects(sweep)&&!existingSupport(box,contacts)){EvaAirTransportR31.holdAtPitch(eva,startPitch);return false;}
+                    if(box.intersects(sweep)&&!existingSupport(box,contacts))
+                    {
+                        // A captured sole may already slightly overlap its bearing floor.
+                        // Permit only vertical separation from that existing floor contact.
+                        AABB before=transformed(eva,local,root,startPitch,startYaw).inflate(.015);
+                        boolean separating=delta.y>0&&delta.horizontalDistanceSqr()<1e-8
+                                &&Math.abs(endPitch-startPitch)<1e-4&&Math.abs(turn)<1e-4
+                                &&box.maxY<=root.y+.25&&before.intersects(box)
+                                &&Math.min(before.maxY+delta.y,box.maxY)-Math.max(before.minY+delta.y,box.minY)
+                                  <=Math.min(before.maxY,box.maxY)-Math.max(before.minY,box.minY)+1e-6;
+                        if(separating)continue;
+                        com.projectseele.ProjectSeele.LOGGER.warn("AIR CONTACT root={} delta={} pitch={}/{} yaw={}/{} local={} sweep={} obstacle={} supports={}",root,delta,startPitch,endPitch,startYaw,targetYaw,local,sweep,box,contacts);
+                        EvaAirTransportR31.holdAtPitch(eva,startPitch);return false;
+                    }
             }
         }
         EvaAirTransportR31.acceptPitch(eva,endPitch);return true;
+    }
+    /** Position the lowest measured carried part above the receiving surface. */
+    static Vec3 landingRoot(EvaUnit01Entity eva,Vec3 floor,float yaw)
+    {
+        double lowest=Double.POSITIVE_INFINITY;
+        for(var local:sections(eva))lowest=Math.min(lowest,transformed(eva,local,floor,0,yaw).minY);
+        double lift=Math.max(0,floor.y+.035-lowest);
+        if(!Double.isFinite(lift)||lift>4)throw new IllegalStateException("运输姿态与落点高度不相容，请检查机体姿态");
+        return floor.add(0,lift,0);
     }
     static float landingYaw(EvaUnit01Entity eva,Vec3 destination,float preferred)
     {

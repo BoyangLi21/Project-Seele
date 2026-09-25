@@ -122,7 +122,9 @@ public final class TvCampaignDirector
     private static void complete(ServerLevel level, String chapter, UUID owner, UUID angel)
     {
         var data = TvCampaignSavedData.get(level);
+        var returning=java.util.List.copyOf(data.sorties.values());
         if (data.phase.equals("cancel") || !data.finish(chapter, owner, angel)) return;
+        com.projectseele.world.PilotReturnR39.enqueue(level,returning);
         var player = level.getServer().getPlayerList().getPlayer(owner);
         if (player != null)
         {

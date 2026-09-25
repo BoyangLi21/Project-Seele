@@ -16,10 +16,11 @@ def install(enable=False):
         if shader=='ComplementaryUnbound_r5.3.zip':
             from patch_lcl_shader_compat_r35 import build
             shader=build(ROOT/'run/shaderpacks'/shader,ROOT/'run/shaderpacks/ComplementaryUnbound_r5.3_SEELE_LCL.zip').name
-        revision=ROOT/'run/projectseele-local-maps/revision_r38.json'
+        revision=ROOT/'run/projectseele-local-maps/revision_r39.json'
+        if not revision.is_file():revision=ROOT/'run/projectseele-local-maps/revision_r38.json'
         if revision.is_file():
             selected=json.loads(revision.read_text())['shader'];candidate=ROOT/'run/shaderpacks'/selected['filename']
-            if hashlib.sha256(candidate.read_bytes()).hexdigest()!=selected['sha256']:raise ValueError('R38 facility shader changed after review')
+            if hashlib.sha256(candidate.read_bytes()).hexdigest()!=selected['sha256']:raise ValueError('Pinned facility shader changed after review')
             shader=candidate.name
         folder=ROOT/'run/config';folder.mkdir(exist_ok=True);p=folder/'oculus.properties'
         if p.exists():

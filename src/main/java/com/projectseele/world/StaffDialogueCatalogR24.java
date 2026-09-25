@@ -60,7 +60,7 @@ public final class StaffDialogueCatalogR24
             List<String> lines = profiles.getOrDefault(key, Map.of()).get(topic);
             if (lines != null && !lines.isEmpty()) return lines.get(Math.floorMod(variation, lines.size()));
         }
-        return "我在岗位上。你需要了解哪一项情况？";
+        return "请讲。";
     }
 
     public static String next(net.minecraft.server.level.ServerPlayer player, String skin, String role, String topic)
