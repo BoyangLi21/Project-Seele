@@ -92,6 +92,27 @@ public final class SachielGameplayMotionR32
     {
         var c=data().clips.get(name(mode));float at=phase(mode,age)*(c.travel.length-1);int a=(int)at,b=Math.min(a+1,c.travel.length-1);return c.travel[a].lerp(c.travel[b],at-a);
     }
+    public static void adaptContact(SachielEntity actor,EvaBodyPose.Sample pose,float age,float partial)
+    {
+        if(!actor.isStrikeActive())return;
+        int mode=actor.strikeMode();float weight=SachielStrike.prepare(mode,age)*(1-SachielStrike.release(mode,age));if(weight<.001F)return;
+        var profile=com.projectseele.physics.CombatBodyProfiles.get(actor);if(profile==null)return;
+        var reference=pose(actor,SachielStrike.contactStart(mode)+2);var inverse=SachielStrike.root(actor,partial).invert();
+        boolean stomp=mode==SachielStrike.STOMP;int count=SachielStrike.bothHands(mode)?2:1;
+        for(int i=0;i<count;i++)
+        {
+            boolean left=count==2?i==1:left(mode);String side=left?"l":"r",bone=(stomp?"foot_":"hand_")+side;
+            Vec3 goal=actor.strikeAim();var forward=actor.getForward().multiply(1,0,1).normalize();
+            if(count==2)goal=goal.add(new Vec3(forward.z,0,-forward.x).scale(left?-3.5:3.5));
+            if(mode==SachielStrike.PILE)goal=goal.subtract(forward.scale(17));
+            Vector3f local=inverse.transformPosition(goal.toVector3f());
+            Vector3f atContact=reference.matrix(bone).transformPosition(new Vector3f(reference.rig.get(bone).pivot()));
+            Vector3f offset=local.sub(atContact);if(offset.length()>5.6F)offset.normalize().mul(5.6F);
+            Vector3f current=pose.matrix(bone).transformPosition(new Vector3f(pose.rig.get(bone).pivot())).fma(weight,offset);
+            if(stomp)com.projectseele.physics.AnatomicalLimbConstraints.reachFoot(pose,profile,side,current,pose.matrix(bone).getUnnormalizedRotation(new Quaternionf()).normalize());
+            else com.projectseele.physics.AnatomicalLimbConstraints.reachHand(pose,profile,side,current);
+        }
+    }
     public static SachielStrike.Frame contact(SachielEntity e,float age,float partial,boolean left)
     {
         var pose=SachielBodyPoseR35.sampleAt(e,age,partial);String side=left?"l":"r",name=e.strikeMode()==SachielStrike.STOMP?"foot_"+side:"hand_"+side;

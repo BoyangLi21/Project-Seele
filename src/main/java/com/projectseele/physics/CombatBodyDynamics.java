@@ -90,14 +90,19 @@ public final class CombatBodyDynamics
     {
         for(var element:profile.definition().getAsJsonArray("bodies"))
         {
-            var row=element.getAsJsonObject();if(!row.has("hinge"))continue;String n=row.get("name").getAsString();var a=row.getAsJsonArray("joint");
+            var row=element.getAsJsonObject();if(row.get("parent").isJsonNull())continue;String n=row.get("name").getAsString(),parent=row.get("parent").getAsString();var a=row.getAsJsonArray("joint");
             var joint=new Vector3f(a.get(3).getAsFloat(),a.get(7).getAsFloat(),a.get(11).getAsFloat()).div(CombatBodyProfiles.MODEL_TO_PHYSICS);
-            var delta=joint.sub(pose.rig.get(n).pivot());pose.positions.put(n,new Vector3f(delta).sub(pose.rotations.get(n).transform(delta)));
+            var wanted=pose.matrix(parent).transformPosition(new Vector3f(joint));
+            var current=pose.matrix(n).transformPosition(new Vector3f(joint));var correction=wanted.sub(current);
+            String rigParent=pose.rig.get(n).parent();if(rigParent!=null)pose.matrix(rigParent).invert().transformDirection(correction);
+            pose.positions.get(n).add(correction);pose.dirty();
         }
         pose.dirty();
     }
     public static void normalize(LivingEntity entity,EvaBodyPose.Sample pose)
     {var p=CombatBodyProfiles.get(entity);if(p!=null)AnatomicalLimbConstraints.apply(pose,p);}
+    public static void alignJoints(LivingEntity entity,EvaBodyPose.Sample pose)
+    {var profile=CombatBodyProfiles.get(entity);if(profile!=null)stitch(pose,profile);}
     private static Vector3f local(State s,Vec3 point)
     {return point.subtract(s.origin).toVector3f().rotateY(-(180-s.yaw)*Mth.DEG_TO_RAD).mul(SCALE);}
     private static Vec3 world(State s,Vector3f point)
@@ -119,7 +124,7 @@ public final class CombatBodyDynamics
         if(previous==null&&entity instanceof EvaUnit01Entity eva&&eva.getWeapon()==EvaUnit01Entity.WEAPON_FISTS)
         {snapshot.rotations.get("head").rotateY(-eva.pilotHeadYawForRender(0)*Mth.DEG_TO_RAD).rotateX(-eva.pilotHeadPitchForRender(0)*Mth.DEG_TO_RAD);snapshot.dirty();}
         if(previous!=null){previous.simulation.close();SERVER.remove(entity);}
-        State s=new State();s.profile=CombatBodyProfiles.get(entity);AnatomicalLimbConstraints.apply(snapshot,s.profile);s.template=CombatBodyProfiles.copy(snapshot);s.pose=CombatBodyProfiles.copy(snapshot);
+        State s=new State();s.profile=CombatBodyProfiles.get(entity);snapshot=CombatBodyProfiles.canonical(snapshot,s.profile);AnatomicalLimbConstraints.apply(snapshot,s.profile);stitch(snapshot,s.profile);s.template=CombatBodyProfiles.copy(snapshot);s.pose=CombatBodyProfiles.copy(snapshot);
         s.origin=entity.position();s.position=entity.position();s.yaw=entity.getYRot();s.bounds=entity.getBoundingBox();s.started=level.getGameTime();
         s.simulation=new ArticulatedBody(s.profile.definition(),CombatBodyProfiles.physicalMatrices(snapshot,s.profile));
         addTerrain(level,entity,s);Vec3 motion=entity.getDeltaMovement();s.simulation.velocity(motion.toVector3f().rotateY(-(180-s.yaw)*Mth.DEG_TO_RAD).mul(20*SCALE));

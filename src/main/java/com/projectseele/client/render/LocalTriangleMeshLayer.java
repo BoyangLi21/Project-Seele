@@ -141,6 +141,9 @@ public final class LocalTriangleMeshLayer<T extends GeoAnimatable> extends GeoRe
                         this.textureSelector.apply(animatable)));
         float[] values = skinVertices(mesh,part,bone);
         int stride = mesh.stride();
+        if(Boolean.getBoolean("projectseele.r38JointAudit")&&!this.fullBright&&animatable instanceof EvaUnit01Entity eva
+                &&eva.getId()==com.projectseele.visual.CombatR31Review.evaId&&this.getRenderer() instanceof EvaUnit01Renderer renderer)
+            witnessAttachmentsR38(mesh,part,bone,values,renderer.renderedMeshTransform(pose,eva,partialTick));
         if(!this.fullBright&&animatable instanceof EvaUnit01Entity eva&&eva.isFirstBattleActive()
                 &&this.getRenderer() instanceof EvaUnit01Renderer renderer)
             EvaContactShadowsR24.capture(eva,bone.getName(),values,stride,part.pivotX(),part.pivotY(),part.pivotZ(),renderer.renderedMeshTransform(pose,eva,partialTick));
@@ -466,10 +469,12 @@ public final class LocalTriangleMeshLayer<T extends GeoAnimatable> extends GeoRe
         final Map<String,Map<String,Integer>> points=new HashMap<>();
         final Map<String,Vector3f> framePoints=new HashMap<>();final Map<String,String> frameOwners=new HashMap<>();long frame=-1;int samples;double maximum;String worst="";
         WeldWitness(MeshData mesh)
+        {this(mesh,false);}
+        WeldWitness(MeshData mesh,boolean attachments)
         {
             for(var entry:mesh.parts().entrySet())
             {
-                String name=entry.getKey();if(name.startsWith("dorsal_")||name.startsWith("finger_")||name.startsWith("hand_")||name.startsWith("wrist_"))continue;
+                String name=entry.getKey();if(name.startsWith("dorsal_")||name.startsWith("finger_")||!attachments&&(name.startsWith("hand_")||name.startsWith("wrist_")))continue;
                 var part=entry.getValue();var v=part.vertices();
                 for(int i=0;i<v.length;i+=8)
                 {
@@ -477,7 +482,36 @@ public final class LocalTriangleMeshLayer<T extends GeoAnimatable> extends GeoRe
                     points.computeIfAbsent(key,k->new HashMap<>()).putIfAbsent(name,i);
                 }
             }
-            points.entrySet().removeIf(e->e.getValue().size()<2||e.getValue().keySet().stream().noneMatch(n->n.startsWith("r21_join_")));
+            points.entrySet().removeIf(e->e.getValue().size()<2||!(e.getValue().keySet().stream().anyMatch(n->n.startsWith("r21_join_"))
+                    ||attachments&&(pairedR38(e.getValue().keySet(),"forearm_","hand_")||pairedR38(e.getValue().keySet(),"shin_","foot_"))));
+        }
+    }
+    private static boolean pairedR38(java.util.Set<String> names,String a,String b)
+    {return names.contains(a+"l")&&names.contains(b+"l")||names.contains(a+"r")&&names.contains(b+"r");}
+    private static void witnessAttachmentsR38(MeshData mesh,MeshPart part,GeoBone bone,float[] values,Matrix4f world)
+    {
+        var witness=WELD_WITNESSES.computeIfAbsent(mesh.captureTag()+"-r38",k->new WeldWitness(mesh,true));long frame=com.projectseele.client.AircraftRenderClockR21.frame;
+        if(frame!=witness.frame)
+        {
+            witness.frame=frame;witness.framePoints.clear();witness.frameOwners.clear();
+            if(witness.samples>0&&frame%15==0)try
+            {
+                var report=new JsonObject();report.addProperty("passed",witness.maximum<.02);report.addProperty("maximum_world_gap",witness.maximum);report.addProperty("compared_pairs",witness.samples);report.addProperty("neutral_shared_points",witness.points.size());report.addProperty("worst",witness.worst);
+                java.nio.file.Files.writeString(java.nio.file.Path.of(com.projectseele.visual.CombatR31Review.mediaFolder).resolve("surface_seams_r38.json"),report.toString());
+            }
+            catch(IOException error){throw new IllegalStateException(error);}
+        }
+        for(var entry:witness.points.entrySet())
+        {
+            Integer i=entry.getValue().get(bone.getName());if(i==null)continue;
+            var point=world.transformPosition(new Vector3f(-(values[i]+part.pivotX())/16,(values[i+1]+part.pivotY())/16,(values[i+2]+part.pivotZ())/16));
+            var previous=witness.framePoints.putIfAbsent(entry.getKey(),point);
+            if(previous!=null)
+            {
+                double gap=point.distance(previous);if(gap>witness.maximum){witness.maximum=gap;witness.worst=entry.getKey()+" "+witness.frameOwners.get(entry.getKey())+" / "+bone.getName()+" stage="+com.projectseele.visual.CombatR31Review.stageName;}
+                witness.samples++;
+            }
+            else witness.frameOwners.put(entry.getKey(),bone.getName());
         }
     }
     private static void witnessWelds(MeshData mesh,MeshPart part,GeoBone bone,float[] values,Matrix4f world,int serial)
@@ -553,9 +587,9 @@ public final class LocalTriangleMeshLayer<T extends GeoAnimatable> extends GeoRe
     private static Map<String,JointSkin> jointSkins(Map<String,MeshPart> parts,int stride)
     {
         Map<String,JointSkin> result=new HashMap<>();
-        for(String joint:new String[]{"elbow","ankle"})for(String side:new String[]{"l","r"})
+            for(String joint:new String[]{"elbow","ankle","wrist"})for(String side:new String[]{"l","r"})
         {
-            String upper=(joint.equals("elbow")?"arm_":"shin_")+side,lower=(joint.equals("elbow")?"forearm_":"foot_")+side;
+                String upper=(joint.equals("elbow")?"arm_":joint.equals("ankle")?"shin_":"forearm_")+side,lower=(joint.equals("elbow")?"forearm_":joint.equals("ankle")?"foot_":"hand_")+side;
             var a=parts.get(upper);var b=parts.get(lower);if(a==null||b==null)continue;
             // Pivot + relative coordinates can round to opposite sides of a
             // quantization cell. Match spatially and give BOTH copies the same
@@ -591,11 +625,38 @@ public final class LocalTriangleMeshLayer<T extends GeoAnimatable> extends GeoRe
                         float t=Math.max(0,1-(float)Math.sqrt(distanceSquared)/6);weights[i]=.5F*t*t*(3-2*t);
                     }
                 }
-                result.put(name,new JointSkin(name.equals(upper)?lower:upper,weights,rest,rest.clone()));
+                    mergeJointSkin(result,name,p,name.equals(upper)?lower:upper,weights,rest);
             }
             ProjectSeele.LOGGER.info("EVA joint skin seam: joint={} side={} sharedVertices={}",joint,side,seam.size());
         }
-        return Map.copyOf(result);
+            if(parts.containsKey("head")&&parts.containsKey("torso_upper"))
+            {
+                var p=parts.get("head");float[] weights=new float[p.vertices().length/stride];
+                for(int i=0;i<weights.length;i++)
+                {
+                    float y=p.vertices()[i*stride+1]+p.pivotY(),z=p.vertices()[i*stride+2]+p.pivotZ();
+                    float blend=Math.max(0,Math.min(1,(p.pivotY()+1.5F-y)/7F));
+                    if(y>p.pivotY()-3&&z<-6)blend=0; // Helmet and new jaw stay rigid; only the neck sleeve bends.
+                    weights[i]=blend*blend*(3-2*blend);
+                }
+                mergeJointSkin(result,"head",p,"torso_upper",weights,p.vertices().clone());
+            }
+            return Map.copyOf(result);
+    }
+
+    private static void mergeJointSkin(Map<String,JointSkin> result,String name,MeshPart part,String other,float[] weights,float[] rest)
+    {
+        var previous=result.get(name);
+        if(previous==null){result.put(name,new JointSkin(other,weights,rest,rest.clone()));return;}
+        Map<String,float[]> all=new java.util.TreeMap<>();int count=weights.length;
+        if(previous.influences().isEmpty())
+        {
+            all.put(previous.other(),previous.weights().clone());float[] own=new float[count];for(int i=0;i<count;i++)own[i]=1-previous.weights()[i];all.put(name,own);
+        }
+        else previous.influences().forEach((n,w)->all.put(n,w.clone()));
+        float[] own=all.get(name),added=all.computeIfAbsent(other,n->new float[count]);
+        for(int i=0;i<count;i++){float take=Math.min(own[i],weights[i]);own[i]-=take;added[i]+=take;}
+        result.put(name,new JointSkin("",new float[0],rest,rest.clone(),Map.copyOf(all)));
     }
 
     private static GeoBone findBone(GeoBone bone,String name)

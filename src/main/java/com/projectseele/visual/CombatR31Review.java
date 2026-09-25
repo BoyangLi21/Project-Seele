@@ -32,6 +32,9 @@ public final class CombatR31Review
     public static final boolean WRECK=Boolean.getBoolean("projectseele.combatWreck");
     public static final boolean AWAKENING=Boolean.getBoolean("projectseele.combatAwakening");
     public static final boolean MOUTH_ONLY=Boolean.getBoolean("projectseele.combatMouth");
+    public static final boolean CLOSE=Boolean.getBoolean("projectseele.r38Close"),CLOSE_FINALE=Boolean.getBoolean("projectseele.r38CloseFinale");
+    public static final boolean PRONE_WRECK=Boolean.getBoolean("projectseele.r38ProneWreck");
+    private static int closeCase;
     public static final String WORLD="SEELE_FIELD_R31_REVIEW";
     public static final int X=12000,Z=12000,FLOOR=280;
     public static volatile boolean ready,tracked,mounted,done,jump;
@@ -82,7 +85,7 @@ public final class CombatR31Review
             if(stage==Stage.ARENA){buildArena();return;}
             if(AWAKENING&&sawFinale&&eva!=null&&!eva.isFirstBattleActive()&&(angel==null||!angel.isAlive()||angel.isRemoved()))
             {
-                record("natural_awakening_to_finale",sawSilence&&sawRoar&&protectedHull&&feralKinds.size()>=3,"attack_kinds",feralKinds.size());
+                record("natural_awakening_to_finale",sawSilence&&sawRoar&&protectedHull&&(CLOSE_FINALE||feralKinds.size()>=3),"attack_kinds",feralKinds.size());
                 var row=cases.get(cases.size()-1).getAsJsonObject();row.addProperty("silence",sawSilence);row.addProperty("roar",sawRoar);row.addProperty("protection",protectedHull);row.addProperty("automatic_finale",sawFinale);finish("");return;
             }
             if(stage==Stage.DUEL&&eva!=null&&!eva.isRemoved()&&angel!=null&&angel.isRemoved()&&angel.isSelfDestructing())
@@ -102,7 +105,7 @@ public final class CombatR31Review
             {
                 case TRACK->{if(tracked&&stageTicks>20){pilot.setGameMode(GameType.SURVIVAL);pilot.setHealth(pilot.getMaxHealth());pilot.getFoodData().setFoodLevel(20);pilot.getCapability(EvaPilotCapability.DATA).ifPresent(c->c.setSynchronization(100));if(!eva.boardFromExternalPlug(pilot,100))throw new IllegalStateException("R31 real pilot boarding failed");next(Stage.MOUNT);}}
                 case MOUNT->{if(mounted&&eva.getActivationTicks()==0&&stageTicks>20){if(eva.isAtFieldOn())input(4);next(Stage.WARM);}}
-                case WARM->{if(warmFrames>=35&&stageTicks>25){photo="01_ready";if(RECOVERY){arrange(23);initialEvaHealth=eva.getHealth();next(Stage.REACTION);}else if(EXCHANGE){arrange(MOUTH_ONLY?100:39);angel.setNoAi(MOUTH_ONLY);if(!MOUTH_ONLY)angel.setTarget(eva);initialEvaHealth=eva.getHealth();if(AWAKENING){eva.setHealth(70);pilot.getCapability(EvaPilotCapability.DATA).ifPresent(c->c.setSynchronization(10));eva.hurt(angel.damageSources().mobAttack(angel),60);if(!eva.isBerserk()||eva.getHealth()!=50)throw new IllegalStateException("Natural 50 HP awakening did not trigger");}else if(Boolean.getBoolean("projectseele.combatBerserk"))eva.reviewBerserkR34();next(Stage.DUEL);}else next(Stage.WALK_FORWARD);}}
+                case WARM->{if(PRONE_WRECK){if(phase==0){eva.toggleProne(pilot);phase=1;}if(stageTicks<65)return;if(!eva.isPilotProne())throw new IllegalStateException("Prone key was not accepted");}if(warmFrames>=35&&stageTicks>25){photo="01_ready";if(RECOVERY||CLOSE){arrange(23);initialEvaHealth=eva.getHealth();next(Stage.REACTION);}else if(EXCHANGE){arrange(MOUTH_ONLY?100:CLOSE_FINALE?12:39);if(CLOSE_FINALE)angel.setHealth(250);angel.setNoAi(MOUTH_ONLY||CLOSE_FINALE);if(!MOUTH_ONLY&&!CLOSE_FINALE)angel.setTarget(eva);initialEvaHealth=eva.getHealth();if(AWAKENING){eva.setHealth(70);pilot.getCapability(EvaPilotCapability.DATA).ifPresent(c->c.setSynchronization(10));eva.hurt(angel.damageSources().mobAttack(angel),60);if(!eva.isBerserk()||eva.getHealth()!=50)throw new IllegalStateException("Natural 50 HP awakening did not trigger");}else if(Boolean.getBoolean("projectseele.combatBerserk"))eva.reviewBerserkR34();next(Stage.DUEL);}else next(Stage.WALK_FORWARD);}}
                 case WALK_FORWARD->{forward=1;if(eva.getZ()-stageOrigin.z>=10){record("real_forward",true,"distance",eva.getZ()-stageOrigin.z);forward=0;photo="02_forward";next(Stage.WALK_BACKWARD);}}
                 case WALK_BACKWARD->{forward=-1;if(stageOrigin.z-eva.getZ()>=7){record("real_backward",true,"distance",stageOrigin.z-eva.getZ());forward=0;arrange(NORMALS?100:23);next(NORMALS?Stage.NORMAL_EMPTY:Stage.AIR_STRIKE);}}
                 case NORMAL_EMPTY,NORMAL_CONTACT,NORMAL_HEAVY,NORMAL_MOVING->normalAttack();
@@ -253,6 +256,9 @@ public final class CombatR31Review
     }
     private static void reaction()
     {
+        if(CLOSE){closeContacts();return;}
+        if(PRONE_WRECK&&stageTicks<20)return;
+        if(PRONE_WRECK&&stageTicks==20){EvaShutdownR30.fail(eva);sawDown=true;lastHitAt=stageTicks;}
         var b=CombatFeelR31.beat(eva);maximumEvaReactionMove=Math.max(maximumEvaReactionMove,eva.position().subtract(stageOrigin).horizontalDistance());
         if(b!=null&&b.kind()==CombatFeelR31.DOWN){sawDown=true;photo="10_eva_down";}
         if(eva.getHealth()<healthBefore-.01){contactHits++;lastHitAt=stageTicks;healthBefore=eva.getHealth();photo="09_eva_actual_hit";}
@@ -280,6 +286,22 @@ public final class CombatR31Review
             // A new independent incoming strike begins at a recorded contact distance.
             angel.teleportTo(eva.getX(),FLOOR+1,eva.getZ()+23);angel.setYRot(180);angel.yBodyRot=angel.yHeadRot=180;pilot.connection.send(new ClientboundTeleportEntityPacket(angel));
             if(angel.beginStrike(eva,attempts%2==0?SachielStrike.JAB:SachielStrike.OVERHEAD)){attempts++;healthBefore=eva.getHealth();lastHitAt=stageTicks;}
+        }
+    }
+    private static void closeContacts()
+    {
+        int[] modes={SachielStrike.SHOVE,SachielStrike.HOOK,SachielStrike.JAB,SachielStrike.OVERHEAD};double[] ranges={14,14,18,20};
+        if(phase==0)
+        {
+            arrange(ranges[closeCase]);eva.setHealth(eva.getMaxHealth());healthBefore=eva.getHealth();lastHitAt=stageTicks;phase=1;return;
+        }
+        if(phase==1&&stageTicks-lastHitAt>=20)
+        {if(angel.beginStrike(eva,modes[closeCase])){phase=2;lastHitAt=stageTicks;}return;}
+        if(phase==2&&stageTicks-lastHitAt>SachielStrike.duration(modes[closeCase])+12)
+        {
+            double damage=healthBefore-eva.getHealth();record("close_contact_mode_"+modes[closeCase],damage>0,"damage",damage);
+            cases.get(cases.size()-1).getAsJsonObject().addProperty("start_range",ranges[closeCase]);
+            if(++closeCase==modes.length){next(Stage.FINISH);return;}phase=0;
         }
     }
     private static void input(int action){inputAction=action;inputEpoch++;}
@@ -316,7 +338,7 @@ public final class CombatR31Review
         {
             boolean ids=true;for(var entry:fleetIds.entrySet())ids&=EvaFleetSavedData.get(level.getServer()).canonicalId(entry.getKey()).filter(entry.getValue()::equals).isPresent();
             var r=new JsonObject();r.addProperty("error",error);r.addProperty("fleet_ids_unchanged",ids);r.addProperty("hand_samples",handSamples);r.addProperty("maximum_hand_error_metres",Double.isFinite(maximumHandError)?maximumHandError:-1);r.addProperty("media",mediaFolder);
-            boolean all=error.isEmpty()&&ids&&(EXCHANGE||RECOVERY?cases.size()==1:NORMALS?cases.size()>=6:cases.size()>=7&&handSamples>5&&maximumHandError<.8);
+            boolean all=error.isEmpty()&&ids&&(CLOSE?cases.size()==4:EXCHANGE||RECOVERY?cases.size()==1:NORMALS?cases.size()>=6:cases.size()>=7&&handSamples>5&&maximumHandError<.8);
             for(var c:cases)all&=c.getAsJsonObject().get("passed").getAsBoolean();r.addProperty("passed",all);r.add("cases",cases);r.add("contacts",events);r.add("trace",trace);
             Path out=world.resolve("Review");Files.createDirectories(out);Files.writeString(out.resolve((NORMALS?"r32_normal_":"r31_combat_")+(all?"pass":"failure")+".json"),new GsonBuilder().setPrettyPrinting().create().toJson(r));
         }

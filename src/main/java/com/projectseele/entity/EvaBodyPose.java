@@ -246,8 +246,14 @@ public final class EvaBodyPose
         if(EvaShutdownR30.displayed(entity)&&!EvaShutdownR30.pose(entity).isEmpty())
         {
             var frozen=new Sample(d.rigs().get(variant));EvaShutdownR30.decode(EvaShutdownR30.pose(entity),frozen);
+            if(EvaShutdownR30.mode(entity)!=EvaShutdownR30.POWER_LOCK)com.projectseele.physics.CombatBodyDynamics.alignJoints(entity,frozen);
             float blend=EvaShutdownR30.collapse(entity,partial);
-            if(blend<1&&!EvaShutdownR30.origin(entity).isEmpty()){var old=new Sample(d.rigs().get(variant));EvaShutdownR30.decode(EvaShutdownR30.origin(entity),old);return mix(old,frozen,blend);}
+            if(blend<1&&!EvaShutdownR30.origin(entity).isEmpty())
+            {
+                var old=new Sample(d.rigs().get(variant));EvaShutdownR30.decode(EvaShutdownR30.origin(entity),old);var mixed=mix(old,frozen,blend);
+                if(EvaShutdownR30.mode(entity)!=EvaShutdownR30.POWER_LOCK)com.projectseele.physics.CombatBodyDynamics.alignJoints(entity,mixed);
+                return mixed;
+            }
             return frozen;
         }
         float time=((entity.level().getGameTime()%24000)+partial)/20;float idlePhase=(time/2.5F)%1;

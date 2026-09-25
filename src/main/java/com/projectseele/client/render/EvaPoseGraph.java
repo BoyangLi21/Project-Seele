@@ -285,6 +285,7 @@ public final class EvaPoseGraph
         {var names=new java.util.HashSet<>(motionWrites.rotationBones());names.addAll(mouth.rotationBones());var positions=new java.util.HashSet<>(motionWrites.positionBones());positions.addAll(mouth.positionBones());motionWrites=new EvaMotionEngineV2.BoneWrites(Set.copyOf(names),Set.copyOf(positions),"MOTION_ENGINE_LIVE_ACTION");}
         com.projectseele.client.visual.MechanicsR31Client.captureBones(entity,model,partialTick,modelToWorld);
         EvaPowerAttachmentR25.capture(entity,model,modelToWorld);
+        JointAuditR38.capture(entity,model,partialTick);
         EvaPoseTransition.recordFinal(entity,model);
         Snapshot committed = snapshot(
                 entity, partialTick, motionWrites, transitions, firearm, true);

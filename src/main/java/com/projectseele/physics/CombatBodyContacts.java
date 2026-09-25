@@ -64,6 +64,22 @@ public final class CombatBodyContacts
         }
         return Float.isFinite(reach)?Math.max(0,reach/CombatBodyProfiles.BLOCK_TO_PHYSICS):Double.NaN;
     }
+    public static Vec3 strikeAim(LivingEntity attacker,LivingEntity target)
+    {
+        Vec3 centre=target.getBoundingBox().getCenter();var profile=CombatBodyProfiles.get(target);
+        if(profile!=null)
+        {
+            var pose=CombatBodyDynamics.active(target)?CombatBodyDynamics.sample(target,0):CombatBodyDynamics.raw(target,0);
+            for(var part:parts(profile))if(part.bone.equals("torso_upper"))
+            {
+                var transform=new Matrix4f(CombatBodyProfiles.physicalMatrices(pose,profile).get(part.bone)).mul(part.bind);
+                var point=transform.getTranslation(new Vector3f()).div(CombatBodyProfiles.BLOCK_TO_PHYSICS).rotateY((180-target.getYRot())*(float)Math.PI/180);
+                centre=target.position().add(point.x,point.y,point.z);break;
+            }
+        }
+        Vec3 direction=target.position().subtract(attacker.position()).multiply(1,0,1).normalize();
+        return clip(target,centre.subtract(direction.scale(70)),centre,.2).orElse(centre).add(direction.scale(.65));
+    }
     public static Optional<Vec3> clip(LivingEntity target,Vec3 from,Vec3 to,double radius)
     {
         var profile=CombatBodyProfiles.get(target);

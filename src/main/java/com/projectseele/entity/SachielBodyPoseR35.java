@@ -30,7 +30,8 @@ public final class SachielBodyPoseR35
         var hit=EvaImpactResponse.sample(actor,partial);
         pose.rotations.get("torso_lower").rotateX(hit.pitch()*.3F).rotateZ(hit.roll()*.3F);
         pose.rotations.get("torso_upper").rotateX(hit.pitch()*.7F).rotateZ(hit.roll()*.7F);
-        pose.rotations.get("head").rotateX(hit.head());pose.dirty();CombatBodyDynamics.normalize(actor,pose);return pose;
+        pose.rotations.get("head").rotateX(hit.head());pose.dirty();CombatBodyDynamics.normalize(actor,pose);
+        SachielGameplayMotionR32.adaptContact(actor,pose,strikeAge,partial);return pose;
     }
     private SachielBodyPoseR35(){}
 }

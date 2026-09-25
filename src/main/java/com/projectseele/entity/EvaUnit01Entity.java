@@ -4009,9 +4009,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
                 boolean finishing=target instanceof SachielEntity sachiel&&!sachiel.hasUsedFirstBattle()&&sachiel.getHealth()<=sachiel.getMaxHealth()*.32F;
                 if(finishing)
                 {
-                    // Let an existing knockdown recover into the paired scene
-                    // instead of repeatedly knocking the victim down again.
-                    if(!com.projectseele.physics.CombatBodyDynamics.active(target))com.projectseele.event.FirstBattleDirector.tryStart((SachielEntity)target,this,false);
+                    if(!BerserkFinaleApproachR38.tick(this,(SachielEntity)target))this.berserkClaw(target,server);
                 }
                 else this.berserkClaw(target, server);
             }
@@ -4071,6 +4069,7 @@ public class EvaUnit01Entity extends PathfinderMob implements GeoEntity, FirstBa
         this.berserkTargetSearchCooldown = 0;
         this.berserkPounceVisualCooldown = 0;
         this.berserkPatternR37=0;
+        BerserkFinaleApproachR38.clear(this);
         EvaBerserkMotionR34.clear(this);
         EvaBerserkMotionR34.begin(this,0,null);
         if (pilot != null)

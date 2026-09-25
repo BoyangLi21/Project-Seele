@@ -27,6 +27,7 @@ public final class EvaCombatPoseR31
         if(EvaGameplayMotionR32.owns(e,partial))
         {
             var body=EvaBodyPose.sample(e,partial);
+            PhysicalBodyRenderer.pivots(body,m);
             boolean completeHands=EvaGameplayMotionR32.sharedHands(e,partial);
             for(String name:body.rig.keySet())if(completeHands||!name.startsWith("finger_"))m.getBone(name).ifPresent(b->{EvaRigTransforms.rotate(b,body.rotations.get(name));var p=body.positions.get(name);b.setPosX(-p.x*16);b.setPosY(p.y*16);b.setPosZ(p.z*16);changed.add(name);position.add(name);});
             if(!e.isBerserk()&&e.getWeapon()!=EvaUnit01Entity.WEAPON_RIFLE&&!(e instanceof EvaPrototypeEntity un&&un.isEyeLaserActive()))

@@ -33,7 +33,8 @@ public final class SachielTacticsR36 extends Goal
         {
             // Long bone-lance attacks claim space. Close pressure uses a palm
             // drive, with a visible recovery opening before another commitment.
-            int mode=low&&range<26?SachielStrike.STOMP:range>32?SachielStrike.PILE:range<22?SachielStrike.SHOVE:
+            int mode=low&&range<26?SachielStrike.STOMP:range>32?SachielStrike.PILE:range<22?
+                    switch(choice%4){case 0->SachielStrike.SHOVE;case 1->SachielStrike.HOOK;case 2->SachielStrike.JAB;default->SachielStrike.OVERHEAD;}:
                     switch(choice%4){case 0->SachielStrike.HOOK;case 1->SachielStrike.PILE;case 2->SachielStrike.OVERHEAD;default->SachielStrike.JAB;};
             if(actor.beginStrike(target,mode)){choice++;wasStriking=true;stop();return;}
         }
@@ -41,7 +42,7 @@ public final class SachielTacticsR36 extends Goal
         if(regroup>0)
         {
             regroup--;
-            wanted=range<32?forward.scale(-.82).add(lateral.scale((choice%2==0?1:-1)*.18)):Vec3.ZERO;
+            wanted=range<17?forward.scale(-.65):range<32?lateral.scale((choice%2==0?1:-1)*.32):Vec3.ZERO;
         }
         else wanted=range>39?forward.scale(1.1):range>30?forward.scale(.55):range<22?forward.scale(-.45):Vec3.ZERO;
         // Failed movement invokes navigation around a real obstacle, rather

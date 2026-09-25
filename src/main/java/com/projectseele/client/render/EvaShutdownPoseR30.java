@@ -29,7 +29,13 @@ final class EvaShutdownPoseR30
             {SeeleNetwork.CHANNEL.sendToServer(new ServerboundEvaFrozenPoseR30(eva.getId(),view.held.copy()));view.sent=stamp;}
             if(!EvaShutdownR30.pose(eva).isEmpty()&&!(mode==EvaShutdownR30.POWER_LOCK&&mc.player!=null&&mc.player.getRootVehicle()==eva))view.held=EvaShutdownR30.pose(eva).copy();
             float blend=EvaShutdownR30.collapse(eva,partial);if(blend<1)write(model,view.entry,1);
-            view.mode=mode;view.released=0;return write(model,view.held,blend);
+            view.mode=mode;view.released=0;var written=write(model,view.held,blend);
+            if(mode!=EvaShutdownR30.POWER_LOCK)
+            {
+                var pose=EvaBodyPose.neutralForTransportR32(eva);EvaShutdownR30.decode(capture(model),pose);
+                com.projectseele.physics.CombatBodyDynamics.alignJoints(eva,pose);return PhysicalBodyRenderer.write(pose,model);
+            }
+            return written;
         }
         if(view.mode!=0){view.mode=0;view.released=now;}
         var result=EvaMotionEngineV2.BoneWrites.empty();

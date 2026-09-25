@@ -91,6 +91,34 @@ public final class FirstBattleDirector
         }
         return supported>=3;
     }
+    public static Vec3 stagingPosition(EvaUnit01Entity eva,SachielEntity angel,int alternate)
+    {
+        if(!(eva.level() instanceof ServerLevel level))return null;
+        Vec3 away=eva.position().subtract(angel.position()).multiply(1,0,1).normalize();
+        if(away.lengthSqr()<.1)away=eva.getForward().scale(-1);
+        Vec3 best=null;double cost=Double.MAX_VALUE;
+        for(double radius:new double[]{24,30})for(int angle:new int[]{0,30,-30,60,-60,90,-90,180})
+        {
+            if(alternate>0&&angle==0)continue;
+            Vec3 offset=away.yRot((float)Math.toRadians(angle)).scale(radius),candidate=angel.position().add(offset);
+            var at=net.minecraft.core.BlockPos.containing(candidate);if(!level.hasChunkAt(at))continue;
+            Double floor=null;
+            for(int y=at.getY()+4;y>=at.getY()-6;y--)
+            {
+                var pos=new net.minecraft.core.BlockPos(at.getX(),y,at.getZ());var shape=level.getBlockState(pos).getCollisionShape(level,pos);
+                if(!shape.isEmpty()){floor=y+shape.max(net.minecraft.core.Direction.Axis.Y);break;}
+            }
+            if(floor==null||Math.abs(floor-angel.getY())>4)continue;
+            candidate=new Vec3(candidate.x,floor,candidate.z);
+            if(!level.noCollision(eva,eva.getBoundingBox().move(candidate.subtract(eva.position())).deflate(.05)))continue;
+            Vec3 delta=angel.position().subtract(candidate);float yaw=(float)Math.toDegrees(Math.atan2(-delta.x,delta.z));
+            var spec=new FirstBattleSignals.Spec(candidate,yaw,eva.getYRot(),angel.getYRot(),(float)radius,(float)delta.y);
+            if(!spaceReady(level,eva,spec))continue;
+            if(angle==0&&radius==24&&alternate==0)return candidate;
+            double distance=candidate.distanceToSqr(eva.position());if(distance<cost){cost=distance;best=candidate;}
+        }
+        return best;
+    }
     private static boolean participantPresent(FirstBattleSavedData.Encounter record,EvaUnit01Entity eva,ServerPlayer commander)
     {
         if(record.npcPilot==null)return EvaPilotResolver.controlTarget(commander)==eva;

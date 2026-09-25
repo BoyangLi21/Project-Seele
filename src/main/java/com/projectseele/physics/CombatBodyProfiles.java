@@ -74,6 +74,12 @@ public final class CombatBodyProfiles
     }
     public static EvaBodyPose.Sample copy(EvaBodyPose.Sample source)
     {var result=new EvaBodyPose.Sample(source.rig);for(String n:source.rig.keySet()){result.rotations.put(n,new Quaternionf(source.rotations.get(n)));result.positions.put(n,new Vector3f(source.positions.get(n)));}return result;}
+    public static EvaBodyPose.Sample canonical(EvaBodyPose.Sample source,Profile profile)
+    {
+        var result=new EvaBodyPose.Sample(profile.rig());Map<String,Matrix4f> matrices=new HashMap<>();
+        for(String name:source.rig.keySet())if(result.rig.containsKey(name))matrices.put(name,source.matrix(name));
+        Set<String> visited=new HashSet<>();for(String name:result.rig.keySet())apply(name,result,matrices,visited);return result;
+    }
     public static EvaBodyPose.Sample recovery(Profile profile,float progress)
     {
         var clip=profile.recovery;var pose=new EvaBodyPose.Sample(profile.rig);float frame=Math.max(0,Math.min(1,progress))*(clip.rotations.length-1);int a=(int)frame,b=Math.min(a+1,clip.rotations.length-1);

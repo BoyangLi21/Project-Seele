@@ -50,10 +50,10 @@ def temporary_options(path,separator,changes):
 
 def main():
     ap=argparse.ArgumentParser();ap.add_argument('--prepared-file',type=Path,default=ROOT/'.Codex/client-launch-r17.json');ap.add_argument('--prepare-only',action='store_true');ap.add_argument('--video',action='store_true');ap.add_argument('--normal-attacks',action='store_true');ap.add_argument('--duel',action='store_true');ap.add_argument('--variant',type=int,choices=range(5),default=1)
-    ap.add_argument('--body-physics-profiles',type=Path)
+    ap.add_argument('--body-physics-profiles',type=Path);ap.add_argument('--close-contacts',action='store_true');ap.add_argument('--close-finale',action='store_true');ap.add_argument('--joint-audit',action='store_true')
     ap.add_argument('--asset-overlay',type=Path,action='append',default=[]);ap.add_argument('--city-shaders',action='store_true');ap.add_argument('--awakening',action='store_true');ap.add_argument('--mouth-only',action='store_true')
     ap.add_argument('--recovery-only',action='store_true')
-    ap.add_argument('--shutdown',action='store_true')
+    ap.add_argument('--shutdown',action='store_true');ap.add_argument('--prone-shutdown',action='store_true')
     ap.add_argument('--gameplay-motion-directory',type=Path);ap.add_argument('--side-view',action='store_true');ap.add_argument('--early-air',action='store_true');ap.add_argument('--exchange-only',action='store_true');ap.add_argument('--capture-audio',type=Path);ap.add_argument('--field-energy',type=float,default=0);ap.add_argument('--berserk',action='store_true');a=ap.parse_args()
     world=ROOT/'run/saves'/WORLD
     if not (world/'level.dat').is_file():raise FileNotFoundError('Create the disposable '+WORLD+' copy before this fixture; it never edits a formal world.')
@@ -67,8 +67,12 @@ def main():
         if not profile.is_file():raise FileNotFoundError(profile)
         command=[c for c in command if not c.startswith('-Dprojectseele.bodyPhysicsProfiles=')]
         command.insert(1,'-Dprojectseele.bodyPhysicsProfiles='+str(profile))
+    if a.close_contacts:command.insert(1,'-Dprojectseele.r38Close=true')
+    if a.close_finale:a.awakening=True;command.insert(1,'-Dprojectseele.r38CloseFinale=true')
+    if a.joint_audit:command.insert(1,'-Dprojectseele.r38JointAudit=true')
     if a.exchange_only:command.insert(1,'-Dprojectseele.combatExchange=true')
     if a.recovery_only:command.insert(1,'-Dprojectseele.combatRecovery=true')
+    if a.prone_shutdown:a.shutdown=True;command.insert(1,'-Dprojectseele.r38ProneWreck=true')
     if a.shutdown:command.insert(1,'-Dprojectseele.combatWreck=true');command.insert(1,'-Dprojectseele.combatRecovery=true')
     if a.berserk:command.insert(1,'-Dprojectseele.combatBerserk=true')
     if a.mouth_only:a.awakening=True;command.insert(1,'-Dprojectseele.combatMouth=true')

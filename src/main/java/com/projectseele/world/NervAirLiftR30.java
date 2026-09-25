@@ -36,11 +36,12 @@ public final class NervAirLiftR30
     public static final class State extends SavedData
     {
         UUID aircraft;Vec3 aircraftAt=STAND;Job job;String last="NERV 重型运输机在机场待命";
-        CompoundTag aircraftBackup=new CompoundTag();int aircraftMissingTicks;
+        CompoundTag aircraftBackup=new CompoundTag();int aircraftMissingTicks;boolean forceRecovery;
         final Map<Integer,BlockPos> locations=new HashMap<>();
         static State load(CompoundTag t)
         {
             var s=new State();if(t.hasUUID("Aircraft"))s.aircraft=t.getUUID("Aircraft");if(t.contains("AircraftX"))s.aircraftAt=vec(t,"Aircraft");s.last=t.getString("Last");s.aircraftBackup=t.getCompound("AircraftBackupR32").copy();
+            s.forceRecovery=t.getBoolean("ForceRecoveryR38");
             for(int i=0;i<3;i++)if(t.contains("Location"+i))s.locations.put(i,BlockPos.of(t.getLong("Location"+i)));
             if(t.contains("Job"))
             {
@@ -49,7 +50,7 @@ public final class NervAirLiftR30
         }
         @Override public CompoundTag save(CompoundTag t)
         {
-            if(aircraft!=null)t.putUUID("Aircraft",aircraft);put(t,"Aircraft",aircraftAt);t.putString("Last",last);t.put("AircraftBackupR32",aircraftBackup.copy());locations.forEach((i,p)->t.putLong("Location"+i,p.asLong()));
+            if(aircraft!=null)t.putUUID("Aircraft",aircraft);put(t,"Aircraft",aircraftAt);t.putString("Last",last);t.put("AircraftBackupR32",aircraftBackup.copy());t.putBoolean("ForceRecoveryR38",forceRecovery);locations.forEach((i,p)->t.putLong("Location"+i,p.asLong()));
             if(job!=null)
             {
                 var j=job;var n=new CompoundTag();n.putUUID("Unit",j.unit);n.putUUID("Owner",j.owner);n.putInt("Variant",j.variant);n.putString("Phase",j.phase.name());n.putInt("Age",j.age);n.putFloat("LandingYawR32",j.landingYaw);n.putInt("Duration",j.duration);n.putBoolean("Returning",j.returning);n.putBoolean("Carrying",j.carrying);n.putBoolean("Crew",j.crew);put(n,"From",j.from);put(n,"To",j.to);put(n,"Destination",j.destination);n.putString("Note",j.note);t.put("Job",n);
@@ -66,7 +67,64 @@ public final class NervAirLiftR30
         if(!(e.level() instanceof ServerLevel l))return false;var j=state(l).job;
         return j!=null&&j.unit.equals(e.getUUID())&&Set.of(Phase.APPROACH,Phase.CLAMP,Phase.ASCEND,Phase.CRUISE,Phase.DESCEND,Phase.RELEASE,Phase.HOLD).contains(j.phase);
     }
-    public static String status(ServerLevel l){var s=state(l);return s.job==null?s.last:NervStaffDialogue.unitName(s.job.variant)+"："+s.job.note;}
+    public static String status(ServerLevel l){var s=state(l);return s.forceRecovery?s.last:s.job==null?s.last:NervStaffDialogue.unitName(s.job.variant)+"："+s.job.note;}
+    public static String forceRecover(ServerLevel level)
+    {
+        if(!Files.isRegularFile(level.getServer().getWorldPath(LevelResource.ROOT).resolve("nerv_transport_r30.json")))return "此存档尚未安装 NERV 重型运输设施。";
+        var s=state(level);s.forceRecovery=true;s.last="强制回收已受理，正在加载原运输机和载荷。";s.setDirty();return s.last;
+    }
+    public static CompoundTag inspectionR38(ServerLevel level){return state(level).save(new CompoundTag());}
+    public static boolean stageCarriedReviewR38(ServerLevel level,int variant,UUID owner)
+    {
+        if(!"r38-recovery".equals(System.getProperty("projectseele.regionalBuild"))||!level.getServer().getWorldPath(LevelResource.ROOT).normalize().getFileName().toString().equals("SEELE_FIELD_R38_REVIEW"))throw new IllegalStateException("Isolated cargo fixture only");
+        var s=state(level);boolean airport=ready(level,STAND,4);var known=s.locations.get(variant);if(known!=null)ready(level,Vec3.atCenterOf(known),4);
+        EvaLogisticsDirector.loadControlTarget(level,variant);var receipt=EvaFleetSavedData.get(level.getServer()).entry(variant).orElse(null);
+        var unit=receipt==null?null:ServiceAircraftR32.payload(level,receipt.canonicalId());var plane=ServiceAircraftR32.find(level,s.aircraft);
+        if(unit==null||plane==null||!airport)return false;
+        var job=new Job();job.variant=variant;job.unit=unit.getUUID();job.owner=owner;job.phase=Phase.HOLD;job.carrying=true;job.returning=true;job.destination=head(level,variant);job.from=STAND.add(0,160,0);job.to=job.from;job.duration=100;
+        EvaAirTransportR31.begin(unit);lock(unit);EvaAirTransportR31.transition(unit,90,1,1);unit.moveOnNervCarrier(job.from.x,job.from.y,job.from.z,0);
+        plane.setPos(job.from.add(0,OFFSET,0));plane.cargo(unit.getId(),true,1);s.aircraftAt=plane.position();s.locations.put(variant,unit.blockPosition());s.job=job;s.setDirty();return true;
+    }
+    @SubscribeEvent public static void commands(net.minecraftforge.event.RegisterCommandsEvent event)
+    {
+        event.getDispatcher().register(net.minecraft.commands.Commands.literal("nerv")
+            .then(net.minecraft.commands.Commands.literal("transport").requires(source->source.hasPermission(2))
+                .then(net.minecraft.commands.Commands.literal("status").executes(c->{var l=c.getSource().getServer().getLevel(FacilitySchemaV2.DIMENSION);if(l==null)return 0;c.getSource().sendSuccess(()->Component.literal(status(l)),false);return 1;}))
+                .then(net.minecraft.commands.Commands.literal("force_recover").executes(c->{var l=c.getSource().getServer().getLevel(FacilitySchemaV2.DIMENSION);if(l==null)return 0;String reply=forceRecover(l);c.getSource().sendSuccess(()->Component.literal(reply),true);return 1;}))));
+    }
+    private static void completeForcedRecovery(ServerLevel l,State s)
+    {
+        if(!ready(l,STAND,3)||!ready(l,s.aircraftAt,4))return;
+        var plane=ServiceAircraftR32.find(l,s.aircraft);if(plane==null)plane=restoreAircraft(l,s);if(plane==null)return;
+        var job=s.job;boolean returnedCargo=false;
+        if(job!=null&&(job.carrying||ownsRegisteredCargo(s)))
+        {
+            ready(l,Vec3.atCenterOf(s.locations.getOrDefault(job.variant,BlockPos.containing(head(l,job.variant)))),3);
+            EvaLogisticsDirector.loadControlTarget(l,job.variant);
+            var unit=ServiceAircraftR32.payload(l,job.unit);Vec3 destination=head(l,job.variant);
+            var registration=EvaFleetSavedData.get(l.getServer()).entry(job.variant).orElse(null);
+            boolean stale=unit==null&&registration!=null&&!registration.canonicalId().equals(job.unit);
+            if(!stale&&(unit==null||!ready(l,destination,4)))return;
+            if(stale)com.projectseele.ProjectSeele.LOGGER.warn("R38 cleared stale airlift reference {}; current registered EVA {} retained",job.unit,registration.canonicalId());
+            else
+            {
+            // The original EVA/plug/crew are retained; emergency maintenance
+            // bypasses a stuck flight path without dropping or healing cargo.
+            unit.disconnectForAirliftR32();unit.normalizeAfterTransportR30(false);
+            unit.moveOnNervCarrier(destination.x,destination.y,destination.z,EvaUnit01Entity.SILO_BAY_YAW);
+            unit.setNervLogisticsLocked(true);unit.setNoGravity(true);unit.setOnGround(true);unit.resetFallDistance();
+            unit.getPersistentData().putBoolean("R30AwaitingNervRecovery",true);EvaShutdownR30.waitingR31(unit,true);
+            s.locations.put(job.variant,unit.blockPosition());
+            returnedCargo=true;
+            }
+        }
+        plane.cargo(-1,false,0);plane.teleportTo(STAND.x,STAND.y,STAND.z);plane.setYRot(0);plane.setDeltaMovement(Vec3.ZERO);
+        s.aircraftAt=STAND;s.aircraftBackup=plane.saveWithoutId(new CompoundTag());s.job=null;s.forceRecovery=false;s.aircraftMissingTicks=0;
+        s.last=returnedCargo?"NERV 运输机已强制返回机场；原机体交付原发射井顶部，等待常规回收。":"NERV 运输机已返回机场，旧任务已清理；当前登记机体的位置保持不变。";s.setDirty();
+        com.projectseele.ProjectSeele.LOGGER.info("R38 NERV force recovery completed aircraft={} cargo={}",s.aircraft,job==null?null:job.unit);
+    }
+    private static boolean ownsRegisteredCargo(State state)
+    {return state.job!=null&&Set.of(Phase.APPROACH,Phase.CLAMP,Phase.ASCEND,Phase.CRUISE,Phase.DESCEND,Phase.RELEASE,Phase.HOLD).contains(state.job.phase);}
     public static String phaseName(ServerLevel l){var j=state(l).job;return j==null?"IDLE":j.phase.name();}
     public static String request(ServerPlayer p,int variant,boolean returning,int x,int z)
     {
@@ -126,6 +184,7 @@ public final class NervAirLiftR30
         {
             if(!ready(l,STAND,5))return;var plane=ModEntities.UN_TRANSPORT.get().create(l);if(plane==null)return;plane.configure(0,false);plane.setNerv();plane.setPos(STAND);if(!l.addFreshEntity(plane))return;s.aircraft=plane.getUUID();s.aircraftAt=STAND;s.setDirty();
         }
+        if(s.forceRecovery){l.resetEmptyTime();completeForcedRecovery(l,s);return;}
         if(s.job==null)return;l.resetEmptyTime();
         try{advance(l,s);}catch(Exception error){s.job.phase=Phase.HOLD;if(l.getEntity(s.job.unit) instanceof EvaUnit01Entity held){held.endNervCarrierMotion();EvaAirTransportR31.hold(held);}note(l,s.job,"运输暂停："+error.getMessage());s.setDirty();com.projectseele.ProjectSeele.LOGGER.error("NERV airlift held",error);}
     }
